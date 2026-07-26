@@ -13,3 +13,7 @@ The repository name, owner, branch names, and release metadata are resolved by G
 ## License
 
 Unless a repository says otherwise, new material is licensed under the GNU Affero General Public License v3.0-or-later. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## GitHub security behavior
+
+The CodeQL workflow runs automatically for public repositories and skips itself for private repositories unless GitHub Code Security is enabled. Do not make the CodeQL check required for a private repository that does not have Code Security. The template intentionally does not include dependency review because GitHub requires Code Security or Advanced Security for that feature in private repositories.

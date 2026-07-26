@@ -1,22 +1,65 @@
+# Operating system
 .DS_Store
+Thumbs.db
+.Trashes
+
+# Secrets and local environment
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+
+# JavaScript and TypeScript
+node_modules/
+.pnp/
+.pnp.js
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python
 .venv/
 venv/
 __pycache__/
+*.py[cod]
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Rust
+target/
+
+# Build and test output
+dist/
+build/
+out/
 coverage/
 htmlcov/
 .coverage*
-node_modules/
-.turbo/
-dist/
-build/
-target/
+.next/
+
+# Logs and temporary files
 *.log
 *.tmp
-.idea/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Editors, agents, and local tools
+.claude/
+.kilo/
+.codex/
+.cursor/
+.windsurf/
 .vscode/
+.idea/
+.zed/
+.fleet/
+.opencode/
+.kluster/
+.direnv/
+.envrc
+mise.local.toml
+.mise.local.toml
+*.code-workspace

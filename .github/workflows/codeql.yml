@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, staging]
   pull_request:
-    branches: [main, staging]
+    branches: [staging]
   schedule:
     - cron: "31 6 * * 1"
   workflow_dispatch:
@@ -22,6 +22,9 @@ concurrency:
 jobs:
   analyze:
     name: Analyze
+    # Code scanning is unavailable on private GitHub Free/Pro repositories.
+    # Keep this job optional there; it becomes active automatically if the repo is public.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
