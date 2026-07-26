@@ -46,8 +46,18 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# Editors and local tools
-.idea/
-.vscode/
+# Editors, agents, and local tools
+.claude/
+.kilo/
+.codex/
 .cursor/
 .windsurf/
+.vscode/
+.idea/
+.zed/
+.fleet/
+.opencode/
+.direnv/
+.envrc
+mise.local.toml
+.mise.local.toml
