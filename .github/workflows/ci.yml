@@ -41,3 +41,15 @@ jobs:
         run: bash .github/scripts/ci.sh install
       - name: Tests and coverage
         run: bash .github/scripts/ci.sh test
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ github.run_id }}
+          path: |
+            coverage/**
+            htmlcov/**
+            .coverage*
+            target/llvm-cov/**
+          if-no-files-found: ignore
+          retention-days: 14

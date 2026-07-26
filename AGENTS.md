@@ -16,3 +16,4 @@ This repository supports TypeScript, Rust, Python, or a combination of them.
 - Preserve least-privilege workflow permissions.
 - Pin runtime/tool versions through mise rather than duplicating versions in workflows.
 - Keep organization-specific deployment, hosting, and product details in the repository that owns them.
+- Treat CodeQL as an optional public-repository security check; do not require it for private repositories without GitHub Code Security.
