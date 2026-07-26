@@ -57,7 +57,9 @@ pnpm-debug.log*
 .zed/
 .fleet/
 .opencode/
+.kluster/
 .direnv/
 .envrc
 mise.local.toml
 .mise.local.toml
+*.code-workspace
