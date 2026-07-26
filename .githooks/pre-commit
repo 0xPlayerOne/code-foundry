@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+git diff --cached --check
+
+if [ -f package.json ] && command -v bun >/dev/null 2>&1; then
+  bun run --if-present lint-staged
+fi
+
+if [ -f Cargo.toml ] && command -v cargo >/dev/null 2>&1; then
+  cargo fmt --check
+fi
