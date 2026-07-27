@@ -114,8 +114,10 @@ runs:
           **/node_modules/.vite
           **/*.tsbuildinfo
         key: ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '.mise.toml', 'mise.lock') }}
+        # Keep primary saves isolated so parallel jobs cannot race. A cache
+        # from another job in this workflow is still a valid warm fallback.
         restore-keys: |
-          ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-
+          ${{ runner.os }}-javascript-build-${{ github.workflow }}-
     - name: Cache Python environment
       id: python-environment
       if: inputs.install == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
@@ -172,8 +174,10 @@ runs:
       with:
         path: target
         key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
+        # Cargo fingerprints validate restored artifacts; keep job-specific
+        # primary saves but reuse a prior job's target directory when warm.
         restore-keys: |
-          ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-
+          ${{ runner.os }}-rust-build-${{ github.workflow }}-
     - name: Setup
       uses: jdx/mise-action@v4
       with:
