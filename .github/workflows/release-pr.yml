@@ -14,7 +14,7 @@ env:
 jobs:
   create-release-pr:
     name: Create
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true

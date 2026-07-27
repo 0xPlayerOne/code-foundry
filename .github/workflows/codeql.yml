@@ -22,7 +22,7 @@ concurrency:
 jobs:
   detect:
     name: Detect
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     outputs:
       languages: ${{ steps.languages.outputs.languages }}
     steps:

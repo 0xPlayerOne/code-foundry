@@ -29,7 +29,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Review
         uses: actions/dependency-review-action@v5

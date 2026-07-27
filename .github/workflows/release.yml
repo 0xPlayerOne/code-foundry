@@ -13,7 +13,7 @@ permissions:
 jobs:
   detect:
     name: Detect
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
@@ -51,7 +51,7 @@ jobs:
     name: Version and Release
     needs: detect
     if: needs.detect.outputs.release_type != 'none'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false
@@ -71,7 +71,7 @@ jobs:
     name: Publish npm
     needs: [detect, release]
     if: needs.release.outputs.release_created == 'true' && needs.detect.outputs.npm_publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     permissions:
       contents: read
       id-token: write
