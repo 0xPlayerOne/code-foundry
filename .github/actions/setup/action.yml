@@ -253,21 +253,21 @@ runs:
           ${{ runner.os }}-javascript-build-
     - name: Cache Python environment
       id: python-environment
-      if: inputs.install == 'true' && inputs.install-python == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
+      if: inputs.install == 'true' && inputs.install-python == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
           .venv
           **/.venv
-        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml', 'mise.lock') }}
     - name: Cache Python packages
-      if: (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != '' && steps.python-environment.outputs.cache-hit != 'true'
+      if: (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != '' && steps.python-environment.outputs.cache-hit != 'true'
       uses: actions/cache@v5
       with:
         path: |
           ~/.cache/pip
           ~/.cache/uv
-        key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') }}
+        key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') }}
         restore-keys: |
           ${{ runner.os }}-python-
     - name: Cache Python lint state
