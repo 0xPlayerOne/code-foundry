@@ -145,6 +145,11 @@ type_check() {
 }
 
 build() {
+  # Some frameworks validate session secrets while statically collecting pages.
+  # Keep CI builds deterministic without weakening runtime/deployment validation.
+  if [ "${CI:-}" = true ] && [ -z "${NEXTAUTH_SECRET:-}" ]; then
+    export NEXTAUTH_SECRET="ci-only-build-secret-not-for-runtime-0123456789"
+  fi
   run_script build
   if [ -f Cargo.toml ]; then cargo build --all-targets --all-features; fi
 }
