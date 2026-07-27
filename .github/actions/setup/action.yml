@@ -139,6 +139,17 @@ runs:
         key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') }}
         restore-keys: |
           ${{ runner.os }}-python-
+    - name: Cache Python lint state
+      if: inputs.install == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/ruff.toml') != ''
+      uses: actions/cache@v5
+      with:
+        path: |
+          **/.ruff_cache
+        key: ${{ runner.os }}-python-lint-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/pyproject.toml', '**/ruff.toml', '.mise.toml', 'mise.lock') }}
+        # Primary saves remain job-specific; another job's Ruff cache is a
+        # useful warm fallback because Ruff validates entries by file state.
+        restore-keys: |
+          ${{ runner.os }}-python-lint-${{ github.workflow }}-
     - name: Cache Turborepo
       if: inputs.install == 'true' && steps.profile.outputs.turbo == 'true' && hashFiles('**/turbo.json', '**/turbo.jsonc') != ''
       uses: actions/cache@v5
