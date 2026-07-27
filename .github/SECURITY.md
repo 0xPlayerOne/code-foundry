@@ -6,9 +6,9 @@ The latest commit on `staging` receives security patches. Patches are promoted t
 
 | Branch | Supported |
 | --- | --- |
-| `staging` | Yes |
-| `main` | Yes, through the staging-to-main release |
-| Feature branches | No |
+| `staging` | ✅ |
+| `main` | ✅ |
+| Feature branches | ❌ |
 
 ## Reporting a Vulnerability
 

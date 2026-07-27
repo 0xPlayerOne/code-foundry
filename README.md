@@ -10,6 +10,15 @@ Reusable baseline for TypeScript, Rust, Python, and mixed-language projects.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
+## Optional Turborepo remote caching
+
+Turborepo repositories can use Vercel Remote Caching without changing the workflows. Add these repository settings:
+
+- Secret: `TURBO_TOKEN`
+- Repository variable: `TURBO_TEAM`
+
+CI and Test pass those values to every job. Non-Turborepo repositories and repositories without the settings simply use their normal local cache behavior. This does not require the repository to deploy to Vercel.
+
 ## License
 
 Unless a repository says otherwise, new material is licensed under the GNU Affero General Public License v3.0-or-later. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
