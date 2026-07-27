@@ -53,19 +53,6 @@ wait_for_parallel() {
   return "$status"
 }
 
-run_parallel() {
-  local status=0 pid task
-  local -a pids=()
-  for task in "$@"; do
-    "$task" &
-    pids+=("$!")
-  done
-  for pid in "${pids[@]}"; do
-    if ! wait "$pid"; then status=1; fi
-  done
-  return "$status"
-}
-
 package_manager() {
   local configured=""
   if [ -f .github/template.yml ]; then
@@ -121,9 +108,13 @@ audit_python() {
       python -m pip install --disable-pip-version-check --quiet pip-audit
       pip_audit() { python -m pip_audit "$@"; }
     fi
-    if [ -f requirements.txt ]; then pip_audit -r requirements.txt; fi
-    if [ -f requirements-dev.txt ]; then pip_audit -r requirements-dev.txt; fi
-    if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then pip_audit; fi
+    pids=()
+    if [ -f requirements.txt ]; then pip_audit -r requirements.txt & pids+=("$!"); fi
+    if [ -f requirements-dev.txt ]; then pip_audit -r requirements-dev.txt & pids+=("$!"); fi
+    if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then
+      pip_audit & pids+=("$!")
+    fi
+    wait_for_parallel "${pids[@]}"
   else
     echo "Skipping Python audit (Python dependency manifest not found)"
   fi
