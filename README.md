@@ -4,13 +4,27 @@ Reusable baseline for TypeScript, Rust, Python, and mixed-language projects.
 
 ## Setup
 
-1. Install [mise](https://mise.jdx.dev/) and run `mise install`.
-2. Enable repository hooks with `git config core.hooksPath .githooks`.
+1. Install [mise](https://mise.jdx.dev/).
+2. Run `bash .github/scripts/bootstrap.sh` to install the pinned toolchain, enable hooks, and validate the repository.
 3. Add the repository's standard scripts (`format:check`, `lint`, `type-check`, `build`, `test:unit`, `test:integration`, `test:e2e`, and `test:smoke`) when available. The shared scripts also recognize legacy aliases and skip checks that do not apply to the repository's languages or package manager.
+
+## Applying the baseline to an existing repository
+
+Run the sync script from the repository root. It updates shared workflows, GitHub forms, hooks, policy files, and tool configuration while preserving the repository's README, `.mise.toml` selections, extra workflows, and application code.
+
+```bash
+bash .github/scripts/init-repo.sh
+```
+
+Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
 CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
+
+## Test runner standard
+
+For TypeScript and JavaScript tests, use Bun's native test runner by default. Do not add Vitest to projects based on this template. Preserve specialized native runners such as Matchstick for The Graph and Hardhat for smart contracts.
 
 ## Optional Turborepo remote caching
 
