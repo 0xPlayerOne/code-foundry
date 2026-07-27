@@ -30,6 +30,29 @@ jobs:
         uses: actions/checkout@v7
         with:
           filter: blob:none
+          sparse-checkout: |
+            .github
+            .npmrc
+            .pnpmfile.cjs
+            .yarnrc*
+            **/package.json
+            **/bun.lock
+            **/bun.lockb
+            **/pnpm-lock.yaml
+            **/yarn.lock
+            **/package-lock.json
+            **/Cargo.toml
+            **/Cargo.lock
+            **/.cargo/**
+            **/pyproject.toml
+            **/requirements*.txt
+            **/setup.py
+            **/setup.cfg
+            **/Pipfile
+            **/Pipfile.lock
+            **/poetry.lock
+            **/uv.lock
+          sparse-checkout-cone-mode: false
       - name: Detect
         id: profile
         run: bash .github/scripts/security.sh profile >> "$GITHUB_OUTPUT"
@@ -71,6 +94,29 @@ jobs:
           # Dependency audits only need manifests and lockfiles; defer source
           # blob transfer until a tool explicitly reads a required file.
           filter: blob:none
+          sparse-checkout: |
+            .github
+            .npmrc
+            .pnpmfile.cjs
+            .yarnrc*
+            **/package.json
+            **/bun.lock
+            **/bun.lockb
+            **/pnpm-lock.yaml
+            **/yarn.lock
+            **/package-lock.json
+            **/Cargo.toml
+            **/Cargo.lock
+            **/.cargo/**
+            **/pyproject.toml
+            **/requirements*.txt
+            **/setup.py
+            **/setup.cfg
+            **/Pipfile
+            **/Pipfile.lock
+            **/poetry.lock
+            **/uv.lock
+          sparse-checkout-cone-mode: false
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
