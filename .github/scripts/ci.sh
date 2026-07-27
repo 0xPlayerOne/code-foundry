@@ -20,6 +20,10 @@ has_python() {
     git ls-files -- '*.py' ':!.github/**' | grep -q .
 }
 
+has_graph_project() {
+  [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.devDependencies?.["@graphprotocol/graph-cli"] ? 0 : 1)'
+}
+
 package_manager() {
   if [ -f bun.lock ] || [ -f bun.lockb ]; then echo bun
   elif [ -f pnpm-lock.yaml ]; then echo pnpm
@@ -133,7 +137,9 @@ lint() {
 }
 
 type_check() {
-  if has_script type-check; then run_script type-check
+  if has_graph_project; then
+    echo "Skipping TypeScript type-check (Graph AssemblyScript project uses graph build/codegen)"
+  elif has_script type-check; then run_script type-check
   elif has_script typecheck; then run_script typecheck
   else echo "Skipping type-check (script not defined)"; fi
   if [ -f Cargo.toml ]; then cargo check; fi
