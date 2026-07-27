@@ -10,26 +10,50 @@ on:
 permissions:
   contents: read
 
+env:
+  REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   dependency-audit:
-    name: Dependency Audit
-    runs-on: ubuntu-latest
+    name: Dependency Audit (${{ matrix.name }})
+    runs-on: ubuntu-slim
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: JavaScript
+            ecosystem: javascript
+          - name: Rust
+            ecosystem: rust
+          - name: Python
+            ecosystem: python
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Dependency audits only need manifests and lockfiles; defer source
+          # blob transfer until a tool explicitly reads a required file.
+          filter: blob:none
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/security.sh should_run "${{ matrix.ecosystem }}" >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
+        with:
+          mise-scope: ${{ matrix.ecosystem }}
       - name: Audit dependencies
-        run: bash .github/scripts/security.sh
+        if: steps.applicability.outputs.applicable == 'true'
+        run: bash .github/scripts/security.sh audit "${{ matrix.ecosystem }}"
 
   dependency-review:
     name: Dependency Review
     if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Review
         uses: actions/dependency-review-action@v5

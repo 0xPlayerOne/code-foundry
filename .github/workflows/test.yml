@@ -13,6 +13,7 @@ permissions:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
@@ -25,14 +26,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run unit >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
+          cache-build: false
       - name: Unit
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
       - name: Upload coverage
-        if: always()
+        if: >-
+          always() &&
+          steps.applicability.outputs.applicable == 'true' &&
+          hashFiles('coverage/**', 'htmlcov/**', '.coverage*', 'target/llvm-cov/**') != ''
         uses: actions/upload-artifact@v7
         with:
           name: coverage-unit-${{ github.run_id }}
@@ -41,6 +51,7 @@ jobs:
             htmlcov/**
             .coverage*
             target/llvm-cov/**
+          compression-level: 1
           if-no-files-found: ignore
           retention-days: 14
 
@@ -50,11 +61,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run integration >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
+          cache-build: false
       - name: Integration
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
 
   e2e:
@@ -63,11 +80,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run e2e >> "$GITHUB_OUTPUT"
+      - name: Cache browser binaries
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.browser == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/Cypress
+            ~/.cache/puppeteer
+          key: ${{ runner.os }}-e2e-browsers-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/playwright.config.*', '**/cypress.config.*') }}
+          restore-keys: |
+            ${{ runner.os }}-e2e-browsers-
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: E2E
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh e2e
 
   smoke:
@@ -76,9 +109,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run smoke >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Smoke
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh smoke

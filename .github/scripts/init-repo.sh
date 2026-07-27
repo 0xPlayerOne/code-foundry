@@ -10,6 +10,8 @@ languages="auto"
 features="all"
 package_manager="auto"
 bootstrap=true
+release_type="auto"
+npm_publish="false"
 tool_dir=""
 
 cleanup() {
@@ -30,6 +32,8 @@ Options:
   --features LIST            all or comma-separated optional features:
                              ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME     auto, bun, pnpm, yarn, or npm
+  --release-type NAME        auto, node, python, rust, or simple
+  --npm-publish              Enable npm publication in the release workflow
   --dry-run                  Preview changes without writing files
   --prune                    Remove disabled standard workflows (never custom workflows)
   --protection               Synchronize main branch required checks
@@ -50,6 +54,8 @@ while [ "$#" -gt 0 ]; do
     --languages) languages="${2:?missing language list}"; shift 2 ;;
     --features) features="${2:?missing feature list}"; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; shift 2 ;;
+    --release-type) release_type="${2:?missing release type}"; shift 2 ;;
+    --npm-publish) npm_publish=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     --prune) prune=true; shift ;;
     --protection) protection=true; shift ;;
@@ -65,6 +71,10 @@ done
 case "$package_manager" in
   auto|bun|pnpm|yarn|npm) ;;
   *) printf 'Unsupported package manager: %s\n' "$package_manager" >&2; exit 2 ;;
+esac
+case "$release_type" in
+  auto|node|python|rust|simple|none) ;;
+  *) printf 'Unsupported release type: %s\n' "$release_type" >&2; exit 2 ;;
 esac
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
@@ -84,6 +94,7 @@ sync_args=(
   --ref "$ref"
   --languages "$languages"
   --features "$features"
+  --package-manager "$package_manager"
 )
 if [ "$dry_run" = true ]; then sync_args+=(--check); else sync_args+=(--apply); fi
 if [ "$prune" = true ]; then sync_args+=(--prune); fi
@@ -104,6 +115,8 @@ template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml 
   printf 'languages: %s\n' "$languages"
   printf 'features: %s\n' "$features"
   printf 'package_manager: %s\n' "$package_manager"
+  printf 'release_type: %s\n' "$release_type"
+  printf 'npm_publish: %s\n' "$npm_publish"
 } > .github/template.yml
 
 if [ "$bootstrap" = false ]; then

@@ -1,0 +1,7 @@
+version: 1
+template: repo-foundry@latest
+languages: typescript
+features: all
+package_manager: bun
+release_type: node
+npm_publish: true
