@@ -13,7 +13,7 @@ runs:
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies
       if: inputs.install == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml') != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           **/node_modules
@@ -22,7 +22,7 @@ runs:
           ${{ runner.os }}-javascript-installed-v2-
     - name: Cache JavaScript packages
       if: hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.bun/install/cache
@@ -35,7 +35,7 @@ runs:
     - name: Cache Python environment
       id: python-environment
       if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml') != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           .venv
@@ -45,7 +45,7 @@ runs:
           ${{ runner.os }}-python-environment-
     - name: Cache Python packages
       if: hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != '' && steps.python-environment.outputs.cache-hit != 'true'
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cache/pip
@@ -55,7 +55,7 @@ runs:
           ${{ runner.os }}-python-
     - name: Cache Rust packages
       if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
