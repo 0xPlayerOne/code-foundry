@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
         run: bash .github/scripts/ci.sh should_run format >> "$GITHUB_OUTPUT"
@@ -48,6 +50,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
         run: bash .github/scripts/ci.sh should_run lint >> "$GITHUB_OUTPUT"
@@ -69,6 +73,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
         run: bash .github/scripts/ci.sh should_run type_check >> "$GITHUB_OUTPUT"
@@ -88,6 +94,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
         run: bash .github/scripts/ci.sh should_run build >> "$GITHUB_OUTPUT"

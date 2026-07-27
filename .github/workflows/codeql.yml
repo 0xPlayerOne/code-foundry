@@ -29,6 +29,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          fetch-depth: 2
           # Detection only reads Git trees, paths, and small profile files;
           # defer source blob transfer until the analyzer jobs.
           filter: blob:none
