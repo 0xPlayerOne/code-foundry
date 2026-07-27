@@ -58,7 +58,7 @@ Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supporte
 
 ## Releases and publishing
 
-The standard release workflow uses [Release Please](https://github.com/googleapis/release-please) after changes reach `main`. It opens or updates a release pull request, maintains `CHANGELOG.md`, creates the GitHub release, and applies semantic version bumps from Conventional Commits. The reusable `release-please-config.json` groups feature, fix, performance, dependency, documentation, test, CI, and maintenance changes in generated notes:
+The standard release workflow uses [Release Please](https://github.com/googleapis/release-please) after changes reach `main`. It opens or updates a versioned release pull request, maintains `CHANGELOG.md`, creates the GitHub release after that PR is merged, and applies semantic version bumps from Conventional Commits. The reusable `release-please-config.json` groups feature, fix, performance, dependency, documentation, test, CI, and maintenance changes in generated notes:
 
 - `fix:` → patch
 - `feat:` → minor
@@ -77,7 +77,9 @@ npm_publish: false   # true only for a package published to npm
 
 GitHub Actions needs permission to open release pull requests. Configure a repository or organization secret named `RELEASE_PLEASE_TOKEN` containing a narrowly scoped token or GitHub App token if the default `GITHUB_TOKEN` is not allowed to create pull requests. Keep `contents`, `issues`, and `pull-requests` permissions enabled for the release workflow.
 
-For npm publication, set `npm_publish: true` and configure npm trusted publishing (recommended) for this repository’s `release.yml` workflow, or provide an `NPM_TOKEN` secret. Publication occurs only after Release Please creates a release tag, so ordinary pushes cannot publish packages.
+For npm publication, set `npm_publish: true` and configure npm trusted publishing (recommended) for this repository’s `release.yml` workflow, or provide an `NPM_TOKEN` secret. The workflow detects which method is configured, and publication occurs only after Release Please creates a release tag, so ordinary pushes cannot publish packages. If npm publication is enabled without either configuration, the release job fails clearly instead of silently skipping a package release.
+
+The release flow is: promote `staging` into `main`; let Release Please open or update the version/changelog PR; merge that PR to create the GitHub release and tag; then publish to npm only when `npm_publish: true`.
 
 For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published template checkout or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract for a future npm/package wrapper around these same operations.
 
