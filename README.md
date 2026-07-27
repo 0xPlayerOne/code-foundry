@@ -133,7 +133,7 @@ Release and Security metadata jobs also use blobless checkouts where a checkout 
 
 CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Unchanged analyzer jobs use `ubuntu-slim` and skip both checkout and analysis while remaining visible to branch protection; changed analyzers use full `ubuntu-latest` runners. Its detection job uses a `blob:none` partial clone because it only needs Git paths and metadata. Scheduled and manually dispatched CodeQL runs remain full scans.
 
-CodeQL uploads SARIF findings for GitHub code scanning but does not archive the intermediate database in the reusable baseline; this keeps coverage and alert processing while avoiding an unnecessary database transfer.
+CodeQL uploads SARIF findings for GitHub code scanning but does not archive the intermediate database in the reusable baseline; this keeps coverage and alert processing while avoiding an unnecessary database transfer. The required workflow check gates on successful SARIF upload acknowledgment and does not wait for GitHub’s asynchronous post-upload processing, shortening the CI critical path while retaining the uploaded findings.
 
 Coverage is enforced at 80% for Python and Bun test suites when those ecosystems expose coverage support. Rust projects must keep their native test suites green; repositories with `cargo-llvm-cov` should enforce the same 80% line target in their Cargo coverage configuration.
 
