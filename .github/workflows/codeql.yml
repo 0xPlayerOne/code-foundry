@@ -60,6 +60,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          # Use all available runner cores for query evaluation; CodeQL's
+          # default on Linux is two threads.
+          threads: 0
       - name: Analyze
         if: matrix.changed
         uses: github/codeql-action/analyze@v4
