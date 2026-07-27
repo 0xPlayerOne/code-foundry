@@ -93,7 +93,7 @@ The repository name, owner, branch names, and release metadata are resolved by G
 
 CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
 
-The initializer generates a minimal `.mise.toml` from the selected language profile instead of installing every supported tool on every runner. Existing `.mise.toml` files are preserved. Workflow setup also restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
+The initializer generates a minimal `.mise.toml` from the selected language profile instead of installing every supported tool on every runner. Existing `.mise.toml` files are preserved. Initialization also generates a committed `mise.lock` when mise is available; CI then installs exact tool URLs and checksums without repeating registry/API resolution. Workflow setup restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
 
 Rust repositories also cache `target/` and Cargo-installed audit tools using separate lockfile/toolchain/workflow-job keys. Cargo fingerprints invalidate stale objects safely, while keeping build caches separate prevents a large Rust build from displacing dependency-download caches or parallel jobs from racing to save one partial cache.
 
