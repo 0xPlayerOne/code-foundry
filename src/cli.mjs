@@ -21,6 +21,8 @@ Init/sync options:
   --languages LIST          auto or typescript,rust,python,solidity
   --features LIST           all or ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME    auto, bun, pnpm, yarn, or npm
+  --release-type NAME        auto, node, python, rust, simple, or none
+  --npm-publish              Enable npm publication in the release workflow
   --dry-run                 Preview changes without writing files
   --prune                   Remove disabled standard workflows
   --protection              Synchronize main branch protections (init only)
@@ -42,6 +44,8 @@ function parseArgs(argv) {
     languages: 'auto',
     features: 'all',
     packageManager: 'auto',
+    releaseType: 'auto',
+    npmPublish: false,
     languagesSet: false,
     featuresSet: false,
     dryRun: false,
@@ -56,6 +60,7 @@ function parseArgs(argv) {
     ['--languages', 'languages'],
     ['--features', 'features'],
     ['--package-manager', 'packageManager'],
+    ['--release-type', 'releaseType'],
   ])
 
   while (argv.length) {
@@ -76,6 +81,7 @@ function parseArgs(argv) {
     else if (arg === '--prune') options.prune = true
     else if (arg === '--protection') options.protection = true
     else if (arg === '--no-bootstrap') options.bootstrap = false
+    else if (arg === '--npm-publish') options.npmPublish = true
     else fail(`unknown option: ${arg}`)
   }
 
@@ -111,10 +117,12 @@ function main() {
       '--languages', options.languages,
       '--features', options.features,
       '--package-manager', options.packageManager,
+      '--release-type', options.releaseType,
     ]
     if (options.protection) initArgs.push('--protection')
     if (options.dryRun) initArgs.push('--dry-run')
     if (options.prune) initArgs.push('--prune')
+    if (options.npmPublish) initArgs.push('--npm-publish')
     if (!options.bootstrap) initArgs.push('--no-bootstrap')
     run('init-repo.sh', initArgs, target)
   } else if (command === 'sync') {

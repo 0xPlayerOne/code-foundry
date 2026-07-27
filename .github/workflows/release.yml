@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,23 +11,15 @@ permissions:
   pull-requests: write
 
 jobs:
-  release:
-    name: Release / Version
-    runs-on: ubuntu-slim
+  detect:
+    name: Detect
+    runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: false
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created || 'false' }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      npm_publish: ${{ steps.profile.outputs.npm_publish }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          # Release Please reads release metadata and manifests; defer source
-          # blob transfer until a package file is actually needed.
-          filter: blob:none
       - name: Detect release profile
         id: profile
         shell: bash
@@ -54,48 +46,46 @@ jobs:
           if [ ! -f package.json ]; then npm_publish=false; fi
           printf 'release_type=%s\n' "$release_type" >> "$GITHUB_OUTPUT"
           printf 'npm_publish=%s\n' "$npm_publish" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Version and Release
+    needs: detect
+    if: needs.detect.outputs.release_type != 'none'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
       - name: Release Please
         id: release
-        if: steps.profile.outputs.release_type != 'none'
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@v4
         with:
-          # Use a PAT or GitHub App token when GITHUB_TOKEN cannot create PRs.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
-          config-file: release-please-config.json
-          release-type: ${{ steps.profile.outputs.release_type }}
+          release-type: ${{ needs.detect.outputs.release_type }}
           bump-minor-pre-major: true
 
   npm:
-    name: Release / Publish npm
-    needs: release
-    if: needs.release.outputs.release_created == 'true' && needs.release.outputs.npm_publish == 'true'
-    runs-on: ubuntu-slim
+    name: Publish npm
+    needs: [detect, release]
+    if: needs.release.outputs.release_created == 'true' && needs.detect.outputs.npm_publish == 'true'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout release
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.release.outputs.tag_name }}
-      - name: Setup Node (trusted)
-        if: env.NPM_TOKEN == ''
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - name: Setup Node (token)
-        if: env.NPM_TOKEN != ''
-        uses: actions/setup-node@v5
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Publish npm with token
-        if: env.NPM_TOKEN != ''
+      - name: Publish npm package
         env:
-          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
-        run: npm publish --provenance --access public
-      - name: Publish npm with trusted publishing
-        if: env.NPM_TOKEN == ''
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public

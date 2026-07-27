@@ -28,11 +28,14 @@ languages_set=false
 features_set=false
 package_manager=""
 template_ref=""
+release_type="auto"
+npm_publish="false"
 gitignore_backup=""
 custom_ignores=""
 
 valid_languages="typescript rust python solidity"
 valid_features="ci codeql security test draft-pr release-pr release dependabot"
+valid_release_types="auto node python rust simple none"
 
 contains_word() {
   case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
@@ -91,9 +94,17 @@ if [ -f .github/template.yml ]; then
   fi
   package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
   template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml)"
+  configured_release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml)"
+  configured_npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml)"
+  [ -n "$configured_release_type" ] && release_type="$configured_release_type"
+  [ -n "$configured_npm_publish" ] && npm_publish="$configured_npm_publish"
 fi
 validate_list language "$languages" "$valid_languages"
 validate_list feature "$features" "$valid_features"
+contains_word "$valid_release_types" "$release_type" || {
+  printf 'Unsupported release type: %s\n' "$release_type" >&2
+  exit 2
+}
 
 if [ -d "$source" ] && [ -f "$source/.github/scripts/sync-template.sh" ]; then
   template_root="$source"
@@ -236,6 +247,22 @@ for file in "${files[@]}"; do
   fi
 done
 
+# Release Please owns changelog updates after initialization. Preserve an
+# existing project history, but give new repositories the expected file.
+if [ ! -f CHANGELOG.md ]; then
+  changed=$((changed + 1))
+  if [ "$mode" = "check" ]; then
+    printf '%s\n' 'Would initialize CHANGELOG.md'
+  else
+    cat > CHANGELOG.md <<'EOF'
+# Changelog
+
+All notable changes to this project are documented here.
+EOF
+    printf '%s\n' 'Initialized CHANGELOG.md'
+  fi
+fi
+
 for file in "${optional_files[@]}"; do
   if [ ! -f "$file" ]; then
     changed=$((changed + 1))
@@ -247,6 +274,19 @@ for file in "${optional_files[@]}"; do
     fi
   fi
 done
+
+# Release Please's simple strategy needs a version file. Initialize one only
+# for Solidity-only repositories, where no package manifest owns the version.
+if [ ! -f version.txt ] && git ls-files -- '*.sol' | grep -q . &&
+  [ ! -f package.json ] && [ ! -f Cargo.toml ] && [ ! -f pyproject.toml ]; then
+  changed=$((changed + 1))
+  if [ "$mode" = "check" ]; then
+    printf '%s\n' 'Would initialize version.txt'
+  else
+    printf '%s\n' '0.1.0' > version.txt
+    printf '%s\n' 'Initialized version.txt'
+  fi
+fi
 
 if [ "$mode" = "apply" ]; then
   git config core.hooksPath .githooks
@@ -261,6 +301,8 @@ if [ "$mode" = "apply" ]; then
     if [ -n "$package_manager" ]; then
       printf 'package_manager: %s\n' "$package_manager"
     fi
+    printf 'release_type: %s\n' "$release_type"
+    printf 'npm_publish: %s\n' "$npm_publish"
   } > .github/template.yml
 fi
 
