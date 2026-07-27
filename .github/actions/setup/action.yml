@@ -486,6 +486,9 @@ runs:
         inputs.install == 'true' &&
         inputs.cache-build == 'true' &&
         (steps.profile.outputs.build == 'true' || inputs.task == 'build') &&
+        (inputs.task != 'type_check' ||
+        steps.profile.outputs.turbo != 'true' ||
+        steps.profile.outputs.turbo_task != 'true') &&
         (env.TURBO_TOKEN == '' ||
         env.TURBO_TEAM == '' ||
         steps.profile.outputs.turbo != 'true' ||
@@ -493,7 +496,8 @@ runs:
       uses: actions/cache@v5
       with:
         # Remote Turbo already stores task outputs for Turbo-backed builds.
-        # Avoid a second, often-empty framework cache archive in that mode.
+        # Avoid a second, often-empty framework cache archive in that mode;
+        # Turbo Type-Check tasks do not need framework build state either.
         path: |
           **/.next/cache
           **/node_modules/.vite
