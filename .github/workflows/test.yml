@@ -20,6 +20,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test-profile:
+    name: Test Profile
+    runs-on: ubuntu-slim
+    outputs:
+      e2e: ${{ steps.profile.outputs.e2e }}
+      e2e_browser: ${{ steps.profile.outputs.e2e_browser }}
+      smoke: ${{ steps.profile.outputs.smoke }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - name: Detect
+        id: profile
+        run: bash .github/scripts/ci.sh profile_test_optional >> "$GITHUB_OUTPUT"
+
   unit:
     name: Unit
     runs-on: ubuntu-latest
@@ -76,15 +92,14 @@ jobs:
 
   e2e:
     name: E2E
-    runs-on: ubuntu-latest
+    needs: test-profile
+    runs-on: ${{ needs.test-profile.outputs.e2e == 'true' && 'ubuntu-latest' || 'ubuntu-slim' }}
     steps:
       - name: Checkout
+        if: needs.test-profile.outputs.e2e == 'true'
         uses: actions/checkout@v7
-      - name: Detect
-        id: applicability
-        run: bash .github/scripts/ci.sh should_run e2e >> "$GITHUB_OUTPUT"
       - name: Cache browser binaries
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.browser == 'true'
+        if: needs.test-profile.outputs.e2e == 'true' && needs.test-profile.outputs.e2e_browser == 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -95,30 +110,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-e2e-browsers-
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: needs.test-profile.outputs.e2e == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
           cache-build: false
       - name: E2E
-        if: steps.applicability.outputs.applicable == 'true'
+        if: needs.test-profile.outputs.e2e == 'true'
         run: bash .github/scripts/ci.sh e2e
 
   smoke:
     name: Smoke
-    runs-on: ubuntu-latest
+    needs: test-profile
+    runs-on: ${{ needs.test-profile.outputs.smoke == 'true' && 'ubuntu-latest' || 'ubuntu-slim' }}
     steps:
       - name: Checkout
+        if: needs.test-profile.outputs.smoke == 'true'
         uses: actions/checkout@v7
-      - name: Detect
-        id: applicability
-        run: bash .github/scripts/ci.sh should_run smoke >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: needs.test-profile.outputs.smoke == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
           cache-build: false
       - name: Smoke
-        if: steps.applicability.outputs.applicable == 'true'
+        if: needs.test-profile.outputs.smoke == 'true'
         run: bash .github/scripts/ci.sh smoke
