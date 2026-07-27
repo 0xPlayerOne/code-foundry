@@ -183,6 +183,7 @@ runs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
+          ~/.cargo/advisory-db
         key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-
