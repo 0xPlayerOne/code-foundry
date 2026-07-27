@@ -23,7 +23,7 @@ inputs:
     required: false
     default: auto
   cache-build:
-    description: Restore JavaScript framework and incremental compiler caches.
+    description: Restore JavaScript framework, Rust dependency, and incremental compiler caches.
     required: false
     default: 'true'
   cache-lint:
@@ -448,15 +448,23 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-tools-
     - name: Cache Rust builds
-      if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      if: inputs.install == 'true' && inputs.install-rust == 'true' && inputs.cache-build == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
-        path: target
-        key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
+        # Keep reusable dependency/build-script artifacts for the Build job;
+        # exclude target/incremental and release output, which are large and
+        # provide little value on a fresh hosted runner.
+        path: |
+          target/.rustc_info.json
+          target/debug/deps
+          target/debug/build
+          target/debug/.fingerprint
+          target/debug/*.d
+        key: ${{ runner.os }}-rust-build-v2-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
         # Cargo fingerprints validate restored artifacts; keep job-specific
-        # primary saves but reuse a prior workflow's target directory when warm.
+        # primary saves but reuse a prior workflow's dependency artifacts.
         restore-keys: |
-          ${{ runner.os }}-rust-build-
+          ${{ runner.os }}-rust-build-v2-
     - name: Setup
       if: ${{ steps.profile.outputs.mise_required == 'true' }}
       uses: jdx/mise-action@v4
