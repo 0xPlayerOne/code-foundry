@@ -94,6 +94,7 @@ sync_args=(
   --ref "$ref"
   --languages "$languages"
   --features "$features"
+  --package-manager "$package_manager"
 )
 if [ "$dry_run" = true ]; then sync_args+=(--check); else sync_args+=(--apply); fi
 if [ "$prune" = true ]; then sync_args+=(--prune); fi

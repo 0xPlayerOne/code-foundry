@@ -11,6 +11,7 @@ README files, mise tool selections, or additional workflows.
 Options:
   --languages LIST  auto or comma-separated: typescript,rust,python,solidity
   --features LIST   all or comma-separated standard features
+  --package-manager NAME  auto, bun, pnpm, yarn, or npm
   --check           Preview changes (default)
   --apply           Apply changes
   --prune           Remove disabled standard workflows
@@ -27,6 +28,7 @@ prune=false
 languages_set=false
 features_set=false
 package_manager=""
+package_manager_set=false
 template_ref=""
 release_type="auto"
 npm_publish="false"
@@ -79,6 +81,7 @@ while [ "$#" -gt 0 ]; do
     --ref) source_ref="${2:?missing ref}"; shift 2 ;;
     --languages) languages="${2:?missing language list}"; languages_set=true; shift 2 ;;
     --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
+    --package-manager) package_manager="${2:?missing package manager}"; package_manager_set=true; shift 2 ;;
     --check) mode="check"; shift ;;
     --apply) mode="apply"; shift ;;
     --prune) prune=true; shift ;;
@@ -97,13 +100,20 @@ if [ -f .github/template.yml ]; then
     configured_features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml)"
     [ -n "$configured_features" ] && features="$configured_features"
   fi
-  package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
+  if [ "$package_manager_set" = false ]; then
+    package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
+  fi
   template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml)"
   configured_release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml)"
   configured_npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml)"
   [ -n "$configured_release_type" ] && release_type="$configured_release_type"
   [ -n "$configured_npm_publish" ] && npm_publish="$configured_npm_publish"
 fi
+[ -n "$package_manager" ] || package_manager=auto
+case "$package_manager" in
+  auto|bun|pnpm|yarn|npm) ;;
+  *) printf 'Unsupported package manager: %s\n' "$package_manager" >&2; exit 2 ;;
+esac
 validate_list language "$languages" "$valid_languages"
 validate_list feature "$features" "$valid_features"
 contains_word "$valid_release_types" "$release_type" || {
@@ -287,12 +297,21 @@ detect_languages() {
 
 initialize_mise() {
   local selected_languages="$1"
-  local language
+  local language selected_package_manager
   if [ -f .mise.toml ]; then
     return
   fi
   if [ "$selected_languages" = auto ]; then
     selected_languages="$(detect_languages)"
+  fi
+  selected_package_manager="$package_manager"
+  if [ "$selected_package_manager" = auto ]; then
+    if [ -f bun.lock ] || [ -f bun.lockb ]; then selected_package_manager=bun
+    elif [ -f pnpm-lock.yaml ]; then selected_package_manager=pnpm
+    elif [ -f yarn.lock ]; then selected_package_manager=yarn
+    elif [ -f package-lock.json ]; then selected_package_manager=npm
+    else selected_package_manager=bun
+    fi
   fi
   changed=$((changed + 1))
   if [ "$mode" = check ]; then
@@ -305,7 +324,9 @@ initialize_mise() {
       case "$language" in
         typescript|solidity)
           printf 'node = "%s"\n' "$node_version"
-          printf 'bun = "%s"\n' "$bun_version"
+          if [ "$selected_package_manager" = bun ]; then
+            printf 'bun = "%s"\n' "$bun_version"
+          fi
           ;;
         python)
           printf 'python = "%s"\n' "$python_version"
