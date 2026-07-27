@@ -69,3 +69,7 @@ jobs:
           # archive is not needed by this reusable baseline and adds upload
           # overhead.
           upload-database: false
+          # The upload acknowledgment is sufficient for the required workflow
+          # check; let GitHub process the SARIF asynchronously to remove the
+          # post-upload wait from the critical path.
+          wait-for-processing: false
