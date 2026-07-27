@@ -6,6 +6,14 @@ inputs:
     description: Install dependencies for the detected project ecosystems.
     required: false
     default: 'false'
+  cache-build:
+    description: Restore JavaScript framework and incremental compiler caches.
+    required: false
+    default: 'true'
+  cache-lint:
+    description: Restore the JavaScript/TypeScript lint cache.
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -33,16 +41,24 @@ runs:
         key: ${{ runner.os }}-javascript-${{ hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-javascript-
+    - name: Cache JavaScript lint state
+      if: inputs.install == 'true' && inputs.cache-lint == 'true' && hashFiles('**/.eslintrc*', '**/eslint.config.*') != ''
+      uses: actions/cache@v5
+      with:
+        path: |
+          **/.eslintcache
+        key: ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.eslintrc*', '**/eslint.config.*', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-
     - name: Cache JavaScript build state
-      if: inputs.install == 'true' && hashFiles('**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '**/.eslintrc*', '**/eslint.config.*') != ''
+      if: inputs.install == 'true' && inputs.cache-build == 'true' && hashFiles('**/next.config.*', '**/vite.config.*', '**/tsconfig*.json') != ''
       uses: actions/cache@v5
       with:
         path: |
           **/.next/cache
           **/node_modules/.vite
-          **/.eslintcache
           **/*.tsbuildinfo
-        key: ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '**/.eslintrc*', '**/eslint.config.*', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-
     - name: Cache Python environment

@@ -33,6 +33,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          cache-build: false
       - name: Format
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh format
@@ -51,6 +52,8 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          cache-build: false
+          cache-lint: true
       - name: Lint
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh lint
