@@ -42,14 +42,20 @@ runs:
       id: profile
       shell: bash
       run: |
-        has_files() {
-          git ls-files -- "$@" | grep -q .
+        tracked_files="$(git ls-files)"
+
+        has_tracked_regex() {
+          printf '%s\n' "$tracked_files" | grep -Eq "$1"
+        }
+
+        has_python_source() {
+          awk '!/^\.github\// && /(^|\/)[^\/]+\.py$/ { found=1; exit } END { exit !found }' <<< "$tracked_files"
         }
 
         javascript=false
         if [ -f package.json ] || [ -f bun.lock ] || [ -f bun.lockb ] ||
           [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ] ||
-          has_files '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts'; then
+          has_tracked_regex '(^|/)[^/]+\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$'; then
           javascript=true
           echo 'javascript=true' >> "$GITHUB_OUTPUT"
         else
@@ -59,14 +65,13 @@ runs:
         if [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
           [ -f yarn.lock ] || [ -f package-lock.json ]; then
           echo 'javascript_dependencies=true' >> "$GITHUB_OUTPUT"
-        elif [ -f package.json ] && node <<'NODE'
-        const { execFileSync } = require('node:child_process');
+        elif [ -f package.json ] && REPO_FOUNDRY_PACKAGE_FILES="$tracked_files" node <<'NODE'
         const fs = require('node:fs');
 
-        const files = execFileSync('git', ['ls-files', '--', 'package.json', '*/package.json'], { encoding: 'utf8' })
+        const files = (process.env.REPO_FOUNDRY_PACKAGE_FILES || '')
           .trim()
           .split('\n')
-          .filter(Boolean);
+          .filter((file) => /(^|\/)package\.json$/.test(file));
         const groups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
         const hasDependencies = files.some((file) => {
           try {
@@ -87,7 +92,7 @@ runs:
         fi
 
         python=false
-        if has_files '*.py' ':!.github/**' || [ -f pyproject.toml ] ||
+        if has_python_source || [ -f pyproject.toml ] ||
           [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then
           python=true
           echo 'python=true' >> "$GITHUB_OUTPUT"
@@ -104,7 +109,7 @@ runs:
         fi
 
         turbo=false
-        if [ -f turbo.json ] || [ -f turbo.jsonc ] || has_files '*/turbo.json' '*/turbo.jsonc'; then
+        if [ -f turbo.json ] || [ -f turbo.jsonc ] || has_tracked_regex '(^|/)turbo\.jsonc?$'; then
           turbo=true
           echo 'turbo=true' >> "$GITHUB_OUTPUT"
         else
@@ -113,7 +118,7 @@ runs:
 
         eslint=false
         if [ -f .eslintrc ] || [ -f .eslintrc.js ] || [ -f .eslintrc.cjs ] ||
-          [ -f .eslintrc.json ] || has_files '.eslintrc*' 'eslint.config.*'; then
+          [ -f .eslintrc.json ] || has_tracked_regex '(^|/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$'; then
           eslint=true
           echo 'eslint=true' >> "$GITHUB_OUTPUT"
         else
@@ -121,7 +126,7 @@ runs:
         fi
 
         build=false
-        if has_files 'next.config.*' 'vite.config.*' 'tsconfig*.json'; then
+        if has_tracked_regex '(^|/)(next\.config\.[^/]*|vite\.config\.[^/]*|tsconfig[^/]*\.json)$'; then
           build=true
           echo 'build=true' >> "$GITHUB_OUTPUT"
         else
