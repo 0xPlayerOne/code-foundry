@@ -21,9 +21,7 @@ concurrency:
 jobs:
   format:
     name: Format
-    # Formatting never compiles or launches services; keep it on the lean
-    # single-CPU runner while build, type-check, and lint retain full runners.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
