@@ -142,6 +142,10 @@ rust_component() {
   local component="$1"
   if command -v rustup >/dev/null 2>&1; then
     local toolchain="${RUSTUP_TOOLCHAIN:-$(rustup show active-toolchain | awk '{print $1}')}"
+    if rustup component list --toolchain "$toolchain" 2>/dev/null |
+      grep -q "^${component}.*(installed)"; then
+      return
+    fi
     rustup component add --toolchain "$toolchain" "$component" >/dev/null
   fi
 }

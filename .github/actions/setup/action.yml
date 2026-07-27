@@ -10,6 +10,36 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Cache JavaScript packages
+      if: hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.bun/install/cache
+          ~/.npm
+          ~/.cache/yarn
+          ~/.local/share/pnpm/store
+        key: ${{ runner.os }}-javascript-${{ hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-javascript-
+    - name: Cache Rust packages
+      if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-
+    - name: Cache Python packages
+      if: hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != ''
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-python-
     - name: Setup
       uses: jdx/mise-action@v4
       with:
