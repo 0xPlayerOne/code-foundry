@@ -27,6 +27,7 @@ jobs:
       languages: ${{ steps.languages.outputs.languages }}
     steps:
       - name: Checkout
+        if: matrix.changed
         uses: actions/checkout@v7
         with:
           # Detection only reads Git trees, paths, and small profile files;
