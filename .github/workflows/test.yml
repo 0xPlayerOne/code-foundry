@@ -29,11 +29,9 @@ jobs:
         id: applicability
         run: bash .github/scripts/ci.sh should_run unit >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
-          cache-build: false
       - name: Unit
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
@@ -64,11 +62,9 @@ jobs:
         id: applicability
         run: bash .github/scripts/ci.sh should_run integration >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
-          cache-build: false
       - name: Integration
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
@@ -94,7 +90,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-e2e-browsers-
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
@@ -112,7 +107,6 @@ jobs:
         id: applicability
         run: bash .github/scripts/ci.sh should_run smoke >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
