@@ -177,7 +177,10 @@ runs:
 
         ruff=false
         if [ "$python" = true ] &&
-          { [ -f pyproject.toml ] || [ -f ruff.toml ] || configured_tool ruff; }; then
+          { [ -f ruff.toml ] || configured_tool ruff ||
+            { [ -f pyproject.toml ] && grep -Eiq 'ruff|\[tool\.ruff' pyproject.toml; } ||
+            { [ -f requirements.txt ] && grep -Eiq '(^|[-_.])ruff([<>=[:space:]]|$)' requirements.txt; } ||
+            { [ -f requirements-dev.txt ] && grep -Eiq '(^|[-_.])ruff([<>=[:space:]]|$)' requirements-dev.txt; }; }; then
           ruff=true
         fi
         printf 'ruff=%s\n' "$ruff" >> "$GITHUB_OUTPUT"
