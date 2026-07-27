@@ -30,6 +30,10 @@ inputs:
     description: Restore materialized Python virtual environments; disable for parallel test jobs with large environments.
     required: false
     default: 'true'
+  cache-installed:
+    description: Cache materialized JavaScript dependencies; auto skips large Bun node_modules trees and keeps compact link-based installs.
+    required: false
+    default: auto
   cache-lint:
     description: Restore the JavaScript/TypeScript lint cache.
     required: false
@@ -312,7 +316,16 @@ runs:
 
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies
-      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript_dependencies == 'true' && steps.profile.outputs.javascript_package_manager != 'npm' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/template.yml', '.mise.toml', 'mise.lock') != ''
+      if: >-
+        inputs.install == 'true' &&
+        inputs.install-javascript == 'true' &&
+        inputs.cache-installed != 'false' &&
+        steps.profile.outputs.javascript_dependencies == 'true' &&
+        steps.profile.outputs.javascript_package_manager != 'npm' &&
+        (inputs.cache-installed == 'true' ||
+        steps.profile.outputs.javascript_package_manager == 'pnpm' ||
+        steps.profile.outputs.javascript_package_manager == 'yarn') &&
+        hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/template.yml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
