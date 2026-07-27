@@ -27,6 +27,8 @@ prune=false
 languages_set=false
 features_set=false
 package_manager=""
+gitignore_backup=""
+custom_ignores=""
 
 valid_languages="typescript rust python solidity"
 valid_features="ci codeql security test draft-pr release-pr release dependabot"
@@ -57,6 +59,8 @@ workflow_enabled() {
 
 cleanup() {
   if [ -n "$temp_dir" ]; then rm -rf "$temp_dir"; fi
+  if [ -n "$gitignore_backup" ]; then rm -f "$gitignore_backup"; fi
+  if [ -n "$custom_ignores" ]; then rm -f "$custom_ignores"; fi
 }
 trap cleanup EXIT
 
@@ -195,7 +199,28 @@ for file in "${files[@]}"; do
       printf 'Would sync %s\n' "$file"
     else
       mkdir -p "$(dirname "$file")"
-      cp "$template_file" "$file"
+      if [ "$file" = .gitignore ] && [ -f "$file" ]; then
+        # Keep repository-specific ignore rules while refreshing the shared
+        # baseline. This prevents a template sync from hiding generated files
+        # or local tooling that only one project uses.
+        gitignore_backup="$(mktemp)"
+        custom_ignores="$(mktemp)"
+        cp "$file" "$gitignore_backup"
+        cp "$template_file" "$file"
+        awk 'NR == FNR { seen[$0] = 1; next } NF && !seen[$0] { print }' \
+          "$template_file" "$gitignore_backup" > "$custom_ignores"
+        if [ -s "$custom_ignores" ]; then
+          {
+            printf '\n# Repository-specific rules\n'
+            cat "$custom_ignores"
+          } >> "$file"
+        fi
+        rm -f "$gitignore_backup" "$custom_ignores"
+        gitignore_backup=""
+        custom_ignores=""
+      else
+        cp "$template_file" "$file"
+      fi
       case "$file" in
         .githooks/*|.github/scripts/*) chmod +x "$file" ;;
       esac
