@@ -16,20 +16,30 @@ concurrency:
 
 jobs:
   dependency-audit:
-    name: Dependency Audit
+    name: Dependency Audit (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: JavaScript
+            ecosystem: javascript
+          - name: Rust
+            ecosystem: rust
+          - name: Python
+            ecosystem: python
     steps:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Detect
         id: applicability
-        run: bash .github/scripts/security.sh should_run >> "$GITHUB_OUTPUT"
+        run: bash .github/scripts/security.sh should_run "${{ matrix.ecosystem }}" >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
       - name: Audit dependencies
         if: steps.applicability.outputs.applicable == 'true'
-        run: bash .github/scripts/security.sh
+        run: bash .github/scripts/security.sh audit "${{ matrix.ecosystem }}"
 
   dependency-review:
     name: Dependency Review

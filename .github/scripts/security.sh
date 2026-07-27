@@ -13,22 +13,35 @@ has_dependency_manifest() {
 }
 
 should_run() {
-  if has_dependency_manifest; then
-    printf '%s\n' 'applicable=true'
-  else
-    printf '%s\n' 'applicable=false'
-  fi
+  case "${1:-all}" in
+    javascript) has_javascript_dependencies || return 1 ;;
+    rust) [ -f Cargo.toml ] || return 1 ;;
+    python) [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ] || return 1 ;;
+    all) has_dependency_manifest || return 1 ;;
+    *) echo "unknown ecosystem: ${1:-}" >&2; return 2 ;;
+  esac
+  printf '%s\n' 'applicable=true'
 }
 
 if [ "${1:-audit}" = should_run ]; then
-  should_run
-  exit 0
+  if should_run "${2:-all}"; then
+    exit 0
+  else
+    status=$?
+    [ "$status" -eq 1 ] && printf '%s\n' 'applicable=false' && exit 0
+    exit "$status"
+  fi
 fi
 
-if [ "${1:-audit}" != audit ]; then
-  echo "usage: $0 [audit|should_run]" >&2
-  exit 2
-fi
+mode="${1:-audit}"
+if [ "$mode" = audit ] && [ -n "${2:-}" ]; then mode="$2"; fi
+case "$mode" in
+  audit|all|javascript|rust|python) ;;
+  *)
+    echo "usage: $0 [audit|should_run] [javascript|rust|python|all]" >&2
+    exit 2
+    ;;
+esac
 
 audits=0
 
@@ -41,7 +54,11 @@ package_manager() {
   fi
 }
 
-if has_javascript_dependencies; then
+audit_javascript() {
+  if ! has_javascript_dependencies; then
+    echo "Skipping JavaScript/TypeScript audit (dependency inputs not found)"
+    return
+  fi
   audit_args=(--audit-level=high)
   if [ -f .github/security-audit-allowlist.txt ]; then
     while IFS= read -r advisory; do
@@ -55,31 +72,46 @@ if has_javascript_dependencies; then
     yarn) audits=$((audits + 1)); corepack yarn npm audit --all --recursive ;;
     npm) audits=$((audits + 1)); npm audit --audit-level=high ;;
   esac
-else
-  echo "Skipping JavaScript/TypeScript audit (dependency inputs not found)"
-fi
+}
 
-if [ -f Cargo.toml ]; then
-  audits=$((audits + 1))
-  if ! command -v cargo-audit >/dev/null 2>&1; then cargo install cargo-audit --locked --quiet; fi
-  cargo audit
-else
-  echo "Skipping Rust audit (Cargo.toml not found)"
-fi
-
-if [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
-  audits=$((audits + 1))
-  if command -v uv >/dev/null 2>&1; then
-    pip_audit() { uv tool run --from pip-audit pip-audit "$@"; }
+audit_rust() {
+  if [ -f Cargo.toml ]; then
+    audits=$((audits + 1))
+    if ! command -v cargo-audit >/dev/null 2>&1; then cargo install cargo-audit --locked --quiet; fi
+    cargo audit
   else
-    python -m pip install --disable-pip-version-check --quiet pip-audit
-    pip_audit() { python -m pip_audit "$@"; }
+    echo "Skipping Rust audit (Cargo.toml not found)"
   fi
-  if [ -f requirements.txt ]; then pip_audit -r requirements.txt; fi
-  if [ -f requirements-dev.txt ]; then pip_audit -r requirements-dev.txt; fi
-  if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then pip_audit; fi
-else
-  echo "Skipping Python audit (Python dependency manifest not found)"
-fi
+}
+
+audit_python() {
+  if [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
+    audits=$((audits + 1))
+    if command -v uv >/dev/null 2>&1; then
+      pip_audit() { uv tool run --from pip-audit pip-audit "$@"; }
+    else
+      python -m pip install --disable-pip-version-check --quiet pip-audit
+      pip_audit() { python -m pip_audit "$@"; }
+    fi
+    if [ -f requirements.txt ]; then pip_audit -r requirements.txt; fi
+    if [ -f requirements-dev.txt ]; then pip_audit -r requirements-dev.txt; fi
+    if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then pip_audit; fi
+  else
+    echo "Skipping Python audit (Python dependency manifest not found)"
+  fi
+}
+
+case "$mode" in
+  audit|all)
+    audit_javascript
+    audit_rust
+    audit_python
+    ;;
+  javascript) audit_javascript ;;
+  rust) audit_rust ;;
+  python) audit_python ;;
+esac
 
 if [ "$audits" -eq 0 ]; then echo "No supported dependency manifests found; nothing to audit"; fi
+
+exit 0
