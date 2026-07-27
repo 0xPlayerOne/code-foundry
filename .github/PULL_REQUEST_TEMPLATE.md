@@ -1,32 +1,29 @@
-## Description
+## Summary
 
-<!-- Summarize the change and link related issues. -->
+<!-- What changed, why was it needed, and which issue or requirement does it address? -->
 
-## CI Status
+## Validation
 
-Do not merge until all applicable required checks pass.
+<!-- List the commands, local checks, CI links, screenshots, or recordings used to validate this change. Required repository checks are enforced automatically. -->
 
-- [ ] `CI / Format` passes
-- [ ] `CI / Lint` passes
-- [ ] `CI / Type-Check` passes when applicable
-- [ ] `CI / Build` passes when applicable
-- [ ] `Test / Unit` and coverage pass when applicable
-- [ ] `Test / Integration` passes when applicable
-- [ ] `Test / E2E` passes when applicable
-- [ ] `Test / Smoke` passes when applicable
-- [ ] `Security / Dependency Audit` passes when applicable
-- [ ] `Security / Dependency Review` passes when applicable
-- [ ] `CodeQL / Analyze (...)` passes or is not applicable
-- [ ] Preview/deployment checks pass when applicable
+- Commands run:
+- CI or deployment links:
+- Screenshots/recordings, when applicable:
 
-## Compliance Checklist
+## Impact and rollout
 
-- [ ] Commits follow the repository's documented convention, preferably [Conventional Commits](https://www.conventionalcommits.org/)
-- [ ] Formatting, linting, type checking, build, tests, and coverage were run as applicable
-- [ ] New dependencies use the repository's existing package manager and lockfile
-- [ ] No secrets, local environment files, generated artifacts, or unrelated formatting are included
-- [ ] Documentation and configuration are updated when needed
+- [ ] No migration or rollout action is required
+- [ ] Migration or rollout steps are documented below
+- [ ] Environment or secret changes are documented below
+- [ ] Security, privacy, compatibility, or performance impact is documented below
+- [ ] Rollback or follow-up work is documented below
 
-## Additional Context
+<!-- Add the relevant details here. -->
 
-<!-- Mention migrations, environment changes, breaking changes, compatibility, deployment, rollback, or follow-up work. -->
+## Review notes
+
+<!-- Call out tradeoffs, known limitations, generated files, dependency changes, or areas that need focused review. -->
+
+## Related issue
+
+<!-- Use `Closes #123` when applicable. -->
