@@ -103,7 +103,7 @@ New Python profiles include pinned `uv` as an accelerated, pip-compatible instal
 
 Python Security audits use cached `uv tool run` environments for `pip-audit` when uv is available, with the same pip fallback used by CI installation.
 
-CI, Test, and Security workflows perform one source-only applicability pass on `ubuntu-slim` before starting language-specific jobs. Empty suites remain visible as skipped successful required checks, while applicable jobs continue to run in parallel and perform normal tool installation and dependency setup.
+CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
 
 Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, and CodeQL language detection. Build, test, audit, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because the slim container is intended for short operations and has only one CPU.
 

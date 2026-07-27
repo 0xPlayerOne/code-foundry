@@ -19,82 +19,74 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  detect:
-    name: Detect
-    runs-on: ubuntu-slim
-    outputs:
-      format: ${{ steps.suites.outputs.format }}
-      lint: ${{ steps.suites.outputs.lint }}
-      type_check: ${{ steps.suites.outputs.type_check }}
-      build: ${{ steps.suites.outputs.build }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Detect suites
-        id: suites
-        shell: bash
-        run: |
-          for task in format lint type_check build; do
-            applicable="$(bash .github/scripts/ci.sh should_run "$task" | awk -F= '$1 == "applicable" { print $2 }')"
-            printf '%s=%s\n' "$task" "$applicable" >> "$GITHUB_OUTPUT"
-          done
-
   format:
     name: Format
-    needs: detect
-    if: needs.detect.outputs.format == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run format >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Format
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh format
 
   lint:
     name: Lint
-    needs: detect
-    if: needs.detect.outputs.lint == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run lint >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Lint
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh lint
 
   type-check:
     name: Type-Check
-    needs: detect
-    if: needs.detect.outputs.type_check == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run type_check >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Type-Check
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh type_check
 
   build:
     name: Build
-    needs: detect
-    if: needs.detect.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run build >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Build
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh build
