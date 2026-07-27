@@ -67,6 +67,27 @@ has_graph_project() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.devDependencies?.["@graphprotocol/graph-cli"] ? 0 : 1)'
 }
 
+has_browser_dependencies() {
+  if [ -f package.json ] && node <<'NODE'
+const fs = require('node:fs');
+const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const groups = [p.dependencies, p.devDependencies, p.optionalDependencies, p.peerDependencies];
+const names = groups.flatMap((group) => Object.keys(group || {}));
+const scripts = Object.values(p.scripts || {});
+process.exit([...names, ...scripts].some((value) => /playwright|cypress|puppeteer/i.test(value)) ? 0 : 1);
+NODE
+  then
+    return 0
+  fi
+
+  for manifest in pyproject.toml requirements.txt requirements-dev.txt; do
+    if [ -f "$manifest" ] && grep -Eiq 'playwright|cypress|puppeteer' "$manifest"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 package_manager() {
   local configured=""
   if [ -f .github/template.yml ]; then
@@ -452,6 +473,7 @@ should_run() {
   local task="$1"
   if repo_foundry_pr_docs_only; then
     printf '%s\n' 'applicable=false'
+    [ "$task" = e2e ] && printf '%s\n' 'browser=false'
     return 0
   fi
   case "$task" in
@@ -501,8 +523,14 @@ should_run() {
     e2e)
       if has_script test:e2e || has_script e2e || [ -d tests/e2e ]; then
         printf '%s\n' 'applicable=true'
+        if has_browser_dependencies; then
+          printf '%s\n' 'browser=true'
+        else
+          printf '%s\n' 'browser=false'
+        fi
       else
         printf '%s\n' 'applicable=false'
+        printf '%s\n' 'browser=false'
       fi
       ;;
     smoke)
