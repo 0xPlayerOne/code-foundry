@@ -19,10 +19,6 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
       - name: Check
         id: check-pr
         run: |
@@ -34,7 +30,9 @@ jobs:
         run: |
           DATE=$(date +%Y-%m-%d)
           BODY_FILE="$RUNNER_TEMP/release-pr.md"
-          COMMITS=$(git log --no-merges --pretty=format:'- %s (%h)' origin/main..HEAD)
+          COMMITS=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/compare/main...staging" \
+            --jq '.commits[] | "- \(.commit.message | split("\\n")[0]) (\(.sha[0:7]))"' | tail -100)
           if [ -z "$COMMITS" ]; then
             COMMITS='- No commits found since main.'
           fi
