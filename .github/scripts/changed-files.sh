@@ -25,8 +25,11 @@ repo_foundry_changed_files() {
   REPO_FOUNDRY_CHANGED_FILES_READY=true
 }
 
-repo_foundry_pr_docs_only() {
-  [ "${GITHUB_EVENT_NAME:-}" = pull_request ] || return 1
+repo_foundry_governance_only() {
+  case "${GITHUB_EVENT_NAME:-}" in
+    pull_request|push) ;;
+    *) return 1 ;;
+  esac
 
   local changed_files=""
 
@@ -46,6 +49,10 @@ repo_foundry_pr_docs_only() {
   done <<< "$changed_files"
 
   return 0
+}
+
+repo_foundry_pr_docs_only() {
+  repo_foundry_governance_only
 }
 
 # Return success when an ordinary push or pull request changed no dependency or

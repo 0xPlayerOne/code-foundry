@@ -119,7 +119,7 @@ Python Security audits use an isolated cache for `uv tool run` environments cont
 
 CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
 
-On pull requests, CI, Test, and Security also recognize governance-only changes (README, license, issue/PR templates, CODEOWNERS, Code of Conduct, CONTRIBUTING, and SECURITY) and leave the required jobs successful without installing tools or running unrelated checks. Any source, dependency, workflow, profile, or build configuration change runs the full applicable checks; an unavailable diff always falls back to running them.
+On pull requests and ordinary pushes, CI, Test, and Security also recognize governance-only changes (README, license, issue/PR templates, CODEOWNERS, Code of Conduct, CONTRIBUTING, and SECURITY) and leave the required jobs successful without installing tools or running unrelated checks. Any source, dependency, workflow, profile, or build configuration change runs the full applicable checks; an unavailable diff always falls back to running them.
 
 Security dependency audits apply the same fail-open change detection per ecosystem: JavaScript, Rust, and Python audits skip setup for source-only pushes and pull requests that do not change that ecosystem's manifests, lockfiles, audit allowlist, or shared tool configuration. Scheduled scans, manual runs, and uncertain diffs always audit normally.
 
