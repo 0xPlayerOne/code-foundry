@@ -42,11 +42,11 @@ docs/*  test/*  refactor/*         │              │
                                    └── integration branch
 ```
 
-| Branch | Purpose | Contribution rule |
-| --- | --- | --- |
-| `main` | Protected release branch | Merge through the `staging` → `main` release PR. No direct pushes. |
-| `staging` | Integration branch | Target normal pull requests here. Required checks must pass before merge. |
-| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work | Branch from `staging`; keep changes small and reviewable. |
+| Branch                                                         | Purpose                  | Contribution rule                                                         |
+| -------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| `main`                                                         | Protected release branch | Merge through the `staging` → `main` release PR. No direct pushes.        |
+| `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |
+| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |
 
 Use squash merges unless the repository documents another strategy. Re-align `staging` with `main` after a release when needed.
 
@@ -161,13 +161,13 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 ## Workflow and check behavior
 
-| Event | Expected automation |
-| --- | --- |
-| Push to `main` or `staging` | CI, Test, Security, and CodeQL workflows |
+| Event                            | Expected automation                      |
+| -------------------------------- | ---------------------------------------- |
+| Push to `main` or `staging`      | CI, Test, Security, and CodeQL workflows |
 | Pull request targeting `staging` | CI, Test, Security, and CodeQL workflows |
-| Push to a working branch | Draft PR workflow |
-| Push to `staging` | Release PR workflow |
-| Version tag such as `v1.2.3` | Release workflow |
+| Push to a working branch         | Draft PR workflow                        |
+| Push to `staging`                | Release PR workflow                      |
+| Version tag such as `v1.2.3`     | Release workflow                         |
 
 The workflows use separate concurrency groups. A newer run for the same branch or pull request cancels its older run, while independent CI, test, security, and CodeQL workflows continue in parallel.
 
@@ -177,10 +177,10 @@ Security checks can be skipped when repository visibility or the GitHub plan doe
 
 ## Review and merge protocol
 
-| Change | Target | Merge gate |
-| --- | --- | --- |
-| Working branch | `staging` | All applicable required checks pass |
-| `staging` release | `main` | Current staging checks, release review, and rollout notes |
+| Change            | Target    | Merge gate                                                |
+| ----------------- | --------- | --------------------------------------------------------- |
+| Working branch    | `staging` | All applicable required checks pass                       |
+| `staging` release | `main`    | Current staging checks, release review, and rollout notes |
 
 Reviewers focus on correctness, security, maintainability, test coverage, operational impact, and compatibility. Authors remain responsible for responding to feedback and verifying the final commit.
 
