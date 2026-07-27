@@ -53,7 +53,7 @@ jobs:
       - name: Release Please
         id: release
         if: steps.profile.outputs.release_type != 'none'
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           # Use a PAT or GitHub App token when GITHUB_TOKEN cannot create PRs.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
@@ -78,12 +78,12 @@ jobs:
           ref: ${{ needs.release.outputs.tag_name }}
       - name: Setup Node (trusted)
         if: env.NPM_TOKEN == ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Setup Node (token)
         if: env.NPM_TOKEN != ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
