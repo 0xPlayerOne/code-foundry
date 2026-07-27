@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+has_javascript_dependencies() {
+  [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
+    [ -f yarn.lock ] || [ -f package-lock.json ] ||
+    { [ -f package.json ] && node -e 'const p=require("./package.json"); const groups=[p.dependencies,p.devDependencies,p.optionalDependencies,p.peerDependencies]; process.exit(groups.some((g)=>g && Object.keys(g).length) ? 0 : 1)' 2>/dev/null; }
+}
+
 has_dependency_manifest() {
-  [ -f package.json ] || [ -f Cargo.toml ] || [ -f requirements.txt ] ||
+  has_javascript_dependencies || [ -f Cargo.toml ] || [ -f requirements.txt ] ||
     [ -f requirements-dev.txt ] || [ -f pyproject.toml ]
 }
 
@@ -35,7 +41,7 @@ package_manager() {
   fi
 }
 
-if [ -f package.json ]; then
+if has_javascript_dependencies; then
   audit_args=(--audit-level=high)
   if [ -f .github/security-audit-allowlist.txt ]; then
     while IFS= read -r advisory; do
@@ -50,7 +56,7 @@ if [ -f package.json ]; then
     npm) audits=$((audits + 1)); npm audit --audit-level=high ;;
   esac
 else
-  echo "Skipping JavaScript/TypeScript audit (package.json not found)"
+  echo "Skipping JavaScript/TypeScript audit (dependency inputs not found)"
 fi
 
 if [ -f Cargo.toml ]; then
