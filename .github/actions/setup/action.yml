@@ -34,6 +34,10 @@ inputs:
     description: Restore the Prettier format cache.
     required: false
     default: 'false'
+  task:
+    description: Optional CI task used to scope test dependency installation.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -426,4 +430,5 @@ runs:
         REPO_FOUNDRY_INSTALL_JAVASCRIPT: ${{ inputs.install-javascript }}
         REPO_FOUNDRY_INSTALL_PYTHON: ${{ inputs.install-python }}
         REPO_FOUNDRY_INSTALL_RUST: ${{ inputs.install-rust }}
+        REPO_FOUNDRY_TASK: ${{ inputs.task }}
       run: bash .github/scripts/ci.sh install
