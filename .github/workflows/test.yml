@@ -33,6 +33,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          cache-build: false
       - name: Unit
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
@@ -64,6 +65,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          cache-build: false
       - name: Integration
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
