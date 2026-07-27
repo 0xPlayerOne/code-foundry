@@ -112,9 +112,9 @@ install() {
     { [ "${REPO_FOUNDRY_JAVASCRIPT_CACHE_HIT:-false}" != true ] || [ ! -d node_modules ]; }; then
     case "$(package_manager)" in
       bun) bun install --frozen-lockfile ;;
-      pnpm) corepack pnpm install --frozen-lockfile ;;
+      pnpm) corepack pnpm install --frozen-lockfile --prefer-offline ;;
       yarn) corepack yarn install --immutable ;;
-      npm) npm ci ;;
+      npm) npm ci --prefer-offline --no-audit --fund=false ;;
     esac
   elif [ -f package.json ]; then
     echo "Using cached JavaScript dependencies"
