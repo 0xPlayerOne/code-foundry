@@ -1,4 +1,4 @@
-name: Release PR Workflow
+name: Release PR
 
 on:
   push:
