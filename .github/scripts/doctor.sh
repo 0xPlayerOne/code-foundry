@@ -45,6 +45,15 @@ if [ -f package.json ]; then
       warn "JavaScript/TypeScript sources found but no test or test:unit/test:integration script is defined"
     fi
   fi
+  if [ -f bunfig.toml ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.["test:coverage"] ? 0 : 1)' 2>/dev/null; then
+    if ! grep -q 'coverageThreshold' bunfig.toml; then
+      if [ -x .github/scripts/ci.sh ]; then
+        printf '%s\n' "INFO: shared CI enforces the Bun aggregate coverage threshold"
+      else
+        error "Bun coverage is enabled by test:coverage but no coverage policy is configured"
+      fi
+    fi
+  fi
 fi
 
 if [ -f Cargo.toml ]; then
@@ -53,14 +62,16 @@ if [ -f Cargo.toml ]; then
 fi
 
 if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then
-  command -v python >/dev/null 2>&1 || error "Python is required for this repository"
+  if ! command -v python >/dev/null 2>&1 && [ ! -x .venv/bin/python ]; then
+    error "Python is required for this repository"
+  fi
 fi
 
 for workflow in ci.yml codeql.yml security.yml test.yml draft-pr.yml release-pr.yml release.yml; do
   [ -f ".github/workflows/$workflow" ] || error "missing standard workflow: $workflow"
 done
 
-for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh sync-template.sh init-repo.sh; do
+for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh sync-template.sh init-repo.sh sync-protection.sh; do
   [ -x ".github/scripts/$script" ] || error "missing executable script: .github/scripts/$script"
 done
 

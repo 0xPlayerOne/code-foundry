@@ -7,13 +7,21 @@ has_script() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.[process.argv[1]] ? 0 : 1)' "$1"
 }
 
+has_bun_native_coverage() {
+  [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.["test:coverage"]?.includes("bun test") ? 0 : 1)'
+}
+
 has_javascript() {
   git ls-files -- '*.js' '*.jsx' '*.ts' '*.tsx' | grep -q .
 }
 
 has_python() {
   [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ] || \
-    git ls-files -- '*.py' | grep -q .
+    git ls-files -- '*.py' ':!.github/**' | grep -q .
+}
+
+has_graph_project() {
+  [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.devDependencies?.["@graphprotocol/graph-cli"] ? 0 : 1)'
 }
 
 package_manager() {
@@ -44,6 +52,45 @@ run_package_tool() {
   esac
 }
 
+run_bun_coverage() {
+  local log_file coverage_line functions lines minimum
+  log_file="$(mktemp)"
+  if ! run_script test:coverage 2>&1 | tee "$log_file"; then
+    rm -f "$log_file"
+    return 1
+  fi
+  coverage_line="$(grep -E '^All files[[:space:]]*\|' "$log_file" | tail -n 1 || true)"
+  if [ -z "$coverage_line" ]; then
+    echo "Coverage summary not found in test:coverage output" >&2
+    rm -f "$log_file"
+    return 1
+  fi
+  functions="$(printf '%s\n' "$coverage_line" | awk -F'|' '{gsub(/[[:space:]]/, "", $4); print $4}')"
+  lines="$(printf '%s\n' "$coverage_line" | awk -F'|' '{gsub(/[[:space:]]/, "", $5); print $5}')"
+  minimum="${BUN_COVERAGE_MIN:-80}"
+  if ! awk -v functions="$functions" -v lines="$lines" -v minimum="$minimum" \
+    'BEGIN { exit !(functions + 0 >= minimum && lines + 0 >= minimum) }'; then
+    echo "Coverage below ${minimum}%: functions=${functions}% lines=${lines}%" >&2
+    rm -f "$log_file"
+    return 1
+  fi
+  echo "Coverage threshold passed: functions=${functions}% lines=${lines}% (minimum ${minimum}%)"
+  rm -f "$log_file"
+}
+
+python_coverage_args() {
+  if [ -f pyproject.toml ]; then
+    python - <<'PY'
+import tomllib
+from pathlib import Path
+
+config = tomllib.loads(Path("pyproject.toml").read_text())
+for source in config.get("tool", {}).get("coverage", {}).get("run", {}).get("source", []):
+    print(f"--cov={source}")
+PY
+  fi
+}
+
 install() {
   if [ -f package.json ]; then
     case "$(package_manager)" in
@@ -67,6 +114,12 @@ rust_component() {
   fi
 }
 
+has_rust_target() {
+  local kind="$1"
+  cargo metadata --no-deps --format-version 1 |
+    jq -e --arg kind "$kind" 'any(.packages[].targets[]; (.kind | index($kind)) != null)' >/dev/null
+}
+
 format() {
   if has_script format:check; then run_script format:check
   elif has_javascript; then run_package_tool prettier --check .
@@ -84,7 +137,9 @@ lint() {
 }
 
 type_check() {
-  if has_script type-check; then run_script type-check
+  if has_graph_project; then
+    echo "Skipping TypeScript type-check (Graph AssemblyScript project uses graph build/codegen)"
+  elif has_script type-check; then run_script type-check
   elif has_script typecheck; then run_script typecheck
   else echo "Skipping type-check (script not defined)"; fi
   if [ -f Cargo.toml ]; then cargo check; fi
@@ -95,7 +150,15 @@ type_check() {
   fi
 }
 
-build() { run_script build; }
+build() {
+  # Some frameworks validate session secrets while statically collecting pages.
+  # Keep CI builds deterministic without weakening runtime/deployment validation.
+  if [ "${CI:-}" = true ] && [ -z "${NEXTAUTH_SECRET:-}" ]; then
+    export NEXTAUTH_SECRET="ci-only-build-secret-not-for-runtime-0123456789"
+  fi
+  run_script build
+  if [ -f Cargo.toml ]; then cargo build --all-targets --all-features; fi
+}
 
 unit() {
   # Bun repositories should expose test scripts backed by Bun's native runner.
@@ -103,17 +166,31 @@ unit() {
   if has_script test:unit; then
     run_script test:unit
   elif has_script test:coverage; then
-    run_script test:coverage
+    if [ "$(package_manager)" = bun ] && has_bun_native_coverage; then
+      run_bun_coverage
+    else
+      run_script test:coverage
+    fi
   elif has_script test && ! has_script test:integration; then
     run_script test
   else
     echo "Skipping JavaScript/TypeScript unit tests (script not defined)"
   fi
-  if [ -f Cargo.toml ]; then cargo test --lib --all-features; fi
+  if [ -f Cargo.toml ]; then
+    if has_rust_target lib; then cargo test --lib --all-features
+    elif has_rust_target bin; then cargo test --bins --all-features
+    else echo "Skipping Rust unit tests (no library or binary target)"; fi
+  fi
   if [ -d tests/unit ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
-    python -m pytest -q tests/unit --cov --cov-report=term-missing
+    coverage_args=()
+    while IFS= read -r arg; do [ -n "$arg" ] && coverage_args+=("$arg"); done < <(python_coverage_args)
+    [ "${#coverage_args[@]}" -gt 0 ] || coverage_args=(--cov)
+    env -u MISE_GITHUB_TOKEN -u MISE_TRUSTED_CONFIG_PATHS -u MISE_YES -u MISE_LOG_LEVEL -u PYTHONHOME PYTHONPATH="$PWD/.github/scripts" python -m pytest -q tests/unit "${coverage_args[@]}" --cov-report=term-missing --cov-fail-under="${PYTHON_COVERAGE_MIN:-80}"
   elif [ -d tests ] && [ ! -d tests/integration ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
-    python -m pytest -q tests --cov --cov-report=term-missing
+    coverage_args=()
+    while IFS= read -r arg; do [ -n "$arg" ] && coverage_args+=("$arg"); done < <(python_coverage_args)
+    [ "${#coverage_args[@]}" -gt 0 ] || coverage_args=(--cov)
+    env -u MISE_GITHUB_TOKEN -u MISE_TRUSTED_CONFIG_PATHS -u MISE_YES -u MISE_LOG_LEVEL -u PYTHONHOME PYTHONPATH="$PWD/.github/scripts" python -m pytest -q tests "${coverage_args[@]}" --cov-report=term-missing --cov-fail-under="${PYTHON_COVERAGE_MIN:-80}"
   else
     echo "Skipping Python unit tests (no unit suite detected)"
   fi

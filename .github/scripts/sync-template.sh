@@ -67,8 +67,10 @@ files=(
   .github/scripts/codeql-languages.sh
   .github/scripts/doctor.sh
   .github/scripts/security.sh
+  .github/scripts/sitecustomize.py
   .github/scripts/sync-template.sh
   .github/scripts/init-repo.sh
+  .github/scripts/sync-protection.sh
   .github/workflows/ci.yml
   .github/workflows/codeql.yml
   .github/workflows/draft-pr.yml
@@ -77,6 +79,27 @@ files=(
   .github/workflows/security.yml
   .github/workflows/test.yml
 )
+
+# Workflows outside the standard baseline are repository-owned extensions.
+# The sync operation never deletes or replaces them; surface them explicitly
+# so maintainers can verify custom deployment, indexing, or security flows.
+standard_workflow() {
+  case "$1" in
+    ci.yml|codeql.yml|draft-pr.yml|release-pr.yml|release.yml|security.yml|test.yml) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+custom_workflows=()
+if [ -d .github/workflows ]; then
+  while IFS= read -r workflow; do
+    workflow="${workflow#./.github/workflows/}"
+    standard_workflow "$workflow" || custom_workflows+=("$workflow")
+  done < <(find .github/workflows -maxdepth 1 -type f -print | sort)
+fi
+if [ "${#custom_workflows[@]}" -gt 0 ]; then
+  printf 'Preserving custom workflows: %s\n' "${custom_workflows[*]}"
+fi
 
 changed=0
 for file in "${files[@]}"; do
