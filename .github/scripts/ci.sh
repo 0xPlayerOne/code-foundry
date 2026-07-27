@@ -20,6 +20,42 @@ has_python() {
     git ls-files -- '*.py' ':!.github/**' | grep -q .
 }
 
+has_python_dependencies() {
+  [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ] ||
+    [ -f Pipfile.lock ] || [ -f poetry.lock ] || [ -f uv.lock ]
+}
+
+needs_python_environment() {
+  has_python_dependencies || ! command -v ruff >/dev/null 2>&1
+}
+
+has_javascript_dependencies() {
+  [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
+    [ -f yarn.lock ] || [ -f package-lock.json ] || {
+      [ -f package.json ] || return 1
+      node <<'NODE'
+const { execFileSync } = require('node:child_process');
+
+const files = execFileSync('git', ['ls-files', '--', 'package.json', '*/package.json'], { encoding: 'utf8' })
+  .trim()
+  .split('\n')
+  .filter(Boolean);
+const groups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+const hasDependencies = files.some((file) => {
+  try {
+    const packageJson = JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
+    return groups.some((group) => packageJson[group] && Object.keys(packageJson[group]).length > 0) ||
+      Array.isArray(packageJson.workspaces) ||
+      (packageJson.workspaces && typeof packageJson.workspaces === 'object');
+  } catch {
+    return true;
+  }
+});
+process.exit(hasDependencies ? 0 : 1);
+NODE
+    }
+}
+
 has_graph_project() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.devDependencies?.["@graphprotocol/graph-cli"] ? 0 : 1)'
 }
@@ -113,7 +149,7 @@ PY
 }
 
 install_javascript() {
-  if [ "${REPO_FOUNDRY_INSTALL_JAVASCRIPT:-true}" = true ] && [ -f package.json ] &&
+  if [ "${REPO_FOUNDRY_INSTALL_JAVASCRIPT:-true}" = true ] && [ -f package.json ] && has_javascript_dependencies &&
     { [ "${REPO_FOUNDRY_JAVASCRIPT_CACHE_HIT:-false}" != true ] || [ ! -d node_modules ]; }; then
     case "$(package_manager)" in
       bun) bun install --frozen-lockfile ;;
@@ -121,6 +157,8 @@ install_javascript() {
       yarn) corepack yarn install --immutable ;;
       npm) npm ci --prefer-offline --no-audit --fund=false ;;
     esac
+  elif [ -f package.json ] && ! has_javascript_dependencies; then
+    echo "Skipping JavaScript dependency install (no dependencies found)"
   elif [ -f package.json ]; then
     echo "Using cached JavaScript dependencies"
   fi
@@ -136,6 +174,7 @@ install_rust() {
 
 install_python() {
   if [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python &&
+    needs_python_environment &&
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
     install_python_with_uv() {
       uv venv --python "$(command -v python)" .venv
@@ -159,8 +198,10 @@ install_python() {
         .venv/bin/python -m pip install --disable-pip-version-check "${python_packages[@]}"
       fi
     fi
-  elif [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python; then
+  elif [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python && needs_python_environment; then
     echo "Using cached Python environment"
+  elif [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python; then
+    echo "Using shared Python tools; project environment not required"
   fi
 }
 

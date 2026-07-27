@@ -107,6 +107,8 @@ Applicable jobs also cache installed JavaScript dependencies, Corepack package-m
 
 When a repository uses multiple supported ecosystems, JavaScript, Rust, and Python dependency installation runs concurrently inside each setup job. A failure in any installer still fails the job after all active installers finish, preserving complete diagnostics without making network waits additive.
 
+Installers also short-circuit cleanly: JavaScript projects without dependency entries do not run a package install, and Python source-only projects reuse the shared Ruff tool without creating a virtual environment. Workspace manifests and project dependency files still take the normal locked-install path.
+
 E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by dependency/configuration hash, avoiding repeated browser downloads while invalidating safely when the browser configuration or lockfiles change. Coverage artifacts are uploaded only when a test actually produces coverage output.
 
 Repositories with Turborepo automatically cache local `.turbo/cache` results per workflow job and dependency/configuration hash. Fallback restores can reuse valid artifacts produced by another workflow job, while Turbo’s task hashes discard stale results. Vercel Remote Caching remains available through `TURBO_TOKEN` and `TURBO_TEAM`; the local cache provides a fast fallback when remote caching is not configured.
