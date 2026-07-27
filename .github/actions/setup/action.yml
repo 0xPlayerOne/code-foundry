@@ -62,7 +62,7 @@ runs:
           **/.turbo/cache
         key: ${{ runner.os }}-turbo-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/turbo.json', '**/turbo.jsonc', '.mise.toml', 'mise.lock') }}
         restore-keys: |
-          ${{ runner.os }}-turbo-${{ github.workflow }}-${{ github.job }}-
+          ${{ runner.os }}-turbo-
     - name: Cache Rust packages
       id: rust-packages
       if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
