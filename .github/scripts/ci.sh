@@ -66,19 +66,41 @@ type_check() {
 
 build() { run_script build; }
 
-test() {
-  if has_script test:coverage; then bun run test:coverage
-  elif has_script test; then bun run test
-  else echo "Skipping JavaScript/TypeScript tests (script not defined)"; fi
-  if [ -f Cargo.toml ]; then cargo test --all-features; fi
-  if [ -d tests ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
-    python -m pytest -q --cov --cov-report=term-missing
+unit() {
+  if has_script test:unit; then
+    run_script test:unit
+  elif has_script test:coverage; then
+    run_script test:coverage
+  elif has_script test && ! has_script test:integration; then
+    run_script test
   else
-    echo "Skipping Python tests (pytest or tests directory not found)"
+    echo "Skipping JavaScript/TypeScript unit tests (script not defined)"
+  fi
+  if [ -f Cargo.toml ]; then cargo test --lib --all-features; fi
+  if [ -d tests/unit ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
+    python -m pytest -q tests/unit --cov --cov-report=term-missing
+  elif [ -d tests ] && [ ! -d tests/integration ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
+    python -m pytest -q tests --cov --cov-report=term-missing
+  else
+    echo "Skipping Python unit tests (no unit suite detected)"
+  fi
+}
+
+integration() {
+  if has_script test:integration; then
+    run_script test:integration
+  else
+    echo "Skipping JavaScript/TypeScript integration tests (script not defined)"
+  fi
+  if [ -f Cargo.toml ] && [ -d tests ]; then cargo test --tests --all-features; fi
+  if [ -d tests/integration ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
+    python -m pytest -q tests/integration
+  else
+    echo "Skipping Python integration tests (tests/integration not found)"
   fi
 }
 
 case "${1:-}" in
-  install|format|lint|type_check|build|test) "$1" ;;
-  *) echo "usage: $0 {install|format|lint|type_check|build|test}" >&2; exit 2 ;;
+  install|format|lint|type_check|build|unit|integration) "$1" ;;
+  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration}" >&2; exit 2 ;;
 esac

@@ -64,7 +64,8 @@ bash .github/scripts/ci.sh format
 bash .github/scripts/ci.sh lint
 bash .github/scripts/ci.sh type_check
 bash .github/scripts/ci.sh build
-bash .github/scripts/ci.sh test
+bash .github/scripts/ci.sh unit
+bash .github/scripts/ci.sh integration
 ```
 
 The scripts detect supported package managers and skip checks that do not apply. A repository may add stricter project-specific commands. Do not use `--no-verify` to hide a failing hook; fix the underlying issue.
@@ -93,8 +94,8 @@ The standard triggers are:
 
 | Event | Workflows |
 | --- | --- |
-| Push to `main` or `staging` | CI, Test, Security, CodeQL |
-| Pull request targeting `staging` | CI, Test, Security, CodeQL |
+| Push to `main` or `staging` | CI, Test / Unit, Test / Integration, Security, CodeQL |
+| Pull request targeting `staging` | CI, Test / Unit, Test / Integration, Security, CodeQL |
 | Weekly schedule | CodeQL |
 | Feature branch push | Draft PR Workflow |
 | Push to `staging` | Release PR Workflow |

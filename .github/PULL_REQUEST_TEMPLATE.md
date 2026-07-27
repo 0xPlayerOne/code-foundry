@@ -10,7 +10,8 @@ Do not merge until all applicable required checks pass.
 - [ ] `CI / Lint` passes
 - [ ] `CI / Type-Check` passes when applicable
 - [ ] `CI / Build` passes when applicable
-- [ ] `Test / Run` and coverage pass when applicable
+- [ ] `Test / Unit` and coverage pass when applicable
+- [ ] `Test / Integration` passes when applicable
 - [ ] `Security / Dependency Review` passes when applicable
 - [ ] `CodeQL / Analyze (...)` passes or is not applicable
 - [ ] Preview/deployment checks pass when applicable
