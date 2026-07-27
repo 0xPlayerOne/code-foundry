@@ -30,7 +30,7 @@ jobs:
         id: check-pr
         run: |
           BRANCH="${{ github.ref_name }}"
-          EXISTING=$(gh pr list --limit 1 --base staging --head "$BRANCH" --state open --json number,title 2>/dev/null | jq 'length')
+          EXISTING=$(gh pr list --base staging --head "$BRANCH" --state open --json number,title 2>/dev/null | jq 'length')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
       - name: Create
@@ -52,7 +52,7 @@ jobs:
         if: steps.check-pr.outputs.existing == '0'
         run: |
           BRANCH="${{ github.ref_name }}"
-          PR_NUMBER=$(gh pr list --limit 1 --base staging --head "$BRANCH" --state open --json number 2>/dev/null | jq '.[0].number')
+          PR_NUMBER=$(gh pr list --base staging --head "$BRANCH" --state open --json number 2>/dev/null | jq '.[0].number')
           if [ -n "$PR_NUMBER" ]; then
             gh pr ready "$PR_NUMBER"
           fi
