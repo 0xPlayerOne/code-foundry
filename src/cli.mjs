@@ -42,6 +42,8 @@ function parseArgs(argv) {
     languages: 'auto',
     features: 'all',
     packageManager: 'auto',
+    languagesSet: false,
+    featuresSet: false,
     dryRun: false,
     prune: false,
     protection: false,
@@ -66,6 +68,8 @@ function parseArgs(argv) {
       const value = argv.shift()
       if (!value || value.startsWith('-')) fail(`${arg} requires a value`)
       options[values.get(arg)] = value
+      if (arg === '--languages') options.languagesSet = true
+      if (arg === '--features') options.featuresSet = true
       continue
     }
     if (arg === '--dry-run') options.dryRun = true
@@ -93,35 +97,26 @@ function run(script, args, target) {
 function main() {
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
-  const common = [
-    '--source', options.source,
-    '--ref', options.ref,
-    '--languages', options.languages,
-    '--features', options.features,
-  ]
+  const common = ['--source', options.source, '--ref', options.ref]
+  if (options.languagesSet) common.push('--languages', options.languages)
+  if (options.featuresSet) common.push('--features', options.features)
   if (options.prune) common.push('--prune')
   if (options.dryRun) common.push('--check')
   else common.push('--apply')
 
   if (command === 'init') {
-    const initArgs = [...common]
+    const initArgs = [
+      '--source', options.source,
+      '--ref', options.ref,
+      '--languages', options.languages,
+      '--features', options.features,
+      '--package-manager', options.packageManager,
+    ]
     if (options.protection) initArgs.push('--protection')
-    if (!options.bootstrap) {
-      // The shell initializer is intentionally composable; sync first and let
-      // callers run bootstrap separately when installing into a CI image.
-      run('sync-template.sh', initArgs, target)
-    } else {
-      run('init-repo.sh', [
-        '--source', options.source,
-        '--ref', options.ref,
-        '--languages', options.languages,
-        '--features', options.features,
-        '--package-manager', options.packageManager,
-        ...(options.dryRun ? ['--dry-run'] : []),
-        ...(options.prune ? ['--prune'] : []),
-        ...(options.protection ? ['--protection'] : []),
-      ], target)
-    }
+    if (options.dryRun) initArgs.push('--dry-run')
+    if (options.prune) initArgs.push('--prune')
+    if (!options.bootstrap) initArgs.push('--no-bootstrap')
+    run('init-repo.sh', initArgs, target)
   } else if (command === 'sync') {
     run('sync-template.sh', common, target)
   } else if (command === 'doctor') {

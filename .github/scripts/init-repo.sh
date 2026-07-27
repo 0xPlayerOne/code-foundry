@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source="https://github.com/0xPlayerOne/template-repo.git"
+source="https://github.com/0xPlayerOne/repo-foundry.git"
 ref="main"
 protection=false
 dry_run=false
@@ -9,6 +9,7 @@ prune=false
 languages="auto"
 features="all"
 package_manager="auto"
+bootstrap=true
 tool_dir=""
 
 cleanup() {
@@ -32,6 +33,7 @@ Options:
   --dry-run                  Preview changes without writing files
   --prune                    Remove disabled standard workflows (never custom workflows)
   --protection               Synchronize main branch required checks
+  --no-bootstrap             Skip mise/hooks/doctor bootstrap after init
   -h, --help                 Show this help
 
 Examples:
@@ -51,6 +53,7 @@ while [ "$#" -gt 0 ]; do
     --dry-run) dry_run=true; shift ;;
     --prune) prune=true; shift ;;
     --protection) protection=true; shift ;;
+    --no-bootstrap) bootstrap=false; shift ;;
     -h|--help) usage; exit 0 ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
@@ -98,6 +101,11 @@ languages: $languages
 features: $features
 package_manager: $package_manager
 EOF
+
+if [ "$bootstrap" = false ]; then
+  printf '%s\n' 'Bootstrap skipped.'
+  exit 0
+fi
 
 bash .github/scripts/bootstrap.sh
 
