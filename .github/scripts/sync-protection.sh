@@ -42,7 +42,7 @@ while IFS= read -r context; do
   esac
 done <<< "$existing"
 
-payload="$(printf '%s\n' "${preserved[@]}" "${contexts[@]}" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique | {strict: true, contexts: .}')"
+payload="$(printf '%s\n' "${preserved[@]-}" "${contexts[@]}" | jq -Rsc 'split("\n") | map(select(length > 0)) | unique | {strict: true, contexts: .}')"
 
 if [ "$mode" = check ]; then
   printf '%s\n' "$payload" | jq .
