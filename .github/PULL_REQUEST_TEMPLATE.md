@@ -1,18 +1,32 @@
-## Summary
+## Description
 
-<!-- What changed and why? -->
+<!-- Summarize the change and link related issues. -->
 
-## Validation
+## CI Status
 
-- [ ] Formatting and linting pass
-- [ ] Type checking/build pass
-- [ ] Tests and coverage pass
-- [ ] Documentation updated, if needed
+Do not merge until all applicable required checks pass.
 
-## Risk and rollout
+- [ ] `CI / Format` passes
+- [ ] `CI / Lint` passes
+- [ ] `CI / Type-Check` passes when applicable
+- [ ] `CI / Build` passes when applicable
+- [ ] `Test / Unit` and coverage pass when applicable
+- [ ] `Test / Integration` passes when applicable
+- [ ] `Test / E2E` passes when applicable
+- [ ] `Test / Smoke` passes when applicable
+- [ ] `Security / Dependency Audit` passes when applicable
+- [ ] `Security / Dependency Review` passes when applicable
+- [ ] `CodeQL / Analyze (...)` passes or is not applicable
+- [ ] Preview/deployment checks pass when applicable
 
-<!-- Mention migrations, security/privacy impact, compatibility, and rollback notes. -->
+## Compliance Checklist
 
-## Related issue
+- [ ] Commits follow the repository's documented convention, preferably [Conventional Commits](https://www.conventionalcommits.org/)
+- [ ] Formatting, linting, type checking, build, tests, and coverage were run as applicable
+- [ ] New dependencies use the repository's existing package manager and lockfile
+- [ ] No secrets, local environment files, generated artifacts, or unrelated formatting are included
+- [ ] Documentation and configuration are updated when needed
 
-<!-- Link with `Closes #123` when applicable. -->
+## Additional Context
+
+<!-- Mention migrations, environment changes, breaking changes, compatibility, deployment, rollback, or follow-up work. -->

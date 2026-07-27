@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   release:
+    name: Publish
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - name: Create GitHub release
