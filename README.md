@@ -123,7 +123,7 @@ Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Rele
 
 Release and Security metadata jobs also use blobless checkouts where a checkout is needed, reducing source transfer while preserving on-demand manifest access.
 
-CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Unchanged analyzer jobs use `ubuntu-slim` and skip both checkout and analysis while remaining visible to branch protection; lightweight Actions analysis also uses `ubuntu-slim`, while compiled-language analyzers use full `ubuntu-latest` runners. Its detection job uses a `blob:none` partial clone because it only needs Git paths and metadata. Scheduled and manually dispatched CodeQL runs remain full scans.
+CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Unchanged analyzer jobs use `ubuntu-slim` and skip both checkout and analysis while remaining visible to branch protection; changed analyzers use full `ubuntu-latest` runners. Its detection job uses a `blob:none` partial clone because it only needs Git paths and metadata. Scheduled and manually dispatched CodeQL runs remain full scans.
 
 Coverage is enforced at 80% for Python and Bun test suites when those ecosystems expose coverage support. Rust projects must keep their native test suites green; repositories with `cargo-llvm-cov` should enforce the same 80% line target in their Cargo coverage configuration.
 
