@@ -16,41 +16,57 @@ concurrency:
 
 jobs:
   format:
-    name: CI / Format
+    name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup
+        uses: jdx/mise-action@v4
         with: { cache: true }
-      - run: bash .github/scripts/ci.sh install
-      - run: bash .github/scripts/ci.sh format
+      - name: Install
+        run: bash .github/scripts/ci.sh install
+      - name: Format
+        run: bash .github/scripts/ci.sh format
 
   lint:
-    name: CI / Lint
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup
+        uses: jdx/mise-action@v4
         with: { cache: true }
-      - run: bash .github/scripts/ci.sh install
-      - run: bash .github/scripts/ci.sh lint
+      - name: Install
+        run: bash .github/scripts/ci.sh install
+      - name: Lint
+        run: bash .github/scripts/ci.sh lint
 
   type-check:
-    name: CI / Type-Check
+    name: Type-Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup
+        uses: jdx/mise-action@v4
         with: { cache: true }
-      - run: bash .github/scripts/ci.sh install
-      - run: bash .github/scripts/ci.sh type_check
+      - name: Install
+        run: bash .github/scripts/ci.sh install
+      - name: Type-Check
+        run: bash .github/scripts/ci.sh type_check
 
   build:
-    name: CI / Build
+    name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup
+        uses: jdx/mise-action@v4
         with: { cache: true }
-      - run: bash .github/scripts/ci.sh install
-      - run: bash .github/scripts/ci.sh build
+      - name: Install
+        run: bash .github/scripts/ci.sh install
+      - name: Build
+        run: bash .github/scripts/ci.sh build

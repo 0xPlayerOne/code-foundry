@@ -16,8 +16,9 @@ concurrency:
 
 jobs:
   dependency-review:
-    name: Security / Dependency Review
+    name: Dependency Review
     if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/dependency-review-action@v4
+      - name: Review
+        uses: actions/dependency-review-action@v4

@@ -16,14 +16,18 @@ concurrency:
 
 jobs:
   test:
-    name: CI / Test
+    name: Run
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup
+        uses: jdx/mise-action@v4
         with: { cache: true }
-      - run: bash .github/scripts/ci.sh install
-      - run: bash .github/scripts/ci.sh test
+      - name: Install
+        run: bash .github/scripts/ci.sh install
+      - name: Test
+        run: bash .github/scripts/ci.sh test
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v7

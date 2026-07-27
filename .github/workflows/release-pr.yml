@@ -13,7 +13,7 @@ env:
 
 jobs:
   create-release-pr:
-    name: Release PR / Create
+    name: Create
     runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Release PR / Check
+      - name: Check
         id: check-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,7 +31,7 @@ jobs:
           EXISTING=$(gh pr list --base main --head staging --state all --json number 2>/dev/null | jq 'length')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
-      - name: Release PR / Create
+      - name: Create
         if: steps.check-pr.outputs.existing == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

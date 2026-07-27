@@ -20,7 +20,7 @@ env:
 
 jobs:
   create-draft-pr:
-    name: Draft PR / Create
+    name: Create
     runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,14 +30,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if PR already exists
+      - name: Check
         id: check-pr
         run: |
           BRANCH="${{ github.ref_name }}"
           EXISTING=$(gh pr list --base staging --head "$BRANCH" --state all --json number,title 2>/dev/null | jq 'length')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
-      - name: Create draft PR
+      - name: Create
         if: steps.check-pr.outputs.existing == '0'
         run: |
           BRANCH="${{ github.ref_name }}"
@@ -52,7 +52,7 @@ jobs:
 
             **CI Status:** Pending — this workflow triggered on push to \`$BRANCH\`."
 
-      - name: Mark PR ready when CI passes
+      - name: Mark ready
         if: steps.check-pr.outputs.existing == '0'
         run: |
           BRANCH="${{ github.ref_name }}"

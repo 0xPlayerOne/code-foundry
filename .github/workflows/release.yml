@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    name: Release / Publish
+    name: Publish
     runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}

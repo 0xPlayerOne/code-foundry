@@ -21,18 +21,19 @@ concurrency:
 
 jobs:
   detect:
-    name: CodeQL / Detect
+    name: Detect
     runs-on: ubuntu-latest
     outputs:
       languages: ${{ steps.languages.outputs.languages }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
       - id: languages
         name: Detect languages
         run: bash .github/scripts/codeql-languages.sh
 
   analyze:
-    name: CodeQL / Analyze (${{ matrix.language }})
+    name: Analyze (${{ matrix.name }})
     needs: detect
     if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
@@ -43,7 +44,7 @@ jobs:
         include: ${{ fromJSON(needs.detect.outputs.languages) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Initialize
         uses: github/codeql-action/init@v4
         with:
