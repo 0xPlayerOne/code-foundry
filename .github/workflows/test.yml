@@ -40,6 +40,7 @@ jobs:
           install-python: ${{ steps.applicability.outputs.python == 'true' }}
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
+          cache-environment: false
           task: unit
           task-javascript: ${{ steps.applicability.outputs.javascript }}
           task-python: ${{ steps.applicability.outputs.python }}
@@ -84,6 +85,7 @@ jobs:
           install-python: ${{ steps.applicability.outputs.python == 'true' }}
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
+          cache-environment: false
           task: integration
           task-javascript: ${{ steps.applicability.outputs.javascript }}
           task-python: ${{ steps.applicability.outputs.python }}
@@ -123,6 +125,7 @@ jobs:
           install-python: ${{ steps.applicability.outputs.python == 'true' }}
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
+          cache-environment: false
           task: e2e
           task-javascript: ${{ steps.applicability.outputs.javascript }}
           task-python: ${{ steps.applicability.outputs.python }}
@@ -151,6 +154,7 @@ jobs:
           install-python: ${{ steps.applicability.outputs.python == 'true' }}
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
+          cache-environment: false
           task: smoke
           task-javascript: ${{ steps.applicability.outputs.javascript }}
           task-python: ${{ steps.applicability.outputs.python }}

@@ -26,6 +26,10 @@ inputs:
     description: Restore JavaScript framework, Rust dependency, and incremental compiler caches.
     required: false
     default: 'true'
+  cache-environment:
+    description: Restore materialized Python virtual environments; disable for parallel test jobs with large environments.
+    required: false
+    default: 'true'
   cache-lint:
     description: Restore the JavaScript/TypeScript lint cache.
     required: false
@@ -370,7 +374,7 @@ runs:
           ${{ runner.os }}-javascript-build-
     - name: Cache Python environment
       id: python-environment
-      if: inputs.install == 'true' && inputs.install-python == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml', 'mise.lock') != ''
+      if: inputs.install == 'true' && inputs.install-python == 'true' && inputs.cache-environment == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
