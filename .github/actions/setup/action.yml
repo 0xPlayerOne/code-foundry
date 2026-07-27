@@ -66,6 +66,11 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Disable framework telemetry
+      shell: bash
+      run: |
+        echo 'TURBO_TELEMETRY_DISABLED=1' >> "$GITHUB_ENV"
+        echo 'NEXT_TELEMETRY_DISABLED=1' >> "$GITHUB_ENV"
     - name: Detect project profile
       id: profile
       shell: bash
