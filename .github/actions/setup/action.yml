@@ -74,13 +74,19 @@ runs:
         key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-
-    - name: Cache Rust builds
-      if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+    - name: Cache Rust tools
+      if: inputs.install != 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
-        path: |
-          target
-          ~/.cargo/bin
+        path: ~/.cargo/bin
+        key: ${{ runner.os }}-rust-tools-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-tools-
+    - name: Cache Rust builds
+      if: inputs.install == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      uses: actions/cache@v5
+      with:
+        path: target
         key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-
