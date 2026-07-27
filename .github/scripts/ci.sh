@@ -146,19 +146,25 @@ install_python() {
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
     install_python_with_uv() {
       uv venv --python "$(command -v python)" .venv
-      local -a python_packages=(ruff)
+      local -a python_packages=()
+      command -v ruff >/dev/null 2>&1 || python_packages+=(ruff)
       if [ -f requirements.txt ]; then python_packages+=(-r requirements.txt); fi
       if [ -f requirements-dev.txt ]; then python_packages+=(-r requirements-dev.txt); fi
-      uv pip install --python .venv/bin/python "${python_packages[@]}"
+      if [ "${#python_packages[@]}" -gt 0 ]; then
+        uv pip install --python .venv/bin/python "${python_packages[@]}"
+      fi
     }
     if command -v uv >/dev/null 2>&1 && install_python_with_uv; then
       echo "Installed Python dependencies with uv"
     else
       python -m venv .venv
-      local -a python_packages=(ruff)
+      local -a python_packages=()
+      command -v ruff >/dev/null 2>&1 || python_packages+=(ruff)
       if [ -f requirements.txt ]; then python_packages+=(-r requirements.txt); fi
       if [ -f requirements-dev.txt ]; then python_packages+=(-r requirements-dev.txt); fi
-      .venv/bin/python -m pip install --disable-pip-version-check "${python_packages[@]}"
+      if [ "${#python_packages[@]}" -gt 0 ]; then
+        .venv/bin/python -m pip install --disable-pip-version-check "${python_packages[@]}"
+      fi
     fi
   elif [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python; then
     echo "Using cached Python environment"

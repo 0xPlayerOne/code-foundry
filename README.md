@@ -111,7 +111,7 @@ E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by depende
 
 Repositories with Turborepo automatically cache local `.turbo/cache` results per workflow job and dependency/configuration hash. Fallback restores can reuse valid artifacts produced by another workflow job, while Turbo’s task hashes discard stale results. Vercel Remote Caching remains available through `TURBO_TOKEN` and `TURBO_TEAM`; the local cache provides a fast fallback when remote caching is not configured.
 
-New Python profiles include pinned `uv` as an accelerated, pip-compatible installer. Existing repositories without `uv` continue using pip automatically, so adopting the template does not require changing their dependency files or lockfile format.
+New Python profiles include pinned `uv` as an accelerated, pip-compatible installer and pinned Ruff as the shared formatter/linter. Existing repositories without `uv` continue using pip automatically, while existing custom tool selections and dependency-file formats remain supported.
 
 Python Security audits use cached `uv tool run` environments for `pip-audit` when uv is available, with the same pip fallback used by CI installation. Independent `requirements.txt` and `requirements-dev.txt` audits run concurrently and aggregate failures. When the combined Security fallback is used, JavaScript, Rust, and Python audits also run concurrently and still report a failure if any ecosystem audit fails.
 
