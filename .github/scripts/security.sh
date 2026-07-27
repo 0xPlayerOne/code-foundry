@@ -92,11 +92,7 @@ package_manager() {
   fi
 }
 
-audit_javascript() {
-  if ! has_javascript_dependencies; then
-    echo "Skipping JavaScript/TypeScript audit (dependency inputs not found)"
-    return
-  fi
+if [ -f package.json ]; then
   audit_args=(--audit-level=high)
   if [ -f .github/security-audit-allowlist.txt ]; then
     while IFS= read -r advisory; do
