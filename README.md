@@ -4,8 +4,8 @@ Reusable baseline for TypeScript, Rust, Python, and mixed-language projects.
 
 ## Setup
 
-1. Install [mise](https://mise.jdx.dev/) and run `mise install`.
-2. Enable repository hooks with `git config core.hooksPath .githooks`.
+1. Install [mise](https://mise.jdx.dev/).
+2. Run `bash .github/scripts/bootstrap.sh` to install the pinned toolchain, enable hooks, and validate the repository.
 3. Add the repository's standard scripts (`format:check`, `lint`, `type-check`, `build`, `test:unit`, `test:integration`, `test:e2e`, and `test:smoke`) when available. The shared scripts also recognize legacy aliases and skip checks that do not apply to the repository's languages or package manager.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
