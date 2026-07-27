@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Dependency audits only need manifests and lockfiles; defer source
+          # blob transfer until a tool explicitly reads a required file.
+          filter: blob:none
       - name: Detect
         id: applicability
         run: bash .github/scripts/security.sh should_run "${{ matrix.ecosystem }}" >> "$GITHUB_OUTPUT"
