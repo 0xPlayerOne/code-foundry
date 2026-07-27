@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v7
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run format
+        run: bash .github/scripts/ci.sh should_run format >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v7
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run lint
+        run: bash .github/scripts/ci.sh should_run lint >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -63,7 +63,7 @@ jobs:
         uses: actions/checkout@v7
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run type_check
+        run: bash .github/scripts/ci.sh should_run type_check >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v7
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run build
+        run: bash .github/scripts/ci.sh should_run build >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
