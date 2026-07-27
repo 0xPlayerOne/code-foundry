@@ -62,7 +62,9 @@ if [ -f Cargo.toml ]; then
 fi
 
 if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then
-  command -v python >/dev/null 2>&1 || error "Python is required for this repository"
+  if ! command -v python >/dev/null 2>&1 && [ ! -x .venv/bin/python ]; then
+    error "Python is required for this repository"
+  fi
 fi
 
 for workflow in ci.yml codeql.yml security.yml test.yml draft-pr.yml release-pr.yml release.yml; do
