@@ -34,11 +34,10 @@ Use `repo-foundry sync` to update an existing repository and
 Run the sync script from the repository root. It updates shared workflows, GitHub forms, hooks, policy files, and tool configuration while preserving the repository's README, `.mise.toml` selections, extra workflows, and application code.
 
 ```bash
-bash .github/scripts/sync-template.sh --source https://github.com/0xPlayerOne/template-repo.git --ref main --apply
-bash .github/scripts/bootstrap.sh
+bash .github/scripts/init-repo.sh
 ```
 
-Use `--check` to preview differences. For local template development, pass the template checkout as `--source`.
+Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
