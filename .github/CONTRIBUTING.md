@@ -1,63 +1,85 @@
 # Contributing
 
-Welcome. This document is the reusable contribution guide for TypeScript, Rust, Python, and mixed-language repositories using this template.
+This guide is the operating contract for humans and automation contributing to this repository.
 
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
-- [Security Policy](./SECURITY.md)
-- [Pull Request Template](./PULL_REQUEST_TEMPLATE.md)
+It applies to TypeScript, Rust, Python, and mixed-language projects using this template.
 
-## 1. Branching model
+Quick links: [Code of Conduct](./CODE_OF_CONDUCT.md) · [Security Policy](./SECURITY.md) · [Pull Request Template](./PULL_REQUEST_TEMPLATE.md)
+
+### Contents
+
+[Agent contract](#agent-operating-contract) · [Branches](#branching-model) · [Setup](#before-you-start) · [Validation](#local-validation) · [Internal](#internal-contribution-workflow) · [External](#external-contribution-workflow) · [Pull requests](#pull-request-standards) · [Reviews](#review-and-merge-protocol) · [Security](#security-and-emergencies)
+
+## Agent operating contract
+
+Agents must follow these rules before changing code:
+
+1. Read this file, `AGENTS.md`, and the relevant project documentation.
+2. Inspect the current branch, worktree, remotes, and existing changes before editing.
+3. Preserve user-owned changes. Never discard or overwrite unrelated work.
+4. Branch from `staging` and target pull requests at `staging`; do not work directly on `main`.
+5. Keep the change focused. Do not expand scope without documenting why.
+6. Run the applicable format, lint, type-check, build, unit, integration, E2E, smoke, and security checks.
+7. Report exact validation results, skipped checks, known limitations, and remaining risks.
+8. Never commit secrets, credentials, local environment files, generated artifacts, or machine-specific paths.
+
+Agents must not:
+
+- Use destructive Git operations, force pushes, or history rewriting without explicit authorization.
+- Bypass hooks or required checks to hide a failure.
+- Change branch protections, secrets, deployments, or external systems unless that action is explicitly in scope.
+- Claim completion when tests, deployment checks, or required reviews are still pending.
+
+## Branching model
 
 ```text
-main  ----------------------------------------- protected release branch
-  ^ staging -> main release PR
-staging -------------------------------------- integration branch
-  ^ feature/fix -> staging pull request
-feat/* fix/* chore/* refactor/* docs/* test/*  working branches
+                                      release PR
+                                   ┌──────────────┐
+                                   │              ▼
+feat/*  fix/*  chore/*  ──PR──▶  staging  ──PR──▶  main
+docs/*  test/*  refactor/*         │              │
+                                   │              └── protected release branch
+                                   └── integration branch
 ```
 
-### `main`
+| Branch | Purpose | Contribution rule |
+| --- | --- | --- |
+| `main` | Protected release branch | Merge through the `staging` → `main` release PR. No direct pushes. |
+| `staging` | Integration branch | Target normal pull requests here. Required checks must pass before merge. |
+| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work | Branch from `staging`; keep changes small and reviewable. |
 
-- Treat `main` as the protected release branch.
-- Merge into `main` through the release pull request from `staging`.
-- Require all configured quality and security checks before merging.
-- Do not force-push or bypass branch protection.
+Use squash merges unless the repository documents another strategy. Re-align `staging` with `main` after a release when needed.
 
-### `staging`
+## Before you start
 
-- Use `staging` as the integration branch and pull request target.
-- Feature branches may be merged by squash merge after applicable checks pass.
-- Direct pushes are reserved for small fixes or documented emergencies.
-- After a release, keep `staging` aligned with `main` to reduce future conflicts.
+### Toolchain
 
-### Working branches
+1. Install [mise](https://mise.jdx.dev/).
+2. Run `mise install` to use the versions pinned in `.mise.toml`.
+3. Enable hooks once per checkout:
 
-- Branch from `staging`, not `main`.
-- Use a descriptive prefix: `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`, or `test/`.
-- Keep commits focused and use [Conventional Commits](https://www.conventionalcommits.org/) when no repository-specific convention exists.
+   ```sh
+   git config core.hooksPath .githooks
+   ```
 
-## 2. Development setup
+4. Use the repository's existing package manager and lockfile. Do not introduce a second package manager.
+5. Copy `.env.example` to the appropriate local environment file when provided. Never commit the copy.
 
-### Prerequisites
-
-- `git`
-- [mise](https://mise.jdx.dev/) for the pinned toolchain
-- The package manager and language tools used by the repository
-
-### One-time setup
+### Worktree and branch
 
 ```sh
-git clone <repository-url>
-cd <repository-directory>
-mise install
-git config core.hooksPath .githooks
+git status --short --branch
+git fetch origin
+git switch staging
+git pull --ff-only origin staging
+git switch -c feat/short-description
 ```
 
-Install dependencies using the repository's existing lockfile and package manager. If `.env.example` exists, copy it to the appropriate local environment file and fill in local values. Never commit secrets.
+If the worktree is dirty, stop and understand the existing changes before switching branches or editing overlapping files.
 
-## 3. Local quality checks
+## Local validation
 
-Run the applicable shared checks before opening a pull request:
+The template scripts detect supported tools and skip checks that do not apply:
 
 ```sh
 bash .github/scripts/ci.sh format
@@ -68,65 +90,110 @@ bash .github/scripts/ci.sh unit
 bash .github/scripts/ci.sh integration
 bash .github/scripts/ci.sh e2e
 bash .github/scripts/ci.sh smoke
+bash .github/scripts/security.sh
 ```
 
-The scripts detect supported package managers and skip checks that do not apply. A repository may add stricter project-specific commands. Do not use `--no-verify` to hide a failing hook; fix the underlying issue.
+Run the checks relevant to the change. For a release or security-sensitive change, run the complete set. Record the commands and results in the pull request.
 
-## 4. Contribution workflow
+## Internal contribution workflow
 
-### Internal contributors
+For maintainers, trusted contributors, and automation agents:
 
-1. Update the integration branch: `git checkout staging && git pull origin staging`.
-2. Create a focused working branch.
-3. Make the change, update documentation and tests, and run applicable checks.
-4. Commit and push the branch.
-5. Open a pull request targeting `staging` and complete the pull request template.
-6. Address failures or review feedback, then squash-merge after required checks pass.
+1. Start from an up-to-date `staging` branch.
+2. Create a focused branch with a descriptive prefix.
+3. Inspect the relevant code and tests before making changes.
+4. Implement the smallest complete change.
+5. Add or update tests, documentation, configuration, and migration notes as needed.
+6. Run local validation and inspect the final diff.
+7. Commit with a clear message, preferably using Conventional Commits:
 
-### External contributors
+   ```text
+   feat(auth): add passkey recovery
+   fix(api): handle expired session tokens
+   chore(ci): cache Rust dependencies
+   ```
 
-1. Fork the repository and add the upstream remote.
-2. Branch from the upstream `staging` branch.
-3. Keep the change focused and follow the repository's contribution and security policies.
-4. Open a pull request targeting `staging` with reproduction steps, tests, and relevant context.
+8. Push the branch and open a pull request into `staging`.
+9. Address review feedback and failed checks on the same branch.
+10. Squash-merge only after required checks pass and the change is ready.
 
-## 5. CI and workflow discipline
+### Internal agent handoff
 
-The standard triggers are:
+Every agent handoff should state:
 
-| Event | Workflows |
+```text
+Summary: what changed and why
+Files: important files changed
+Validation: exact commands and pass/fail results
+Skipped: checks skipped and why
+Risks: known limitations or follow-up work
+Branch/PR: branch name and pull request link
+```
+
+## External contribution workflow
+
+For contributors who do not have direct write access:
+
+1. Fork the repository on GitHub.
+2. Add the upstream repository as `upstream`.
+3. Branch from the upstream `staging` branch.
+4. Make a focused change and follow the local setup instructions.
+5. Add tests and documentation for behavior changes.
+6. Run all applicable checks locally.
+7. Push to the fork and open a pull request targeting `staging`.
+8. Explain the problem, proposed solution, validation, compatibility, and rollout impact.
+9. Address maintainer feedback without rewriting unrelated history or scope.
+
+External contributors should never need repository secrets or production access to validate a normal change.
+
+## Pull request standards
+
+Every pull request should make these questions easy to answer:
+
+- What changed?
+- Why was it needed?
+- How was it tested?
+- What could break?
+- Does it require migration, deployment, configuration, or rollback work?
+- Which files or areas deserve focused review?
+
+Keep pull requests focused and reviewable. Include screenshots or recordings for user-facing changes. Link related issues and use `Closes #123` when appropriate. Complete the [pull request template](./PULL_REQUEST_TEMPLATE.md).
+
+## Workflow and check behavior
+
+| Event | Expected automation |
 | --- | --- |
-| Push to `main` or `staging` | CI, Test / Unit, Test / Integration, Test / E2E, Test / Smoke, Security / Dependency Audit, CodeQL |
-| Pull request targeting `staging` | CI, Test / Unit, Test / Integration, Test / E2E, Test / Smoke, Security / Dependency Audit, Security / Dependency Review, CodeQL |
-| Weekly schedule | CodeQL |
-| Feature branch push | Draft PR Workflow |
-| Push to `staging` | Release PR Workflow |
-| Version tag | Release |
+| Push to `main` or `staging` | CI, Test, Security, and CodeQL workflows |
+| Pull request targeting `staging` | CI, Test, Security, and CodeQL workflows |
+| Push to a working branch | Draft PR workflow |
+| Push to `staging` | Release PR workflow |
+| Version tag such as `v1.2.3` | Release workflow |
 
-Push checks cover branch commits and pull request checks cover feature-branch changes targeting `staging`; this keeps the standard path from running the same branch check twice. Concurrency cancels superseded runs for the same workflow and branch or pull request while allowing independent workflows to run in parallel.
+The workflows use separate concurrency groups. A newer run for the same branch or pull request cancels its older run, while independent CI, test, security, and CodeQL workflows continue in parallel.
 
-Security checks may be skipped when GitHub plan or repository visibility does not support them. A skipped optional security check must not be made a required branch-protection check.
+Required checks are enforced by branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 
-## 6. Pull request and review standards
+Security checks can be skipped when repository visibility or the GitHub plan does not support a feature. A skipped optional check must not be configured as a required status check.
 
-- Explain what changed, why it changed, and how it was validated.
-- Link related issues and use `Closes #123` when appropriate.
-- Call out migrations, environment changes, compatibility, security/privacy impact, deployment, rollback, and follow-up work.
-- Include screenshots or recordings for user-facing changes when useful.
-- Keep pull requests focused; split large changes when practical.
-- Reviewers should focus on correctness, security, maintainability, test coverage, and operational impact.
+## Review and merge protocol
 
-## 7. Merge and release protocol
+| Change | Target | Merge gate |
+| --- | --- | --- |
+| Working branch | `staging` | All applicable required checks pass |
+| `staging` release | `main` | Current staging checks, release review, and rollout notes |
 
-| From | To | Method | Gate |
-| --- | --- | --- | --- |
-| Working branch | `staging` | Squash merge | Required applicable checks |
-| `staging` | `main` | Release pull request | All required checks and release review |
+Reviewers focus on correctness, security, maintainability, test coverage, operational impact, and compatibility. Authors remain responsible for responding to feedback and verifying the final commit.
 
-Release pull requests should summarize the commits since `main`, note migrations and risks, and confirm that staging validation is current. Delete merged working branches when practical.
-
-## 8. Emergency procedures
-
-For an urgent production or security issue, create a focused branch from `staging`, document the urgency, open a pull request, and run the narrowest complete validation available. CI bypasses are for infrastructure emergencies only and require a follow-up fix within the next maintenance cycle.
+## Security and emergencies
 
 Report vulnerabilities privately using [SECURITY.md](./SECURITY.md), never in a public issue or pull request.
+
+For an urgent production or security issue:
+
+1. Create a focused branch from `staging`.
+2. Document the urgency and affected systems without exposing secrets.
+3. Open a pull request and run the narrowest complete validation available.
+4. Request the appropriate maintainer review.
+5. Record follow-up work, remediation, and rollback information.
+
+CI bypasses are for documented infrastructure emergencies only and require a follow-up fix. Never use a bypass to hide a code or test failure.
