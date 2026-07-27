@@ -102,7 +102,11 @@ install() {
   elif [ -f package.json ]; then
     echo "Using cached JavaScript dependencies"
   fi
-  if [ -f Cargo.toml ]; then cargo fetch --locked; fi
+  if [ -f Cargo.toml ] && [ "${REPO_FOUNDRY_RUST_CACHE_HIT:-false}" != true ]; then
+    cargo fetch --locked
+  elif [ -f Cargo.toml ]; then
+    echo "Using cached Rust packages"
+  fi
   if has_python &&
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
     install_python_with_uv() {
