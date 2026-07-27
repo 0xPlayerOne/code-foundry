@@ -11,45 +11,46 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Quality
+  format:
+    name: CI / Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
-        with:
-          cache: true
-      - name: Install dependencies
-        run: bash .github/scripts/ci.sh install
-      - name: Quality checks
-        run: bash .github/scripts/ci.sh quality
+        with: { cache: true }
+      - run: bash .github/scripts/ci.sh install
+      - run: bash .github/scripts/ci.sh format
 
-  test:
-    name: Tests and coverage
-    needs: quality
+  lint:
+    name: CI / Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
-        with:
-          cache: true
-      - name: Install dependencies
-        run: bash .github/scripts/ci.sh install
-      - name: Tests and coverage
-        run: bash .github/scripts/ci.sh test
-      - name: Upload coverage artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-${{ github.run_id }}
-          path: |
-            coverage/**
-            htmlcov/**
-            .coverage*
-            target/llvm-cov/**
-          if-no-files-found: ignore
-          retention-days: 14
+        with: { cache: true }
+      - run: bash .github/scripts/ci.sh install
+      - run: bash .github/scripts/ci.sh lint
+
+  type-check:
+    name: CI / Type-Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with: { cache: true }
+      - run: bash .github/scripts/ci.sh install
+      - run: bash .github/scripts/ci.sh type_check
+
+  build:
+    name: CI / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with: { cache: true }
+      - run: bash .github/scripts/ci.sh install
+      - run: bash .github/scripts/ci.sh build

@@ -15,10 +15,16 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   create-draft-pr:
-    name: Create Draft PR into staging
+    name: Draft PR / Create
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:

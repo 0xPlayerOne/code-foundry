@@ -1,4 +1,4 @@
-name: Release PR
+name: Release PR Workflow
 
 on:
   push:
@@ -8,10 +8,16 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   create-release-pr:
-    name: Create Release PR into main
+    name: Release PR / Create
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v7
         with:
