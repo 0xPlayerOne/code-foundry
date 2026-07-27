@@ -128,6 +128,14 @@ runs:
         key: ${{ runner.os }}-javascript-installed-v2-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-javascript-installed-v2-
+    - name: Cache Corepack managers
+      if: (inputs.mise-scope == 'javascript' || steps.javascript-dependencies.outputs.cache-hit == 'true') && inputs.install-javascript == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/pnpm-lock.yaml', '**/yarn.lock') != ''
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/node/corepack
+        key: ${{ runner.os }}-corepack-${{ hashFiles('**/package.json', '**/pnpm-lock.yaml', '**/yarn.lock', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-corepack-
     - name: Cache JavaScript packages
       if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
       uses: actions/cache@v5
