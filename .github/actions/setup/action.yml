@@ -12,12 +12,12 @@ runs:
   steps:
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies
-      if: inputs.install == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml') != ''
+      if: inputs.install == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
           **/node_modules
-        key: ${{ runner.os }}-javascript-installed-v2-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml') }}
+        key: ${{ runner.os }}-javascript-installed-v2-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-javascript-installed-v2-
     - name: Cache JavaScript packages
@@ -34,13 +34,13 @@ runs:
           ${{ runner.os }}-javascript-
     - name: Cache Python environment
       id: python-environment
-      if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml') != ''
+      if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
           .venv
           **/.venv
-        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml') }}
+        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-python-environment-
     - name: Cache Python packages
@@ -70,7 +70,7 @@ runs:
         path: |
           target
           ~/.cargo/bin
-        key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml') }}
+        key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-
     - name: Setup

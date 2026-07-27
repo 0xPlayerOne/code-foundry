@@ -324,6 +324,27 @@ initialize_mise() {
 
 initialize_mise "$languages"
 
+initialize_mise_lock() {
+  if [ ! -f .mise.toml ] || [ -f mise.lock ]; then
+    return
+  fi
+  if ! command -v mise >/dev/null 2>&1; then
+    return
+  fi
+  changed=$((changed + 1))
+  if [ "$mode" = check ]; then
+    printf '%s\n' 'Would initialize mise.lock'
+    return
+  fi
+  if MISE_TRUSTED_CONFIG_PATHS="$PWD" mise lock >/dev/null 2>&1; then
+    printf '%s\n' 'Initialized mise.lock'
+  else
+    printf '%s\n' 'Warning: mise.lock could not be generated; CI will resolve pinned tools normally.' >&2
+  fi
+}
+
+initialize_mise_lock
+
 # Release Please's simple strategy needs a version file. Initialize one only
 # for Solidity-only repositories, where no package manifest owns the version.
 if [ ! -f version.txt ] && find . -path './.git' -prune -o -type f -name '*.sol' -print | grep -q . &&
