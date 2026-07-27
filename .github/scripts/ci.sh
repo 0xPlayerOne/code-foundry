@@ -12,7 +12,7 @@ has_bun_native_coverage() {
 }
 
 has_javascript() {
-  git ls-files -- '*.js' '*.jsx' '*.ts' '*.tsx' | grep -q .
+  git ls-files -- '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts' | grep -q .
 }
 
 has_python() {
@@ -243,7 +243,74 @@ smoke() {
   fi
 }
 
+should_run() {
+  local task="$1"
+  case "$task" in
+    format)
+      if has_script format:check || has_javascript || [ -f Cargo.toml ] || has_python; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    lint)
+      if has_script lint || has_javascript || [ -f Cargo.toml ] || has_python; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    type_check)
+      if has_script type-check || has_script typecheck || [ -f Cargo.toml ] || has_python; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    build)
+      if has_script build || [ -f Cargo.toml ]; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    unit)
+      if has_script test:unit || has_script test:coverage || has_script test || [ -f Cargo.toml ] ||
+        [ -d tests ] || [ -d test ]; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    integration)
+      if has_script test:integration || [ -f Cargo.toml ] && [ -d tests ] || [ -d tests/integration ]; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    e2e)
+      if has_script test:e2e || has_script e2e || [ -d tests/e2e ]; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    smoke)
+      if has_script test:smoke || has_script smoke || [ -d tests/smoke ]; then
+        printf '%s\n' 'applicable=true'
+      else
+        printf '%s\n' 'applicable=false'
+      fi
+      ;;
+    *)
+      echo "unknown CI task: $task" >&2
+      return 2
+      ;;
+  esac
+}
+
 case "${1:-}" in
-  install|format|lint|type_check|build|unit|integration|e2e|smoke) "$1" ;;
-  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke}" >&2; exit 2 ;;
+  install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run) "$1" "${2:-}" ;;
+  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run}" >&2; exit 2 ;;
 esac

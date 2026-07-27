@@ -25,11 +25,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run format
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Format
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh format
 
   lint:
@@ -38,11 +43,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run lint
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Lint
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh lint
 
   type-check:
@@ -51,11 +61,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run type_check
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Type-Check
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh type_check
 
   build:
@@ -64,9 +79,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run build
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Build
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh build

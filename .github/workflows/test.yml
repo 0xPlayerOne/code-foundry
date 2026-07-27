@@ -25,14 +25,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run unit
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Unit
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
       - name: Upload coverage
-        if: always()
+        if: always() && steps.applicability.outputs.applicable == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-unit-${{ github.run_id }}
@@ -50,11 +55,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run integration
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Integration
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
 
   e2e:
@@ -63,11 +73,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run e2e
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: E2E
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh e2e
 
   smoke:
@@ -76,9 +91,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run smoke
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Smoke
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh smoke
