@@ -47,6 +47,7 @@ preserved=()
 while IFS= read -r context; do
   [ -n "$context" ] || continue
   case "$context" in
+    'Slither / Analyze') continue ;; # removed from the standard workflow set
     'CI / '*|'Test / '*|'Security / '*|'CodeQL / '*) ;;
     *) preserved+=("$context") ;;
   esac
