@@ -1,6 +1,6 @@
 {
   "name": "repo-foundry",
-  "version": "0.1.4",
+  "version": "0.1.0",
   "description": "A fast, language-aware repository factory for agent-ready workflows, testing, security, and release automation.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
@@ -15,8 +15,6 @@
     ".editorconfig",
     ".gitattributes",
     ".gitignore",
-    "CHANGELOG.md",
-    "release-please-config.json",
     ".mise.toml",
     ".prettierrc",
     ".env.example",

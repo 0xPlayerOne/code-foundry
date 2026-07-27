@@ -87,7 +87,7 @@ fi
 validate_list language "$languages" "$valid_languages"
 validate_list feature "$features" "$valid_features"
 
-if [ -d "$source/.git" ]; then
+if [ -d "$source" ] && [ -f "$source/.github/scripts/sync-template.sh" ]; then
   template_root="$source"
 else
   command -v git >/dev/null 2>&1 || { echo "git is required" >&2; exit 1; }
@@ -177,17 +177,23 @@ fi
 
 changed=0
 for file in "${files[@]}"; do
-  if [ ! -f "$template_root/$file" ]; then
+  template_file="$template_root/$file"
+  # npm renames .gitignore to .npmignore when installing a package. Treat the
+  # renamed file as the same template asset so packaged initialization works.
+  if [ "$file" = .gitignore ] && [ ! -f "$template_file" ] && [ -f "$template_root/.npmignore" ]; then
+    template_file="$template_root/.npmignore"
+  fi
+  if [ ! -f "$template_file" ]; then
     echo "Template file missing: $file" >&2
     exit 1
   fi
-  if [ ! -f "$file" ] || ! cmp -s "$template_root/$file" "$file"; then
+  if [ ! -f "$file" ] || ! cmp -s "$template_file" "$file"; then
     changed=$((changed + 1))
     if [ "$mode" = "check" ]; then
       printf 'Would sync %s\n' "$file"
     else
       mkdir -p "$(dirname "$file")"
-      cp "$template_root/$file" "$file"
+      cp "$template_file" "$file"
       case "$file" in
         .githooks/*|.github/scripts/*) chmod +x "$file" ;;
       esac

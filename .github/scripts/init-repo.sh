@@ -67,7 +67,7 @@ esac
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 if [ -f "$script_dir/sync-template.sh" ]; then
   sync_script="$script_dir/sync-template.sh"
-elif [ -d "$source/.git" ]; then
+elif [ -d "$source" ] && [ -f "$source/.github/scripts/sync-template.sh" ]; then
   sync_script="$source/.github/scripts/sync-template.sh"
 else
   command -v git >/dev/null 2>&1 || { echo "git is required" >&2; exit 1; }
