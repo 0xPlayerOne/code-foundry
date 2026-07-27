@@ -41,7 +41,11 @@ if [ -f package.json ]; then
     if [ -f "$lockfile" ]; then lockfiles=$((lockfiles + 1)); fi
   done
   if [ "$lockfiles" -eq 0 ]; then
-    error "package.json exists but no supported lockfile was found"
+    if node -e 'const p=require("./package.json"); const groups=[p.dependencies,p.devDependencies,p.optionalDependencies,p.peerDependencies]; process.exit(groups.some((g)=>g && Object.keys(g).length) ? 0 : 1)' 2>/dev/null; then
+      error "package.json exists but no supported lockfile was found"
+    else
+      printf '%s\n' "INFO: package.json has no dependencies; a lockfile is optional"
+    fi
   elif [ "$lockfiles" -gt 1 ]; then
     error "multiple JavaScript lockfiles found; keep one package manager"
   fi

@@ -1,6 +1,27 @@
-# Repository Template
+# Repo Foundry
 
-Reusable baseline for TypeScript, Rust, Python, and mixed-language projects.
+`repo-foundry` is a repository factory for TypeScript, Rust, Python, Solidity,
+and mixed-language projects. It installs agent-ready instructions, fast native
+testing, security automation, release workflows, hooks, and repository policy
+from one versioned package.
+
+## Quick start
+
+```bash
+npx repo-foundry init
+```
+
+Or select the project profile explicitly:
+
+```bash
+npx repo-foundry init \
+  --languages typescript,python \
+  --features all \
+  --package-manager bun
+```
+
+Use `repo-foundry sync` to update an existing repository and
+`repo-foundry doctor` to validate it. Add `--dry-run` to preview changes.
 
 ## Setup
 
