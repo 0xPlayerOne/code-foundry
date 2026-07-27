@@ -345,10 +345,19 @@ runs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
-          ~/.cargo/advisory-db
         key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-
+    - name: Cache Rust advisory database
+      if: inputs.install == 'false' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      uses: actions/cache@v5
+      with:
+        path: ~/.cargo/advisory-db
+        # The advisory database is independent of project dependencies. Keep
+        # it warm for Security without invalidating it on every lockfile edit.
+        key: ${{ runner.os }}-rust-advisory-${{ hashFiles('.github/scripts/security.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-advisory-
     - name: Cache Rust tools
       if: inputs.install != 'true' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
