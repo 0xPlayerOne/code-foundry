@@ -115,6 +115,7 @@ runs:
 
         if [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
           [ -f yarn.lock ] || [ -f package-lock.json ]; then
+          javascript_dependencies=true
           echo 'javascript_dependencies=true' >> "$GITHUB_OUTPUT"
         elif [ -f package.json ] && REPO_FOUNDRY_PACKAGE_FILES="$tracked_files" node <<'NODE'
         const fs = require('node:fs');
@@ -137,10 +138,30 @@ runs:
         process.exit(hasDependencies ? 0 : 1);
         NODE
         then
+          javascript_dependencies=true
           echo 'javascript_dependencies=true' >> "$GITHUB_OUTPUT"
         else
+          javascript_dependencies=false
           echo 'javascript_dependencies=false' >> "$GITHUB_OUTPUT"
         fi
+
+        javascript_package_manager=none
+        configured_package_manager=""
+        if [ -f .github/template.yml ]; then
+          configured_package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
+        fi
+        case "$configured_package_manager" in
+          bun|pnpm|yarn|npm) javascript_package_manager="$configured_package_manager" ;;
+          *)
+            if [ -f bun.lock ] || [ -f bun.lockb ]; then javascript_package_manager=bun
+            elif [ -f pnpm-lock.yaml ]; then javascript_package_manager=pnpm
+            elif [ -f yarn.lock ]; then javascript_package_manager=yarn
+            elif [ -f package-lock.json ]; then javascript_package_manager=npm
+            elif [ "$javascript_dependencies" = true ]; then javascript_package_manager=bun
+            fi
+            ;;
+        esac
+        printf 'javascript_package_manager=%s\n' "$javascript_package_manager" >> "$GITHUB_OUTPUT"
 
         python=false
         if has_python_source || [ -f pyproject.toml ] ||
@@ -283,12 +304,12 @@ runs:
 
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies
-      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript_dependencies == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') != ''
+      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript_dependencies == 'true' && steps.profile.outputs.javascript_package_manager != 'npm' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/template.yml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
           **/node_modules
-        key: ${{ runner.os }}-javascript-installed-v2-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-installed-v3-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/template.yml', '.mise.toml', 'mise.lock') }}
     - name: Cache Corepack managers
       if: (inputs.mise-scope == 'javascript' || steps.javascript-dependencies.outputs.cache-hit == 'true') && inputs.install-javascript == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/pnpm-lock.yaml', '**/yarn.lock') != ''
       uses: actions/cache@v5
