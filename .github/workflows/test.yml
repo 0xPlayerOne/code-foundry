@@ -19,42 +19,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  detect:
-    name: Detect
-    runs-on: ubuntu-slim
-    outputs:
-      unit: ${{ steps.suites.outputs.unit }}
-      integration: ${{ steps.suites.outputs.integration }}
-      e2e: ${{ steps.suites.outputs.e2e }}
-      smoke: ${{ steps.suites.outputs.smoke }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Detect suites
-        id: suites
-        shell: bash
-        run: |
-          for task in unit integration e2e smoke; do
-            applicable="$(bash .github/scripts/ci.sh should_run "$task" | awk -F= '$1 == "applicable" { print $2 }')"
-            printf '%s=%s\n' "$task" "$applicable" >> "$GITHUB_OUTPUT"
-          done
-
   unit:
     name: Unit
-    needs: detect
-    if: needs.detect.outputs.unit == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run unit >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Unit
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
       - name: Upload coverage
-        if: always()
+        if: always() && steps.applicability.outputs.applicable == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-unit-${{ github.run_id }}
@@ -69,45 +52,54 @@ jobs:
 
   integration:
     name: Integration
-    needs: detect
-    if: needs.detect.outputs.integration == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run integration >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Integration
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
 
   e2e:
     name: E2E
-    needs: detect
-    if: needs.detect.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run e2e >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: E2E
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh e2e
 
   smoke:
     name: Smoke
-    needs: detect
-    if: needs.detect.outputs.smoke == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run smoke >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
       - name: Smoke
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh smoke
