@@ -113,7 +113,7 @@ Python Security audits use cached `uv tool run` environments for `pip-audit` whe
 
 CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
 
-Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, and CodeQL language detection. Build, test, audit, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because the slim container is intended for short operations and has only one CPU.
+Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, CodeQL language detection, and dependency audits. Build, test, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because they may compile or analyze larger projects and benefit from multiple CPUs.
 
 CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Scheduled and manually dispatched CodeQL runs remain full scans.
 
