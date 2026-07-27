@@ -1,0 +1,42 @@
+{
+  "name": "repo-foundry",
+  "version": "0.1.0",
+  "description": "A fast, language-aware repository factory for agent-ready workflows, testing, security, and release automation.",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "packageManager": "bun@1.3.14",
+  "bin": {
+    "repo-foundry": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    ".github",
+    ".githooks",
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    ".mise.toml",
+    ".prettierrc",
+    ".env.example",
+    "AGENTS.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "ruff.toml"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node --check src/cli.mjs",
+    "format:check": "node --check src/cli.mjs",
+    "lint": "node --check src/cli.mjs",
+    "test": "node --check src/cli.mjs",
+    "type-check": "node --check src/cli.mjs",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm test && npm run pack:check"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
