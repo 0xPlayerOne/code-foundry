@@ -43,10 +43,15 @@ package_manager() {
 cargo_run() {
   local command="$1"
   shift
+  local -a cargo_args=("$@")
   if [ -f Cargo.lock ]; then
-    cargo "$command" "$@" --locked
+    cargo_args+=(--locked)
+  fi
+  if [ "${CARGO_NET_OFFLINE:-false}" = true ]; then
+    cargo_args+=(--offline)
+    cargo "$command" "${cargo_args[@]}"
   else
-    cargo "$command" "$@"
+    cargo "$command" "${cargo_args[@]}"
   fi
 }
 
@@ -205,9 +210,10 @@ lint_javascript() {
 lint_rust() {
   if [ -f Cargo.toml ]; then
     rust_component clippy
-    if [ -f Cargo.lock ]; then cargo clippy --all-targets --locked -- -D warnings
-    else cargo clippy --all-targets -- -D warnings
-    fi
+    clippy_args=(--all-targets)
+    if [ -f Cargo.lock ]; then clippy_args+=(--locked); fi
+    if [ "${CARGO_NET_OFFLINE:-false}" = true ]; then clippy_args+=(--offline); fi
+    cargo clippy "${clippy_args[@]}" -- -D warnings
   fi
 }
 
