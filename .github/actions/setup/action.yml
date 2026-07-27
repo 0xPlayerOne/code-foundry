@@ -38,6 +38,10 @@ inputs:
     description: Restore the Prettier format cache.
     required: false
     default: 'false'
+  cache-turbo:
+    description: Cache local Turborepo artifacts; auto skips duplicate archives when TURBO_TOKEN enables remote caching.
+    required: false
+    default: auto
   task:
     description: Optional CI task used to scope test dependency installation.
     required: false
@@ -413,7 +417,13 @@ runs:
         restore-keys: |
           ${{ runner.os }}-python-lint-${{ github.workflow }}-
     - name: Cache Turborepo
-      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.turbo == 'true' && hashFiles('**/turbo.json', '**/turbo.jsonc') != ''
+      if: >-
+        inputs.install == 'true' &&
+        inputs.install-javascript == 'true' &&
+        inputs.cache-turbo != 'false' &&
+        steps.profile.outputs.turbo == 'true' &&
+        hashFiles('**/turbo.json', '**/turbo.jsonc') != '' &&
+        (inputs.cache-turbo == 'true' || env.TURBO_TOKEN == '')
       uses: actions/cache@v5
       with:
         path: |
