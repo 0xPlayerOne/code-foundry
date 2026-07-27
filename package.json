@@ -15,6 +15,7 @@
     ".editorconfig",
     ".gitattributes",
     ".gitignore",
+    "CHANGELOG.md",
     ".mise.toml",
     ".prettierrc",
     ".env.example",

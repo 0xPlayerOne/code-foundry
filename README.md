@@ -56,6 +56,29 @@ bash .github/scripts/init-repo.sh \
 
 Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supported feature flags are `ci`, `codeql`, `security`, `test`, `draft-pr`, `release-pr`, `release`, and `dependabot`. Use `--prune` only when you explicitly want disabled standard workflows removed; custom workflows are always preserved. The selected profile is stored in `.github/template.yml`, which makes later syncs repeatable and lets workflows consume repository-specific settings without duplicating the template scripts.
 
+## Releases and publishing
+
+The standard release workflow uses [Release Please](https://github.com/googleapis/release-please) after changes reach `main`. It opens or updates a release pull request, maintains `CHANGELOG.md`, creates the GitHub release, and applies semantic version bumps from Conventional Commits:
+
+- `fix:` → patch
+- `feat:` → minor
+- `!` or `BREAKING CHANGE:` → major
+
+Use `Release-As: 2.0.0` in a commit or pull request body when a specific version is required. Existing `CHANGELOG.md` files are preserved by sync and remain repository-owned.
+
+Release behavior is configured in `.github/template.yml`:
+
+```yaml
+release_type: auto   # auto, node, python, rust, simple, or none
+npm_publish: false   # true only for a package published to npm
+```
+
+`auto` selects the first matching package type (`package.json`, `pyproject.toml`, `Cargo.toml`, or `version.txt`). Use `none` when the repository should not release automatically. Solidity-only repositories use `simple` with a root `version.txt`. For a repository containing multiple independently released packages, add a Release Please manifest/configuration and select the appropriate Release Please strategy rather than treating the repository as one package.
+
+GitHub Actions needs permission to open release pull requests. Configure a repository or organization secret named `RELEASE_PLEASE_TOKEN` containing a narrowly scoped token or GitHub App token if the default `GITHUB_TOKEN` is not allowed to create pull requests. Keep `contents`, `issues`, and `pull-requests` permissions enabled for the release workflow.
+
+For npm publication, set `npm_publish: true` and configure npm trusted publishing (recommended) for this repository’s `release.yml` workflow, or provide an `NPM_TOKEN` secret. Publication occurs only after Release Please creates a release tag, so ordinary pushes cannot publish packages.
+
 For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published template checkout or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract for a future npm/package wrapper around these same operations.
 
 Branch protection is an administrator operation and is opt-in:

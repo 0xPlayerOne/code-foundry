@@ -2,22 +2,90 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
+  detect:
+    name: Detect
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Detect release profile
+        id: profile
+        shell: bash
+        run: |
+          release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+          npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+          [ -n "$release_type" ] || release_type=auto
+          [ -n "$npm_publish" ] || npm_publish=false
+
+          if [ "$release_type" = auto ]; then
+            if [ -f package.json ]; then release_type=node
+            elif [ -f pyproject.toml ]; then release_type=python
+            elif [ -f Cargo.toml ]; then release_type=rust
+            elif [ -f version.txt ]; then release_type=simple
+            else release_type=none
+            fi
+          fi
+
+          case "$release_type" in
+            node|python|rust|simple) ;;
+            none) npm_publish=false ;;
+            *) echo "Unsupported release_type: $release_type" >&2; exit 2 ;;
+          esac
+          if [ ! -f package.json ]; then npm_publish=false; fi
+          printf 'release_type=%s\n' "$release_type" >> "$GITHUB_OUTPUT"
+          printf 'npm_publish=%s\n' "$npm_publish" >> "$GITHUB_OUTPUT"
+
   release:
-    name: Publish
+    name: Version and Release
+    needs: detect
+    if: needs.detect.outputs.release_type != 'none'
     runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: false
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Create GitHub release
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          release-type: ${{ needs.detect.outputs.release_type }}
+          bump-minor-pre-major: true
+
+  npm:
+    name: Publish npm
+    needs: [detect, release]
+    if: needs.release.outputs.release_created == 'true' && needs.detect.outputs.npm_publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag_name }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Publish npm package
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
