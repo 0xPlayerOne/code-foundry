@@ -177,34 +177,85 @@ has_rust_target() {
     jq -e --arg kind "$kind" 'any(.packages[].targets[]; (.kind | index($kind)) != null)' >/dev/null
 }
 
-format() {
+run_parallel() {
+  local status=0 pid task
+  local -a pids=()
+  for task in "$@"; do
+    "$task" &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do
+    if ! wait "$pid"; then status=1; fi
+  done
+  return "$status"
+}
+
+format_javascript() {
   if has_script format:check; then run_script format:check
   elif has_javascript; then run_package_tool prettier --check .
   else echo "Skipping JavaScript/TypeScript formatting (no formatter script or source found)"; fi
+}
+
+format_rust() {
   if [ -f Cargo.toml ]; then rust_component rustfmt; cargo fmt --check; fi
+}
+
+format_python() {
   if has_python && command -v ruff >/dev/null 2>&1; then ruff format --check .; fi
 }
 
-lint() {
+format() {
+  run_parallel format_javascript format_rust format_python
+}
+
+lint_javascript() {
   if has_script lint; then run_script lint
   elif has_javascript; then run_package_tool eslint .
   else echo "Skipping JavaScript/TypeScript lint (no lint script or source found)"; fi
+}
+
+lint_rust() {
   if [ -f Cargo.toml ]; then rust_component clippy; cargo clippy --all-targets -- -D warnings; fi
+}
+
+lint_python() {
   if has_python && command -v ruff >/dev/null 2>&1; then ruff check .; fi
 }
 
-type_check() {
+lint() {
+  run_parallel lint_javascript lint_rust lint_python
+}
+
+typecheck_javascript() {
   if has_graph_project; then
     echo "Skipping TypeScript type-check (Graph AssemblyScript project uses graph build/codegen)"
   elif has_script type-check; then run_script type-check
   elif has_script typecheck; then run_script typecheck
   else echo "Skipping type-check (script not defined)"; fi
+}
+
+typecheck_rust() {
   if [ -f Cargo.toml ]; then cargo check; fi
+}
+
+typecheck_python() {
   if has_python && command -v python >/dev/null 2>&1; then
     py_dirs=()
     for dir in tests src scripts; do [ -d "$dir" ] && py_dirs+=("$dir"); done
     if [ "${#py_dirs[@]}" -gt 0 ]; then python -m compileall -q "${py_dirs[@]}"; fi
   fi
+}
+
+type_check() {
+  run_parallel typecheck_javascript typecheck_rust typecheck_python
+}
+
+build_javascript() {
+  run_script build
+}
+
+build_rust() {
+  if [ -f Cargo.toml ]; then cargo build --all-targets --all-features; fi
 }
 
 build() {
@@ -213,11 +264,10 @@ build() {
   if [ "${CI:-}" = true ] && [ -z "${NEXTAUTH_SECRET:-}" ]; then
     export NEXTAUTH_SECRET="ci-only-build-secret-not-for-runtime-0123456789"
   fi
-  run_script build
-  if [ -f Cargo.toml ]; then cargo build --all-targets --all-features; fi
+  run_parallel build_javascript build_rust
 }
 
-unit() {
+unit_javascript() {
   # Bun repositories should expose test scripts backed by Bun's native runner.
   # Specialized repositories may keep their native runner (for example Matchstick or Hardhat).
   if has_script test:unit; then
@@ -233,11 +283,17 @@ unit() {
   else
     echo "Skipping JavaScript/TypeScript unit tests (script not defined)"
   fi
+}
+
+unit_rust() {
   if [ -f Cargo.toml ]; then
     if has_rust_target lib; then cargo test --lib --all-features
     elif has_rust_target bin; then cargo test --bins --all-features
     else echo "Skipping Rust unit tests (no library or binary target)"; fi
   fi
+}
+
+unit_python() {
   if [ -d tests/unit ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
     coverage_args=()
     while IFS= read -r arg; do [ -n "$arg" ] && coverage_args+=("$arg"); done < <(python_coverage_args)
@@ -266,7 +322,7 @@ integration_javascript() {
 }
 
 integration_rust() {
-  if [ -f Cargo.toml ] && [ -d tests ]; then cargo_run test --tests --all-features; fi
+  if [ -f Cargo.toml ] && [ -d tests ]; then cargo test --tests --all-features; fi
 }
 
 integration_python() {
@@ -319,6 +375,10 @@ smoke_python() {
   else
     echo "Skipping Python smoke tests (tests/smoke not found)"
   fi
+}
+
+smoke() {
+  run_parallel smoke_javascript smoke_python
 }
 
 should_run() {
