@@ -50,7 +50,7 @@ fi
 if [ "${1:-}" = profile ]; then
   python_requirements="$(
     git ls-files -z '*requirements*.txt' |
-      node -e 'let data=""; process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => process.stdout.write(JSON.stringify(data.split("\\0").filter(Boolean))));'
+      node -e 'let data=""; process.stdin.on("data", (chunk) => { data += chunk; }).on("end", () => process.stdout.write(JSON.stringify(data.split("\0").filter(Boolean))));'
   )"
   [ "$python_requirements" = "[]" ] && python_requirements='[""]'
   for ecosystem in javascript rust python; do
