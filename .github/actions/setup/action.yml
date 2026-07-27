@@ -34,6 +34,10 @@ inputs:
     description: Cache materialized JavaScript dependencies; auto skips large Bun node_modules trees and keeps compact link-based installs.
     required: false
     default: auto
+  cache-packages:
+    description: Restore JavaScript package-manager caches; disable when a warm registry install is faster than restoring a large archive.
+    required: false
+    default: 'true'
   cache-lint:
     description: Restore the JavaScript/TypeScript lint cache.
     required: false
@@ -417,7 +421,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-corepack-
     - name: Cache JavaScript packages
-      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
+      if: inputs.install == 'true' && inputs.install-javascript == 'true' && inputs.cache-packages != 'false' && steps.profile.outputs.javascript == 'true' && hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
       uses: actions/cache@v5
       with:
         path: |
