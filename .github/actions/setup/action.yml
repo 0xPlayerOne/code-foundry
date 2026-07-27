@@ -14,6 +14,10 @@ inputs:
     description: Restore the JavaScript/TypeScript lint cache.
     required: false
     default: 'false'
+  cache-format:
+    description: Restore the Prettier format cache.
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -105,6 +109,17 @@ runs:
         key: ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.eslintrc*', '**/eslint.config.*', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-
+    - name: Cache JavaScript format state
+      if: inputs.install == 'true' && inputs.cache-format == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*') != ''
+      uses: actions/cache@v5
+      with:
+        path: |
+          **/node_modules/.cache/prettier
+        key: ${{ runner.os }}-javascript-format-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*', '.mise.toml', 'mise.lock') }}
+        # Keep primary saves isolated so parallel jobs cannot race. A cache
+        # from another workflow job is still a valid warm fallback.
+        restore-keys: |
+          ${{ runner.os }}-javascript-format-
     - name: Cache JavaScript build state
       if: inputs.install == 'true' && inputs.cache-build == 'true' && steps.profile.outputs.build == 'true' && hashFiles('**/next.config.*', '**/vite.config.*', '**/tsconfig*.json') != ''
       uses: actions/cache@v5

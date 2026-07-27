@@ -173,7 +173,7 @@ run_parallel() {
 
 format_javascript() {
   if has_script format:check; then run_script format:check
-  elif has_javascript; then run_package_tool prettier --check .
+  elif has_javascript; then run_package_tool prettier --check . --cache --cache-strategy content
   else echo "Skipping JavaScript/TypeScript formatting (no formatter script or source found)"; fi
 }
 
