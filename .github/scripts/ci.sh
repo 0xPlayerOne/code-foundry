@@ -91,18 +91,27 @@ PY
 }
 
 install() {
-  if [ -f package.json ]; then
+  if [ -f package.json ] &&
+    { [ "${REPO_FOUNDRY_JAVASCRIPT_CACHE_HIT:-false}" != true ] || [ ! -d node_modules ]; }; then
     case "$(package_manager)" in
       bun) bun install --frozen-lockfile ;;
       pnpm) corepack pnpm install --frozen-lockfile ;;
       yarn) corepack yarn install --immutable ;;
       npm) npm ci ;;
     esac
+  elif [ -f package.json ]; then
+    echo "Using cached JavaScript dependencies"
   fi
   if [ -f Cargo.toml ]; then cargo fetch --locked; fi
-  if has_python; then python -m venv .venv; .venv/bin/python -m pip install --disable-pip-version-check --quiet ruff; fi
-  if [ -f requirements.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt; fi
-  if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt; fi
+  if has_python &&
+    { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
+    python -m venv .venv
+    .venv/bin/python -m pip install --disable-pip-version-check --quiet ruff
+    if [ -f requirements.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt; fi
+    if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt; fi
+  elif has_python; then
+    echo "Using cached Python environment"
+  fi
 }
 
 rust_component() {

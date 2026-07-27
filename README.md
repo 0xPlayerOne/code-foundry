@@ -97,6 +97,8 @@ The initializer generates a minimal `.mise.toml` from the selected language prof
 
 Rust repositories also cache `target/` and Cargo-installed audit tools using separate lockfile/toolchain/workflow-job keys. Cargo fingerprints invalidate stale objects safely, while keeping build caches separate prevents a large Rust build from displacing dependency-download caches or parallel jobs from racing to save one partial cache.
 
+Applicable jobs also cache installed JavaScript dependencies and Python virtual environments by manifest/configuration hash. Cache misses always fall back to a clean install; cached environments must never contain credentials or generated secrets.
+
 CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
 
 Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, and CodeQL language detection. Build, test, audit, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because the slim container is intended for short operations and has only one CPU.
