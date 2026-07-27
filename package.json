@@ -16,6 +16,7 @@
     ".gitattributes",
     ".gitignore",
     "CHANGELOG.md",
+    "release-please-config.json",
     ".mise.toml",
     ".prettierrc",
     ".env.example",
