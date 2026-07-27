@@ -37,7 +37,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.name }})
     needs: detect
-    if: ${{ !github.event.repository.private && matrix.changed }}
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,11 +48,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Initialize
+        if: matrix.changed
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
       - name: Analyze
+        if: matrix.changed
         uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
