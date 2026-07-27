@@ -205,7 +205,7 @@ format() {
 
 lint_javascript() {
   if has_script lint; then run_script lint
-  elif has_javascript; then run_package_tool eslint --cache .
+  elif has_javascript; then run_package_tool eslint --cache --cache-strategy content .
   else echo "Skipping JavaScript/TypeScript lint (no lint script or source found)"; fi
 }
 
