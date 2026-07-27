@@ -3,6 +3,10 @@
 # Shared pull-request change detection. A failed or incomplete diff must be
 # treated as relevant so checks never become silently optional.
 repo_foundry_changed_files() {
+  if [ "${REPO_FOUNDRY_CHANGED_FILES_READY:-false}" = true ]; then
+    return 0
+  fi
+
   local base_sha="${REPO_FOUNDRY_BASE_SHA:-}"
   local head_sha="${GITHUB_SHA:-HEAD}"
   local changed_files=""
@@ -17,7 +21,8 @@ repo_foundry_changed_files() {
   fi
 
   [ -n "$changed_files" ] || return 1
-  printf '%s\n' "$changed_files"
+  REPO_FOUNDRY_CHANGED_FILES="$changed_files"
+  REPO_FOUNDRY_CHANGED_FILES_READY=true
 }
 
 repo_foundry_pr_docs_only() {
@@ -25,7 +30,8 @@ repo_foundry_pr_docs_only() {
 
   local changed_files=""
 
-  changed_files="$(repo_foundry_changed_files)" || return 1
+  repo_foundry_changed_files || return 1
+  changed_files="$REPO_FOUNDRY_CHANGED_FILES"
 
   # An unavailable or empty diff is not evidence that a PR is documentation
   # only. Continue with the full check in that case.
@@ -50,7 +56,8 @@ repo_foundry_pr_dependencies_unchanged() {
   [ "${GITHUB_EVENT_NAME:-}" = pull_request ] || return 1
 
   local changed_files=""
-  changed_files="$(repo_foundry_changed_files)" || return 1
+  repo_foundry_changed_files || return 1
+  changed_files="$REPO_FOUNDRY_CHANGED_FILES"
 
   while IFS= read -r file; do
     case "$file" in
