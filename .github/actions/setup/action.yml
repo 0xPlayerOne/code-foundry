@@ -316,6 +316,16 @@ runs:
         key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') }}
         restore-keys: |
           ${{ runner.os }}-python-
+    - name: Cache Python audit tools
+      if: inputs.install == 'false' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != ''
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/uv-audit
+        # pip-audit is independent of application requirements; keep its uv
+        # tool environment warm across dependency lockfile changes.
+        key: ${{ runner.os }}-python-audit-${{ hashFiles('.github/scripts/security.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-python-audit-
     - name: Cache Python lint state
       if: inputs.install == 'true' && steps.profile.outputs.ruff == 'true' && hashFiles('**/pyproject.toml', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
