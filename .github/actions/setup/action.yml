@@ -33,6 +33,18 @@ runs:
         key: ${{ runner.os }}-javascript-${{ hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-javascript-
+    - name: Cache JavaScript build state
+      if: inputs.install == 'true' && hashFiles('**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '**/.eslintrc*', '**/eslint.config.*') != ''
+      uses: actions/cache@v5
+      with:
+        path: |
+          **/.next/cache
+          **/node_modules/.vite
+          **/.eslintcache
+          **/*.tsbuildinfo
+        key: ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '**/.eslintrc*', '**/eslint.config.*', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-
     - name: Cache Python environment
       id: python-environment
       if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
