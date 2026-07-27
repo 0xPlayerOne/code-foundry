@@ -207,7 +207,7 @@ for file in "${files[@]}"; do
         custom_ignores="$(mktemp)"
         cp "$file" "$gitignore_backup"
         cp "$template_file" "$file"
-        awk 'NR == FNR { seen[$0] = 1; next } NF && !seen[$0] { print }' \
+        awk 'NR == FNR { seen[$0] = 1; next } /^# Repository-specific rules$/ { next } NF && !seen[$0] { print }' \
           "$template_file" "$gitignore_backup" > "$custom_ignores"
         if [ -s "$custom_ignores" ]; then
           {
