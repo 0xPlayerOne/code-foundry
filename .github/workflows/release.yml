@@ -11,12 +11,16 @@ permissions:
   pull-requests: write
 
 jobs:
-  detect:
-    name: Detect
+  release:
+    name: Release / Version
     runs-on: ubuntu-slim
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
+      cancel-in-progress: false
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created || 'false' }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      npm_publish: ${{ steps.profile.outputs.npm_publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -46,33 +50,21 @@ jobs:
           if [ ! -f package.json ]; then npm_publish=false; fi
           printf 'release_type=%s\n' "$release_type" >> "$GITHUB_OUTPUT"
           printf 'npm_publish=%s\n' "$npm_publish" >> "$GITHUB_OUTPUT"
-
-  release:
-    name: Release / Version
-    needs: detect
-    if: needs.detect.outputs.release_type != 'none'
-    runs-on: ubuntu-slim
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: false
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-    steps:
       - name: Release Please
         id: release
+        if: steps.profile.outputs.release_type != 'none'
         uses: googleapis/release-please-action@v4
         with:
           # Use a PAT or GitHub App token when GITHUB_TOKEN cannot create PRs.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
-          release-type: ${{ needs.detect.outputs.release_type }}
+          release-type: ${{ steps.profile.outputs.release_type }}
           bump-minor-pre-major: true
 
   npm:
     name: Release / Publish npm
-    needs: [detect, release]
-    if: needs.release.outputs.release_created == 'true' && needs.detect.outputs.npm_publish == 'true'
+    needs: release
+    if: needs.release.outputs.release_created == 'true' && needs.release.outputs.npm_publish == 'true'
     runs-on: ubuntu-slim
     permissions:
       contents: read
