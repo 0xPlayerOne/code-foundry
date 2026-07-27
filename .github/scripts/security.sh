@@ -15,7 +15,7 @@ has_dependency_manifest() {
 }
 
 should_run() {
-  if repo_foundry_pr_docs_only; then
+  if repo_foundry_governance_only; then
     printf '%s\n' 'applicable=false'
     return 0
   fi

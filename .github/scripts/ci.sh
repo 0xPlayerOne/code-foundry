@@ -468,7 +468,7 @@ smoke() {
 
 should_run() {
   local task="$1"
-  if repo_foundry_pr_docs_only; then
+  if repo_foundry_governance_only; then
     printf '%s\n' 'applicable=false'
     [ "$task" = e2e ] && printf '%s\n' 'browser=false'
     return 0
