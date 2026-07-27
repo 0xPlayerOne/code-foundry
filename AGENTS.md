@@ -98,9 +98,9 @@ Run focused tests first, then the complete applicable set for release, security,
 
 At minimum:
 
-- TypeScript: format, lint, type-check, build, unit tests, and relevant browser/integration tests
-- Rust: format, clippy, check, unit/integration tests, and dependency audit
-- Python: format/lint, compile or type checks, pytest, coverage, and dependency audit
+- TypeScript/JavaScript: Prettier formatting, ESLint linting, type-check, build, unit tests, and relevant browser/integration tests
+- Rust: default rustfmt, Clippy with warnings treated as errors, check, unit/integration tests, and dependency audit
+- Python: Ruff formatting and linting, compile or type checks, pytest, coverage, and dependency audit
 - Mixed projects: validate each active ecosystem and its integration boundaries
 
 If a check cannot run, state the exact reason. A skipped check is not a passing check.

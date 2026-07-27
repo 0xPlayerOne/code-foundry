@@ -10,6 +10,8 @@ Reusable baseline for TypeScript, Rust, Python, and mixed-language projects.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
+CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
+
 ## Optional Turborepo remote caching
 
 Turborepo repositories can use Vercel Remote Caching without changing the workflows. Add these repository settings:
