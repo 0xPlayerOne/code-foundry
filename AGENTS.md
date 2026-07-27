@@ -6,6 +6,10 @@ They complement `CONTRIBUTING.md`. More specific instructions in nested `AGENTS.
 
 ## Mission
 
+- Keep formatting, linting, type checking, builds, tests, and coverage reproducible locally and in CI.
+- Prefer the versions pinned in `.mise.toml`.
+- Do not commit secrets, generated credentials, local environment files, or machine-specific paths.
+- Add tests for behavior changes and keep coverage thresholds explicit in the project configuration.
 Make the smallest complete, well-tested change that solves the requested problem without disturbing unrelated work.
 
 This repository may contain TypeScript, Rust, Python, or any combination of them. Detect the active stack from the files present; do not assume every check applies.
@@ -98,9 +102,9 @@ Run focused tests first, then the complete applicable set for release, security,
 
 At minimum:
 
-- TypeScript: format, lint, type-check, build, unit tests, and relevant browser/integration tests
-- Rust: format, clippy, check, unit/integration tests, and dependency audit
-- Python: format/lint, compile or type checks, pytest, coverage, and dependency audit
+- TypeScript/JavaScript: Prettier formatting, ESLint linting, type-check, build, unit tests, and relevant browser/integration tests
+- Rust: default rustfmt, Clippy with warnings treated as errors, check, unit/integration tests, and dependency audit
+- Python: Ruff formatting and linting, compile or type checks, pytest, coverage, and dependency audit
 - Mixed projects: validate each active ecosystem and its integration boundaries
 
 If a check cannot run, state the exact reason. A skipped check is not a passing check.

@@ -7,6 +7,16 @@ has_script() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.[process.argv[1]] ? 0 : 1)' "$1"
 }
 
+has_javascript() {
+  find . -type f \( -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' \) \
+    -not -path './.git/*' -not -path './node_modules/*' -print -quit | grep -q .
+}
+
+has_python() {
+  [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ] || \
+    find . -type f -name '*.py' -not -path './.git/*' -not -path './.venv/*' -print -quit | grep -q .
+}
+
 package_manager() {
   if [ -f bun.lock ] || [ -f bun.lockb ]; then echo bun
   elif [ -f pnpm-lock.yaml ]; then echo pnpm
@@ -20,9 +30,18 @@ run_script() {
   if ! has_script "$1"; then echo "Skipping $1 (script not defined)"; return; fi
   case "$(package_manager)" in
     bun) bun run "$1" ;;
-    pnpm) pnpm run "$1" ;;
-    yarn) yarn "$1" ;;
+    pnpm) corepack pnpm run "$1" ;;
+    yarn) corepack yarn run "$1" ;;
     npm) npm run "$1" ;;
+  esac
+}
+
+run_package_tool() {
+  case "$(package_manager)" in
+    bun) bunx --no-install "$@" ;;
+    pnpm) corepack pnpm exec "$@" ;;
+    yarn) corepack yarn exec "$@" ;;
+    npm) npx --no-install "$@" ;;
   esac
 }
 
@@ -36,28 +55,33 @@ install() {
     esac
   fi
   if [ -f Cargo.toml ]; then cargo fetch --locked; fi
-  if [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then python -m venv .venv; fi
+  if has_python; then python -m venv .venv; .venv/bin/python -m pip install --disable-pip-version-check --quiet ruff; fi
   if [ -f requirements.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt; fi
   if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt; fi
 }
 
 format() {
-  run_script format:check
+  if has_script format:check; then run_script format:check
+  elif has_javascript; then run_package_tool prettier --check .
+  else echo "Skipping JavaScript/TypeScript formatting (no formatter script or source found)"; fi
   if [ -f Cargo.toml ]; then cargo fmt --check; fi
+  if has_python && command -v ruff >/dev/null 2>&1; then ruff format --check .; fi
 }
 
 lint() {
-  run_script lint
+  if has_script lint; then run_script lint
+  elif has_javascript; then run_package_tool eslint .
+  else echo "Skipping JavaScript/TypeScript lint (no lint script or source found)"; fi
   if [ -f Cargo.toml ]; then cargo clippy --all-targets -- -D warnings; fi
-  if command -v ruff >/dev/null 2>&1; then ruff check .; fi
+  if has_python && command -v ruff >/dev/null 2>&1; then ruff check .; fi
 }
 
 type_check() {
-  if has_script type-check; then bun run type-check
-  elif has_script typecheck; then bun run typecheck
+  if has_script type-check; then run_script type-check
+  elif has_script typecheck; then run_script typecheck
   else echo "Skipping type-check (script not defined)"; fi
   if [ -f Cargo.toml ]; then cargo check; fi
-  if command -v python >/dev/null 2>&1; then
+  if has_python && command -v python >/dev/null 2>&1; then
     py_dirs=()
     for dir in tests src scripts; do [ -d "$dir" ] && py_dirs+=("$dir"); done
     if [ "${#py_dirs[@]}" -gt 0 ]; then python -m compileall -q "${py_dirs[@]}"; fi
