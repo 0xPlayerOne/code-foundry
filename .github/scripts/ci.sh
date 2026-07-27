@@ -132,24 +132,7 @@ type_check() {
   run_parallel typecheck_javascript typecheck_rust typecheck_python
 }
 
-build_javascript() {
-  run_script build
-}
-
-build_rust() {
-  if [ -f Cargo.toml ]; then cargo_run build --all-targets --all-features; fi
-}
-
-build() {
-  # Some frameworks validate session secrets while statically collecting pages.
-  # Keep CI builds deterministic without weakening runtime/deployment validation.
-  if [ "${CI:-}" = true ] && [ -z "${NEXTAUTH_SECRET:-}" ]; then
-    export NEXTAUTH_SECRET="ci-only-build-secret-not-for-runtime-0123456789"
-  fi
-  run_parallel build_javascript build_rust
-}
-
-unit_javascript() {
+unit() {
   # Bun repositories should expose test scripts backed by Bun's native runner.
   # Specialized repositories may keep their native runner (for example Matchstick or Hardhat).
   if has_script test:unit; then

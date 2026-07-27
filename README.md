@@ -97,6 +97,10 @@ The repository name, owner, branch names, and release metadata are resolved by G
 
 CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
 
+## Test runner standard
+
+For TypeScript and JavaScript tests, use Bun's native test runner by default. Do not add Vitest to projects based on this template. Preserve specialized native runners such as Matchstick for The Graph and Hardhat for smart contracts.
+
 ## Optional Turborepo remote caching
 
 Turborepo repositories can use Vercel Remote Caching without changing the workflows. Add these repository settings:
