@@ -46,48 +46,92 @@ runs:
           git ls-files -- "$@" | grep -q .
         }
 
+        javascript=false
         if [ -f package.json ] || [ -f bun.lock ] || [ -f bun.lockb ] ||
           [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ] ||
           has_files '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts'; then
+          javascript=true
           echo 'javascript=true' >> "$GITHUB_OUTPUT"
         else
           echo 'javascript=false' >> "$GITHUB_OUTPUT"
         fi
 
+        if [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
+          [ -f yarn.lock ] || [ -f package-lock.json ]; then
+          echo 'javascript_dependencies=true' >> "$GITHUB_OUTPUT"
+        elif [ -f package.json ] && node <<'NODE'
+        const { execFileSync } = require('node:child_process');
+        const fs = require('node:fs');
+
+        const files = execFileSync('git', ['ls-files', '--', 'package.json', '*/package.json'], { encoding: 'utf8' })
+          .trim()
+          .split('\n')
+          .filter(Boolean);
+        const groups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+        const hasDependencies = files.some((file) => {
+          try {
+            const packageJson = JSON.parse(fs.readFileSync(file, 'utf8'));
+            return groups.some((group) => packageJson[group] && Object.keys(packageJson[group]).length > 0) ||
+              Array.isArray(packageJson.workspaces) ||
+              (packageJson.workspaces && typeof packageJson.workspaces === 'object');
+          } catch {
+            return true;
+          }
+        });
+        process.exit(hasDependencies ? 0 : 1);
+        NODE
+        then
+          echo 'javascript_dependencies=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'javascript_dependencies=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        python=false
         if has_files '*.py' ':!.github/**' || [ -f pyproject.toml ] ||
           [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then
+          python=true
           echo 'python=true' >> "$GITHUB_OUTPUT"
         else
           echo 'python=false' >> "$GITHUB_OUTPUT"
         fi
 
+        rust=false
         if [ -f Cargo.toml ] || [ -f Cargo.lock ]; then
+          rust=true
           echo 'rust=true' >> "$GITHUB_OUTPUT"
         else
           echo 'rust=false' >> "$GITHUB_OUTPUT"
         fi
 
+        turbo=false
         if [ -f turbo.json ] || [ -f turbo.jsonc ] || has_files '*/turbo.json' '*/turbo.jsonc'; then
+          turbo=true
           echo 'turbo=true' >> "$GITHUB_OUTPUT"
         else
           echo 'turbo=false' >> "$GITHUB_OUTPUT"
         fi
 
+        eslint=false
         if [ -f .eslintrc ] || [ -f .eslintrc.js ] || [ -f .eslintrc.cjs ] ||
           [ -f .eslintrc.json ] || has_files '.eslintrc*' 'eslint.config.*'; then
+          eslint=true
           echo 'eslint=true' >> "$GITHUB_OUTPUT"
         else
           echo 'eslint=false' >> "$GITHUB_OUTPUT"
         fi
 
+        build=false
         if has_files 'next.config.*' 'vite.config.*' 'tsconfig*.json'; then
+          build=true
           echo 'build=true' >> "$GITHUB_OUTPUT"
         else
           echo 'build=false' >> "$GITHUB_OUTPUT"
         fi
 
+        python_dependencies=false
         if [ -f pyproject.toml ] || [ -f uv.lock ] || [ -f requirements.txt ] ||
           [ -f requirements-dev.txt ] || [ -f Pipfile.lock ] || [ -f poetry.lock ]; then
+          python_dependencies=true
           echo 'python_dependencies=true' >> "$GITHUB_OUTPUT"
         else
           echo 'python_dependencies=false' >> "$GITHUB_OUTPUT"
@@ -137,12 +181,17 @@ runs:
           *) echo "Unsupported mise-scope: $REPO_FOUNDRY_MISE_SCOPE" >&2; exit 2 ;;
         esac
         printf 'mise_tools=%s\n' "${mise_tools[*]}" >> "$GITHUB_OUTPUT"
+        if [ "${#mise_tools[@]}" -gt 0 ]; then
+          printf 'mise_required=true\n' >> "$GITHUB_OUTPUT"
+        else
+          printf 'mise_required=false\n' >> "$GITHUB_OUTPUT"
+        fi
       env:
         REPO_FOUNDRY_MISE_SCOPE: ${{ inputs.mise-scope }}
 
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies
-      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') != ''
+      if: inputs.install == 'true' && inputs.install-javascript == 'true' && steps.profile.outputs.javascript_dependencies == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -273,7 +322,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-build-
     - name: Setup
-      if: ${{ hashFiles('.mise.toml') != '' }}
+      if: ${{ steps.profile.outputs.mise_required == 'true' }}
       uses: jdx/mise-action@v4
       with:
         cache: true
