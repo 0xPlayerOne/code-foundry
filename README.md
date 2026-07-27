@@ -115,6 +115,8 @@ CI and Test jobs perform a source-only applicability check before setup. Empty i
 
 The shared setup action accepts `install-javascript`, `install-python`, and `install-rust` switches. They default to `true` for compatibility, while the standard CI jobs disable ecosystems that their task cannot use: formatting skips project Cargo/Python installs, and lint, type-check, and build skip Python dependency installation. Test jobs keep all ecosystem installs enabled because project test suites may cross language boundaries.
 
+It also accepts `mise-scope` (`all`, `javascript`, `python`, or `rust`). Security's parallel ecosystem matrix uses this to install only the active language toolchain and restore only its package caches; callers that omit it retain the full profile.
+
 Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, CodeQL language detection, and dependency audits. Build, test, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because they may compile or analyze larger projects and benefit from multiple CPUs.
 
 CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Its detection job uses a `blob:none` partial clone because it only needs Git paths and metadata; analyzer jobs use normal full checkouts. Scheduled and manually dispatched CodeQL runs remain full scans.

@@ -40,6 +40,8 @@ jobs:
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
+        with:
+          mise-scope: ${{ matrix.ecosystem }}
       - name: Audit dependencies
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/security.sh audit "${{ matrix.ecosystem }}"
