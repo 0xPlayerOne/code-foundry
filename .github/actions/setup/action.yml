@@ -224,7 +224,7 @@ runs:
       with:
         path: |
           **/.eslintcache
-        key: ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.eslintrc*', '**/eslint.config.*', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.eslintrc*', '**/eslint.config.*') }}
         restore-keys: |
           ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-
     - name: Cache JavaScript format state
@@ -233,7 +233,7 @@ runs:
       with:
         path: |
           **/node_modules/.cache/prettier
-        key: ${{ runner.os }}-javascript-format-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-format-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*') }}
         # Keep primary saves isolated so parallel jobs cannot race. A cache
         # from another workflow job is still a valid warm fallback.
         restore-keys: |
