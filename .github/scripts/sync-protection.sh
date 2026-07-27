@@ -6,7 +6,7 @@ repo=""
 mode="check"
 
 usage() {
-  printf '%s\n' 'Usage: sync-protection.sh --repo OWNER/REPO [--branch main] [--apply]'
+  printf '%s\n' 'Usage: sync-protection.sh --repo OWNER/REPO [--branch main] [--check] [--apply]'
 }
 
 while [ "$#" -gt 0 ]; do
