@@ -25,6 +25,13 @@ has_graph_project() {
 }
 
 package_manager() {
+  local configured=""
+  if [ -f .github/template.yml ]; then
+    configured="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
+    case "$configured" in
+      bun|pnpm|yarn|npm) echo "$configured"; return ;;
+    esac
+  fi
   if [ -f bun.lock ] || [ -f bun.lockb ]; then echo bun
   elif [ -f pnpm-lock.yaml ]; then echo pnpm
   elif [ -f yarn.lock ]; then echo yarn
