@@ -28,9 +28,16 @@ if [ -f .github/template.yml ]; then
 fi
 
 if [ "$configured" = auto ] || [ "$configured" = all ] || [ -z "$configured" ]; then
-  if git ls-files -- '*.ts' '*.tsx' '*.js' '*.jsx' 'package.json' 'tsconfig*.json' | grep -q .; then languages+=(javascript-typescript); fi
-  if git ls-files -- '*.py' 'pyproject.toml' 'requirements*.txt' 'setup.py' ':!.github/**' | grep -q .; then languages+=(python); fi
-  if git ls-files -- '*.rs' 'Cargo.toml' 'Cargo.lock' | grep -q .; then languages+=(rust); fi
+  tracked_files="$(git ls-files)"
+  if printf '%s\n' "$tracked_files" | grep -Eq '(^|/)([^/]+\.(ts|tsx|js|jsx)|package\.json|tsconfig[^/]*\.json)$'; then
+    languages+=(javascript-typescript)
+  fi
+  if printf '%s\n' "$tracked_files" | awk '!/^\.github\// && /(^|\/)([^\/]+\.py|pyproject\.toml|requirements[^\/]*\.txt|setup\.py)$/ { found=1; exit } END { exit !found }'; then
+    languages+=(python)
+  fi
+  if printf '%s\n' "$tracked_files" | grep -Eq '(^|/)([^/]+\.rs|Cargo\.toml|Cargo\.lock)$'; then
+    languages+=(rust)
+  fi
 else
   case ",$configured," in *,typescript,*) languages+=(javascript-typescript) ;; esac
   case ",$configured," in *,python,*) languages+=(python) ;; esac
