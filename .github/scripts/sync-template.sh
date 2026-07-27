@@ -312,7 +312,7 @@ initialize_mise() {
           printf 'uv = "%s"\n' "$uv_version"
           ;;
         rust)
-          printf 'rust = "%s"\n' "$rust_version"
+          printf 'rust = { version = "%s", components = ["rustfmt", "clippy"] }\n' "$rust_version"
           ;;
       esac
     done | awk '!seen[$0]++'
