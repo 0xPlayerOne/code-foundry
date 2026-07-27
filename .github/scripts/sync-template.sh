@@ -26,6 +26,7 @@ features="all"
 prune=false
 languages_set=false
 features_set=false
+package_manager=""
 
 valid_languages="typescript rust python solidity"
 valid_features="ci codeql security test draft-pr release-pr release dependabot"
@@ -83,6 +84,7 @@ if [ -f .github/template.yml ]; then
     configured_features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml)"
     [ -n "$configured_features" ] && features="$configured_features"
   fi
+  package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
 fi
 validate_list language "$languages" "$valid_languages"
 validate_list feature "$features" "$valid_features"
@@ -217,11 +219,14 @@ done
 if [ "$mode" = "apply" ]; then
   git config core.hooksPath .githooks
   mkdir -p .github
-  cat > .github/template.yml <<EOF
-version: 1
-languages: $languages
-features: $features
-EOF
+  {
+    printf 'version: 1\n'
+    printf 'languages: %s\n' "$languages"
+    printf 'features: %s\n' "$features"
+    if [ -n "$package_manager" ]; then
+      printf 'package_manager: %s\n' "$package_manager"
+    fi
+  } > .github/template.yml
 fi
 
 if [ "$prune" = true ]; then
