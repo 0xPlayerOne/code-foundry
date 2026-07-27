@@ -34,6 +34,7 @@ node_version="24.18.0"
 bun_version="1.3.14"
 python_version="3.13"
 rust_version="1.97.1"
+uv_version="0.11.32"
 gitignore_backup=""
 custom_ignores=""
 
@@ -307,6 +308,7 @@ initialize_mise() {
           ;;
         python)
           printf 'python = "%s"\n' "$python_version"
+          printf 'uv = "%s"\n' "$uv_version"
           ;;
         rust)
           printf 'rust = "%s"\n' "$rust_version"

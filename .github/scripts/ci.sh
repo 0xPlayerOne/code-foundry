@@ -105,10 +105,20 @@ install() {
   if [ -f Cargo.toml ]; then cargo fetch --locked; fi
   if has_python &&
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
-    python -m venv .venv
-    .venv/bin/python -m pip install --disable-pip-version-check --quiet ruff
-    if [ -f requirements.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt; fi
-    if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt; fi
+    install_python_with_uv() {
+      uv venv --python "$(command -v python)" .venv
+      uv pip install --python .venv/bin/python ruff
+      if [ -f requirements.txt ]; then uv pip install --python .venv/bin/python -r requirements.txt; fi
+      if [ -f requirements-dev.txt ]; then uv pip install --python .venv/bin/python -r requirements-dev.txt; fi
+    }
+    if command -v uv >/dev/null 2>&1 && install_python_with_uv; then
+      echo "Installed Python dependencies with uv"
+    else
+      python -m venv .venv
+      .venv/bin/python -m pip install --disable-pip-version-check --quiet ruff
+      if [ -f requirements.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt; fi
+      if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt; fi
+    fi
   elif has_python; then
     echo "Using cached Python environment"
   fi

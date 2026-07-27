@@ -43,11 +43,13 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-
     - name: Cache Python packages
-      if: hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != ''
+      if: hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != ''
       uses: actions/cache@v4
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') }}
+        path: |
+          ~/.cache/pip
+          ~/.cache/uv
+        key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') }}
         restore-keys: |
           ${{ runner.os }}-python-
     - name: Cache installed JavaScript dependencies
