@@ -1,57 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source .github/scripts/changed-files.sh
-
-has_javascript_dependencies() {
-  [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
-    [ -f yarn.lock ] || [ -f package-lock.json ] ||
-    { [ -f package.json ] && node -e 'const p=require("./package.json"); const groups=[p.dependencies,p.devDependencies,p.optionalDependencies,p.peerDependencies]; process.exit(groups.some((g)=>g && Object.keys(g).length) ? 0 : 1)' 2>/dev/null; }
-}
-
 has_dependency_manifest() {
-  has_javascript_dependencies || [ -f Cargo.toml ] || [ -f requirements.txt ] ||
+  [ -f package.json ] || [ -f Cargo.toml ] || [ -f requirements.txt ] ||
     [ -f requirements-dev.txt ] || [ -f pyproject.toml ]
 }
 
 should_run() {
-  if repo_foundry_governance_only; then
+  if has_dependency_manifest; then
+    printf '%s\n' 'applicable=true'
+  else
     printf '%s\n' 'applicable=false'
-    return 0
   fi
-  if repo_foundry_pr_dependencies_unchanged "${1:-all}"; then
-    printf '%s\n' 'applicable=false'
-    return 0
-  fi
-  case "${1:-all}" in
-    javascript) has_javascript_dependencies || return 1 ;;
-    rust) [ -f Cargo.toml ] || return 1 ;;
-    python) [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ] || return 1 ;;
-    all) has_dependency_manifest || return 1 ;;
-    *) echo "unknown ecosystem: ${1:-}" >&2; return 2 ;;
-  esac
-  printf '%s\n' 'applicable=true'
 }
 
 if [ "${1:-audit}" = should_run ]; then
-  if should_run "${2:-all}"; then
-    exit 0
-  else
-    status=$?
-    [ "$status" -eq 1 ] && printf '%s\n' 'applicable=false' && exit 0
-    exit "$status"
-  fi
+  should_run
+  exit 0
 fi
 
-mode="${1:-audit}"
-if [ "$mode" = audit ] && [ -n "${2:-}" ]; then mode="$2"; fi
-case "$mode" in
-  audit|all|javascript|rust|python) ;;
-  *)
-    echo "usage: $0 [audit|should_run] [javascript|rust|python|all]" >&2
-    exit 2
-    ;;
-esac
+if [ "${1:-audit}" != audit ]; then
+  echo "usage: $0 [audit|should_run]" >&2
+  exit 2
+fi
 
 audits=0
 
@@ -163,7 +134,7 @@ fi
 
 if [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
   audits=$((audits + 1))
-  if command -v uv >/dev/null 2>&1 && uv tool run --from pip-audit pip-audit --version >/dev/null 2>&1; then
+  if command -v uv >/dev/null 2>&1; then
     pip_audit() { uv tool run --from pip-audit pip-audit "$@"; }
   else
     python -m pip install --disable-pip-version-check --quiet pip-audit
