@@ -101,7 +101,7 @@ The initializer generates a minimal `.mise.toml` from the selected language prof
 
 Rust profiles declare `rustfmt` and `clippy` as mise components, so they are installed once with the cached toolchain instead of being added separately by each formatting or lint job. Rust repositories also cache `target/` and Cargo-installed audit tools using separate lockfile/toolchain/workflow-job keys. Cargo fingerprints invalidate stale objects safely, while keeping build caches separate prevents a large Rust build from displacing dependency-download caches or parallel jobs from racing to save one partial cache.
 
-Applicable jobs also cache installed JavaScript dependencies and Python virtual environments by manifest/configuration hash. Cache misses always fall back to a clean install; cached environments must never contain credentials or generated secrets.
+Applicable jobs also cache installed JavaScript dependencies, ESLint state, and Python virtual environments by manifest/configuration hash. The generic ESLint fallback enables `--cache` so restored lint state is actually reused; repository-defined lint scripts remain authoritative. Cache misses always fall back to a clean install; cached environments must never contain credentials or generated secrets.
 
 E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by dependency/configuration hash, avoiding repeated browser downloads while invalidating safely when the browser configuration or lockfiles change.
 
