@@ -18,8 +18,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  profile:
+    name: Profile
+    runs-on: ubuntu-slim
+    outputs:
+      javascript: ${{ steps.profile.outputs.javascript }}
+      rust: ${{ steps.profile.outputs.rust }}
+      python: ${{ steps.profile.outputs.python }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          filter: blob:none
+      - name: Detect
+        id: profile
+        run: bash .github/scripts/security.sh profile >> "$GITHUB_OUTPUT"
+
   dependency-audit:
     name: Dependency Audit (${{ matrix.name }})
+    needs: profile
     runs-on: ubuntu-slim
     strategy:
       fail-fast: false
@@ -32,15 +49,28 @@ jobs:
           - name: Python
             ecosystem: python
     steps:
+      - name: Check
+        id: applicability
+        env:
+          ECOSYSTEM: ${{ matrix.ecosystem }}
+          JAVASCRIPT: ${{ needs.profile.outputs.javascript }}
+          RUST: ${{ needs.profile.outputs.rust }}
+          PYTHON: ${{ needs.profile.outputs.python }}
+        run: |
+          case "$ECOSYSTEM" in
+            javascript) applicable="$JAVASCRIPT" ;;
+            rust) applicable="$RUST" ;;
+            python) applicable="$PYTHON" ;;
+            *) echo "Unknown ecosystem: $ECOSYSTEM" >&2; exit 2 ;;
+          esac
+          printf 'applicable=%s\n' "$applicable" >> "$GITHUB_OUTPUT"
       - name: Checkout
+        if: steps.applicability.outputs.applicable == 'true'
         uses: actions/checkout@v7
         with:
           # Dependency audits only need manifests and lockfiles; defer source
           # blob transfer until a tool explicitly reads a required file.
           filter: blob:none
-      - name: Detect
-        id: applicability
-        run: bash .github/scripts/security.sh should_run "${{ matrix.ecosystem }}" >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup

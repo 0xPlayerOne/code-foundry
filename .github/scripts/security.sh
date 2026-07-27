@@ -43,6 +43,19 @@ if [ "${1:-audit}" = should_run ]; then
   fi
 fi
 
+if [ "${1:-}" = profile ]; then
+  for ecosystem in javascript rust python; do
+    if should_run "$ecosystem"; then
+      printf '%s=true\n' "$ecosystem"
+    else
+      status=$?
+      [ "$status" -eq 1 ] && printf '%s=false\n' "$ecosystem" && continue
+      exit "$status"
+    fi
+  done
+  exit 0
+fi
+
 mode="${1:-audit}"
 if [ "$mode" = audit ] && [ -n "${2:-}" ]; then mode="$2"; fi
 case "$mode" in

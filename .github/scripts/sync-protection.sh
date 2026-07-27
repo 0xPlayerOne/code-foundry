@@ -53,7 +53,7 @@ contexts=()
 if feature_enabled ci; then contexts+=(Format Lint Type-Check Build); fi
 if feature_enabled test; then contexts+=(Unit Integration E2E Smoke); fi
 if feature_enabled security; then
-  contexts+=('Dependency Audit (JavaScript)' 'Dependency Audit (Rust)' 'Dependency Audit (Python)')
+  contexts+=(Profile 'Dependency Audit (JavaScript)' 'Dependency Audit (Rust)' 'Dependency Audit (Python)')
 fi
 if feature_enabled codeql; then contexts+=(Detect); fi
 
