@@ -37,7 +37,7 @@ jobs:
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
       - name: Upload coverage
-        if: always() && steps.applicability.outputs.applicable == 'true' && hashFiles('coverage/**', 'htmlcov/**', '.coverage*', 'target/llvm-cov/**') != ''
+        if: always() && steps.applicability.outputs.applicable == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-unit-${{ github.run_id }}
