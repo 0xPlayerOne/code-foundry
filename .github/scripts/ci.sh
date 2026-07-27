@@ -112,7 +112,7 @@ PY
   fi
 }
 
-install() {
+install_javascript() {
   if [ "${REPO_FOUNDRY_INSTALL_JAVASCRIPT:-true}" = true ] && [ -f package.json ] &&
     { [ "${REPO_FOUNDRY_JAVASCRIPT_CACHE_HIT:-false}" != true ] || [ ! -d node_modules ]; }; then
     case "$(package_manager)" in
@@ -124,16 +124,22 @@ install() {
   elif [ -f package.json ]; then
     echo "Using cached JavaScript dependencies"
   fi
+}
+
+install_rust() {
   if [ "${REPO_FOUNDRY_INSTALL_RUST:-true}" = true ] && [ -f Cargo.toml ] && [ "${REPO_FOUNDRY_RUST_CACHE_HIT:-false}" != true ]; then
     cargo_run fetch
   elif [ "${REPO_FOUNDRY_INSTALL_RUST:-true}" = true ] && [ -f Cargo.toml ]; then
     echo "Using cached Rust packages"
   fi
+}
+
+install_python() {
   if [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python &&
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
     install_python_with_uv() {
       uv venv --python "$(command -v python)" .venv
-      python_packages=(ruff)
+      local -a python_packages=(ruff)
       if [ -f requirements.txt ]; then python_packages+=(-r requirements.txt); fi
       if [ -f requirements-dev.txt ]; then python_packages+=(-r requirements-dev.txt); fi
       uv pip install --python .venv/bin/python "${python_packages[@]}"
@@ -142,7 +148,7 @@ install() {
       echo "Installed Python dependencies with uv"
     else
       python -m venv .venv
-      python_packages=(ruff)
+      local -a python_packages=(ruff)
       if [ -f requirements.txt ]; then python_packages+=(-r requirements.txt); fi
       if [ -f requirements-dev.txt ]; then python_packages+=(-r requirements-dev.txt); fi
       .venv/bin/python -m pip install --disable-pip-version-check "${python_packages[@]}"
@@ -150,6 +156,10 @@ install() {
   elif [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python; then
     echo "Using cached Python environment"
   fi
+}
+
+install() {
+  run_parallel install_javascript install_rust install_python
 }
 
 rust_component() {
