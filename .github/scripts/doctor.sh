@@ -31,6 +31,20 @@ if [ -f package.json ]; then
   elif [ "$lockfiles" -gt 1 ]; then
     error "multiple JavaScript lockfiles found; keep one package manager"
   fi
+  if node -e 'const p=require("./package.json"); process.exit(p.packageManager ? 0 : 1)' 2>/dev/null; then
+    declared="$(node -p 'require("./package.json").packageManager.split("@")[0]')"
+    actual=""
+    [ -f bun.lock ] || [ -f bun.lockb ] && actual="bun"
+    [ -f pnpm-lock.yaml ] && actual="pnpm"
+    [ -f yarn.lock ] && actual="yarn"
+    [ -f package-lock.json ] && actual="npm"
+    [ -n "$actual" ] && [ "$declared" != "$actual" ] && error "packageManager ($declared) does not match $actual lockfile"
+  fi
+  if git ls-files -- '*.ts' '*.tsx' '*.js' '*.jsx' | grep -q .; then
+    if ! node -e 'const p=require("./package.json"); const s=p.scripts||{}; process.exit(s.test||s["test:unit"]||s["test:integration"] ? 0 : 1)' 2>/dev/null; then
+      warn "JavaScript/TypeScript sources found but no test or test:unit/test:integration script is defined"
+    fi
+  fi
 fi
 
 if [ -f Cargo.toml ]; then
@@ -46,7 +60,7 @@ for workflow in ci.yml codeql.yml security.yml test.yml draft-pr.yml release-pr.
   [ -f ".github/workflows/$workflow" ] || error "missing standard workflow: $workflow"
 done
 
-for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh; do
+for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh sync-template.sh; do
   [ -x ".github/scripts/$script" ] || error "missing executable script: .github/scripts/$script"
 done
 

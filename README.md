@@ -34,64 +34,11 @@ Use `repo-foundry sync` to update an existing repository and
 Run the sync script from the repository root. It updates shared workflows, GitHub forms, hooks, policy files, and tool configuration while preserving the repository's README, `.mise.toml` selections, extra workflows, and application code.
 
 ```bash
-bash .github/scripts/init-repo.sh
+bash .github/scripts/sync-template.sh --source https://github.com/0xPlayerOne/template-repo.git --ref main --apply
+bash .github/scripts/bootstrap.sh
 ```
 
-Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
-
-The initializer is intentionally flag-driven so the same baseline can be used as a small repository package. Language selection controls CodeQL and records the repository profile; feature selection controls which standard workflows are installed. `auto` detects supported languages, while `all` enables every standard workflow.
-
-```bash
-# Preview a TypeScript + Python repository without changing files
-bash .github/scripts/init-repo.sh \
-  --languages typescript,python \
-  --features all \
-  --dry-run
-
-# Initialize a Rust repository with only the core automation
-bash .github/scripts/init-repo.sh \
-  --languages rust \
-  --features ci,codeql,security,test
-```
-
-Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supported feature flags are `ci`, `codeql`, `security`, `test`, `draft-pr`, `release-pr`, `release`, and `dependabot`. Use `--prune` only when you explicitly want disabled standard workflows removed; custom workflows are always preserved. The selected profile is stored in `.github/template.yml`, which makes later syncs repeatable and lets workflows consume repository-specific settings without duplicating the template scripts.
-
-## Releases and publishing
-
-The standard release workflow uses [Release Please](https://github.com/googleapis/release-please) after changes reach `main`. It opens or updates a versioned release pull request, maintains `CHANGELOG.md`, creates the GitHub release after that PR is merged, and applies semantic version bumps from Conventional Commits. The reusable `release-please-config.json` groups feature, fix, performance, dependency, documentation, test, CI, and maintenance changes in generated notes:
-
-- `fix:` → patch, such as `1.2.3` → `1.2.4`
-- `feat:` → minor, such as `1.2.3` → `1.3.0`
-- `feat!:`, `fix!:`, or `BREAKING CHANGE:` → major, such as `1.2.3` → `2.0.0`
-
-Before `1.0.0`, `feat:` intentionally increments the minor version. This keeps pre-1.0 releases useful without treating every feature as a breaking major.
-
-Use `Release-As: 2.0.0` in a commit or pull request body when a specific version is required. Existing `CHANGELOG.md` files are preserved by sync and remain repository-owned.
-
-Release behavior is configured in `.github/template.yml`:
-
-```yaml
-release_type: auto   # auto, node, python, rust, simple, or none
-npm_publish: false   # true only for a package published to npm
-```
-
-`auto` selects the first matching package type (`package.json`, `pyproject.toml`, `Cargo.toml`, or `version.txt`). Use `none` when the repository should not release automatically. Solidity-only repositories use `simple` with a root `version.txt`. For a repository containing multiple independently released packages, add a Release Please manifest/configuration and select the appropriate Release Please strategy rather than treating the repository as one package.
-
-GitHub Actions needs permission to open release pull requests. Configure a repository or organization secret named `RELEASE_PLEASE_TOKEN` containing a narrowly scoped token or GitHub App token if the default `GITHUB_TOKEN` is not allowed to create pull requests. Keep `contents`, `issues`, and `pull-requests` permissions enabled for the release workflow.
-
-For npm publication, set `npm_publish: true` and configure npm trusted publishing (recommended) for this repository’s `release.yml` workflow, or provide an `NPM_TOKEN` secret. The workflow detects which method is configured, and publication occurs only after Release Please creates a release tag, so ordinary pushes cannot publish packages. Keep `publishConfig.access` in `package.json` aligned with the package’s intended visibility; the baseline publishes public packages. If npm publication is enabled without either configuration, the publish job fails instead of silently skipping the release.
-
-The release flow is: promote `staging` into `main`; let Release Please open or update the version/changelog PR; merge that PR to create the GitHub release and tag; then publish to npm only when `npm_publish: true`.
-
-For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published template checkout or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract for a future npm/package wrapper around these same operations.
-
-Branch protection is an administrator operation and is opt-in:
-
-```bash
-bash .github/scripts/init-repo.sh --protection
-```
-
-The protection helper preserves unrelated provider checks, replaces stale template check names, and skips CodeQL analysis checks for private repositories where the workflow is intentionally skipped.
+Use `--check` to preview differences. For local template development, pass the template checkout as `--source`.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
