@@ -184,6 +184,10 @@ install_python() {
     needs_python_environment &&
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
     install_python_with_uv() {
+      if [ -f pyproject.toml ] && [ -f uv.lock ]; then
+        uv sync --frozen --python "$(command -v python)"
+        return
+      fi
       uv venv --python "$(command -v python)" .venv
       local -a python_packages=()
       command -v ruff >/dev/null 2>&1 || python_packages+=(ruff)
