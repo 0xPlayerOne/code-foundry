@@ -33,6 +33,16 @@ package_manager() {
   fi
 }
 
+cargo_run() {
+  local command="$1"
+  shift
+  if [ -f Cargo.lock ]; then
+    cargo "$command" "$@" --locked
+  else
+    cargo "$command" "$@"
+  fi
+}
+
 run_script() {
   if ! has_script "$1"; then echo "Skipping $1 (script not defined)"; return; fi
   case "$(package_manager)" in
@@ -103,7 +113,7 @@ install() {
     echo "Using cached JavaScript dependencies"
   fi
   if [ -f Cargo.toml ] && [ "${REPO_FOUNDRY_RUST_CACHE_HIT:-false}" != true ]; then
-    cargo fetch --locked
+    cargo_run fetch
   elif [ -f Cargo.toml ]; then
     echo "Using cached Rust packages"
   fi
@@ -186,7 +196,12 @@ lint_javascript() {
 }
 
 lint_rust() {
-  if [ -f Cargo.toml ]; then rust_component clippy; cargo clippy --all-targets -- -D warnings; fi
+  if [ -f Cargo.toml ]; then
+    rust_component clippy
+    if [ -f Cargo.lock ]; then cargo clippy --all-targets --locked -- -D warnings
+    else cargo clippy --all-targets -- -D warnings
+    fi
+  fi
 }
 
 lint_python() {
@@ -206,7 +221,7 @@ typecheck_javascript() {
 }
 
 typecheck_rust() {
-  if [ -f Cargo.toml ]; then cargo check; fi
+  if [ -f Cargo.toml ]; then cargo_run check; fi
 }
 
 typecheck_python() {
@@ -226,7 +241,7 @@ build_javascript() {
 }
 
 build_rust() {
-  if [ -f Cargo.toml ]; then cargo build --all-targets --all-features; fi
+  if [ -f Cargo.toml ]; then cargo_run build --all-targets --all-features; fi
 }
 
 build() {
@@ -258,8 +273,8 @@ unit_javascript() {
 
 unit_rust() {
   if [ -f Cargo.toml ]; then
-    if has_rust_target lib; then cargo test --lib --all-features
-    elif has_rust_target bin; then cargo test --bins --all-features
+    if has_rust_target lib; then cargo_run test --lib --all-features
+    elif has_rust_target bin; then cargo_run test --bins --all-features
     else echo "Skipping Rust unit tests (no library or binary target)"; fi
   fi
 }
@@ -293,7 +308,7 @@ integration_javascript() {
 }
 
 integration_rust() {
-  if [ -f Cargo.toml ] && [ -d tests ]; then cargo test --tests --all-features; fi
+  if [ -f Cargo.toml ] && [ -d tests ]; then cargo_run test --tests --all-features; fi
 }
 
 integration_python() {
