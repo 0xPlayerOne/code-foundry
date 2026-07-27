@@ -131,7 +131,7 @@ jobs:
         run: bash .github/scripts/security.sh audit rust
 
   dependency-audit-python:
-    name: Dependency Audit (Python) / ${{ matrix.requirement || 'Project' }}
+    name: Dependency Audit (Python) / ${{ matrix.requirement }}
     needs: profile
     if: needs.profile.outputs.python == 'true'
     strategy:
