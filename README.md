@@ -95,7 +95,7 @@ CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt
 
 The initializer generates a minimal `.mise.toml` from the selected language profile instead of installing every supported tool on every runner. Existing `.mise.toml` files are preserved. Initialization also generates a committed `mise.lock` when mise is available; CI then installs exact tool URLs and checksums without repeating registry/API resolution. Workflow setup restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
 
-Rust repositories also cache `target/` and Cargo-installed audit tools using separate lockfile/toolchain/workflow-job keys. Cargo fingerprints invalidate stale objects safely, while keeping build caches separate prevents a large Rust build from displacing dependency-download caches or parallel jobs from racing to save one partial cache.
+Rust profiles declare `rustfmt` and `clippy` as mise components, so they are installed once with the cached toolchain instead of being added separately by each formatting or lint job. Rust repositories also cache `target/` and Cargo-installed audit tools using separate lockfile/toolchain/workflow-job keys. Cargo fingerprints invalidate stale objects safely, while keeping build caches separate prevents a large Rust build from displacing dependency-download caches or parallel jobs from racing to save one partial cache.
 
 Applicable jobs also cache installed JavaScript dependencies and Python virtual environments by manifest/configuration hash. Cache misses always fall back to a clean install; cached environments must never contain credentials or generated secrets.
 
