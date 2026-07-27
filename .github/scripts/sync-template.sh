@@ -37,6 +37,7 @@ bun_version="1.3.14"
 python_version="3.13"
 rust_version="1.97.1"
 uv_version="0.11.32"
+ruff_version="0.16.0"
 gitignore_backup=""
 custom_ignores=""
 
@@ -331,6 +332,7 @@ initialize_mise() {
         python)
           printf 'python = "%s"\n' "$python_version"
           printf 'uv = "%s"\n' "$uv_version"
+          printf 'ruff = "%s"\n' "$ruff_version"
           ;;
         rust)
           printf 'rust = { version = "%s", components = ["rustfmt", "clippy"] }\n' "$rust_version"

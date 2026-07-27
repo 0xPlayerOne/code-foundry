@@ -104,7 +104,7 @@ runs:
 
         case "$REPO_FOUNDRY_MISE_SCOPE" in
           all)
-            for tool in node bun python uv rust; do add_configured_tool "$tool"; done
+            for tool in node bun python uv ruff rust; do add_configured_tool "$tool"; done
             ;;
           auto)
             if [ "$javascript" = true ]; then
@@ -117,6 +117,7 @@ runs:
             if [ "$python" = true ]; then
               add_configured_tool python
               add_configured_tool uv
+              add_configured_tool ruff
             fi
             if [ "$rust" = true ]; then add_configured_tool rust; fi
             ;;
@@ -130,6 +131,7 @@ runs:
           python)
             configured_tool python && mise_tools+=(python)
             configured_tool uv && mise_tools+=(uv)
+            configured_tool ruff && mise_tools+=(ruff)
             ;;
           rust) configured_tool rust && mise_tools+=(rust) ;;
           *) echo "Unsupported mise-scope: $REPO_FOUNDRY_MISE_SCOPE" >&2; exit 2 ;;
