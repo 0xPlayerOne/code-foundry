@@ -18,9 +18,63 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Detect project profile
+      id: profile
+      shell: bash
+      run: |
+        has_files() {
+          git ls-files -- "$@" | grep -q .
+        }
+
+        if [ -f package.json ] || [ -f bun.lock ] || [ -f bun.lockb ] ||
+          [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ]; then
+          echo 'javascript=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'javascript=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        if has_files '*.py' ':!.github/**' || [ -f pyproject.toml ] ||
+          [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then
+          echo 'python=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'python=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ -f Cargo.toml ] || [ -f Cargo.lock ]; then
+          echo 'rust=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'rust=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ -f turbo.json ] || [ -f turbo.jsonc ] || has_files '*/turbo.json' '*/turbo.jsonc'; then
+          echo 'turbo=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'turbo=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ -f .eslintrc ] || [ -f .eslintrc.js ] || [ -f .eslintrc.cjs ] ||
+          [ -f .eslintrc.json ] || has_files '.eslintrc*' 'eslint.config.*'; then
+          echo 'eslint=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'eslint=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        if has_files 'next.config.*' 'vite.config.*' 'tsconfig*.json'; then
+          echo 'build=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'build=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ -f pyproject.toml ] || [ -f uv.lock ] || [ -f requirements.txt ] ||
+          [ -f requirements-dev.txt ] || [ -f Pipfile.lock ] || [ -f poetry.lock ]; then
+          echo 'python_dependencies=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'python_dependencies=false' >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies
-      if: inputs.install == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') != ''
+      if: inputs.install == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -29,7 +83,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-javascript-installed-v2-
     - name: Cache JavaScript packages
-      if: inputs.install == 'true' && hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
+      if: inputs.install == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
       uses: actions/cache@v5
       with:
         path: |
@@ -42,7 +96,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-javascript-
     - name: Cache JavaScript lint state
-      if: inputs.install == 'true' && inputs.cache-lint == 'true' && hashFiles('**/.eslintrc*', '**/eslint.config.*') != ''
+      if: inputs.install == 'true' && inputs.cache-lint == 'true' && steps.profile.outputs.eslint == 'true' && hashFiles('**/.eslintrc*', '**/eslint.config.*') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -51,7 +105,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-
     - name: Cache JavaScript build state
-      if: inputs.install == 'true' && inputs.cache-build == 'true' && hashFiles('**/next.config.*', '**/vite.config.*', '**/tsconfig*.json') != ''
+      if: inputs.install == 'true' && inputs.cache-build == 'true' && steps.profile.outputs.build == 'true' && hashFiles('**/next.config.*', '**/vite.config.*', '**/tsconfig*.json') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -63,7 +117,7 @@ runs:
           ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-
     - name: Cache Python environment
       id: python-environment
-      if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
+      if: inputs.install == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -73,7 +127,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-python-environment-
     - name: Cache Python packages
-      if: hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != '' && steps.python-environment.outputs.cache-hit != 'true'
+      if: steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != '' && steps.python-environment.outputs.cache-hit != 'true'
       uses: actions/cache@v5
       with:
         path: |
@@ -83,7 +137,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-python-
     - name: Cache Turborepo
-      if: inputs.install == 'true' && hashFiles('**/turbo.json', '**/turbo.jsonc') != ''
+      if: inputs.install == 'true' && steps.profile.outputs.turbo == 'true' && hashFiles('**/turbo.json', '**/turbo.jsonc') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -94,7 +148,7 @@ runs:
           ${{ runner.os }}-turbo-
     - name: Cache Rust packages
       id: rust-packages
-      if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      if: steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -104,7 +158,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-
     - name: Cache Rust tools
-      if: inputs.install != 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      if: inputs.install != 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
         path: ~/.cargo/bin
@@ -112,7 +166,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-tools-
     - name: Cache Rust builds
-      if: inputs.install == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      if: inputs.install == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
         path: target
