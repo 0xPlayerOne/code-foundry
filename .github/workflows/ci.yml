@@ -33,6 +33,8 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          install-python: false
+          install-rust: false
           cache-build: false
           cache-format: true
       - name: Format
@@ -53,6 +55,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          install-python: false
           cache-build: false
           cache-lint: true
       - name: Lint
@@ -73,6 +76,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          install-python: false
       - name: Type-Check
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh type_check
@@ -91,6 +95,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          install-python: false
       - name: Build
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh build
