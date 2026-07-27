@@ -129,6 +129,7 @@ files=(
   .editorconfig
   .gitattributes
   .gitignore
+  release-please-config.json
   .githooks/pre-commit
   AGENTS.md
   LICENSE
