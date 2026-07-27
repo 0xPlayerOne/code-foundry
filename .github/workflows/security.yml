@@ -18,19 +18,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dependency-audit:
-    name: Dependency Audit (${{ matrix.name }})
+  detect:
+    name: Detect
     runs-on: ubuntu-slim
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: JavaScript
-            ecosystem: javascript
-          - name: Rust
-            ecosystem: rust
-          - name: Python
-            ecosystem: python
+    outputs:
+      audit: ${{ steps.manifests.outputs.audit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Detect manifests
+        id: manifests
+        shell: bash
+        run: |
+          if [ -f package.json ] || [ -f Cargo.toml ] || [ -f requirements.txt ] ||
+            [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
+            echo 'audit=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'audit=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  dependency-audit:
+    name: Dependency Audit
+    needs: detect
+    if: needs.detect.outputs.audit == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
