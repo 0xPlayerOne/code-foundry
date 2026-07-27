@@ -41,7 +41,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.name }})
     needs: detect
-    if: ${{ !github.event.repository.private && matrix.changed }}
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
