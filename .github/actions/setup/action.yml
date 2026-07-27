@@ -70,6 +70,23 @@ runs:
         NODE
         }
 
+        uses_eslint() {
+          [ -f package.json ] || return 1
+          node <<'NODE'
+        const fs = require('node:fs');
+        const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+        const scripts = p.scripts || {};
+        const dependencies = {
+          ...p.dependencies,
+          ...p.devDependencies,
+          ...p.optionalDependencies,
+          ...p.peerDependencies,
+        };
+        const usesEslint = Boolean(dependencies.eslint) || Object.values(scripts).some((value) => /\beslint\b/.test(value));
+        process.exit(usesEslint ? 0 : 1);
+        NODE
+        }
+
         javascript=false
         if [ -f package.json ] || [ -f bun.lock ] || [ -f bun.lockb ] ||
           [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ] ||
@@ -136,7 +153,8 @@ runs:
 
         eslint=false
         if [ -f .eslintrc ] || [ -f .eslintrc.js ] || [ -f .eslintrc.cjs ] ||
-          [ -f .eslintrc.json ] || has_tracked_regex '(^|/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$'; then
+          [ -f .eslintrc.json ] || has_tracked_regex '(^|/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$' ||
+          uses_eslint; then
           eslint=true
           echo 'eslint=true' >> "$GITHUB_OUTPUT"
         else
@@ -265,7 +283,9 @@ runs:
         restore-keys: |
           ${{ runner.os }}-javascript-
     - name: Cache JavaScript lint state
-      if: inputs.install == 'true' && inputs.cache-lint == 'true' && steps.profile.outputs.eslint == 'true' && hashFiles('**/.eslintrc*', '**/eslint.config.*') != ''
+      # Fallback ESLint mode is valid without a dedicated config file; use the
+      # manifest/lockfile as the cache identity in that case as well.
+      if: inputs.install == 'true' && inputs.cache-lint == 'true' && steps.profile.outputs.eslint == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.eslintrc*', '**/eslint.config.*') != ''
       uses: actions/cache@v5
       with:
         path: |
