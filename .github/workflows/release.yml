@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Release Please reads release metadata and manifests; defer source
+          # blob transfer until a package file is actually needed.
+          filter: blob:none
       - name: Detect release profile
         id: profile
         shell: bash
