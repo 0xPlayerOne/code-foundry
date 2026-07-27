@@ -46,7 +46,13 @@ if [ -f package.json ]; then
     fi
   fi
   if [ -f bunfig.toml ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.["test:coverage"] ? 0 : 1)' 2>/dev/null; then
-    grep -q 'coverageThreshold' bunfig.toml || error "Bun coverage is enabled by test:coverage but bunfig.toml has no coverageThreshold"
+    if ! grep -q 'coverageThreshold' bunfig.toml; then
+      if [ -x .github/scripts/ci.sh ]; then
+        printf '%s\n' "INFO: shared CI enforces the Bun aggregate coverage threshold"
+      else
+        error "Bun coverage is enabled by test:coverage but no coverage policy is configured"
+      fi
+    fi
   fi
 fi
 
