@@ -153,4 +153,27 @@ if [ "$audits" -eq 0 ] && ! has_dependency_manifest; then
   echo "No supported dependency manifests found; nothing to audit"
 fi
 
-exit 0
+if [ -f Cargo.toml ]; then
+  audits=$((audits + 1))
+  if ! command -v cargo-audit >/dev/null 2>&1; then cargo install cargo-audit --locked --quiet; fi
+  cargo audit
+else
+  echo "Skipping Rust audit (Cargo.toml not found)"
+fi
+
+if [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
+  audits=$((audits + 1))
+  if command -v uv >/dev/null 2>&1 && uv tool run --from pip-audit pip-audit --version >/dev/null 2>&1; then
+    pip_audit() { uv tool run --from pip-audit pip-audit "$@"; }
+  else
+    python -m pip install --disable-pip-version-check --quiet pip-audit
+    pip_audit() { python -m pip_audit "$@"; }
+  fi
+  if [ -f requirements.txt ]; then pip_audit -r requirements.txt; fi
+  if [ -f requirements-dev.txt ]; then pip_audit -r requirements-dev.txt; fi
+  if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then pip_audit; fi
+else
+  echo "Skipping Python audit (Python dependency manifest not found)"
+fi
+
+if [ "$audits" -eq 0 ]; then echo "No supported dependency manifests found; nothing to audit"; fi
