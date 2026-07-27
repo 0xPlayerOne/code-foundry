@@ -99,6 +99,8 @@ Rust repositories also cache `target/` and Cargo-installed audit tools using sep
 
 Applicable jobs also cache installed JavaScript dependencies and Python virtual environments by manifest/configuration hash. Cache misses always fall back to a clean install; cached environments must never contain credentials or generated secrets.
 
+E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by dependency/configuration hash, avoiding repeated browser downloads while invalidating safely when the browser configuration or lockfiles change.
+
 New Python profiles include pinned `uv` as an accelerated, pip-compatible installer. Existing repositories without `uv` continue using pip automatically, so adopting the template does not require changing their dependency files or lockfile format.
 
 Python Security audits use cached `uv tool run` environments for `pip-audit` when uv is available, with the same pip fallback used by CI installation.

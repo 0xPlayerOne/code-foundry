@@ -76,6 +76,17 @@ jobs:
       - name: Detect
         id: applicability
         run: bash .github/scripts/ci.sh should_run e2e >> "$GITHUB_OUTPUT"
+      - name: Cache browser binaries
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/Cypress
+            ~/.cache/puppeteer
+          key: ${{ runner.os }}-e2e-browsers-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/playwright.config.*', '**/cypress.config.*', '.mise.toml', 'mise.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-e2e-browsers-
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
