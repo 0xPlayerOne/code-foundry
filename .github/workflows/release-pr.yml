@@ -22,7 +22,7 @@ jobs:
       - name: Check
         id: check-pr
         run: |
-          EXISTING=$(gh pr list --base main --head staging --state open --json number 2>/dev/null | jq 'length')
+          EXISTING=$(gh pr list --limit 1 --base main --head staging --state open --json number 2>/dev/null | jq 'length')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
       - name: Create
