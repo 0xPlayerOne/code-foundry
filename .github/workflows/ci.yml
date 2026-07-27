@@ -34,6 +34,7 @@ jobs:
         with:
           install: true
           cache-build: false
+          cache-format: true
       - name: Format
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh format
