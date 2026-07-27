@@ -62,13 +62,13 @@ runs:
           ${{ runner.os }}-javascript-installed-v2-
     - name: Cache Python environment
       id: python-environment
-      if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml') != ''
+      if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml') != ''
       uses: actions/cache@v4
       with:
         path: |
           .venv
           **/.venv
-        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml') }}
+        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml', '.mise.toml') }}
         restore-keys: |
           ${{ runner.os }}-python-environment-
     - name: Setup
