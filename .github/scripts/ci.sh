@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source .github/scripts/changed-files.sh
+
 if [ -d .venv/bin ]; then export PATH="$PWD/.venv/bin:$PATH"; fi
 
 has_script() {
@@ -443,6 +445,10 @@ smoke() {
 
 should_run() {
   local task="$1"
+  if repo_foundry_pr_docs_only; then
+    printf '%s\n' 'applicable=false'
+    return 0
+  fi
   case "$task" in
     format)
       if has_script format:check || has_javascript || [ -f Cargo.toml ] || has_python; then

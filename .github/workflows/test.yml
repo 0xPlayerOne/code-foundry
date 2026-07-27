@@ -13,6 +13,7 @@ permissions:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
@@ -90,7 +91,7 @@ jobs:
             ~/.cache/ms-playwright
             ~/.cache/Cypress
             ~/.cache/puppeteer
-          key: ${{ runner.os }}-e2e-browsers-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/playwright.config.*', '**/cypress.config.*', '.mise.toml', 'mise.lock') }}
+          key: ${{ runner.os }}-e2e-browsers-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/playwright.config.*', '**/cypress.config.*') }}
           restore-keys: |
             ${{ runner.os }}-e2e-browsers-
       - name: Setup
