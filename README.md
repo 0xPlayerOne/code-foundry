@@ -101,6 +101,8 @@ Applicable jobs also cache installed JavaScript dependencies and Python virtual 
 
 E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by dependency/configuration hash, avoiding repeated browser downloads while invalidating safely when the browser configuration or lockfiles change.
 
+Repositories with Turborepo automatically cache local `.turbo/cache` results per workflow job and dependency/configuration hash. Vercel Remote Caching remains available through `TURBO_TOKEN` and `TURBO_TEAM`; the local cache provides a fast fallback when remote caching is not configured.
+
 New Python profiles include pinned `uv` as an accelerated, pip-compatible installer. Existing repositories without `uv` continue using pip automatically, so adopting the template does not require changing their dependency files or lockfile format.
 
 Python Security audits use cached `uv tool run` environments for `pip-audit` when uv is available, with the same pip fallback used by CI installation.

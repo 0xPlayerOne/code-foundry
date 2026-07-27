@@ -53,6 +53,16 @@ runs:
         key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') }}
         restore-keys: |
           ${{ runner.os }}-python-
+    - name: Cache Turborepo
+      if: inputs.install == 'true' && hashFiles('**/turbo.json', '**/turbo.jsonc') != ''
+      uses: actions/cache@v5
+      with:
+        path: |
+          .turbo/cache
+          **/.turbo/cache
+        key: ${{ runner.os }}-turbo-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/turbo.json', '**/turbo.jsonc', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-turbo-${{ github.workflow }}-${{ github.job }}-
     - name: Cache Rust packages
       if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
