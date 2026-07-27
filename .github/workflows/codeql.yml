@@ -44,11 +44,9 @@ jobs:
     if: ${{ !github.event.repository.private }}
     # Unchanged matrix entries only complete skipped steps; reserve a full
     # runner for analyzers that actually initialize and scan source.
-    # Actions analysis is a lightweight workflow-language scan and does not
-    # need the full build runner. Keep compiled/application languages on the
-    # full runner where CodeQL initialization and analysis benefit from more
-    # CPU and memory.
-    runs-on: ${{ matrix.changed && (matrix.language == 'actions' && 'ubuntu-slim' || 'ubuntu-latest') || 'ubuntu-slim' }}
+    # Unchanged matrix entries only complete skipped steps; reserve a full
+    # runner for analyzers that actually initialize and scan source.
+    runs-on: ${{ matrix.changed && 'ubuntu-latest' || 'ubuntu-slim' }}
     strategy:
       fail-fast: false
       max-parallel: 4
