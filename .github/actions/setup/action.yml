@@ -26,6 +26,7 @@ runs:
       with:
         path: |
           ~/.bun/install/cache
+          ~/.cache/node/corepack
           ~/.npm
           ~/.cache/yarn
           ~/.local/share/pnpm/store
