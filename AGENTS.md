@@ -6,11 +6,7 @@ They complement `CONTRIBUTING.md`. More specific instructions in nested `AGENTS.
 
 ## Mission
 
-- Keep formatting, linting, type checking, builds, tests, and coverage reproducible locally and in CI.
-- Prefer the versions pinned in `.mise.toml`.
-- Do not commit secrets, generated credentials, local environment files, or machine-specific paths.
-- Add tests for behavior changes and keep coverage thresholds explicit in the project configuration.
-- Make the smallest complete, well-tested change that solves the requested problem without disturbing unrelated work.
+Make the smallest complete, well-tested change that solves the requested problem without disturbing unrelated work.
 
 This repository may contain TypeScript, Rust, Python, or any combination of them. Detect the active stack from the files present; do not assume every check applies.
 
@@ -62,11 +58,10 @@ Ask for clarification when a missing decision would materially change the implem
 2. Inspect before editing; preserve unrelated work.
 3. Plan the smallest coherent change.
 4. Implement with existing project patterns.
-5. Run bash .github/scripts/bootstrap.sh for a new checkout, or bash .github/scripts/doctor.sh to diagnose setup drift.
-6. Run focused checks while iterating.
-7. Inspect the final diff for accidental changes, secrets, formatting, and generated files.
-8. Run the broadest applicable validation available.
-9. Report what changed, exact checks and results, skipped checks with reasons, risks, and remaining work.
+5. Run focused checks while iterating.
+6. Inspect the final diff for accidental changes, secrets, formatting, and generated files.
+7. Run the broadest applicable validation available.
+8. Report what changed, exact checks and results, skipped checks with reasons, risks, and remaining work.
 
 For normal feature work, branch from `staging` and target pull requests at `staging`. Treat `main` as the protected release branch. Follow `.github/CONTRIBUTING.md` for the complete internal and external contribution flow.
 
@@ -103,10 +98,9 @@ Run focused tests first, then the complete applicable set for release, security,
 
 At minimum:
 
-- TypeScript/JavaScript: Prettier formatting, ESLint linting, type-check, build, and Bun's native test runner for unit/integration tests; use the project's native browser runner for E2E tests
-- Do not add Vitest. Preserve specialized native runners such as Matchstick for The Graph and Hardhat for smart contracts.
-- Rust: default rustfmt, Clippy with warnings treated as errors, check, unit/integration tests, and dependency audit
-- Python: Ruff formatting and linting, compile or type checks, pytest, coverage, and dependency audit
+- TypeScript: format, lint, type-check, build, unit tests, and relevant browser/integration tests
+- Rust: format, clippy, check, unit/integration tests, and dependency audit
+- Python: format/lint, compile or type checks, pytest, coverage, and dependency audit
 - Mixed projects: validate each active ecosystem and its integration boundaries
 
 If a check cannot run, state the exact reason. A skipped check is not a passing check.
@@ -125,7 +119,6 @@ If a check cannot run, state the exact reason. A skipped check is not a passing 
 - Use `push` for `main, staging` and `pull_request` for `staging` unless a workflow has a documented event-specific reason.
 - Give workflows clear names and jobs concise names; avoid repeating the workflow name in the job name.
 - Use per-workflow concurrency groups that cancel superseded runs while allowing independent workflows to run in parallel.
-- Keep setup language-aware and cache dependency downloads by lockfile; do not cache secrets, `node_modules`, virtual environments, or broad build output without a measured reason.
 - Use least-privilege permissions and pin action versions consistently with the template.
 - Keep CI, Test, Security, CodeQL, Draft PR, Release PR, and Release concerns separated.
 - Security and CodeQL may skip when repository visibility or GitHub plan support does not permit them. Do not make an unavailable check required.
