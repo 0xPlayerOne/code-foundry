@@ -137,11 +137,6 @@ runs:
           *) echo "Unsupported mise-scope: $REPO_FOUNDRY_MISE_SCOPE" >&2; exit 2 ;;
         esac
         printf 'mise_tools=%s\n' "${mise_tools[*]}" >> "$GITHUB_OUTPUT"
-        if [ "${#mise_tools[@]}" -gt 0 ]; then
-          printf 'mise_required=true\n' >> "$GITHUB_OUTPUT"
-        else
-          printf 'mise_required=false\n' >> "$GITHUB_OUTPUT"
-        fi
       env:
         REPO_FOUNDRY_MISE_SCOPE: ${{ inputs.mise-scope }}
 
@@ -278,7 +273,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-build-
     - name: Setup
-      if: ${{ steps.profile.outputs.mise_required == 'true' }}
+      if: ${{ hashFiles('.mise.toml') != '' }}
       uses: jdx/mise-action@v4
       with:
         cache: true
