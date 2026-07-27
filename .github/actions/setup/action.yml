@@ -50,6 +50,27 @@ runs:
         key: ${{ runner.os }}-python-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') }}
         restore-keys: |
           ${{ runner.os }}-python-
+    - name: Cache installed JavaScript dependencies
+      id: javascript-dependencies
+      if: inputs.install == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs') != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          **/node_modules
+        key: ${{ runner.os }}-javascript-installed-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs') }}
+        restore-keys: |
+          ${{ runner.os }}-javascript-installed-
+    - name: Cache Python environment
+      id: python-environment
+      if: inputs.install == 'true' && hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml') != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          .venv
+          **/.venv
+        key: ${{ runner.os }}-python-environment-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-python-environment-
     - name: Setup
       uses: jdx/mise-action@v4
       with:
@@ -57,4 +78,7 @@ runs:
     - name: Install
       if: inputs.install == 'true'
       shell: bash
+      env:
+        REPO_FOUNDRY_JAVASCRIPT_CACHE_HIT: ${{ steps.javascript-dependencies.outputs.cache-hit }}
+        REPO_FOUNDRY_PYTHON_CACHE_HIT: ${{ steps.python-environment.outputs.cache-hit }}
       run: bash .github/scripts/ci.sh install
