@@ -46,6 +46,7 @@ jobs:
             htmlcov/**
             .coverage*
             target/llvm-cov/**
+          compression-level: 1
           if-no-files-found: ignore
           retention-days: 14
 
