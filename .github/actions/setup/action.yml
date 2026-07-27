@@ -27,7 +27,8 @@ runs:
         }
 
         if [ -f package.json ] || [ -f bun.lock ] || [ -f bun.lockb ] ||
-          [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ]; then
+          [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ] ||
+          has_files '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts'; then
           echo 'javascript=true' >> "$GITHUB_OUTPUT"
         else
           echo 'javascript=false' >> "$GITHUB_OUTPUT"
@@ -70,6 +71,25 @@ runs:
           echo 'python_dependencies=true' >> "$GITHUB_OUTPUT"
         else
           echo 'python_dependencies=false' >> "$GITHUB_OUTPUT"
+        fi
+
+        node_version="$(sed -nE 's/^node[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' .mise.toml 2>/dev/null | head -n 1)"
+        bun_version="$(sed -nE 's/^bun[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' .mise.toml 2>/dev/null | head -n 1)"
+        python_version="$(sed -nE 's/^python[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' .mise.toml 2>/dev/null | head -n 1)"
+        uv_version="$(sed -nE 's/^uv[[:space:]]*=[[:space:]]*"([^"]+)"/\1/p' .mise.toml 2>/dev/null | head -n 1)"
+        rust_version="$(sed -nE 's/^rust[[:space:]]*=[[:space:]]*\{[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' .mise.toml 2>/dev/null | head -n 1)"
+        printf 'node_version=%s\n' "${node_version:-24.18.0}" >> "$GITHUB_OUTPUT"
+        printf 'bun_version=%s\n' "${bun_version:-1.3.14}" >> "$GITHUB_OUTPUT"
+        printf 'python_version=%s\n' "${python_version:-3.13}" >> "$GITHUB_OUTPUT"
+        printf 'uv_version=%s\n' "${uv_version:-0.11.32}" >> "$GITHUB_OUTPUT"
+        printf 'rust_version=%s\n' "${rust_version:-1.97.1}" >> "$GITHUB_OUTPUT"
+
+        if [ -f bun.lock ] || [ -f bun.lockb ] ||
+          { [ -f package.json ] && node -e 'const p=require("./package.json"); const pm=p.packageManager; process.exit(pm ? (pm.startsWith("bun@") ? 0 : 1) : 0)' 2>/dev/null; } ||
+          { [ ! -f package.json ] && has_files '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts'; }; then
+          echo 'bun=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'bun=false' >> "$GITHUB_OUTPUT"
         fi
 
     - name: Cache installed JavaScript dependencies
@@ -173,10 +193,36 @@ runs:
         key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-
-    - name: Setup
+    - name: Setup Node
+      if: steps.profile.outputs.javascript == 'true'
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ steps.profile.outputs.node_version }}
+        check-latest: false
+        package-manager-cache: false
+    - name: Setup Bun
+      if: steps.profile.outputs.bun == 'true'
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ steps.profile.outputs.bun_version }}
+        no-cache: false
+    - name: Setup Python
+      if: steps.profile.outputs.python == 'true'
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ steps.profile.outputs.python_version }}
+    - name: Setup uv
+      if: steps.profile.outputs.python == 'true'
+      uses: astral-sh/setup-uv@v8
+      with:
+        version: ${{ steps.profile.outputs.uv_version }}
+        enable-cache: false
+    - name: Setup Rust
+      if: steps.profile.outputs.rust == 'true'
       uses: jdx/mise-action@v4
       with:
         cache: true
+        install_args: rust
     - name: Install
       if: inputs.install == 'true'
       shell: bash
