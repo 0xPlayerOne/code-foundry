@@ -93,6 +93,8 @@ The repository name, owner, branch names, and release metadata are resolved by G
 
 CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
 
+The initializer generates a minimal `.mise.toml` from the selected language profile instead of installing every supported tool on every runner. Existing `.mise.toml` files are preserved. Workflow setup also restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
+
 Coverage is enforced at 80% for Python and Bun test suites when those ecosystems expose coverage support. Rust projects must keep their native test suites green; repositories with `cargo-llvm-cov` should enforce the same 80% line target in their Cargo coverage configuration.
 
 ## Test runner standard

@@ -30,6 +30,10 @@ package_manager=""
 template_ref=""
 release_type="auto"
 npm_publish="false"
+node_version="24.18.0"
+bun_version="1.3.14"
+python_version="3.13"
+rust_version="1.97.1"
 gitignore_backup=""
 custom_ignores=""
 
@@ -175,8 +179,6 @@ for file in "${files[@]}"; do
 done
 files=("${filtered_files[@]}")
 
-optional_files=(.mise.toml)
-
 # Workflows outside the standard baseline are repository-owned extensions.
 # The sync operation never deletes or replaces them; surface them explicitly
 # so maintainers can verify custom deployment, indexing, or security flows.
@@ -263,21 +265,65 @@ EOF
   fi
 fi
 
-for file in "${optional_files[@]}"; do
-  if [ ! -f "$file" ]; then
-    changed=$((changed + 1))
-    if [ "$mode" = "check" ]; then
-      printf 'Would initialize %s\n' "$file"
-    else
-      cp "$template_root/$file" "$file"
-      printf 'Initialized %s\n' "$file"
-    fi
+detect_languages() {
+  local detected=()
+  if [ -f package.json ] || git ls-files -- '*.js' '*.jsx' '*.ts' '*.tsx' | grep -q .; then
+    detected+=(typescript)
   fi
-done
+  if [ -f Cargo.toml ] || git ls-files -- '*.rs' | grep -q .; then
+    detected+=(rust)
+  fi
+  if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ] ||
+    git ls-files -- '*.py' ':!.github/**' | grep -q .; then
+    detected+=(python)
+  fi
+  if find . -path './.git' -prune -o -type f -name '*.sol' -print | grep -q .; then
+    detected+=(solidity)
+  fi
+  printf '%s\n' "${detected[*]}"
+}
+
+initialize_mise() {
+  local selected_languages="$1"
+  local language
+  if [ -f .mise.toml ]; then
+    return
+  fi
+  if [ "$selected_languages" = auto ]; then
+    selected_languages="$(detect_languages)"
+  fi
+  changed=$((changed + 1))
+  if [ "$mode" = check ]; then
+    printf '%s\n' 'Would initialize .mise.toml'
+    return
+  fi
+  {
+    printf '%s\n' '[tools]'
+    for language in $(normalize_csv "$selected_languages"); do
+      case "$language" in
+        typescript|solidity)
+          printf 'node = "%s"\n' "$node_version"
+          printf 'bun = "%s"\n' "$bun_version"
+          ;;
+        python)
+          printf 'python = "%s"\n' "$python_version"
+          ;;
+        rust)
+          printf 'rust = "%s"\n' "$rust_version"
+          ;;
+      esac
+    done | awk '!seen[$0]++'
+    printf '\n%s\n' '[settings]'
+    printf '%s\n' 'experimental = true'
+  } > .mise.toml
+  printf '%s\n' 'Initialized .mise.toml'
+}
+
+initialize_mise "$languages"
 
 # Release Please's simple strategy needs a version file. Initialize one only
 # for Solidity-only repositories, where no package manifest owns the version.
-if [ ! -f version.txt ] && git ls-files -- '*.sol' | grep -q . &&
+if [ ! -f version.txt ] && find . -path './.git' -prune -o -type f -name '*.sol' -print | grep -q . &&
   [ ! -f package.json ] && [ ! -f Cargo.toml ] && [ ! -f pyproject.toml ]; then
   changed=$((changed + 1))
   if [ "$mode" = "check" ]; then
