@@ -100,7 +100,37 @@ integration() {
   fi
 }
 
+e2e() {
+  if has_script test:e2e; then
+    run_script test:e2e
+  elif has_script e2e; then
+    run_script e2e
+  else
+    echo "Skipping JavaScript/TypeScript E2E tests (script not defined)"
+  fi
+  if [ -d tests/e2e ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
+    python -m pytest -q tests/e2e
+  else
+    echo "Skipping Python E2E tests (tests/e2e not found)"
+  fi
+}
+
+smoke() {
+  if has_script test:smoke; then
+    run_script test:smoke
+  elif has_script smoke; then
+    run_script smoke
+  else
+    echo "Skipping JavaScript/TypeScript smoke tests (script not defined)"
+  fi
+  if [ -d tests/smoke ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
+    python -m pytest -q tests/smoke
+  else
+    echo "Skipping Python smoke tests (tests/smoke not found)"
+  fi
+}
+
 case "${1:-}" in
-  install|format|lint|type_check|build|unit|integration) "$1" ;;
-  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration}" >&2; exit 2 ;;
+  install|format|lint|type_check|build|unit|integration|e2e|smoke) "$1" ;;
+  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke}" >&2; exit 2 ;;
 esac

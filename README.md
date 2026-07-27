@@ -6,7 +6,7 @@ Reusable baseline for TypeScript, Rust, Python, and mixed-language projects.
 
 1. Install [mise](https://mise.jdx.dev/) and run `mise install`.
 2. Enable repository hooks with `git config core.hooksPath .githooks`.
-3. Add the repository's standard scripts (`format:check`, `lint`, `type-check`, `build`, `test:unit`, and `test:integration`) when available. The shared scripts also recognize a legacy `test` or `test:coverage` script and skip checks that do not apply to the repository's languages or package manager.
+3. Add the repository's standard scripts (`format:check`, `lint`, `type-check`, `build`, `test:unit`, `test:integration`, `test:e2e`, and `test:smoke`) when available. The shared scripts also recognize legacy aliases and skip checks that do not apply to the repository's languages or package manager.
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
