@@ -51,7 +51,7 @@ command -v gh >/dev/null 2>&1 || { echo "gh is required" >&2; exit 1; }
 is_private="$(gh repo view "$repo" --json isPrivate --jq '.isPrivate')"
 contexts=()
 if feature_enabled ci; then contexts+=(Format Lint Type-Check Build); fi
-if feature_enabled test; then contexts+=('Test Profile' Unit Integration E2E Smoke); fi
+if feature_enabled test; then contexts+=(Unit Integration E2E Smoke); fi
 if feature_enabled security; then
   contexts+=(Profile 'Dependency Audit (JavaScript)' 'Dependency Audit (Rust)' 'Dependency Audit (Python)')
 fi

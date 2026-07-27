@@ -544,21 +544,7 @@ should_run() {
   esac
 }
 
-profile_test_optional() {
-  local task output applicable browser
-  for task in e2e smoke; do
-    output="$(should_run "$task")"
-    applicable="$(printf '%s\n' "$output" | awk -F= '$1 == "applicable" {print $2; exit}')"
-    printf '%s=%s\n' "$task" "${applicable:-false}"
-    if [ "$task" = e2e ]; then
-      browser="$(printf '%s\n' "$output" | awk -F= '$1 == "browser" {print $2; exit}')"
-      printf 'e2e_browser=%s\n' "${browser:-false}"
-    fi
-  done
-}
-
 case "${1:-}" in
   install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run) "$1" "${2:-}" ;;
-  profile_test_optional) profile_test_optional ;;
-  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run|profile_test_optional}" >&2; exit 2 ;;
+  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run}" >&2; exit 2 ;;
 esac
