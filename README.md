@@ -123,7 +123,7 @@ The shared setup action accepts `install-javascript`, `install-python`, and `ins
 
 It also accepts `mise-scope` (`auto`, `all`, `javascript`, `python`, or `rust`). Security's parallel ecosystem matrix uses this to install only the active language toolchain and restore only its package caches; callers that omit it get automatic profile-based tool selection, while `all` remains available for tasks that intentionally span every configured ecosystem.
 
-Lightweight jobs use GitHub's `ubuntu-slim` runner: CI formatting, Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, CodeQL language detection, and dependency audits. Build, lint, type-check, test, and active CodeQL analysis jobs remain on full `ubuntu-latest` runners because they may compile or analyze larger projects and benefit from multiple CPUs.
+Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, CodeQL language detection, and dependency audits. Build, format, lint, type-check, test, and active CodeQL analysis jobs remain on full `ubuntu-latest` runners because toolchain initialization and source analysis benefit from full runner resources.
 
 Release and Security metadata jobs also use blobless checkouts where a checkout is needed, reducing source transfer while preserving on-demand manifest access.
 
