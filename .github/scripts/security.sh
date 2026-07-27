@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+has_dependency_manifest() {
+  [ -f package.json ] || [ -f Cargo.toml ] || [ -f requirements.txt ] ||
+    [ -f requirements-dev.txt ] || [ -f pyproject.toml ]
+}
+
+should_run() {
+  if has_dependency_manifest; then
+    printf '%s\n' 'applicable=true'
+  else
+    printf '%s\n' 'applicable=false'
+  fi
+}
+
+if [ "${1:-audit}" = should_run ]; then
+  should_run
+  exit 0
+fi
+
+if [ "${1:-audit}" != audit ]; then
+  echo "usage: $0 [audit|should_run]" >&2
+  exit 2
+fi
+
 audits=0
 
 package_manager() {
@@ -40,7 +63,7 @@ fi
 
 if [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
   audits=$((audits + 1))
-  if command -v uv >/dev/null 2>&1 && uv tool run --from pip-audit pip-audit --version >/dev/null 2>&1; then
+  if command -v uv >/dev/null 2>&1; then
     pip_audit() { uv tool run --from pip-audit pip-audit "$@"; }
   else
     python -m pip install --disable-pip-version-check --quiet pip-audit

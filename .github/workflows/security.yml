@@ -21,9 +21,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/security.sh should_run >> "$GITHUB_OUTPUT"
       - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
       - name: Audit dependencies
+        if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/security.sh
 
   dependency-review:
