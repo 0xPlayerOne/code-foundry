@@ -39,6 +39,25 @@ bash .github/scripts/init-repo.sh
 
 Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
 
+The initializer is intentionally flag-driven so the same baseline can be used as a small repository package. Language selection controls CodeQL and records the repository profile; feature selection controls which standard workflows are installed. `auto` detects supported languages, while `all` enables every standard workflow.
+
+```bash
+# Preview a TypeScript + Python repository without changing files
+bash .github/scripts/init-repo.sh \
+  --languages typescript,python \
+  --features all \
+  --dry-run
+
+# Initialize a Rust repository with only the core automation
+bash .github/scripts/init-repo.sh \
+  --languages rust \
+  --features ci,codeql,security,test
+```
+
+Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supported feature flags are `ci`, `codeql`, `security`, `test`, `draft-pr`, `release-pr`, `release`, and `dependabot`. Use `--prune` only when you explicitly want disabled standard workflows removed; custom workflows are always preserved. The selected profile is stored in `.github/template.yml`, which makes later syncs repeatable and lets workflows consume repository-specific settings without duplicating the template scripts.
+
+For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published template checkout or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract for a future npm/package wrapper around these same operations.
+
 Branch protection is an administrator operation and is opt-in:
 
 ```bash

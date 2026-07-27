@@ -3,6 +3,20 @@ set -euo pipefail
 
 errors=0
 
+configured_features="all"
+if [ -f .github/template.yml ]; then
+  configured_features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml)"
+  [ -n "$configured_features" ] || configured_features="all"
+fi
+
+feature_enabled() {
+  [ "$configured_features" = all ] && return 0
+  case " $(printf '%s' "$configured_features" | tr ',' ' ') " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 error() {
   printf 'ERROR: %s\n' "$1" >&2
   errors=$((errors + 1))
@@ -67,8 +81,10 @@ if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt
   fi
 fi
 
-for workflow in ci.yml codeql.yml security.yml test.yml draft-pr.yml release-pr.yml release.yml; do
-  [ -f ".github/workflows/$workflow" ] || error "missing standard workflow: $workflow"
+for workflow in ci codeql security test draft-pr release-pr release; do
+  if feature_enabled "$workflow"; then
+    [ -f ".github/workflows/$workflow.yml" ] || error "missing enabled workflow: $workflow.yml"
+  fi
 done
 
 for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh sync-template.sh init-repo.sh sync-protection.sh; do

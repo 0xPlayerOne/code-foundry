@@ -3,9 +3,20 @@ set -euo pipefail
 
 languages=()
 if find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print -quit | grep -q .; then languages+=(actions); fi
-if git ls-files -- '*.ts' '*.tsx' '*.js' '*.jsx' 'package.json' 'tsconfig*.json' | grep -q .; then languages+=(javascript-typescript); fi
-if git ls-files -- '*.py' 'pyproject.toml' 'requirements*.txt' 'setup.py' ':!.github/**' | grep -q .; then languages+=(python); fi
-if git ls-files -- '*.rs' 'Cargo.toml' 'Cargo.lock' | grep -q .; then languages+=(rust); fi
+configured=""
+if [ -f .github/template.yml ]; then
+  configured="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml)"
+fi
+
+if [ "$configured" = auto ] || [ "$configured" = all ] || [ -z "$configured" ]; then
+  if git ls-files -- '*.ts' '*.tsx' '*.js' '*.jsx' 'package.json' 'tsconfig*.json' | grep -q .; then languages+=(javascript-typescript); fi
+  if git ls-files -- '*.py' 'pyproject.toml' 'requirements*.txt' 'setup.py' ':!.github/**' | grep -q .; then languages+=(python); fi
+  if git ls-files -- '*.rs' 'Cargo.toml' 'Cargo.lock' | grep -q .; then languages+=(rust); fi
+else
+  case ",$configured," in *,typescript,*) languages+=(javascript-typescript) ;; esac
+  case ",$configured," in *,python,*) languages+=(python) ;; esac
+  case ",$configured," in *,rust,*) languages+=(rust) ;; esac
+fi
 
 # Scheduled and manually dispatched scans are always full scans. For pushes
 # and pull requests, a shallow commit diff lets the matrix skip analyzers for
