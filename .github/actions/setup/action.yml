@@ -163,21 +163,6 @@ runs:
         esac
         printf 'javascript_package_manager=%s\n' "$javascript_package_manager" >> "$GITHUB_OUTPUT"
 
-        bun_required=false
-        if [ -f bun.lock ] || [ -f bun.lockb ] ||
-          { [ "$javascript_package_manager" = bun ] && [ "$javascript_dependencies" = true ]; }; then
-          bun_required=true
-        elif [ -f package.json ] && node <<'NODE'
-        const fs = require('node:fs');
-        const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-        const scripts = Object.values(p.scripts || {});
-        process.exit(scripts.some((value) => /\bbun(?:x)?\b/.test(value)) ? 0 : 1);
-        NODE
-        then
-          bun_required=true
-        fi
-        printf 'bun_required=%s\n' "$bun_required" >> "$GITHUB_OUTPUT"
-
         python=false
         if has_python_source || [ -f pyproject.toml ] ||
           [ -f requirements.txt ] || [ -f requirements-dev.txt ]; then
@@ -277,7 +262,8 @@ runs:
             }
             if [ "$javascript" = true ] && task_language_needed javascript; then
               add_configured_tool node
-              if [ "$bun_required" = true ]; then
+              if { [ -f bun.lock ] || [ -f bun.lockb ] ||
+                awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null | grep -qx bun; }; then
                 add_configured_tool bun
               fi
             fi
@@ -290,7 +276,8 @@ runs:
             ;;
           javascript)
             configured_tool node && mise_tools+=(node)
-            if [ "$bun_required" = true ] && configured_tool bun; then
+            if { [ -f bun.lock ] || [ -f bun.lockb ] ||
+              awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null | grep -qx bun; } && configured_tool bun; then
               mise_tools+=(bun)
             fi
             ;;
