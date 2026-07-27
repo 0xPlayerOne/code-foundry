@@ -48,12 +48,15 @@ repo_foundry_pr_docs_only() {
   return 0
 }
 
-# Return success when a pull request changed no dependency or audit inputs for
-# the requested ecosystem. Unknown or unavailable diffs fail open so security
-# checks never become silently optional.
+# Return success when an ordinary push or pull request changed no dependency or
+# audit inputs for the requested ecosystem. Scheduled and manual runs, plus
+# unknown or unavailable diffs, fail open to a full security check.
 repo_foundry_pr_dependencies_unchanged() {
   local ecosystem="${1:-all}"
-  [ "${GITHUB_EVENT_NAME:-}" = pull_request ] || return 1
+  case "${GITHUB_EVENT_NAME:-}" in
+    pull_request|push) ;;
+    *) return 1 ;;
+  esac
 
   local changed_files=""
   repo_foundry_changed_files || return 1
