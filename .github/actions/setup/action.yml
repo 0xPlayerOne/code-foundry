@@ -32,6 +32,16 @@ runs:
         key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-rust-
+    - name: Cache Rust builds
+      if: hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          target
+          ~/.cargo/bin
+        key: ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '.mise.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-build-${{ github.workflow }}-${{ github.job }}-
     - name: Cache Python packages
       if: hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != ''
       uses: actions/cache@v4

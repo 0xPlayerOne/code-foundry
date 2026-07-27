@@ -95,6 +95,8 @@ CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt
 
 The initializer generates a minimal `.mise.toml` from the selected language profile instead of installing every supported tool on every runner. Existing `.mise.toml` files are preserved. Workflow setup also restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
 
+Rust repositories also cache `target/` and Cargo-installed audit tools using separate lockfile/toolchain/workflow-job keys. Cargo fingerprints invalidate stale objects safely, while keeping build caches separate prevents a large Rust build from displacing dependency-download caches or parallel jobs from racing to save one partial cache.
+
 CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
 
 Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, and CodeQL language detection. Build, test, audit, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because the slim container is intended for short operations and has only one CPU.
