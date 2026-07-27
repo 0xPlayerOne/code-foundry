@@ -52,6 +52,24 @@ runs:
           awk '!/^\.github\// && /(^|\/)[^\/]+\.py$/ { found=1; exit } END { exit !found }' <<< "$tracked_files"
         }
 
+        uses_prettier() {
+          [ -f package.json ] || return 0
+          node <<'NODE'
+        const fs = require('node:fs');
+        const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+        const scripts = p.scripts || {};
+        const dependencies = {
+          ...p.dependencies,
+          ...p.devDependencies,
+          ...p.optionalDependencies,
+          ...p.peerDependencies,
+        };
+        const usesPrettier = Boolean(dependencies.prettier) || Object.values(scripts).some((value) => /\bprettier\b/.test(value));
+        const hasFormatScript = Boolean(scripts['format:check'] || scripts.format || scripts.fmt);
+        process.exit(usesPrettier || !hasFormatScript ? 0 : 1);
+        NODE
+        }
+
         javascript=false
         if [ -f package.json ] || [ -f bun.lock ] || [ -f bun.lockb ] ||
           [ -f pnpm-lock.yaml ] || [ -f yarn.lock ] || [ -f package-lock.json ] ||
@@ -124,6 +142,17 @@ runs:
         else
           echo 'eslint=false' >> "$GITHUB_OUTPUT"
         fi
+
+        prettier=false
+        if [ "$javascript" = true ]; then
+          # Cache the fallback formatter for projects without a dedicated
+          # config, but avoid probing an empty cache when a repository-owned
+          # format script does not use Prettier.
+          if uses_prettier; then
+            prettier=true
+          fi
+        fi
+        printf 'prettier=%s\n' "$prettier" >> "$GITHUB_OUTPUT"
 
         build=false
         if has_tracked_regex '(^|/)(next\.config\.[^/]*|vite\.config\.[^/]*|tsconfig[^/]*\.json)$'; then
@@ -233,7 +262,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-javascript-lint-${{ github.workflow }}-${{ github.job }}-
     - name: Cache JavaScript format state
-      if: inputs.install == 'true' && inputs.cache-format == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*') != ''
+      if: inputs.install == 'true' && inputs.cache-format == 'true' && steps.profile.outputs.prettier == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*') != ''
       uses: actions/cache@v5
       with:
         path: |
