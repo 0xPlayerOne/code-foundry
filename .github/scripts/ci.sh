@@ -5,6 +5,11 @@ source .github/scripts/changed-files.sh
 
 if [ -d .venv/bin ]; then export PATH="$PWD/.venv/bin:$PATH"; fi
 
+# Build one tracked-file inventory for the detectors below. These functions are
+# called repeatedly by parallel workflow jobs, so avoid starting Git for each
+# language check.
+tracked_files="$(git ls-files)"
+
 has_script() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.[process.argv[1]] ? 0 : 1)' "$1"
 }
@@ -14,12 +19,12 @@ has_bun_native_coverage() {
 }
 
 has_javascript() {
-  git ls-files -- '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts' | grep -q .
+  printf '%s\n' "$tracked_files" | grep -Eq '(^|/)[^/]+\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$'
 }
 
 has_python() {
   [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ] || \
-    git ls-files -- '*.py' ':!.github/**' | grep -q .
+    printf '%s\n' "$tracked_files" | awk '!/^\.github\// && /(^|\/)[^\/]+\.py$/ { found=1; exit } END { exit !found }'
 }
 
 has_python_dependencies() {
@@ -35,13 +40,10 @@ has_javascript_dependencies() {
   [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
     [ -f yarn.lock ] || [ -f package-lock.json ] || {
       [ -f package.json ] || return 1
-      node <<'NODE'
-const { execFileSync } = require('node:child_process');
-
-const files = execFileSync('git', ['ls-files', '--', 'package.json', '*/package.json'], { encoding: 'utf8' })
-  .trim()
+      REPO_FOUNDRY_TRACKED_FILES="$tracked_files" node <<'NODE'
+const files = (process.env.REPO_FOUNDRY_TRACKED_FILES || '')
   .split('\n')
-  .filter(Boolean);
+  .filter((file) => /(^|\/)package\.json$/.test(file));
 const groups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
 const hasDependencies = files.some((file) => {
   try {
