@@ -175,6 +175,13 @@ runs:
           [ -f .mise.toml ] && grep -Eq "^$1[[:space:]]*=" .mise.toml
         }
 
+        ruff=false
+        if [ "$python" = true ] &&
+          { [ -f pyproject.toml ] || [ -f ruff.toml ] || configured_tool ruff; }; then
+          ruff=true
+        fi
+        printf 'ruff=%s\n' "$ruff" >> "$GITHUB_OUTPUT"
+
         mise_tools=()
         add_configured_tool() {
           configured_tool "$1" && mise_tools+=("$1")
@@ -305,7 +312,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-python-
     - name: Cache Python lint state
-      if: inputs.install == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/ruff.toml') != ''
+      if: inputs.install == 'true' && steps.profile.outputs.ruff == 'true' && hashFiles('**/pyproject.toml', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
