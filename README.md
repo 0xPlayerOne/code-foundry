@@ -111,6 +111,8 @@ CI and Test jobs perform a source-only applicability check before setup. Empty i
 
 Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, and CodeQL language detection. Build, test, audit, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because the slim container is intended for short operations and has only one CPU.
 
+CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Scheduled and manually dispatched CodeQL runs remain full scans.
+
 Coverage is enforced at 80% for Python and Bun test suites when those ecosystems expose coverage support. Rust projects must keep their native test suites green; repositories with `cargo-llvm-cov` should enforce the same 80% line target in their Cargo coverage configuration.
 
 ## Test runner standard
