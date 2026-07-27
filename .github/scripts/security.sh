@@ -53,6 +53,19 @@ wait_for_parallel() {
   return "$status"
 }
 
+run_parallel() {
+  local status=0 pid task
+  local -a pids=()
+  for task in "$@"; do
+    "$task" &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do
+    if ! wait "$pid"; then status=1; fi
+  done
+  return "$status"
+}
+
 package_manager() {
   local configured=""
   if [ -f .github/template.yml ]; then
@@ -122,15 +135,15 @@ audit_python() {
 
 case "$mode" in
   audit|all)
-    audit_javascript
-    audit_rust
-    audit_python
+    run_parallel audit_javascript audit_rust audit_python
     ;;
   javascript) audit_javascript ;;
   rust) audit_rust ;;
   python) audit_python ;;
 esac
 
-if [ "$audits" -eq 0 ]; then echo "No supported dependency manifests found; nothing to audit"; fi
+if [ "$audits" -eq 0 ] && ! has_dependency_manifest; then
+  echo "No supported dependency manifests found; nothing to audit"
+fi
 
 exit 0
