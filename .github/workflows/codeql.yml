@@ -65,3 +65,7 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
+          # SARIF results remain uploaded for code scanning; the database
+          # archive is not needed by this reusable baseline and adds upload
+          # overhead.
+          upload-database: false
