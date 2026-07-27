@@ -101,6 +101,8 @@ Applicable jobs also cache installed JavaScript dependencies and Python virtual 
 
 New Python profiles include pinned `uv` as an accelerated, pip-compatible installer. Existing repositories without `uv` continue using pip automatically, so adopting the template does not require changing their dependency files or lockfile format.
 
+Python Security audits use cached `uv tool run` environments for `pip-audit` when uv is available, with the same pip fallback used by CI installation.
+
 CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
 
 Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Release PR, release detection, Release Please, npm publication, dependency review, and CodeQL language detection. Build, test, audit, and CodeQL analysis jobs remain on full `ubuntu-latest` runners because the slim container is intended for short operations and has only one CPU.

@@ -40,10 +40,15 @@ fi
 
 if [ -f requirements.txt ] || [ -f requirements-dev.txt ] || [ -f pyproject.toml ]; then
   audits=$((audits + 1))
-  python -m pip install --disable-pip-version-check --quiet pip-audit
-  if [ -f requirements.txt ]; then python -m pip_audit -r requirements.txt; fi
-  if [ -f requirements-dev.txt ]; then python -m pip_audit -r requirements-dev.txt; fi
-  if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then python -m pip_audit; fi
+  if command -v uv >/dev/null 2>&1 && uv tool run --from pip-audit pip-audit --version >/dev/null 2>&1; then
+    pip_audit() { uv tool run --from pip-audit pip-audit "$@"; }
+  else
+    python -m pip install --disable-pip-version-check --quiet pip-audit
+    pip_audit() { python -m pip_audit "$@"; }
+  fi
+  if [ -f requirements.txt ]; then pip_audit -r requirements.txt; fi
+  if [ -f requirements-dev.txt ]; then pip_audit -r requirements-dev.txt; fi
+  if [ -f pyproject.toml ] && [ ! -f requirements.txt ] && [ ! -f requirements-dev.txt ]; then pip_audit; fi
 else
   echo "Skipping Python audit (Python dependency manifest not found)"
 fi
