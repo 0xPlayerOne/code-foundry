@@ -41,9 +41,9 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.name }})
     needs: detect
-    if: ${{ !github.event.repository.private && matrix.changed }}
-    # Unchanged language checks remain visible as successful skipped jobs, but
-    # do not allocate a runner or execute three no-op steps.
+    if: ${{ !github.event.repository.private }}
+    # Unchanged matrix entries only complete skipped steps; reserve a full
+    # runner for analyzers that actually initialize and scan source.
     runs-on: ${{ matrix.changed && 'ubuntu-latest' || 'ubuntu-slim' }}
     strategy:
       fail-fast: false
