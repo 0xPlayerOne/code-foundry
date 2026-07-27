@@ -19,9 +19,9 @@ inputs:
     required: false
     default: 'true'
   mise-scope:
-    description: Limit mise installation and language package caches to all, javascript, python, or rust.
+    description: Limit mise installation and language package caches to auto, all, javascript, python, or rust.
     required: false
-    default: all
+    default: auto
   cache-build:
     description: Restore JavaScript framework and incremental compiler caches.
     required: false
@@ -98,8 +98,28 @@ runs:
         }
 
         mise_tools=()
+        add_configured_tool() {
+          configured_tool "$1" && mise_tools+=("$1")
+        }
+
         case "$REPO_FOUNDRY_MISE_SCOPE" in
-          all) ;;
+          all)
+            for tool in node bun python uv rust; do add_configured_tool "$tool"; done
+            ;;
+          auto)
+            if [ "$javascript" = true ]; then
+              add_configured_tool node
+              if { [ -f bun.lock ] || [ -f bun.lockb ] ||
+                awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null | grep -qx bun; }; then
+                add_configured_tool bun
+              fi
+            fi
+            if [ "$python" = true ]; then
+              add_configured_tool python
+              add_configured_tool uv
+            fi
+            if [ "$rust" = true ]; then add_configured_tool rust; fi
+            ;;
           javascript)
             configured_tool node && mise_tools+=(node)
             if { [ -f bun.lock ] || [ -f bun.lockb ] ||
@@ -194,7 +214,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-python-environment-
     - name: Cache Python packages
-      if: (inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != '' && steps.python-environment.outputs.cache-hit != 'true'
+      if: (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '**/ruff.toml') != '' && steps.python-environment.outputs.cache-hit != 'true'
       uses: actions/cache@v5
       with:
         path: |
@@ -226,7 +246,7 @@ runs:
           ${{ runner.os }}-turbo-
     - name: Cache Rust packages
       id: rust-packages
-      if: (inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      if: (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
         path: |
@@ -237,7 +257,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-rust-
     - name: Cache Rust tools
-      if: inputs.install != 'true' && (inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
+      if: inputs.install != 'true' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: actions/cache@v5
       with:
         path: ~/.cargo/bin
