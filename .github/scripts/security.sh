@@ -136,7 +136,10 @@ audit_rust() {
 }
 
 audit_python() {
-  mapfile -t requirement_files < <(git ls-files '*requirements*.txt')
+  requirement_files=()
+  while IFS= read -r requirement_file; do
+    [ -n "$requirement_file" ] && requirement_files+=( "$requirement_file" )
+  done < <(git ls-files '*requirements*.txt')
   if [ "${#requirement_files[@]}" -gt 0 ] || [ -f pyproject.toml ]; then
     audits=$((audits + 1))
     if command -v uv >/dev/null 2>&1; then
