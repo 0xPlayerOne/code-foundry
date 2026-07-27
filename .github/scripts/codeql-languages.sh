@@ -13,7 +13,7 @@ case "${GITHUB_EVENT_NAME:-}" in
     base_sha="${CODEQL_BASE_SHA:-}"
     if [ -n "$base_sha" ] && [ "$base_sha" != "0000000000000000000000000000000000000000" ]; then
       if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
-        git fetch --no-tags --depth=1 origin "$base_sha" >/dev/null 2>&1 || true
+        git fetch --no-tags --filter=blob:none --depth=1 origin "$base_sha" >/dev/null 2>&1 || true
       fi
       changed_files="$(git diff --name-only "$base_sha" "${GITHUB_SHA:-HEAD}" 2>/dev/null || true)"
     fi

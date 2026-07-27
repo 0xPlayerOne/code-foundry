@@ -28,6 +28,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Detection only reads Git trees, paths, and small profile files;
+          # defer source blob transfer until the analyzer jobs.
+          filter: blob:none
       - id: languages
         name: Detect languages
         env:
