@@ -4,11 +4,11 @@
 
 The latest commit on `staging` receives security patches. Patches are promoted to `main` through the next release cycle.
 
-| Branch | Supported |
-| --- | --- |
-| `staging` | ✅ |
-| `main` | ✅ |
-| Feature branches | ❌ |
+| Branch           | Supported |
+| ---------------- | --------- |
+| `staging`        | ✅        |
+| `main`           | ✅        |
+| Feature branches | ❌        |
 
 ## Reporting a Vulnerability
 
