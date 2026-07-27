@@ -1,28 +1,28 @@
-## Summary
+## Description
 
-<!-- What changed and why? Link related issues. -->
+<!-- Summarize the change and link related issues. -->
 
-## Validation
+## CI Status
+
+Do not merge until all applicable required checks pass.
 
 - [ ] `CI / Format` passes
 - [ ] `CI / Lint` passes
-- [ ] `CI / Type-Check` passes, when applicable
-- [ ] `CI / Build` passes, when applicable
-- [ ] `CI / Test` and coverage pass, when applicable
-- [ ] CodeQL and Dependency Review pass or are not applicable to this repository
-- [ ] Documentation and configuration are updated, when needed
+- [ ] `CI / Type-Check` passes when applicable
+- [ ] `CI / Build` passes when applicable
+- [ ] `Test / Run` and coverage pass when applicable
+- [ ] `Security / Dependency Review` passes when applicable
+- [ ] `CodeQL / Analyze (...)` passes or is not applicable
+- [ ] Preview/deployment checks pass when applicable
 
-## Compliance checklist
+## Compliance Checklist
 
-- [ ] Commits follow the repository's documented convention
-- [ ] Tests cover behavior changes
+- [ ] Commits follow the repository's documented convention, preferably [Conventional Commits](https://www.conventionalcommits.org/)
+- [ ] Formatting, linting, type checking, build, tests, and coverage were run as applicable
+- [ ] New dependencies use the repository's existing package manager and lockfile
 - [ ] No secrets, local environment files, generated artifacts, or unrelated formatting are included
-- [ ] Dependencies use the repository's existing package manager and lockfile
+- [ ] Documentation and configuration are updated when needed
 
-## Risk and rollout
+## Additional Context
 
-<!-- Mention migrations, security/privacy impact, compatibility, deployment, rollback, or follow-up work. -->
-
-## Related issue
-
-<!-- Use `Closes #123` when applicable. -->
+<!-- Mention migrations, environment changes, breaking changes, compatibility, deployment, rollback, or follow-up work. -->
