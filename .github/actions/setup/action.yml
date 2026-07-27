@@ -445,6 +445,15 @@ runs:
         key: ${{ runner.os }}-turbo-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/turbo.json', '**/turbo.jsonc', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-turbo-
+    - name: Configure remote Turbo
+      if: >-
+        inputs.install == 'true' &&
+        inputs.cache-turbo != 'true' &&
+        env.TURBO_TOKEN != '' &&
+        env.TURBO_TEAM != '' &&
+        steps.profile.outputs.turbo == 'true'
+      shell: bash
+      run: echo 'REPO_FOUNDRY_TURBO_REMOTE_ONLY=true' >> "$GITHUB_ENV"
     - name: Cache Rust packages
       id: rust-packages
       if: (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''

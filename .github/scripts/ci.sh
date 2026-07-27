@@ -14,6 +14,10 @@ has_script() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.[process.argv[1]] ? 0 : 1)' "$1"
 }
 
+has_turbo_script() {
+  [ -f package.json ] && node -e 'const p=require("./package.json"); const script=p.scripts?.[process.argv[1]] || ""; process.exit(/(^|[\s;&|])turbo(\s|$)/.test(script) ? 0 : 1)' "$1"
+}
+
 has_bun_native_coverage() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.["test:coverage"]?.includes("bun test") ? 0 : 1)'
 }
@@ -118,6 +122,15 @@ cargo_run() {
 
 run_script() {
   if ! has_script "$1"; then echo "Skipping $1 (script not defined)"; return; fi
+  if [ "${REPO_FOUNDRY_TURBO_REMOTE_ONLY:-false}" = true ] && has_turbo_script "$1"; then
+    case "$(package_manager)" in
+      bun) bun run "$1" -- --remote-only ;;
+      pnpm) corepack pnpm run "$1" -- --remote-only ;;
+      yarn) corepack yarn run "$1" -- --remote-only ;;
+      npm) npm run "$1" -- --remote-only ;;
+    esac
+    return
+  fi
   case "$(package_manager)" in
     bun) bun run "$1" ;;
     pnpm) corepack pnpm run "$1" ;;
