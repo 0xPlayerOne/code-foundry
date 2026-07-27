@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source .github/scripts/changed-files.sh
+
 has_javascript_dependencies() {
   [ -f bun.lock ] || [ -f bun.lockb ] || [ -f pnpm-lock.yaml ] ||
     [ -f yarn.lock ] || [ -f package-lock.json ] ||
@@ -13,6 +15,10 @@ has_dependency_manifest() {
 }
 
 should_run() {
+  if repo_foundry_pr_docs_only; then
+    printf '%s\n' 'applicable=false'
+    return 0
+  fi
   case "${1:-all}" in
     javascript) has_javascript_dependencies || return 1 ;;
     rust) [ -f Cargo.toml ] || return 1 ;;

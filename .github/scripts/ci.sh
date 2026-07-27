@@ -450,6 +450,10 @@ smoke() {
 
 should_run() {
   local task="$1"
+  if repo_foundry_pr_docs_only; then
+    printf '%s\n' 'applicable=false'
+    return 0
+  fi
   case "$task" in
     format)
       if has_script format:check || has_javascript || [ -f Cargo.toml ] || has_python; then

@@ -159,6 +159,7 @@ files=(
   .github/ISSUE_TEMPLATE/feature_request.yml
   .github/actions/setup/action.yml
   .github/scripts/bootstrap.sh
+  .github/scripts/changed-files.sh
   .github/scripts/ci.sh
   .github/scripts/codeql-languages.sh
   .github/scripts/doctor.sh
