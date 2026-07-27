@@ -38,6 +38,18 @@ inputs:
     description: Optional CI task used to scope test dependency installation.
     required: false
     default: ''
+  task-javascript:
+    description: Whether the selected task has a JavaScript suite; auto preserves default detection.
+    required: false
+    default: auto
+  task-python:
+    description: Whether the selected task has a Python suite; auto preserves default detection.
+    required: false
+    default: auto
+  task-rust:
+    description: Whether the selected task has a Rust suite; auto preserves default detection.
+    required: false
+    default: auto
 
 runs:
   using: composite
@@ -217,19 +229,29 @@ runs:
             for tool in node bun python uv ruff rust; do add_configured_tool "$tool"; done
             ;;
           auto)
-            if [ "$javascript" = true ]; then
+            task_language_needed() {
+              local language="$1" flag
+              case "$language" in
+                javascript) flag="$REPO_FOUNDRY_TASK_JAVASCRIPT" ;;
+                python) flag="$REPO_FOUNDRY_TASK_PYTHON" ;;
+                rust) flag="$REPO_FOUNDRY_TASK_RUST" ;;
+                *) return 0 ;;
+              esac
+              [ -z "$REPO_FOUNDRY_TASK" ] || [ "$flag" = auto ] || [ "$flag" = true ]
+            }
+            if [ "$javascript" = true ] && task_language_needed javascript; then
               add_configured_tool node
               if { [ -f bun.lock ] || [ -f bun.lockb ] ||
                 awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null | grep -qx bun; }; then
                 add_configured_tool bun
               fi
             fi
-            if [ "$python" = true ]; then
+            if [ "$python" = true ] && task_language_needed python; then
               add_configured_tool python
               add_configured_tool uv
               add_configured_tool ruff
             fi
-            if [ "$rust" = true ]; then add_configured_tool rust; fi
+            if [ "$rust" = true ] && task_language_needed rust; then add_configured_tool rust; fi
             ;;
           javascript)
             configured_tool node && mise_tools+=(node)
@@ -254,6 +276,10 @@ runs:
         fi
       env:
         REPO_FOUNDRY_MISE_SCOPE: ${{ inputs.mise-scope }}
+        REPO_FOUNDRY_TASK: ${{ inputs.task }}
+        REPO_FOUNDRY_TASK_JAVASCRIPT: ${{ inputs.task-javascript }}
+        REPO_FOUNDRY_TASK_PYTHON: ${{ inputs.task-python }}
+        REPO_FOUNDRY_TASK_RUST: ${{ inputs.task-rust }}
 
     - name: Cache installed JavaScript dependencies
       id: javascript-dependencies

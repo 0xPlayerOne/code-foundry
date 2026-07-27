@@ -39,6 +39,9 @@ jobs:
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
           task: unit
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Unit
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
@@ -78,6 +81,9 @@ jobs:
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
           task: integration
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Integration
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
@@ -112,6 +118,9 @@ jobs:
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
           task: e2e
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: E2E
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh e2e
@@ -135,6 +144,9 @@ jobs:
           install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
           task: smoke
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Smoke
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh smoke
