@@ -100,6 +100,12 @@ rust_component() {
   fi
 }
 
+has_rust_target() {
+  local kind="$1"
+  cargo metadata --no-deps --format-version 1 |
+    jq -e --arg kind "$kind" 'any(.packages[].targets[]; (.kind | index($kind)) != null)' >/dev/null
+}
+
 format() {
   if has_script format:check; then run_script format:check
   elif has_javascript; then run_package_tool prettier --check .
@@ -128,8 +134,9 @@ type_check() {
   fi
 }
 
-type_check() {
-  run_parallel typecheck_javascript typecheck_rust typecheck_python
+build() {
+  run_script build
+  if [ -f Cargo.toml ]; then cargo build --all-targets --all-features; fi
 }
 
 unit() {
@@ -148,27 +155,15 @@ unit() {
   else
     echo "Skipping JavaScript/TypeScript unit tests (script not defined)"
   fi
-}
-
-unit_rust() {
   if [ -f Cargo.toml ]; then
-    if has_rust_target lib; then cargo_run test --lib --all-features
-    elif has_rust_target bin; then cargo_run test --bins --all-features
+    if has_rust_target lib; then cargo test --lib --all-features
+    elif has_rust_target bin; then cargo test --bins --all-features
     else echo "Skipping Rust unit tests (no library or binary target)"; fi
   fi
-}
-
-unit_python() {
   if [ -d tests/unit ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
-    coverage_args=()
-    while IFS= read -r arg; do [ -n "$arg" ] && coverage_args+=("$arg"); done < <(python_coverage_args)
-    [ "${#coverage_args[@]}" -gt 0 ] || coverage_args=(--cov)
-    env -u MISE_GITHUB_TOKEN -u MISE_TRUSTED_CONFIG_PATHS -u MISE_YES -u MISE_LOG_LEVEL -u PYTHONHOME PYTHONPATH="$PWD/.github/scripts" python -m pytest -q tests/unit "${coverage_args[@]}" --cov-report=term-missing --cov-fail-under="${PYTHON_COVERAGE_MIN:-80}"
+    python -m pytest -q tests/unit --cov --cov-report=term-missing --cov-fail-under="${PYTHON_COVERAGE_MIN:-80}"
   elif [ -d tests ] && [ ! -d tests/integration ] && python -c 'import importlib.util; raise SystemExit(importlib.util.find_spec("pytest") is None)' 2>/dev/null; then
-    coverage_args=()
-    while IFS= read -r arg; do [ -n "$arg" ] && coverage_args+=("$arg"); done < <(python_coverage_args)
-    [ "${#coverage_args[@]}" -gt 0 ] || coverage_args=(--cov)
-    env -u MISE_GITHUB_TOKEN -u MISE_TRUSTED_CONFIG_PATHS -u MISE_YES -u MISE_LOG_LEVEL -u PYTHONHOME PYTHONPATH="$PWD/.github/scripts" python -m pytest -q tests "${coverage_args[@]}" --cov-report=term-missing --cov-fail-under="${PYTHON_COVERAGE_MIN:-80}"
+    python -m pytest -q tests --cov --cov-report=term-missing --cov-fail-under="${PYTHON_COVERAGE_MIN:-80}"
   else
     echo "Skipping Python unit tests (no unit suite detected)"
   fi

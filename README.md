@@ -39,9 +39,19 @@ bash .github/scripts/init-repo.sh
 
 Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
 
+Branch protection is an administrator operation and is opt-in:
+
+```bash
+bash .github/scripts/init-repo.sh --protection
+```
+
+The protection helper preserves unrelated provider checks, replaces stale template check names, and skips CodeQL analysis checks for private repositories where the workflow is intentionally skipped.
+
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
 CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
+
+Coverage is enforced at 80% for Python and Bun test suites when those ecosystems expose coverage support. Rust projects must keep their native test suites green; repositories with `cargo-llvm-cov` should enforce the same 80% line target in their Cargo coverage configuration.
 
 ## Test runner standard
 
