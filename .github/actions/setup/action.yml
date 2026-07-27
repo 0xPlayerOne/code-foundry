@@ -21,7 +21,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-javascript-installed-v2-
     - name: Cache JavaScript packages
-      if: hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
+      if: inputs.install == 'true' && hashFiles('**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json') != '' && steps.javascript-dependencies.outputs.cache-hit != 'true'
       uses: actions/cache@v5
       with:
         path: |
