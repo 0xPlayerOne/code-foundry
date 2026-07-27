@@ -60,7 +60,7 @@ for workflow in ci.yml codeql.yml security.yml test.yml draft-pr.yml release-pr.
   [ -f ".github/workflows/$workflow" ] || error "missing standard workflow: $workflow"
 done
 
-for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh sync-template.sh; do
+for script in ci.sh codeql-languages.sh security.sh doctor.sh bootstrap.sh sync-template.sh init-repo.sh; do
   [ -x ".github/scripts/$script" ] || error "missing executable script: .github/scripts/$script"
 done
 
