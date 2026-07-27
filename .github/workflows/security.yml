@@ -58,42 +58,16 @@ jobs:
         id: profile
         run: bash .github/scripts/security.sh profile >> "$GITHUB_OUTPUT"
 
-  dependency-audit:
-    name: Dependency Audit (${{ matrix.name }})
+  dependency-audit-javascript:
+    name: Dependency Audit (JavaScript)
     needs: profile
+    if: needs.profile.outputs.javascript == 'true'
     runs-on: ubuntu-slim
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: JavaScript
-            ecosystem: javascript
-          - name: Rust
-            ecosystem: rust
-          - name: Python
-            ecosystem: python
     steps:
-      - name: Check
-        id: applicability
-        env:
-          ECOSYSTEM: ${{ matrix.ecosystem }}
-          JAVASCRIPT: ${{ needs.profile.outputs.javascript }}
-          RUST: ${{ needs.profile.outputs.rust }}
-          PYTHON: ${{ needs.profile.outputs.python }}
-        run: |
-          case "$ECOSYSTEM" in
-            javascript) applicable="$JAVASCRIPT" ;;
-            rust) applicable="$RUST" ;;
-            python) applicable="$PYTHON" ;;
-            *) echo "Unknown ecosystem: $ECOSYSTEM" >&2; exit 2 ;;
-          esac
-          printf 'applicable=%s\n' "$applicable" >> "$GITHUB_OUTPUT"
       - name: Checkout
-        if: steps.applicability.outputs.applicable == 'true'
         uses: actions/checkout@v7
         with:
-          # Dependency audits only need manifests and lockfiles; defer source
-          # blob transfer until a tool explicitly reads a required file.
+          # JavaScript audits only need manifests, lockfiles, and audit config.
           filter: blob:none
           sparse-checkout: |
             .github
@@ -106,9 +80,51 @@ jobs:
             **/pnpm-lock.yaml
             **/yarn.lock
             **/package-lock.json
+          sparse-checkout-cone-mode: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          mise-scope: javascript
+      - name: Audit dependencies
+        run: bash .github/scripts/security.sh audit javascript
+
+  dependency-audit-rust:
+    name: Dependency Audit (Rust)
+    needs: profile
+    if: needs.profile.outputs.rust == 'true'
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Rust audits only need manifests, Cargo configuration, and audit config.
+          filter: blob:none
+          sparse-checkout: |
+            .github
             **/Cargo.toml
             **/Cargo.lock
             **/.cargo/**
+          sparse-checkout-cone-mode: false
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          mise-scope: rust
+      - name: Audit dependencies
+        run: bash .github/scripts/security.sh audit rust
+
+  dependency-audit-python:
+    name: Dependency Audit (Python)
+    needs: profile
+    if: needs.profile.outputs.python == 'true'
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Python audits only need manifests, lockfiles, and audit config.
+          filter: blob:none
+          sparse-checkout: |
+            .github
             **/pyproject.toml
             **/requirements*.txt
             **/setup.py
@@ -119,13 +135,11 @@ jobs:
             **/uv.lock
           sparse-checkout-cone-mode: false
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
-          mise-scope: ${{ matrix.ecosystem }}
+          mise-scope: python
       - name: Audit dependencies
-        if: steps.applicability.outputs.applicable == 'true'
-        run: bash .github/scripts/security.sh audit "${{ matrix.ecosystem }}"
+        run: bash .github/scripts/security.sh audit python
 
   dependency-review:
     name: Dependency Review
