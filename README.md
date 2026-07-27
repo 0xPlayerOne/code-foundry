@@ -103,7 +103,7 @@ Rust profiles declare `rustfmt` and `clippy` as mise components, so they are ins
 
 Applicable jobs also cache installed JavaScript dependencies, ESLint state, Prettier state, and Python virtual environments by manifest/configuration hash. The generic ESLint and Prettier fallbacks enable content-based built-in caches so restored lint/format state survives fresh Git checkouts; repository-defined scripts remain authoritative. Cache misses always fall back to a clean install; cached environments must never contain credentials or generated secrets.
 
-E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by dependency/configuration hash, avoiding repeated browser downloads while invalidating safely when the browser configuration or lockfiles change.
+E2E jobs cache Playwright, Cypress, and Puppeteer browser directories by dependency/configuration hash, avoiding repeated browser downloads while invalidating safely when the browser configuration or lockfiles change. Coverage artifacts are uploaded only when a test actually produces coverage output.
 
 Repositories with Turborepo automatically cache local `.turbo/cache` results per workflow job and dependency/configuration hash. Fallback restores can reuse valid artifacts produced by another workflow job, while Turbo’s task hashes discard stale results. Vercel Remote Caching remains available through `TURBO_TOKEN` and `TURBO_TEAM`; the local cache provides a fast fallback when remote caching is not configured.
 
