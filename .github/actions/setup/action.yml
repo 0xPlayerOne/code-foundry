@@ -423,7 +423,7 @@ runs:
         inputs.cache-turbo != 'false' &&
         steps.profile.outputs.turbo == 'true' &&
         hashFiles('**/turbo.json', '**/turbo.jsonc') != '' &&
-        (inputs.cache-turbo == 'true' || env.TURBO_TOKEN == '')
+        (inputs.cache-turbo == 'true' || env.TURBO_TOKEN == '' || env.TURBO_TEAM == '')
       uses: actions/cache@v5
       with:
         path: |
