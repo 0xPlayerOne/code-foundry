@@ -246,7 +246,9 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/node/corepack
-        key: ${{ runner.os }}-corepack-${{ hashFiles('**/package.json', '**/pnpm-lock.yaml', '**/yarn.lock', '.mise.toml', 'mise.lock') }}
+        # Corepack shims are independent of the project toolchain; keep this
+        # cache warm when Node, Bun, or other mise-managed tools change.
+        key: ${{ runner.os }}-corepack-${{ hashFiles('**/package.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
         restore-keys: |
           ${{ runner.os }}-corepack-
     - name: Cache JavaScript packages
