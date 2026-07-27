@@ -3,13 +3,13 @@ name: Draft PR
 on:
   push:
     branches:
-      - "feat/*"
-      - "fix/*"
-      - "chore/*"
-      - "refactor/*"
-      - "docs/*"
-      - "style/*"
-      - "test/*"
+      - 'feat/*'
+      - 'fix/*'
+      - 'chore/*'
+      - 'refactor/*'
+      - 'docs/*'
+      - 'style/*'
+      - 'test/*'
 
 permissions:
   contents: read

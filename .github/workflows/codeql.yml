@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [staging]
   schedule:
-    - cron: "31 6 * * 1"
+    - cron: '31 6 * * 1'
   workflow_dispatch:
 
 permissions:

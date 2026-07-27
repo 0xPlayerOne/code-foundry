@@ -8,13 +8,12 @@ has_script() {
 }
 
 has_javascript() {
-  find . -type f \( -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' \) \
-    -not -path './.git/*' -not -path './node_modules/*' -print -quit | grep -q .
+  git ls-files -- '*.js' '*.jsx' '*.ts' '*.tsx' | grep -q .
 }
 
 has_python() {
   [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f requirements-dev.txt ] || \
-    find . -type f -name '*.py' -not -path './.git/*' -not -path './.venv/*' -print -quit | grep -q .
+    git ls-files -- '*.py' | grep -q .
 }
 
 package_manager() {
@@ -60,11 +59,19 @@ install() {
   if [ -f requirements-dev.txt ]; then .venv/bin/python -m pip install --disable-pip-version-check -r requirements-dev.txt; fi
 }
 
+rust_component() {
+  local component="$1"
+  if command -v rustup >/dev/null 2>&1; then
+    local toolchain="${RUSTUP_TOOLCHAIN:-$(rustup show active-toolchain | awk '{print $1}')}"
+    rustup component add --toolchain "$toolchain" "$component" >/dev/null
+  fi
+}
+
 format() {
   if has_script format:check; then run_script format:check
   elif has_javascript; then run_package_tool prettier --check .
   else echo "Skipping JavaScript/TypeScript formatting (no formatter script or source found)"; fi
-  if [ -f Cargo.toml ]; then cargo fmt --check; fi
+  if [ -f Cargo.toml ]; then rust_component rustfmt; cargo fmt --check; fi
   if has_python && command -v ruff >/dev/null 2>&1; then ruff format --check .; fi
 }
 
@@ -72,7 +79,7 @@ lint() {
   if has_script lint; then run_script lint
   elif has_javascript; then run_package_tool eslint .
   else echo "Skipping JavaScript/TypeScript lint (no lint script or source found)"; fi
-  if [ -f Cargo.toml ]; then cargo clippy --all-targets -- -D warnings; fi
+  if [ -f Cargo.toml ]; then rust_component clippy; cargo clippy --all-targets -- -D warnings; fi
   if has_python && command -v ruff >/dev/null 2>&1; then ruff check .; fi
 }
 
