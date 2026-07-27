@@ -270,12 +270,16 @@ task_uses_rust() {
 
 task_uses_python() {
   local task="$1"
+  has_python_tests() {
+    local directory="$1"
+    [ -d "$directory" ] && find "$directory" -type f -name '*.py' -print -quit | grep -q .
+  }
   has_python || return 1
   case "$task" in
-    unit) [ -d tests/unit ] || { [ -d tests ] && [ ! -d tests/integration ]; } ;;
-    integration) [ -d tests/integration ] ;;
-    e2e) [ -d tests/e2e ] ;;
-    smoke) [ -d tests/smoke ] ;;
+    unit) has_python_tests tests/unit || { [ ! -d tests/unit ] && [ ! -d tests/integration ] && has_python_tests tests; } ;;
+    integration) has_python_tests tests/integration ;;
+    e2e) has_python_tests tests/e2e ;;
+    smoke) has_python_tests tests/smoke ;;
     *) return 0 ;;
   esac
 }
