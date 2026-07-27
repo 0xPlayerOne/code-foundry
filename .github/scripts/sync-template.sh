@@ -167,6 +167,7 @@ files=(
   .github/scripts/sitecustomize.py
   .github/scripts/sync-template.sh
   .github/scripts/init-repo.sh
+  .github/scripts/sync-codeowners.sh
   .github/scripts/sync-protection.sh
   .github/workflows/ci.yml
   .github/workflows/codeql.yml
@@ -226,6 +227,9 @@ for file in "${files[@]}"; do
   if [ ! -f "$template_file" ]; then
     echo "Template file missing: $file" >&2
     exit 1
+  fi
+  if [ "$file" = .github/CODEOWNERS ] && [ -f "$file" ]; then
+    continue
   fi
   if [ ! -f "$file" ] || ! cmp -s "$template_file" "$file"; then
     changed=$((changed + 1))
@@ -368,6 +372,14 @@ initialize_mise_lock() {
 }
 
 initialize_mise_lock
+
+if [ -x .github/scripts/sync-codeowners.sh ]; then
+  if [ "$mode" = "check" ]; then
+    bash .github/scripts/sync-codeowners.sh --check
+  else
+    bash .github/scripts/sync-codeowners.sh --apply
+  fi
+fi
 
 # Release Please's simple strategy needs a version file. Initialize one only
 # for Solidity-only repositories, where no package manifest owns the version.

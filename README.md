@@ -95,6 +95,8 @@ The protection helper preserves unrelated provider checks, replaces stale templa
 
 The repository name, owner, branch names, and release metadata are resolved by GitHub Actions at runtime through `${{ github.* }}` values. Keep organization-specific details out of this baseline.
 
+`CODEOWNERS` is repository-aware. Initialization queries the target GitHub repository and writes its personal owner or repository administrators into the default rule. For organization repositories, administrator discovery requires an authenticated `gh` session with collaborator visibility; if discovery is unavailable, the file retains an `@OWNER` placeholder that should be replaced before merging protected changes.
+
 CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt` and Clippy with warnings-as-errors for Rust, and Ruff formatting/linting for Python.
 
 The initializer generates a minimal `.mise.toml` from the selected language and package-manager profile instead of installing every supported tool on every runner. TypeScript/Solidity profiles always pin Node and add Bun only for Bun projects; npm, pnpm, and Yarn use Node/Corepack. CI and Security also honor an explicit `package_manager` profile before inspecting lockfiles. Existing `.mise.toml` files are preserved. Initialization also generates a committed `mise.lock` when mise is available; CI then installs exact tool URLs and checksums without repeating registry/API resolution. Workflow setup restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
