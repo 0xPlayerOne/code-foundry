@@ -20,4 +20,4 @@ Maintainers will acknowledge receipt, provide an assessment timeline, coordinate
 
 ## Scope
 
-This policy covers the code, configuration, dependencies, workflows, and generated artifacts maintained in this repository. Never commit credentials, tokens, private keys, or sensitive environment files. Report accidental secret exposure privately and rotate the credential immediately.
+This policy covers the code, configuration, dependencies, workflows, and generated artifacts maintained in this repository. Review `Security / Dependency Audit` results for supported ecosystems. Never commit credentials, tokens, private keys, or sensitive environment files. Report accidental secret exposure privately and rotate the credential immediately.

@@ -14,6 +14,7 @@ Do not merge until all applicable required checks pass.
 - [ ] `Test / Integration` passes when applicable
 - [ ] `Test / E2E` passes when applicable
 - [ ] `Test / Smoke` passes when applicable
+- [ ] `Security / Dependency Audit` passes when applicable
 - [ ] `Security / Dependency Review` passes when applicable
 - [ ] `CodeQL / Analyze (...)` passes or is not applicable
 - [ ] Preview/deployment checks pass when applicable

@@ -96,8 +96,8 @@ The standard triggers are:
 
 | Event | Workflows |
 | --- | --- |
-| Push to `main` or `staging` | CI, Test / Unit, Test / Integration, Test / E2E, Test / Smoke, Security, CodeQL |
-| Pull request targeting `staging` | CI, Test / Unit, Test / Integration, Test / E2E, Test / Smoke, Security, CodeQL |
+| Push to `main` or `staging` | CI, Test / Unit, Test / Integration, Test / E2E, Test / Smoke, Security / Dependency Audit, CodeQL |
+| Pull request targeting `staging` | CI, Test / Unit, Test / Integration, Test / E2E, Test / Smoke, Security / Dependency Audit, Security / Dependency Review, CodeQL |
 | Weekly schedule | CodeQL |
 | Feature branch push | Draft PR Workflow |
 | Push to `staging` | Release PR Workflow |
