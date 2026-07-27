@@ -95,6 +95,8 @@ CI and hooks use Prettier and ESLint for JavaScript/TypeScript, default `rustfmt
 
 The initializer generates a minimal `.mise.toml` from the selected language profile instead of installing every supported tool on every runner. Existing `.mise.toml` files are preserved. Workflow setup also restores lockfile-keyed package caches for Bun/npm/pnpm/Yarn, Cargo, and pip; cache misses remain safe because dependencies are always re-created from their lockfiles or manifests.
 
+CI and Test jobs perform a source-only applicability check before setup. Empty integration, E2E, smoke, or language-specific jobs remain visible as successful required checks but skip runner tool installation and dependency setup.
+
 Coverage is enforced at 80% for Python and Bun test suites when those ecosystems expose coverage support. Rust projects must keep their native test suites green; repositories with `cargo-llvm-cov` should enforce the same 80% line target in their Cargo coverage configuration.
 
 ## Test runner standard

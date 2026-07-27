@@ -19,7 +19,7 @@ has_bun_native_coverage() {
 }
 
 has_javascript() {
-  git ls-files -- '*.js' '*.jsx' '*.ts' '*.tsx' | grep -q .
+  git ls-files -- '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.mts' '*.cts' | grep -q .
 }
 
 has_python() {
@@ -300,17 +300,8 @@ smoke_python() {
   fi
 }
 
-smoke() {
-  run_parallel smoke_javascript smoke_python
-}
-
 should_run() {
   local task="$1"
-  if repo_foundry_governance_only; then
-    printf '%s\n' 'applicable=false'
-    [ "$task" = e2e ] && printf '%s\n' 'browser=false'
-    return 0
-  fi
   case "$task" in
     format)
       if has_script format:check || has_javascript || [ -f Cargo.toml ] || has_python; then
@@ -358,14 +349,8 @@ should_run() {
     e2e)
       if has_script test:e2e || has_script e2e || [ -d tests/e2e ]; then
         printf '%s\n' 'applicable=true'
-        if has_browser_dependencies; then
-          printf '%s\n' 'browser=true'
-        else
-          printf '%s\n' 'browser=false'
-        fi
       else
         printf '%s\n' 'applicable=false'
-        printf '%s\n' 'browser=false'
       fi
       ;;
     smoke)
