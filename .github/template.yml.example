@@ -7,6 +7,7 @@ features: all
 package_manager: auto
 release_type: auto
 npm_publish: false
+license: preserve
 runner: ubuntu-latest
 unit_runner: ubuntu-slim
 cache_packages: auto

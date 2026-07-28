@@ -13,6 +13,8 @@ Options:
   --languages LIST  auto or comma-separated: typescript,rust,python,solidity
   --features LIST   all or comma-separated standard features
   --package-manager NAME  auto, bun, pnpm, yarn, or npm
+  --license NAME     preserve, agpl-3.0-or-later, mit, or none
+  --license-file PATH  Use an exact custom license file
   --check           Preview changes (default)
   --apply           Apply changes
   --prune           Remove disabled standard workflows
@@ -39,10 +41,14 @@ package_manager_set=false
 template_ref=""
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
+license="${REPO_FOUNDRY_LICENSE:-preserve}"
+license_file="${REPO_FOUNDRY_LICENSE_FILE:-}"
 release_type_set=false
 npm_publish_set=false
+license_set=false
 [ -n "${REPO_FOUNDRY_RELEASE_TYPE:-}" ] && release_type_set=true
 [ -n "${REPO_FOUNDRY_NPM_PUBLISH:-}" ] && npm_publish_set=true
+[ -n "${REPO_FOUNDRY_LICENSE:-}" ] && license_set=true
 node_version="24.18.0"
 bun_version="1.3.14"
 python_version="3.13"
@@ -96,6 +102,8 @@ while [ "$#" -gt 0 ]; do
     --languages) languages="${2:?missing language list}"; languages_set=true; shift 2 ;;
     --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; package_manager_set=true; shift 2 ;;
+    --license) license="${2:?missing license}"; license_set=true; shift 2 ;;
+    --license-file) license_file="${2:?missing license file}"; shift 2 ;;
     --check) mode="check"; shift ;;
     --apply) mode="apply"; shift ;;
     --prune) prune=true; shift ;;
@@ -130,6 +138,10 @@ if [ -f .github/template.yml ]; then
     configured_npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml)"
     [ -n "$configured_npm_publish" ] && npm_publish="$configured_npm_publish"
   fi
+  if [ "$license_set" != true ]; then
+    configured_license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml)"
+    [ -n "$configured_license" ] && license="$configured_license"
+  fi
 fi
 [ -n "$package_manager" ] || package_manager=auto
 case "$package_manager" in
@@ -146,6 +158,10 @@ contains_word "$valid_release_types" "$release_type" || {
   printf 'Unsupported release type: %s\n' "$release_type" >&2
   exit 2
 }
+case "$license" in
+  preserve|agpl-3.0-or-later|mit|none) ;;
+  *) printf 'Unsupported license: %s\n' "$license" >&2; exit 2 ;;
+esac
 
 if [ -d "$source" ] && [ -f "$source/.github/scripts/sync-template.sh" ]; then
   template_root="$source"
@@ -276,6 +292,12 @@ for file in "${files[@]}"; do
     echo "Template file missing: $file" >&2
     exit 1
   fi
+  if { [ "$file" = LICENSE ] || [ "$file" = NOTICE ]; } && [ "$license" = preserve ] && [ -f "$file" ]; then
+    continue
+  fi
+  if { [ "$file" = LICENSE ] || [ "$file" = NOTICE ]; } && [ "$license" = none ]; then
+    continue
+  fi
   if [ "$file" = .github/CODEOWNERS ] && [ -f "$file" ]; then
     continue
   fi
@@ -314,6 +336,37 @@ for file in "${files[@]}"; do
     fi
   fi
 done
+
+write_license() {
+  local owner license_source
+  [ "$license" != preserve ] || return 0
+  [ "$license" != none ] || return 0
+  if [ -n "$license_file" ]; then
+    [ -f "$license_file" ] || { printf 'License file not found: %s\n' "$license_file" >&2; exit 1; }
+    license_source="$license_file"
+  else
+    case "$license" in
+      agpl-3.0-or-later) license_source="$template_root/LICENSE" ;;
+      mit) license_source="$template_root/.github/licenses/MIT.txt" ;;
+    esac
+    [ -f "$license_source" ] || { printf 'License template missing: %s\n' "$license_source" >&2; exit 1; }
+  fi
+  changed=$((changed + 1))
+  if [ "$mode" = check ]; then
+    printf 'Would generate LICENSE (%s)\n' "$license"
+    return
+  fi
+  owner="${REPO_FOUNDRY_LICENSE_OWNER:-$(git config user.name 2>/dev/null || true)}"
+  [ -n "$owner" ] || owner="Project contributors"
+  sed "s/PROJECT_OWNER/$owner/g; s/CURRENT_YEAR/$(date +%Y)/g" "$license_source" > LICENSE
+  {
+    printf 'Copyright (C) %s %s\n\n' "$(date +%Y)" "$owner"
+    printf 'This repository is distributed under %s.\n' "$license"
+  } > NOTICE
+  printf 'Generated LICENSE and NOTICE for %s.\n' "$license"
+}
+
+write_license
 
 # Release Please owns changelog updates after initialization. Preserve an
 # existing project history, but give new repositories the expected file.
@@ -458,6 +511,7 @@ if [ "$mode" = "apply" ]; then
     fi
     printf 'release_type: %s\n' "$release_type"
     printf 'npm_publish: %s\n' "$npm_publish"
+    printf 'license: %s\n' "$license"
   } > .github/template.yml
 fi
 
