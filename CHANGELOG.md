@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.10.0...v0.11.0) (2026-07-28)
+
+
+### Features
+
+* **security:** document centralized security runtime ([f8427fe](https://github.com/0xPlayerOne/code-foundry/commit/f8427fe740b2753c83a400766d7dd7ac453f3c5b))
+
 ## [0.10.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.9.0...v0.10.0) (2026-07-28)
 
 
