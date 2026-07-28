@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.15.0...v0.16.0) (2026-07-28)
+
+
+### Features
+
+* **release:** add reusable release workflow runtime ([19c3433](https://github.com/0xPlayerOne/code-foundry/commit/19c3433af4ae1ed796030da77f07309e2bf3e98c))
+
 ## [0.15.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.14.0...v0.15.0) (2026-07-28)
 
 
