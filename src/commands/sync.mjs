@@ -42,12 +42,21 @@ export function syncRepository(options) {
   const source = resolve(options.source)
   const dryRun = options.dryRun ?? false
   const force = options.force ?? false
-  let config = readConfig(join(target, '.github/code-foundry.yml'))
-  if (options.init && !Object.keys(config).length) {
-    config = createDefaultConfig(target, source)
-    writeOrReport(join(target, '.github/code-foundry.yml'), renderConfig(config), dryRun)
+  const configPath = join(target, '.github/code-foundry.yml')
+  const existingConfig = readConfig(configPath)
+  if (!Object.keys(existingConfig).length && !options.init) throw new Error('Missing .github/code-foundry.yml; run init first.')
+  const defaults = createDefaultConfig(target, source)
+  let config = { ...defaults, ...existingConfig }
+  if (!Object.keys(existingConfig).length) {
+    writeOrReport(configPath, renderConfig(config), dryRun)
+  } else {
+    const missing = Object.keys(defaults).filter((key) => !(key in existingConfig))
+    if (missing.length) {
+      const current = readFileSync(configPath, 'utf8').trimEnd()
+      const additions = missing.map((key) => `${key}: ${defaults[key]}`).join('\n')
+      writeOrReport(configPath, `${current}\n${additions}\n`, dryRun)
+    }
   }
-  if (!Object.keys(config).length) throw new Error('Missing .github/code-foundry.yml; run init first.')
 
   const languages = configured(config.languages, detectLanguages(target).join(','))
   const features = configured(config.features, 'all')
