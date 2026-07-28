@@ -14,6 +14,7 @@ Options:
   --features LIST   all or comma-separated standard features
   --package-manager NAME  auto, bun, pnpm, yarn, or npm
   --runtime-repository OWNER/REPO  Reusable workflow runtime repository
+  --runtime-ref REF  Reusable workflow runtime tag or branch
   --license NAME     preserve, agpl-3.0-or-later, mit, or none
   --license-file PATH  Use an exact custom license file
   --check           Preview changes (default)
@@ -42,8 +43,11 @@ package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-}"
 package_manager_set=false
 [ -n "${REPO_FOUNDRY_PACKAGE_MANAGER:-}" ] && package_manager_set=true
 runtime_repository="${REPO_FOUNDRY_RUNTIME_REPOSITORY:-}"
+runtime_ref="${REPO_FOUNDRY_RUNTIME_REF:-}"
 runtime_repository_set=false
 [ -n "${REPO_FOUNDRY_RUNTIME_REPOSITORY:-}" ] && runtime_repository_set=true
+runtime_ref_set=false
+[ -n "${REPO_FOUNDRY_RUNTIME_REF:-}" ] && runtime_ref_set=true
 template_ref=""
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
@@ -109,6 +113,7 @@ while [ "$#" -gt 0 ]; do
     --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; package_manager_set=true; shift 2 ;;
     --runtime-repository) runtime_repository="${2:?missing runtime repository}"; runtime_repository_set=true; shift 2 ;;
+    --runtime-ref) runtime_ref="${2:?missing runtime ref}"; runtime_ref_set=true; shift 2 ;;
     --license) license="${2:?missing license}"; license_set=true; shift 2 ;;
     --license-file) license_file="${2:?missing license file}"; shift 2 ;;
     --check) mode="check"; shift ;;
@@ -139,6 +144,9 @@ if [ -f .github/template.yml ]; then
   fi
   if [ "$runtime_repository_set" = false ]; then
     runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' .github/template.yml)"
+  fi
+  if [ "$runtime_ref_set" = false ]; then
+    runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' .github/template.yml)"
   fi
   template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml)"
   if [ "$release_type_set" != true ]; then
@@ -196,6 +204,16 @@ else
   template_root="$temp_dir/template-repo"
 fi
 
+# Prefer an explicit CLI/environment value, then the target's saved contract,
+# then the source template's contract, and finally the stable public runtime.
+if [ -z "$runtime_ref" ] && [ -f "$template_root/.github/template.yml" ]; then
+  runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' "$template_root/.github/template.yml")"
+fi
+[ -n "$runtime_ref" ] || runtime_ref="v0.20.2"
+case "$runtime_ref" in
+  ''|*[!A-Za-z0-9._/-]*) printf 'Runtime ref contains unsupported characters: %s\n' "$runtime_ref" >&2; exit 2 ;;
+esac
+
 # Resolve the effective profile after the template is available. This gives
 # CLI flags and GitHub repository variables priority over template defaults,
 # while making automatic detection concrete in the generated profile.
@@ -206,6 +224,7 @@ if [ -f "$template_root/.github/scripts/profile.sh" ]; then
     REPO_FOUNDRY_FEATURES="$features" \
     REPO_FOUNDRY_PACKAGE_MANAGER="$package_manager" \
     REPO_FOUNDRY_RUNTIME_REPOSITORY="$runtime_repository" \
+    REPO_FOUNDRY_RUNTIME_REF="$runtime_ref" \
     REPO_FOUNDRY_RELEASE_TYPE="$release_type" \
     REPO_FOUNDRY_NPM_PUBLISH="$npm_publish" \
     bash "$template_root/.github/scripts/profile.sh" detect --root "$PWD"
@@ -374,19 +393,25 @@ done
 # selected runtime repository while leaving custom workflows untouched. Read
 # the source's configured runtime first so forks remain self-contained.
 source_runtime_repository=""
+source_runtime_ref=""
 if [ -f "$template_root/.github/template.yml" ]; then
   source_runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' "$template_root/.github/template.yml")"
+  source_runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' "$template_root/.github/template.yml")"
 fi
 [ -n "$source_runtime_repository" ] || source_runtime_repository="0xPlayerOne/code-foundry"
+[ -n "$source_runtime_ref" ] || source_runtime_ref="$runtime_ref"
 for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflows/security.yml .github/workflows/codeql.yml .github/workflows/draft-pr.yml .github/workflows/release-pr.yml .github/workflows/release.yml; do
   [ -f "$file" ] || continue
-  if grep -qF "$source_runtime_repository" "$file" && [ "$source_runtime_repository" != "$runtime_repository" ]; then
+  if grep -qF "$source_runtime_repository@" "$file" || grep -q 'runtime-ref:' "$file"; then
     changed=$((changed + 1))
     if [ "$mode" = "check" ]; then
       printf 'Would render runtime repository in %s\n' "$file"
     else
       rendered_workflow="$(mktemp)"
-      sed "s#${source_runtime_repository}#${runtime_repository}#g" "$file" > "$rendered_workflow"
+      sed -E \
+        -e "s#${source_runtime_repository}@[^[:space:]]+#${runtime_repository}@${runtime_ref}#g" \
+        -e "s#runtime-ref: [^[:space:]]+#runtime-ref: ${runtime_ref}#g" \
+        "$file" > "$rendered_workflow"
       mv "$rendered_workflow" "$file"
       printf 'Rendered runtime repository in %s\n' "$file"
     fi
@@ -566,6 +591,7 @@ if [ "$mode" = "apply" ]; then
       printf 'package_manager: %s\n' "$package_manager"
     fi
     printf 'runtime_repository: %s\n' "$runtime_repository"
+    printf 'runtime_ref: %s\n' "$runtime_ref"
     printf 'release_type: %s\n' "$release_type"
     printf 'npm_publish: %s\n' "$npm_publish"
     printf 'license: %s\n' "$license"

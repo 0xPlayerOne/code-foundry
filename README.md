@@ -42,7 +42,9 @@ runtime without extra flags. Use `--runtime-repository OWNER/REPO` (or
 `REPO_FOUNDRY_RUNTIME_REPOSITORY`) only when you want to override it. The
 selected repository is saved in `.github/template.yml` and rendered into the
 small CI, Test, Security, CodeQL, Draft PR, and Release PR wrappers
-automatically.
+automatically. Use `--runtime-ref REF` (or `REPO_FOUNDRY_RUNTIME_REF`) to pin
+those callers to a fork's release tag or branch; the selected ref is persisted
+alongside the runtime repository.
 
 Normal synchronization imports only the local hook, agent-facing command,
 profile/release, initializer, doctor, ownership, and protection entrypoints.
@@ -114,7 +116,7 @@ bash .github/scripts/init-repo.sh \
 
 Supported profiles are `application`, `monorepo`, and `minimal`; use `auto` to detect one. Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supported feature flags are `ci`, `codeql`, `security`, `test`, `draft-pr`, `release-pr`, `release`, and `dependabot`. Use `--prune` only when you explicitly want disabled standard workflows removed; custom workflows are always preserved. The selected profile is stored in `.github/template.yml`, which makes later syncs repeatable and lets workflows consume repository-specific settings without duplicating the template scripts.
 
-Profile precedence is consistent everywhere: explicit CLI flags, then `REPO_FOUNDRY_*` GitHub repository variables/environment values, then `.github/template.yml`, then automatic detection and standard defaults. Useful repository variables include `REPO_FOUNDRY_PROFILE`, `REPO_FOUNDRY_LANGUAGES`, `REPO_FOUNDRY_FEATURES`, `REPO_FOUNDRY_PACKAGE_MANAGER`, `REPO_FOUNDRY_RUNTIME_REPOSITORY`, `REPO_FOUNDRY_RUNNER`, `REPO_FOUNDRY_UNIT_RUNNER`, `REPO_FOUNDRY_CACHE_PACKAGES`, `REPO_FOUNDRY_CACHE_BUILD`, `REPO_FOUNDRY_COVERAGE_MINIMUM`, and `REPO_FOUNDRY_TURBO_REMOTE`. Use CLI flags for one-off initialization; use repository variables for local overrides that should not be committed.
+Profile precedence is consistent everywhere: explicit CLI flags, then `REPO_FOUNDRY_*` GitHub repository variables/environment values, then `.github/template.yml`, then automatic detection and standard defaults. Useful repository variables include `REPO_FOUNDRY_PROFILE`, `REPO_FOUNDRY_LANGUAGES`, `REPO_FOUNDRY_FEATURES`, `REPO_FOUNDRY_PACKAGE_MANAGER`, `REPO_FOUNDRY_RUNTIME_REPOSITORY`, `REPO_FOUNDRY_RUNTIME_REF`, `REPO_FOUNDRY_RUNNER`, `REPO_FOUNDRY_UNIT_RUNNER`, `REPO_FOUNDRY_CACHE_PACKAGES`, `REPO_FOUNDRY_CACHE_BUILD`, `REPO_FOUNDRY_COVERAGE_MINIMUM`, and `REPO_FOUNDRY_TURBO_REMOTE`. Use CLI flags for one-off initialization; use repository variables for local overrides that should not be committed.
 
 Inspect the resolved profile at any time with `bash .github/scripts/profile.sh detect`; use `profile.sh get KEY` when another script needs one setting.
 

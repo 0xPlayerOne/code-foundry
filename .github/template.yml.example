@@ -6,6 +6,7 @@ languages: auto
 features: all
 package_manager: auto
 runtime_repository: 0xPlayerOne/code-foundry
+runtime_ref: v0.20.2
 release_type: auto
 npm_publish: false
 license: preserve
