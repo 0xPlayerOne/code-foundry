@@ -62,7 +62,7 @@ Ask for clarification when a missing decision would materially change the implem
 2. Inspect before editing; preserve unrelated work.
 3. Plan the smallest coherent change.
 4. Implement with existing project patterns.
-5. Run bash .github/scripts/bootstrap.sh for a new checkout, or bash .github/scripts/doctor.sh to diagnose setup drift.
+5. Run `npx code-foundry init` for a new checkout, or `npx code-foundry doctor` to diagnose setup drift.
 6. Run focused checks while iterating.
 7. Inspect the final diff for accidental changes, secrets, formatting, and generated files.
 8. Run the broadest applicable validation available.
@@ -96,7 +96,7 @@ bash .github/scripts/ci.sh unit
 bash .github/scripts/ci.sh integration
 bash .github/scripts/ci.sh e2e
 bash .github/scripts/ci.sh smoke
-bash .github/scripts/security.sh
+Security and dependency audits run through the GitHub Security workflow.
 ```
 
 Run focused tests first, then the complete applicable set for release, security, workflow, dependency, and configuration changes.

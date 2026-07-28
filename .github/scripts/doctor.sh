@@ -66,11 +66,7 @@ if [ -f package.json ]; then
   fi
   if [ -f bunfig.toml ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.["test:coverage"] ? 0 : 1)' 2>/dev/null; then
     if ! grep -q 'coverageThreshold' bunfig.toml; then
-      if [ -x .github/scripts/ci.sh ]; then
-        printf '%s\n' "INFO: shared CI enforces the Bun aggregate coverage threshold"
-      else
-        error "Bun coverage is enabled by test:coverage but no coverage policy is configured"
-      fi
+      printf '%s\n' "INFO: shared CI enforces the Bun aggregate coverage threshold"
     fi
   fi
 fi
@@ -92,11 +88,7 @@ for workflow in ci codeql security test draft-pr release-pr release; do
   fi
 done
 
-for script in ci.sh profile.sh doctor.sh bootstrap.sh sync-template.sh init-repo.sh sync-protection.sh sync-codeowners.sh; do
-  [ -x ".github/scripts/$script" ] || error "missing executable script: .github/scripts/$script"
-done
-
-printf '%s\n' 'Remote CI, Test, Security, and CodeQL runtimes are loaded by reusable workflow wrappers.'
+printf '%s\n' 'Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.'
 
 if [ "$errors" -gt 0 ]; then
   printf '%s\n' "Repository doctor found $errors error(s)." >&2

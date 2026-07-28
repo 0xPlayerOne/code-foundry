@@ -54,12 +54,11 @@ analysis.
 
 ## Branch protection
 
-Use the initializer's protection helper after reviewing the repository's
-enabled features:
+Use the repository's GitHub settings or the maintainer's branch-protection
+automation after reviewing the repository's enabled features:
 
 ```bash
-Use the repository's GitHub settings or the maintainer's branch-protection
-automation to apply required checks after initialization.
+Apply only checks for enabled workflows.
 ```
 
 Keep strict status checks, linear history, and conversation resolution enabled.
