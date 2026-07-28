@@ -263,6 +263,11 @@ license="$(config_value license 2>/dev/null || true)"
   printf 'turbo_remote: %s\n' "$turbo_remote"
 } > .github/code-foundry.yml
 
+if [ "$config_path" = .github/template.yml ] && [ -f .github/template.yml ]; then
+  rm .github/template.yml
+  printf '%s\n' 'Migrated .github/template.yml to .github/code-foundry.yml.'
+fi
+
 if [ "$bootstrap" = false ]; then
   printf '%s\n' 'Bootstrap skipped.'
   exit 0
