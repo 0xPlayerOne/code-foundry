@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.19.0...v0.20.0) (2026-07-28)
+
+
+### Features
+
+* **workflows:** use reusable promotion callers ([8429b8f](https://github.com/0xPlayerOne/code-foundry/commit/8429b8f9dee4fa0eedce2d8342332603e88e3f38))
+
 ## [0.19.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.18.0...v0.19.0) (2026-07-28)
 
 
