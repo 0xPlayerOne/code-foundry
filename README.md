@@ -42,6 +42,11 @@ the selected repository is saved in `.github/template.yml` and rendered into
 the small `ci.yml` and `test.yml` wrappers automatically. The equivalent
 environment variable is `REPO_FOUNDRY_RUNTIME_REPOSITORY`.
 
+Normal synchronization imports only the local hook, agent-facing command,
+profile/release, initializer, doctor, ownership, and protection entrypoints.
+Workflow-only actions and Security/CodeQL analyzers stay in the versioned
+runtime package and are not duplicated in consumer repositories.
+
 The standard Security wrapper uses the same runtime contract, so dependency
 audits and the public-only Dependency Review policy can be upgraded centrally
 without copying security scripts into every consumer repository.
