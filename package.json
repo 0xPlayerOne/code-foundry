@@ -42,12 +42,16 @@
     "build": "node --check src/cli.mjs",
     "format:check": "node --check src/cli.mjs",
     "lint": "node --check src/cli.mjs",
-    "test": "node --check src/cli.mjs",
-    "type-check": "node --check src/cli.mjs",
+    "test": "node --test",
+    "type-check": "tsc --project jsconfig.json",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run pack:check"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3"
   }
 }

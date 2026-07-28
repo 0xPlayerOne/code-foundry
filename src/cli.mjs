@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -6,6 +7,9 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
+
+/** @typedef {{ target: string, dryRun: boolean, force: boolean }} Options */
+/** @typedef {{ command: string, options: Options }} ParsedArgs */
 
 const usage = `code-foundry — initialize and maintain agent-ready repositories
 
@@ -25,13 +29,17 @@ Options:
   -h, --help      Show this help
 `
 
+/** @param {string} message @returns {never} */
 function fail(message) {
   console.error(`code-foundry: ${message}`)
   process.exit(2)
 }
 
+/** @param {string[]} argv @returns {ParsedArgs} */
 function parseArgs(argv) {
-  const command = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'init'
+  const first = argv[0]
+  const hasCommand = Boolean(first && !first.startsWith('-'))
+  const command = hasCommand ? /** @type {string} */ (argv.shift()) : 'init'
   const options = { target: process.cwd(), dryRun: false, force: false }
 
   while (argv.length) {
@@ -52,6 +60,7 @@ function parseArgs(argv) {
   return { command, options }
 }
 
+/** @param {string} script @param {string[]} args @param {string} target */
 function run(script, args, target) {
   const scriptPath = resolve(packageRoot, '.github/scripts', script)
   if (!existsSync(scriptPath)) fail(`package is missing ${script}`)
