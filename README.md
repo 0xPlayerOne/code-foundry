@@ -42,6 +42,10 @@ the selected repository is saved in `.github/template.yml` and rendered into
 the small `ci.yml` and `test.yml` wrappers automatically. The equivalent
 environment variable is `REPO_FOUNDRY_RUNTIME_REPOSITORY`.
 
+The standard Security wrapper uses the same runtime contract, so dependency
+audits and the public-only Dependency Review policy can be upgraded centrally
+without copying security scripts into every consumer repository.
+
 Initialization defaults to AGPL for new repositories. Synchronization defaults
 to `--license preserve`, so an existing repository's license is never replaced
 unless you explicitly select a license or provide `--license-file`.
