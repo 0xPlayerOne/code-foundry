@@ -751,6 +751,13 @@ runs:
       with:
         cache: true
         install_args: ${{ steps.profile.outputs.mise_tools }}
+    - name: Setup Rust components
+      if: >-
+        steps.profile.outputs.rust == 'true' &&
+        (steps.profile.outputs.mise_required == 'true' ||
+        steps.profile.outputs.toolchain_mode != 'mise')
+      shell: bash
+      run: rustup component add rustfmt clippy
     - name: Use offline Cargo cache
       if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.rust-packages.outputs.cache-hit == 'true' && hashFiles('**/Cargo.lock') != ''
       shell: bash
