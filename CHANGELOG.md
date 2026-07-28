@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.7.0...v0.8.0) (2026-07-28)
+
+
+### Features
+
+* **test:** add reusable test workflow runtime ([5a1f4cf](https://github.com/0xPlayerOne/code-foundry/commit/5a1f4cfadb6b11f27b001ba8f6424b11de32fd64))
+
+
+### Bug Fixes
+
+* **test:** keep local workflow during runtime release ([8827659](https://github.com/0xPlayerOne/code-foundry/commit/88276590451ee6b3230ad3b1349ccd4785a686bf))
+
 ## [0.7.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.6.0...v0.7.0) (2026-07-28)
 
 
