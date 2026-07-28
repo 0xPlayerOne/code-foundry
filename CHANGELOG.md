@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.14.0...v0.15.0) (2026-07-28)
+
+
+### Features
+
+* **runtime:** unify reusable workflow pins ([bd7aece](https://github.com/0xPlayerOne/code-foundry/commit/bd7aecefac9d02be698907cba686c536c6c242d6))
+
 ## [0.14.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.13.0...v0.14.0) (2026-07-28)
 
 
