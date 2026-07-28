@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.12.0...v0.13.0) (2026-07-28)
+
+
+### Features
+
+* **codeql:** document centralized CodeQL runtime ([2aa20a9](https://github.com/0xPlayerOne/code-foundry/commit/2aa20a946d0979cb12af87cb2ea2d0b50f279965))
+
 ## [0.12.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.11.0...v0.12.0) (2026-07-28)
 
 
