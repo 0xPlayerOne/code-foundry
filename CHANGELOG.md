@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.10](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.9...v0.27.10) (2026-07-28)
+
+
+### Bug Fixes
+
+* **codeql:** make analyzer checks protection-safe ([5ab240e](https://github.com/0xPlayerOne/code-foundry/commit/5ab240e6ce62c2d87acf92f8776a107cffefd860))
+
 ## [0.27.9](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.8...v0.27.9) (2026-07-28)
 
 
