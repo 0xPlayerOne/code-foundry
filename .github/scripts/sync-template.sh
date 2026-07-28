@@ -95,6 +95,13 @@ contains_word() {
   case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
 }
 
+language_enabled() {
+  local list
+  [ "$languages" = auto ] || [ "$languages" = all ] && return 0
+  list="$(normalize_csv "$languages")"
+  contains_word "$list" "$1"
+}
+
 normalize_csv() {
   printf '%s' "$1" | tr ',' ' ' | awk '{$1=$1; print}'
 }
@@ -433,6 +440,10 @@ if [ "${#custom_workflows[@]}" -gt 0 ]; then
 fi
 
 for file in "${files[@]}"; do
+  case "$file" in
+    ruff.toml) language_enabled python || continue ;;
+    .prettierrc) language_enabled typescript || continue ;;
+  esac
   template_file="$template_root/$file"
   case "$file" in
     .github/workflows/*.yml)
@@ -495,6 +506,26 @@ for file in "${files[@]}"; do
         .githooks/*|.github/scripts/*) chmod +x "$file" ;;
       esac
       printf 'Synced %s\n' "$file"
+    fi
+  fi
+done
+
+# Language-specific formatter configuration is generated only when the
+# repository actually uses that language. Remove stale copies that an older
+# template version may have installed, while leaving authored alternatives
+# such as Biome or project-local formatter configuration untouched.
+for language_file in ruff.toml .prettierrc .prettierignore; do
+  case "$language_file" in
+    ruff.toml) language_enabled python && continue ;;
+    .prettierrc|.prettierignore) language_enabled typescript && continue ;;
+  esac
+  if [ -f "$language_file" ]; then
+    changed=$((changed + 1))
+    if [ "$mode" = check ]; then
+      printf 'Would remove irrelevant language configuration %s\n' "$language_file"
+    else
+      rm "$language_file"
+      printf 'Removed irrelevant language configuration %s\n' "$language_file"
     fi
   fi
 done
