@@ -152,6 +152,11 @@ jobs:
   build:
     name: Build
     runs-on: ${{ inputs.runner }}
+    env:
+      # Framework builds may validate server-side configuration at build time.
+      # Consumers can provide the real value; the fallback is intentionally
+      # CI-only and must never be used at runtime.
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
