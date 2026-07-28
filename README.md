@@ -18,25 +18,20 @@ Run this from the root of a repository:
 npx code-foundry init
 ```
 
-Useful variants:
+Initialization is repository-aware. It detects supported languages, package
+manager, profile, release strategy, and required mise tools, then writes the
+resolved choices to `.github/code-foundry.yml`.
 
 ```bash
-# Choose languages and the package manager
-npx code-foundry init --languages typescript,python --package-manager bun
-
-# Choose a license
-npx code-foundry init --license mit
-
-# Preview without changing files
-npx code-foundry init --dry-run
+# Review or change the generated configuration, then render it
+npx code-foundry sync
 ```
 
 For an existing installation, use `npx code-foundry sync`. Run
 `npx code-foundry doctor` to inspect the resulting repository configuration.
 
-If `.github/code-foundry.yml` already exists, initialization uses it automatically.
-You can also supply a different file with `--config PATH`; after changing the
-file, run `npx code-foundry sync` to render the selected configuration.
+If `.github/code-foundry.yml` already exists, `init` uses it as the repository
+contract. For normal updates, edit that file and run `npx code-foundry sync`.
 
 ## What it installs
 
@@ -56,31 +51,15 @@ preserved and can coexist with the standard baseline.
 
 ## Configuration
 
-Initialization is flag-driven. The most important options are:
-
-```text
---profile auto|application|monorepo|minimal
---languages auto|typescript,rust,python,solidity
---features all|ci,codeql,security,test,draft-pr,release-pr,release,dependabot
---package-manager auto|bun|pnpm|yarn|npm
---runtime-repository OWNER/REPO
---runtime-ref TAG_OR_BRANCH
---release-type auto|node|python|rust|simple|none
---license agpl-3.0-or-later|mit|preserve|none
---license-file PATH
-```
-
-The selected profile is saved in `.github/code-foundry.yml`. Explicit flags take
-precedence over `REPO_FOUNDRY_*` environment/repository variables, which take
-precedence over that file and automatic detection. See
+The generated configuration is the one place to control the baseline. See
 [Configuration reference](docs/CONFIGURATION.md) for the visual configuration
 guide and [Initialization and synchronization](docs/INITIALIZATION.md) for
-the safety and precedence rules.
+the two-command workflow.
 
 New repositories default to AGPL-3.0-or-later. Synchronization preserves an
 existing license unless a replacement is explicitly selected. Authored
 documentation, application files, custom workflows, and existing `.mise.toml`
-files are preserved by default; use `--force` or `--prune` only intentionally.
+files are preserved by default.
 
 ## Workflow model
 

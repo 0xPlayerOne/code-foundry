@@ -58,7 +58,8 @@ Use the initializer's protection helper after reviewing the repository's
 enabled features:
 
 ```bash
-bash .github/scripts/init-repo.sh --protection
+Use the repository's GitHub settings or the maintainer's branch-protection
+automation to apply required checks after initialization.
 ```
 
 Keep strict status checks, linear history, and conversation resolution enabled.

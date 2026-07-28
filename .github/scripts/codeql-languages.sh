@@ -27,7 +27,6 @@ if [ -x .github/scripts/profile.sh ]; then
   configured="$(bash .github/scripts/profile.sh get languages 2>/dev/null || true)"
 else
   config_file=.github/code-foundry.yml
-  [ -f "$config_file" ] || config_file=.github/template.yml
   if [ -f "$config_file" ]; then
     configured="$(awk -F': ' '/^languages:/ {print $2; exit}' "$config_file")"
   fi
