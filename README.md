@@ -87,6 +87,8 @@ For a repository that does not yet contain the scripts, the initializer can be i
 
 CI formatting and linting use the preloaded `ubuntu-latest` runner by default because dependency setup is usually faster there. Set `REPO_FOUNDRY_FAST_RUNNER=ubuntu-slim` only after measuring a repository where the lean image is faster; use `ubuntu-latest` for dependency-heavy or native-toolchain projects.
 
+Rust Build and Type-Check jobs keep compiler caches enabled. JavaScript-only Build and Type-Check jobs skip framework cache archives by default because hosted-runner compression can exceed the build time; opt in with `REPO_FOUNDRY_CACHE_BUILD=true` when a repository’s measurements show a repeatable warm-cache win.
+
 Branch protection is an administrator operation and is opt-in:
 
 ```bash
