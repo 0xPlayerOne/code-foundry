@@ -18,7 +18,7 @@ permissions:
 jobs:
   draft-pr:
     name: Draft PR
-    uses: 0xPlayerOne/code-foundry/.github/workflows/draft-pr.yml@v0.22.0
+    uses: ./.github/workflows/draft-pr.yml
     with:
       runner: ubuntu-slim
     secrets: inherit

@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     name: Test
-    uses: 0xPlayerOne/code-foundry/.github/workflows/test.yml@v0.22.0
+    uses: ./.github/workflows/test.yml
     with:
       runtime-repository: 0xPlayerOne/code-foundry
       runtime-ref: v0.22.0
