@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.9.0...v0.10.0) (2026-07-28)
+
+
+### Features
+
+* **security:** add reusable security workflow runtime ([b21d014](https://github.com/0xPlayerOne/code-foundry/commit/b21d014e85cfcdef4181d488b1df91e3c950503b))
+
 ## [0.9.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.8.0...v0.9.0) (2026-07-28)
 
 
