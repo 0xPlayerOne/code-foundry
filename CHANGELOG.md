@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.4.0...v0.5.0) (2026-07-28)
+
+
+### Features
+
+* **init:** preserve authored repository docs ([9fab688](https://github.com/0xPlayerOne/code-foundry/commit/9fab6880ad82762cf4e2eb7d813355ab22cdb905))
+
 ## [0.4.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.3.0...v0.4.0) (2026-07-28)
 
 
