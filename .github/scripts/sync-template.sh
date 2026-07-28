@@ -15,7 +15,7 @@ Options:
   --package-manager NAME  auto, bun, pnpm, yarn, or npm
   --runtime-repository OWNER/REPO  Reusable workflow runtime repository
   --runtime-ref REF  Reusable workflow runtime tag or branch
-  --license NAME     preserve, agpl-3.0-or-later, mit, or none
+  --license NAME     preserve, gpl-3.0-or-later, agpl-3.0-or-later, mit, or none
   --license-file PATH  Use an exact custom license file
   --check           Preview changes (default)
   --apply           Apply changes
@@ -249,7 +249,7 @@ contains_word "$valid_release_types" "$release_type" || {
   exit 2
 }
 case "$license" in
-  preserve|agpl-3.0-or-later|mit|custom|none) ;;
+  preserve|gpl-3.0-or-later|agpl-3.0-or-later|mit|custom|none) ;;
   *) printf 'Unsupported license: %s\n' "$license" >&2; exit 2 ;;
 esac
 [ -z "$license_file" ] || license=custom
@@ -371,6 +371,9 @@ removed_files=(
   .github/scripts/sync-template.sh
   .github/scripts/sitecustomize.py
   .github/scripts/turbo-cache-probe.sh
+  .github/licenses/MIT.txt
+  .github/licenses/GPL-3.0-or-later.txt
+  .github/licenses/AGPL-3.0-or-later.txt
 )
 for file in "${removed_files[@]}"; do
   if [ -e "$file" ]; then
@@ -533,7 +536,8 @@ write_license() {
     license_source="$license_file"
   else
     case "$license" in
-      agpl-3.0-or-later) license_source="$template_root/LICENSE" ;;
+      gpl-3.0-or-later) license_source="$template_root/.github/licenses/GPL-3.0-or-later.txt" ;;
+      agpl-3.0-or-later) license_source="$template_root/.github/licenses/AGPL-3.0-or-later.txt" ;;
       mit) license_source="$template_root/.github/licenses/MIT.txt" ;;
     esac
     [ -f "$license_source" ] || { printf 'License template missing: %s\n' "$license_source" >&2; exit 1; }
