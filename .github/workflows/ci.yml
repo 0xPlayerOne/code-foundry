@@ -66,7 +66,10 @@ jobs:
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
-          install: 'false'
+          # Repository format scripts normally call a project-local formatter
+          # (for example, Prettier). Install dependencies before running them;
+          # otherwise a clean runner cannot resolve the declared tool.
+          install: 'true'
           cache-format: 'true'
           cache-lint: 'false'
           cache-build: 'false'
