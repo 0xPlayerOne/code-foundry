@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.2...v0.27.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** auto-detect format tooling ([2be5228](https://github.com/0xPlayerOne/code-foundry/commit/2be522821b5d3f93b92ca5e2c4b20df345396fc3))
+
 ## [0.27.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.1...v0.27.2) (2026-07-28)
 
 
