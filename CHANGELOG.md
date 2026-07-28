@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.22.2...v0.23.0) (2026-07-28)
+
+
+### Features
+
+* simplify initialization and synchronization ([9f4643e](https://github.com/0xPlayerOne/code-foundry/commit/9f4643e854a262eb923a4fe84ddb986c3f1bdf77))
+
 ## [0.22.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.22.1...v0.22.2) (2026-07-28)
 
 
