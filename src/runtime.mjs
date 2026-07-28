@@ -107,7 +107,7 @@ function install() {
       }
       const command = commands[packageManager]
       if (command) run(command[0], command[1])
-      if (packageManager === 'bun') runScript(['prepare'])
+      if (packageManager === 'bun') runScript(['prepare', 'postinstall'])
     }
   }
   if (hasLanguage('python') && (existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'requirements.txt')))) {
