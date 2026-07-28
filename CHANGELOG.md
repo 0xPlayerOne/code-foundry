@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.11.0...v0.12.0) (2026-07-28)
+
+
+### Features
+
+* **codeql:** add reusable CodeQL workflow runtime ([65896bb](https://github.com/0xPlayerOne/code-foundry/commit/65896bb407ad9d792c962e86d63384849f711a16))
+
 ## [0.11.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.10.0...v0.11.0) (2026-07-28)
 
 
