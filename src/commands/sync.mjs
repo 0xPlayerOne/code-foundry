@@ -118,6 +118,13 @@ export function syncRepository(options) {
       else rmSync(join(target, file), { force: true })
     }
   }
+  if (includesValue(languages, 'typescript') && existsSync(join(target, '.prettierignore'))) {
+    const prettierIgnore = readFileSync(join(target, '.prettierignore'), 'utf8')
+    if (!prettierIgnore.split(/\r?\n/).includes('.code-foundry')) {
+      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n.code-foundry\n`, dryRun)
+      changed.push('.prettierignore')
+    }
+  }
   if (!dryRun && existsSync(join(target, '.githooks/pre-commit'))) {
     chmodSync(join(target, '.githooks/pre-commit'), 0o755)
     git(target, ['config', 'core.hooksPath', '.githooks'])

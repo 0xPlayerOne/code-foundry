@@ -110,6 +110,9 @@ function install() {
     else {
       if (!existsSync(resolve(root, '.venv'))) run('python', ['-m', 'venv', '.venv'])
       const python = resolve(root, '.venv/bin/python')
+      if (spawnSync(python, ['-m', 'pip', '--version'], { stdio: 'ignore' }).status !== 0) {
+        run(python, ['-m', 'ensurepip', '--upgrade'])
+      }
       if (existsSync(resolve(root, 'requirements.txt'))) run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements.txt'])
       if (existsSync(resolve(root, 'requirements-dev.txt'))) run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements-dev.txt'])
     }
@@ -212,7 +215,7 @@ function security(task, ecosystem) {
       : []
     /** @type {Record<string, [string, string[]]>} */
     const commands = {
-      bun: ['bun', ['audit', ...ignores.flatMap((advisory) => ['--ignore', advisory])]],
+      bun: ['bun', ['audit', '--audit-level=high', ...ignores.flatMap((advisory) => ['--ignore', advisory])]],
       pnpm: ['pnpm', ['audit', '--audit-level', 'high']],
       yarn: ['yarn', ['npm', 'audit', '--all', '--recursive']],
       npm: ['npm', ['audit', '--audit-level=high']],
