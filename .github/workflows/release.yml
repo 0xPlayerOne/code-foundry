@@ -4,11 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      github_package_tag:
-        description: 'Existing release tag to publish to GitHub Packages'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -118,55 +113,3 @@ jobs:
       - name: Publish npm with trusted publishing
         if: env.NPM_TOKEN == ''
         run: npm publish --provenance --access public
-
-  github-package:
-    name: Release / Publish GitHub Package
-    needs: release
-    if: >-
-      (needs.release.outputs.release_created == 'true' &&
-      needs.release.outputs.npm_publish == 'true') ||
-      inputs.github_package_tag != ''
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: write
-    env:
-      PACKAGE_TAG: ${{ inputs.github_package_tag || needs.release.outputs.tag_name }}
-      GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
-    steps:
-      - name: Checkout release
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.github_package_tag || needs.release.outputs.tag_name }}
-      - name: Setup Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          registry-url: https://npm.pkg.github.com
-      - name: Publish GitHub Package
-        env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          publish_dir="$(mktemp -d)"
-          cp -R . "$publish_dir/"
-          rm -rf "$publish_dir/.git"
-          export PUBLISH_DIR="$publish_dir"
-          node <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const dir = process.env.PUBLISH_DIR;
-          const manifestPath = path.join(dir, 'package.json');
-          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-          const owner = process.env.GITHUB_REPOSITORY_OWNER.toLowerCase();
-          manifest.name = `@${owner}/${manifest.name}`;
-          manifest.publishConfig = {
-            ...manifest.publishConfig,
-            access: 'public',
-            registry: 'https://npm.pkg.github.com',
-          };
-          fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-          NODE
-          cd "$publish_dir"
-          npm publish --registry=https://npm.pkg.github.com --access public
