@@ -17,7 +17,7 @@ bootstrap=true
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
 prune_standard="${REPO_FOUNDRY_PRUNE_STANDARD:-false}"
-license="${REPO_FOUNDRY_LICENSE:-agpl-3.0-or-later}"
+license="${REPO_FOUNDRY_LICENSE:-gpl-3.0-or-later}"
 license_file="${REPO_FOUNDRY_LICENSE_FILE:-}"
 runner="${REPO_FOUNDRY_RUNNER:-ubuntu-latest}"
 unit_runner="${REPO_FOUNDRY_UNIT_RUNNER:-ubuntu-slim}"
@@ -74,7 +74,7 @@ Options:
   --runtime-repository OWNER/REPO  Reusable workflow runtime repository (auto from source)
   --runtime-ref REF           Reusable workflow runtime tag or branch
   --release-type NAME        auto, node, python, rust, or simple
-  --license NAME             agpl-3.0-or-later, mit, preserve, or none
+  --license NAME             gpl-3.0-or-later, agpl-3.0-or-later, mit, preserve, or none
   --license-file PATH        Use an exact custom license file
   --npm-publish              Enable npm publication in the release workflow
   --dry-run                  Preview changes without writing files
@@ -160,6 +160,10 @@ if [ -f "$config_path" ]; then
   [ -n "$turbo_remote" ] || turbo_remote=auto
   [ -n "$prune_standard" ] || prune_standard=false
   [ "$prune_standard" = true ] && prune=true
+elif [ -f LICENSE ] && [ -z "${REPO_FOUNDRY_LICENSE:-}" ] && [ "$license_set" = false ]; then
+  # Existing projects keep their authored license unless the user explicitly
+  # selects a replacement in the generated configuration.
+  license=preserve
 fi
 
 case "$package_manager" in

@@ -56,8 +56,9 @@ The generated configuration is the one place to control the baseline. See
 guide and [Initialization and synchronization](docs/INITIALIZATION.md) for
 the two-command workflow.
 
-New repositories default to AGPL-3.0-or-later. Synchronization preserves an
-existing license unless a replacement is explicitly selected. Authored
+New repositories default to GPL-3.0-or-later. Existing projects preserve an
+authored license unless a replacement is explicitly selected. Our maintained
+repositories explicitly select AGPL-3.0-or-later. Authored
 documentation, application files, custom workflows, and existing `.mise.toml`
 files are preserved by default.
 

@@ -25,6 +25,9 @@ manifests, lockfiles, source extensions, workspace metadata, and existing
 project scripts. The generated values are explicit, so later syncs are stable
 until a maintainer changes the file.
 
+New repositories receive the GNU GPLv3. Existing repositories with an authored
+`LICENSE` keep that license unless the generated configuration is changed.
+
 ## Runtime selection
 
 Workflow callers use `runtime_repository` and `runtime_ref` from

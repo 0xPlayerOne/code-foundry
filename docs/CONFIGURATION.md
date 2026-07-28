@@ -36,7 +36,7 @@ repository manifests and source
 | `runtime_ref` | tag or branch | Reusable workflow version |
 | `release_type` | `node`, `python`, `rust`, `simple`, `none` | Release strategy |
 | `npm_publish` | `true` or `false` | Opt into npm publication |
-| `license` | license name, `preserve`, `none` | License policy |
+| `license` | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3 |
 | `runner` fields | GitHub runner names | Per-workflow runner policy |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
