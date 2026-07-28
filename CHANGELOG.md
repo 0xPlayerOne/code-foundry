@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.16.0...v0.17.0) (2026-07-28)
+
+
+### Features
+
+* **release:** document centralized release runtime ([3e2a3f9](https://github.com/0xPlayerOne/code-foundry/commit/3e2a3f9b5e71bf5003819aa177afd265d989bb34))
+
+
+### Bug Fixes
+
+* **release:** grant trusted publishing permission ([025f78e](https://github.com/0xPlayerOne/code-foundry/commit/025f78e851d44a60e2e4e17d3718b0b2fbe147ae))
+
 ## [0.16.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.15.0...v0.16.0) (2026-07-28)
 
 
