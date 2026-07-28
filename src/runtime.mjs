@@ -194,7 +194,10 @@ function ci(task) {
   if (hasLanguage('rust')) run('cargo', ['test'])
   if (hasLanguage('python')) {
     const python = existsSync(resolve(root, '.venv/bin/python')) ? resolve(root, '.venv/bin/python') : 'python'
-    run(python, ['-m', 'pytest', ...(task === 'integration' ? ['tests/integration'] : [])])
+    const integrationTests = resolve(root, 'tests/integration')
+    if (task !== 'integration' || existsSync(integrationTests)) {
+      run(python, ['-m', 'pytest', ...(task === 'integration' ? ['tests/integration'] : [])])
+    }
   }
 }
 
