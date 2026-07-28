@@ -206,7 +206,6 @@ runs:
         javascript_package_manager=none
         configured_package_manager=""
         config_file=.github/code-foundry.yml
-        [ -f "$config_file" ] || config_file=.github/template.yml
         if [ -f "$config_file" ]; then
           configured_package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' "$config_file")"
         fi
@@ -389,7 +388,7 @@ runs:
             if [ "$javascript" = true ] && task_language_needed javascript; then
               add_configured_tool node
               if { [ -f bun.lock ] || [ -f bun.lockb ] ||
-                config_file=.github/code-foundry.yml; [ -f "$config_file" ] || config_file=.github/template.yml; awk -F': ' '/^package_manager:/ {print $2; exit}' "$config_file" 2>/dev/null | grep -qx bun; }; then
+                config_file=.github/code-foundry.yml; awk -F': ' '/^package_manager:/ {print $2; exit}' "$config_file" 2>/dev/null | grep -qx bun; }; then
                 add_configured_tool bun
               fi
             fi
@@ -403,7 +402,7 @@ runs:
           javascript)
             configured_tool node && mise_tools+=(node)
             if { [ -f bun.lock ] || [ -f bun.lockb ] ||
-              config_file=.github/code-foundry.yml; [ -f "$config_file" ] || config_file=.github/template.yml; awk -F': ' '/^package_manager:/ {print $2; exit}' "$config_file" 2>/dev/null | grep -qx bun; } && configured_tool bun; then
+              config_file=.github/code-foundry.yml; awk -F': ' '/^package_manager:/ {print $2; exit}' "$config_file" 2>/dev/null | grep -qx bun; } && configured_tool bun; then
               mise_tools+=(bun)
             fi
             ;;
@@ -451,12 +450,12 @@ runs:
         (inputs.cache-installed == 'true' ||
         steps.profile.outputs.javascript_package_manager == 'pnpm' ||
         steps.profile.outputs.javascript_package_manager == 'yarn') &&
-        hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/code-foundry.yml', '.github/template.yml', '.mise.toml', 'mise.lock') != ''
+        hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/code-foundry.yml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache/restore@v5
       with:
         path: |
           **/node_modules
-        key: ${{ runner.os }}-javascript-installed-v3-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/code-foundry.yml', '.github/template.yml', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-installed-v3-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/code-foundry.yml', '.mise.toml', 'mise.lock') }}
     - name: Restore Bun dependencies
       id: javascript-bun-cache-restore
       if: >-
@@ -465,12 +464,12 @@ runs:
         inputs.cache-installed != 'false' &&
         steps.profile.outputs.javascript_dependencies == 'true' &&
         steps.profile.outputs.javascript_package_manager == 'bun' &&
-        hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/.npmrc', '.github/code-foundry.yml', '.github/template.yml', '.mise.toml', 'mise.lock') != ''
+        hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/.npmrc', '.github/code-foundry.yml', '.mise.toml', 'mise.lock') != ''
       uses: actions/cache/restore@v5
       with:
         path: |
           **/node_modules
-        key: ${{ runner.os }}-javascript-installed-v4-bun-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/.npmrc', '.github/code-foundry.yml', '.github/template.yml', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-installed-v4-bun-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/.npmrc', '.github/code-foundry.yml', '.mise.toml', 'mise.lock') }}
     - name: Detect Bun dependencies
       id: javascript-bun-dependencies
       if: >-
@@ -737,7 +736,7 @@ runs:
       with:
         path: |
           **/node_modules
-        key: ${{ runner.os }}-javascript-installed-v4-bun-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/.npmrc', '.github/code-foundry.yml', '.github/template.yml', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-installed-v4-bun-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/.npmrc', '.github/code-foundry.yml', '.mise.toml', 'mise.lock') }}
     - name: Save installed JavaScript dependencies
       if: >-
         inputs.cache-save == 'true' &&
@@ -753,7 +752,7 @@ runs:
       with:
         path: |
           **/node_modules
-        key: ${{ runner.os }}-javascript-installed-v3-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/code-foundry.yml', '.github/template.yml', '.mise.toml', 'mise.lock') }}
+        key: ${{ runner.os }}-javascript-installed-v3-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.npmrc', '**/.yarnrc*', '**/.pnpmfile.cjs', '.github/code-foundry.yml', '.mise.toml', 'mise.lock') }}
     - name: Save JavaScript packages
       if: >-
         inputs.cache-save == 'true' &&

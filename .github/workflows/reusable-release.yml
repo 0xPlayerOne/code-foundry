@@ -48,7 +48,6 @@ jobs:
             npm_publish="$(bash .github/scripts/profile.sh get npm_publish)"
           else
             config_file=.github/code-foundry.yml
-            [ -f "$config_file" ] || config_file=.github/template.yml
             release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' "$config_file" 2>/dev/null || true)"
             npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' "$config_file" 2>/dev/null || true)"
           fi
