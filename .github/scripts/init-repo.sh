@@ -13,6 +13,8 @@ package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-auto}"
 bootstrap=true
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
+license="${REPO_FOUNDRY_LICENSE:-agpl-3.0-or-later}"
+license_file="${REPO_FOUNDRY_LICENSE_FILE:-}"
 tool_dir=""
 
 cleanup() {
@@ -35,6 +37,8 @@ Options:
                              ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME     auto, bun, pnpm, yarn, or npm
   --release-type NAME        auto, node, python, rust, or simple
+  --license NAME             agpl-3.0-or-later, mit, preserve, or none
+  --license-file PATH        Use an exact custom license file
   --npm-publish              Enable npm publication in the release workflow
   --dry-run                  Preview changes without writing files
   --prune                    Remove disabled standard workflows (never custom workflows)
@@ -58,6 +62,8 @@ while [ "$#" -gt 0 ]; do
     --features) features="${2:?missing feature list}"; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; shift 2 ;;
     --release-type) release_type="${2:?missing release type}"; shift 2 ;;
+    --license) license="${2:?missing license}"; shift 2 ;;
+    --license-file) license_file="${2:?missing license file}"; shift 2 ;;
     --npm-publish) npm_publish=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     --prune) prune=true; shift ;;
@@ -99,7 +105,9 @@ sync_args=(
   --languages "$languages"
   --features "$features"
   --package-manager "$package_manager"
+  --license "$license"
 )
+if [ -n "$license_file" ]; then sync_args+=(--license-file "$license_file"); fi
 if [ "$dry_run" = true ]; then sync_args+=(--check); else sync_args+=(--apply); fi
 if [ "$prune" = true ]; then sync_args+=(--prune); fi
 bash "$sync_script" "${sync_args[@]}"
@@ -117,6 +125,7 @@ features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml 2>/d
 package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 {
   printf 'version: 1\n'
   if [ -n "$template_ref" ]; then
@@ -128,6 +137,7 @@ npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.ym
   printf 'package_manager: %s\n' "$package_manager"
   printf 'release_type: %s\n' "$release_type"
   printf 'npm_publish: %s\n' "$npm_publish"
+  printf 'license: %s\n' "$license"
 } > .github/template.yml
 
 if [ "$bootstrap" = false ]; then

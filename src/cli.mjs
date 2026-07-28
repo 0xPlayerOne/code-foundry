@@ -23,6 +23,8 @@ Init/sync options:
   --features LIST           all or ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME    auto, bun, pnpm, yarn, or npm
   --release-type NAME        auto, node, python, rust, simple, or none
+  --license NAME             agpl-3.0-or-later, mit, preserve, or none
+  --license-file PATH        Use an exact custom license file
   --npm-publish              Enable npm publication in the release workflow
   --dry-run                 Preview changes without writing files
   --prune                   Remove disabled standard workflows
@@ -47,6 +49,8 @@ function parseArgs(argv) {
     features: process.env.REPO_FOUNDRY_FEATURES || 'all',
     packageManager: process.env.REPO_FOUNDRY_PACKAGE_MANAGER || 'auto',
     releaseType: process.env.REPO_FOUNDRY_RELEASE_TYPE || 'auto',
+    license: process.env.REPO_FOUNDRY_LICENSE || (command === 'init' ? 'agpl-3.0-or-later' : 'preserve'),
+    licenseFile: process.env.REPO_FOUNDRY_LICENSE_FILE || '',
     npmPublish: process.env.REPO_FOUNDRY_NPM_PUBLISH === 'true',
     languagesSet: false,
     featuresSet: false,
@@ -64,6 +68,8 @@ function parseArgs(argv) {
     ['--features', 'features'],
     ['--package-manager', 'packageManager'],
     ['--release-type', 'releaseType'],
+    ['--license', 'license'],
+    ['--license-file', 'licenseFile'],
   ])
 
   while (argv.length) {
@@ -107,6 +113,8 @@ function main() {
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
   const common = ['--source', options.source, '--ref', options.ref]
+  common.push('--license', options.license)
+  if (options.licenseFile) common.push('--license-file', options.licenseFile)
   if (options.languagesSet) common.push('--languages', options.languages)
   if (options.featuresSet) common.push('--features', options.features)
   if (options.prune) common.push('--prune')
@@ -122,7 +130,9 @@ function main() {
       '--features', options.features,
       '--package-manager', options.packageManager,
       '--release-type', options.releaseType,
+      '--license', options.license,
     ]
+    if (options.licenseFile) initArgs.push('--license-file', options.licenseFile)
     if (options.protection) initArgs.push('--protection')
     if (options.dryRun) initArgs.push('--dry-run')
     if (options.prune) initArgs.push('--prune')

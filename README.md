@@ -28,6 +28,18 @@ npx code-foundry init \
 Use `code-foundry sync` to update an existing repository and
 `code-foundry doctor` to validate it. Add `--dry-run` to preview changes.
 
+Choose the license during initialization without editing generated files:
+
+```bash
+npx code-foundry init --license mit
+npx code-foundry init --license agpl-3.0-or-later
+npx code-foundry init --license-file ./legal/LICENSE.txt
+```
+
+Initialization defaults to AGPL for new repositories. Synchronization defaults
+to `--license preserve`, so an existing repository's license is never replaced
+unless you explicitly select a license or provide `--license-file`.
+
 ## Setup
 
 1. Install [mise](https://mise.jdx.dev/).
@@ -36,10 +48,13 @@ Use `code-foundry sync` to update an existing repository and
 
 ## Applying the baseline to an existing repository
 
-Run the sync script from the repository root. It updates shared workflows, GitHub forms, hooks, policy files, and tool configuration while preserving the repository's README, `.mise.toml` selections, extra workflows, and application code.
+Run the package entrypoint from the repository root. It updates shared
+workflows, GitHub forms, hooks, policy files, and tool configuration while
+preserving the repository's README, `.mise.toml` selections, extra workflows,
+licenses, and application code.
 
 ```bash
-bash .github/scripts/init-repo.sh
+npx code-foundry init
 ```
 
 Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
