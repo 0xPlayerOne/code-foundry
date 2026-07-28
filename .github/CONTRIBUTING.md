@@ -48,7 +48,7 @@ docs/*  test/*  refactor/*         │              │
 | `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |
 | `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |
 
-Use squash merges unless the repository documents another strategy. Re-align `staging` with `main` after a release when needed.
+The default Git workflow is `staging-release`: topic branches merge into `staging`, then a promotion PR moves validated changes into `main`, followed by the versioned release PR. The default merge strategy is `rebase`, which preserves the linear Conventional Commit history. Configure `merge_strategy` as `squash` or `merge` in `.github/code-foundry.yml` when the repository intentionally uses another policy. Re-align `staging` with `main` after a release when needed.
 
 ## Before you start
 
@@ -110,7 +110,7 @@ For maintainers, trusted contributors, and automation agents:
 
 8. Push the branch and open a pull request into `staging`.
 9. Address review feedback and failed checks on the same branch.
-10. Squash-merge only after required checks pass and the change is ready.
+10. Merge using the repository's configured `merge_strategy` after required checks pass and the change is ready.
 
 ### Internal agent handoff
 

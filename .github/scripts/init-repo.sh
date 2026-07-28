@@ -31,6 +31,8 @@ cache_packages="${REPO_FOUNDRY_CACHE_PACKAGES:-auto}"
 cache_build="${REPO_FOUNDRY_CACHE_BUILD:-auto}"
 coverage_minimum="${REPO_FOUNDRY_COVERAGE_MINIMUM:-80}"
 turbo_remote="${REPO_FOUNDRY_TURBO_REMOTE:-auto}"
+git_workflow="${REPO_FOUNDRY_GIT_WORKFLOW:-staging-release}"
+merge_strategy="${REPO_FOUNDRY_MERGE_STRATEGY:-rebase}"
 
 profile_set=false
 languages_set=false
@@ -132,6 +134,8 @@ if [ -f "$config_path" ]; then
   if [ "$release_type_set" = false ]; then release_type="$(config_value release_type)"; fi
   if [ "$npm_publish_set" = false ]; then npm_publish="$(config_value npm_publish)"; fi
   if [ "$license_set" = false ]; then license="$(config_value license)"; fi
+  [ -n "${REPO_FOUNDRY_GIT_WORKFLOW:-}" ] || git_workflow="$(config_value git_workflow)"
+  [ -n "${REPO_FOUNDRY_MERGE_STRATEGY:-}" ] || merge_strategy="$(config_value merge_strategy)"
   [ -n "$license_file" ] || license_file="$(config_value license_file)"
   prune_standard="$(config_value prune_standard)"
   [ -n "${REPO_FOUNDRY_RUNNER:-}" ] || runner="$(config_value runner)"
@@ -158,6 +162,8 @@ if [ -f "$config_path" ]; then
   [ -n "$cache_build" ] || cache_build=auto
   [ -n "$coverage_minimum" ] || coverage_minimum=80
   [ -n "$turbo_remote" ] || turbo_remote=auto
+  [ -n "$git_workflow" ] || git_workflow=staging-release
+  [ -n "$merge_strategy" ] || merge_strategy=rebase
   [ -n "$prune_standard" ] || prune_standard=false
   [ "$prune_standard" = true ] && prune=true
 elif [ -f LICENSE ] && [ -z "${REPO_FOUNDRY_LICENSE:-}" ] && [ "$license_set" = false ]; then
@@ -173,6 +179,14 @@ esac
 case "$release_type" in
   auto|node|python|rust|simple|none) ;;
   *) printf 'Unsupported release type: %s\n' "$release_type" >&2; exit 2 ;;
+esac
+case "$git_workflow" in
+  staging-release) ;;
+  *) printf 'Unsupported git workflow: %s (only staging-release is currently supported)\n' "$git_workflow" >&2; exit 2 ;;
+esac
+case "$merge_strategy" in
+  rebase|squash|merge) ;;
+  *) printf 'Unsupported merge strategy: %s\n' "$merge_strategy" >&2; exit 2 ;;
 esac
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
@@ -222,6 +236,8 @@ runtime_ref="$(config_value runtime_ref 2>/dev/null || true)"
 release_type="$(config_value release_type 2>/dev/null || true)"
 npm_publish="$(config_value npm_publish 2>/dev/null || true)"
 license="$(config_value license 2>/dev/null || true)"
+git_workflow="$(config_value git_workflow 2>/dev/null || true)"
+merge_strategy="$(config_value merge_strategy 2>/dev/null || true)"
 {
   printf 'version: 1\n'
   printf 'profile: %s\n' "$profile"
@@ -241,6 +257,8 @@ license="$(config_value license 2>/dev/null || true)"
   printf 'release_type: %s\n' "$release_type"
   printf 'npm_publish: %s\n' "$npm_publish"
   printf 'license: %s\n' "$license"
+  printf 'git_workflow: %s\n' "$git_workflow"
+  printf 'merge_strategy: %s\n' "$merge_strategy"
   if [ -n "$license_file" ]; then
     printf 'license_file: %s\n' "$license_file"
   fi
