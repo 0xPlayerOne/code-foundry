@@ -10,6 +10,14 @@ permissions:
   issues: write
   pull-requests: write
 
+env:
+  REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
+  REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
+  REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
+  REPO_FOUNDRY_PACKAGE_MANAGER: ${{ vars.REPO_FOUNDRY_PACKAGE_MANAGER }}
+  REPO_FOUNDRY_RELEASE_TYPE: ${{ vars.REPO_FOUNDRY_RELEASE_TYPE }}
+  REPO_FOUNDRY_NPM_PUBLISH: ${{ vars.REPO_FOUNDRY_NPM_PUBLISH }}
+
 jobs:
   release:
     name: Release / Version
@@ -33,8 +41,13 @@ jobs:
         id: profile
         shell: bash
         run: |
-          release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-          npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+          if [ -x .github/scripts/profile.sh ]; then
+            release_type="$(bash .github/scripts/profile.sh get release_type)"
+            npm_publish="$(bash .github/scripts/profile.sh get npm_publish)"
+          else
+            release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+            npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+          fi
           [ -n "$release_type" ] || release_type=auto
           [ -n "$npm_publish" ] || npm_publish=false
 

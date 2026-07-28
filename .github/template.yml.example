@@ -1,8 +1,15 @@
 # Repository-specific settings for the shared initializer and sync scripts.
 version: 1
 template: code-foundry@latest
+profile: auto
 languages: auto
 features: all
 package_manager: auto
 release_type: auto
 npm_publish: false
+runner: ubuntu-latest
+unit_runner: ubuntu-slim
+cache_packages: auto
+cache_build: auto
+coverage_minimum: 80
+turbo_remote: auto

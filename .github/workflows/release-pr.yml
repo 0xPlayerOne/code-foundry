@@ -23,7 +23,14 @@ jobs:
       - name: Check
         id: check-pr
         run: |
-          EXISTING=$(gh pr list --limit 1 --base main --head staging --state open --json number 2>/dev/null | jq 'length')
+          set -euo pipefail
+          EXISTING=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --limit 1 \
+            --base main \
+            --head staging \
+            --state open \
+            --json number | jq 'length')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
       - name: Create
@@ -60,6 +67,7 @@ jobs:
           EOF
 
           gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
             --base main \
             --head staging \
             --title "Release: staging -> main ($DATE)" \

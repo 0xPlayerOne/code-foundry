@@ -3,15 +3,16 @@ set -euo pipefail
 
 source="${REPO_FOUNDRY_SOURCE:-https://github.com/${GITHUB_REPOSITORY_OWNER:-OWNER}/code-foundry.git}"
 ref="main"
+profile="${REPO_FOUNDRY_PROFILE:-auto}"
 protection=false
 dry_run=false
 prune=false
-languages="auto"
-features="all"
-package_manager="auto"
+languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
+features="${REPO_FOUNDRY_FEATURES:-all}"
+package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-auto}"
 bootstrap=true
-release_type="auto"
-npm_publish="false"
+release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
+npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
 tool_dir=""
 
 cleanup() {
@@ -28,6 +29,7 @@ Initialize or synchronize a repository from the shared baseline.
 Options:
   --source PATH_OR_URL       Template source (default: REPO_FOUNDRY_SOURCE or GitHub owner)
   --ref REF                  Template branch or tag (default: main)
+  --profile NAME             auto, application, monorepo, or minimal
   --languages LIST           auto or comma-separated: typescript,rust,python,solidity
   --features LIST            all or comma-separated optional features:
                              ci,codeql,security,test,draft-pr,release-pr,release,dependabot
@@ -51,6 +53,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --source) source="${2:?missing source path or URL}"; shift 2 ;;
     --ref) ref="${2:?missing ref}"; shift 2 ;;
+    --profile) profile="${2:?missing profile}"; shift 2 ;;
     --languages) languages="${2:?missing language list}"; shift 2 ;;
     --features) features="${2:?missing feature list}"; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; shift 2 ;;
@@ -92,6 +95,7 @@ fi
 sync_args=(
   --source "$source"
   --ref "$ref"
+  --profile "$profile"
   --languages "$languages"
   --features "$features"
   --package-manager "$package_manager"
@@ -107,11 +111,18 @@ fi
 
 mkdir -p .github
 template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+profile="$(awk -F': ' '/^profile:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+languages="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 {
   printf 'version: 1\n'
   if [ -n "$template_ref" ]; then
     printf 'template: %s\n' "$template_ref"
   fi
+  printf 'profile: %s\n' "$profile"
   printf 'languages: %s\n' "$languages"
   printf 'features: %s\n' "$features"
   printf 'package_manager: %s\n' "$package_manager"

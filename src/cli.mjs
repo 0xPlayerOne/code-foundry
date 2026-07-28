@@ -18,6 +18,7 @@ Init/sync options:
   --target PATH             Repository directory (default: current directory)
   --source PATH_OR_URL      Template source override
   --ref REF                 Template branch or tag (default: main)
+  --profile NAME            auto, application, monorepo, or minimal
   --languages LIST          auto or typescript,rust,python,solidity
   --features LIST           all or ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME    auto, bun, pnpm, yarn, or npm
@@ -41,11 +42,12 @@ function parseArgs(argv) {
     target: process.cwd(),
     source: packageRoot,
     ref: 'main',
-    languages: 'auto',
-    features: 'all',
-    packageManager: 'auto',
-    releaseType: 'auto',
-    npmPublish: false,
+    profile: process.env.REPO_FOUNDRY_PROFILE || 'auto',
+    languages: process.env.REPO_FOUNDRY_LANGUAGES || 'auto',
+    features: process.env.REPO_FOUNDRY_FEATURES || 'all',
+    packageManager: process.env.REPO_FOUNDRY_PACKAGE_MANAGER || 'auto',
+    releaseType: process.env.REPO_FOUNDRY_RELEASE_TYPE || 'auto',
+    npmPublish: process.env.REPO_FOUNDRY_NPM_PUBLISH === 'true',
     languagesSet: false,
     featuresSet: false,
     dryRun: false,
@@ -57,6 +59,7 @@ function parseArgs(argv) {
     ['--target', 'target'],
     ['--source', 'source'],
     ['--ref', 'ref'],
+    ['--profile', 'profile'],
     ['--languages', 'languages'],
     ['--features', 'features'],
     ['--package-manager', 'packageManager'],
@@ -114,6 +117,7 @@ function main() {
     const initArgs = [
       '--source', options.source,
       '--ref', options.ref,
+      '--profile', options.profile,
       '--languages', options.languages,
       '--features', options.features,
       '--package-manager', options.packageManager,
