@@ -13,6 +13,7 @@ Options:
   --languages LIST  auto or comma-separated: typescript,rust,python,solidity
   --features LIST   all or comma-separated standard features
   --package-manager NAME  auto, bun, pnpm, yarn, or npm
+  --runtime-repository OWNER/REPO  Reusable workflow runtime repository
   --license NAME     preserve, agpl-3.0-or-later, mit, or none
   --license-file PATH  Use an exact custom license file
   --check           Preview changes (default)
@@ -40,6 +41,9 @@ features_set=false
 package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-}"
 package_manager_set=false
 [ -n "${REPO_FOUNDRY_PACKAGE_MANAGER:-}" ] && package_manager_set=true
+runtime_repository="${REPO_FOUNDRY_RUNTIME_REPOSITORY:-}"
+runtime_repository_set=false
+[ -n "${REPO_FOUNDRY_RUNTIME_REPOSITORY:-}" ] && runtime_repository_set=true
 template_ref=""
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
@@ -104,6 +108,7 @@ while [ "$#" -gt 0 ]; do
     --languages) languages="${2:?missing language list}"; languages_set=true; shift 2 ;;
     --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; package_manager_set=true; shift 2 ;;
+    --runtime-repository) runtime_repository="${2:?missing runtime repository}"; runtime_repository_set=true; shift 2 ;;
     --license) license="${2:?missing license}"; license_set=true; shift 2 ;;
     --license-file) license_file="${2:?missing license file}"; shift 2 ;;
     --check) mode="check"; shift ;;
@@ -132,6 +137,9 @@ if [ -f .github/template.yml ]; then
   if [ "$package_manager_set" = false ]; then
     package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
   fi
+  if [ "$runtime_repository_set" = false ]; then
+    runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' .github/template.yml)"
+  fi
   template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml)"
   if [ "$release_type_set" != true ]; then
     configured_release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml)"
@@ -147,6 +155,18 @@ if [ -f .github/template.yml ]; then
   fi
 fi
 [ -n "$package_manager" ] || package_manager=auto
+if [ -z "$runtime_repository" ]; then
+  source_repository="$source"
+  if [ -d "$source" ]; then
+    source_repository="$(git -C "$source" remote get-url origin 2>/dev/null || true)"
+  fi
+  runtime_repository="$(printf '%s\n' "$source_repository" | sed -nE 's#.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$#\1#p')"
+fi
+[ -n "$runtime_repository" ] || runtime_repository="0xPlayerOne/code-foundry"
+case "$runtime_repository" in
+  */*) ;;
+  *) printf 'Runtime repository must be OWNER/REPO: %s\n' "$runtime_repository" >&2; exit 2 ;;
+esac
 case "$package_manager" in
   auto|bun|pnpm|yarn|npm) ;;
   *) printf 'Unsupported package manager: %s\n' "$package_manager" >&2; exit 2 ;;
@@ -185,6 +205,7 @@ if [ -f "$template_root/.github/scripts/profile.sh" ]; then
     REPO_FOUNDRY_LANGUAGES="$languages" \
     REPO_FOUNDRY_FEATURES="$features" \
     REPO_FOUNDRY_PACKAGE_MANAGER="$package_manager" \
+    REPO_FOUNDRY_RUNTIME_REPOSITORY="$runtime_repository" \
     REPO_FOUNDRY_RELEASE_TYPE="$release_type" \
     REPO_FOUNDRY_NPM_PUBLISH="$npm_publish" \
     bash "$template_root/.github/scripts/profile.sh" detect --root "$PWD"
@@ -350,6 +371,23 @@ for file in "${files[@]}"; do
         .githooks/*|.github/scripts/*) chmod +x "$file" ;;
       esac
       printf 'Synced %s\n' "$file"
+    fi
+  fi
+done
+
+# Reusable workflow callers must use a literal repository/ref. Render the
+# selected runtime repository while leaving custom workflows untouched.
+for file in .github/workflows/ci.yml .github/workflows/test.yml; do
+  [ -f "$file" ] || continue
+  if grep -q '0xPlayerOne/code-foundry' "$file"; then
+    changed=$((changed + 1))
+    if [ "$mode" = "check" ]; then
+      printf 'Would render runtime repository in %s\n' "$file"
+    else
+      rendered_workflow="$(mktemp)"
+      sed "s#0xPlayerOne/code-foundry#$runtime_repository#g" "$file" > "$rendered_workflow"
+      mv "$rendered_workflow" "$file"
+      printf 'Rendered runtime repository in %s\n' "$file"
     fi
   fi
 done
@@ -526,6 +564,7 @@ if [ "$mode" = "apply" ]; then
     if [ -n "$package_manager" ]; then
       printf 'package_manager: %s\n' "$package_manager"
     fi
+    printf 'runtime_repository: %s\n' "$runtime_repository"
     printf 'release_type: %s\n' "$release_type"
     printf 'npm_publish: %s\n' "$npm_publish"
     printf 'license: %s\n' "$license"

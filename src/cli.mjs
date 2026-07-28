@@ -22,6 +22,7 @@ Init/sync options:
   --languages LIST          auto or typescript,rust,python,solidity
   --features LIST           all or ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME    auto, bun, pnpm, yarn, or npm
+  --runtime-repository OWNER/REPO  Reusable workflow runtime repository
   --release-type NAME        auto, node, python, rust, simple, or none
   --license NAME             agpl-3.0-or-later, mit, preserve, or none
   --license-file PATH        Use an exact custom license file
@@ -49,6 +50,7 @@ function parseArgs(argv) {
     languages: process.env.REPO_FOUNDRY_LANGUAGES || 'auto',
     features: process.env.REPO_FOUNDRY_FEATURES || 'all',
     packageManager: process.env.REPO_FOUNDRY_PACKAGE_MANAGER || 'auto',
+    runtimeRepository: process.env.REPO_FOUNDRY_RUNTIME_REPOSITORY || '0xPlayerOne/code-foundry',
     releaseType: process.env.REPO_FOUNDRY_RELEASE_TYPE || 'auto',
     license: process.env.REPO_FOUNDRY_LICENSE || (command === 'init' ? 'agpl-3.0-or-later' : 'preserve'),
     licenseFile: process.env.REPO_FOUNDRY_LICENSE_FILE || '',
@@ -69,6 +71,7 @@ function parseArgs(argv) {
     ['--languages', 'languages'],
     ['--features', 'features'],
     ['--package-manager', 'packageManager'],
+    ['--runtime-repository', 'runtimeRepository'],
     ['--release-type', 'releaseType'],
     ['--license', 'license'],
     ['--license-file', 'licenseFile'],
@@ -120,6 +123,7 @@ function main() {
   if (options.licenseFile) common.push('--license-file', options.licenseFile)
   if (options.languagesSet) common.push('--languages', options.languages)
   if (options.featuresSet) common.push('--features', options.features)
+  common.push('--runtime-repository', options.runtimeRepository)
   if (options.prune) common.push('--prune')
   if (options.force) common.push('--force')
   if (options.dryRun) common.push('--check')
@@ -133,6 +137,7 @@ function main() {
       '--languages', options.languages,
       '--features', options.features,
       '--package-manager', options.packageManager,
+      '--runtime-repository', options.runtimeRepository,
       '--release-type', options.releaseType,
       '--license', options.license,
     ]
