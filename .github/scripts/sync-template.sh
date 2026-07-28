@@ -284,6 +284,7 @@ files=("${filtered_files[@]}")
 standard_workflow() {
   case "$1" in
     ci.yml|codeql.yml|draft-pr.yml|release-pr.yml|release.yml|security.yml|test.yml) return 0 ;;
+    reusable-draft-pr.yml|reusable-release-pr.yml) return 0 ;;
     *) return 1 ;;
   esac
 }
