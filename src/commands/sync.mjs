@@ -96,7 +96,7 @@ export function syncRepository(options) {
     const sourceLicense = join(source, '.github/licenses', licenseFile)
     if (!existsSync(sourceLicense)) throw new Error(`License template missing: ${sourceLicense}`)
     writeOrReport(join(target, 'LICENSE'), readFileSync(sourceLicense), dryRun)
-    writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
+    if (!existsSync(join(target, 'NOTICE'))) writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
   }
 
   for (const file of legacyFiles) {
