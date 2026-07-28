@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.24.0...v0.24.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* remove obsolete consumer helper ([4fcf85b](https://github.com/0xPlayerOne/code-foundry/commit/4fcf85b2c452e08aab47ec1fb6e00cdce5523cff))
+
 ## [0.24.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.23.1...v0.24.0) (2026-07-28)
 
 
