@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.3...v0.27.4) (2026-07-28)
+
+
+### Bug Fixes
+
+* **runtime:** resolve Python tools from virtualenv ([788b1ae](https://github.com/0xPlayerOne/code-foundry/commit/788b1ae438451ee57ce55a8669d2710cb8755fcf))
+
 ## [0.27.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.2...v0.27.3) (2026-07-28)
 
 
