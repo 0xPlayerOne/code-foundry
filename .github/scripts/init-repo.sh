@@ -11,6 +11,7 @@ force=false
 languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
 features="${REPO_FOUNDRY_FEATURES:-all}"
 package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-auto}"
+runtime_repository="${REPO_FOUNDRY_RUNTIME_REPOSITORY:-0xPlayerOne/code-foundry}"
 bootstrap=true
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
@@ -37,6 +38,7 @@ Options:
   --features LIST            all or comma-separated optional features:
                              ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME     auto, bun, pnpm, yarn, or npm
+  --runtime-repository OWNER/REPO  Reusable workflow runtime repository
   --release-type NAME        auto, node, python, rust, or simple
   --license NAME             agpl-3.0-or-later, mit, preserve, or none
   --license-file PATH        Use an exact custom license file
@@ -63,6 +65,7 @@ while [ "$#" -gt 0 ]; do
     --languages) languages="${2:?missing language list}"; shift 2 ;;
     --features) features="${2:?missing feature list}"; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; shift 2 ;;
+    --runtime-repository) runtime_repository="${2:?missing runtime repository}"; shift 2 ;;
     --release-type) release_type="${2:?missing release type}"; shift 2 ;;
     --license) license="${2:?missing license}"; shift 2 ;;
     --license-file) license_file="${2:?missing license file}"; shift 2 ;;
@@ -108,6 +111,7 @@ sync_args=(
   --languages "$languages"
   --features "$features"
   --package-manager "$package_manager"
+  --runtime-repository "$runtime_repository"
   --license "$license"
 )
 if [ -n "$license_file" ]; then sync_args+=(--license-file "$license_file"); fi
@@ -127,6 +131,7 @@ profile="$(awk -F': ' '/^profile:/ {print $2; exit}' .github/template.yml 2>/dev
 languages="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
 license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
@@ -139,6 +144,7 @@ license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml 2>/dev
   printf 'languages: %s\n' "$languages"
   printf 'features: %s\n' "$features"
   printf 'package_manager: %s\n' "$package_manager"
+  printf 'runtime_repository: %s\n' "$runtime_repository"
   printf 'release_type: %s\n' "$release_type"
   printf 'npm_publish: %s\n' "$npm_publish"
   printf 'license: %s\n' "$license"

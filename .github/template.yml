@@ -4,6 +4,7 @@ profile: auto
 languages: typescript
 features: all
 package_manager: bun
+runtime_repository: 0xPlayerOne/code-foundry
 release_type: node
 npm_publish: true
 license: agpl-3.0-or-later

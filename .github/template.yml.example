@@ -5,6 +5,7 @@ profile: auto
 languages: auto
 features: all
 package_manager: auto
+runtime_repository: 0xPlayerOne/code-foundry
 release_type: auto
 npm_publish: false
 license: preserve
