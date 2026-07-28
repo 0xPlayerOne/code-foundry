@@ -128,6 +128,7 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
+            src/lib
             src/runtime.mjs
       - name: Install runtime
         run: |
@@ -171,6 +172,7 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
+            src/lib
             src/runtime.mjs
       - name: Install runtime
         run: |
@@ -250,6 +252,7 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
+            src/lib
             src/runtime.mjs
       - name: Install runtime
         run: |
