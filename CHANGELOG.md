@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.3...v0.21.0) (2026-07-28)
+
+
+### Features
+
+* **runtime:** configure reusable workflow refs ([55f20d2](https://github.com/0xPlayerOne/code-foundry/commit/55f20d278f23ece1fed1166f1cad1b15c985ee90))
+
 ## [0.20.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.2...v0.20.3) (2026-07-28)
 
 
