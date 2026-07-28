@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.9](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.8...v0.27.9) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** hoist Bun workspace dependencies ([f480ad6](https://github.com/0xPlayerOne/code-foundry/commit/f480ad671cf12435f632d9397dbc8f72d7a2e8fe))
+
 ## [0.27.8](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.7...v0.27.8) (2026-07-28)
 
 
