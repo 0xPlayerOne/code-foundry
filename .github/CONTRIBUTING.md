@@ -74,17 +74,14 @@ If the worktree is dirty, stop and understand the existing changes before switch
 
 ## Local validation
 
-The template scripts detect supported tools and skip checks that do not apply:
+The repository runtime detects supported tools and skips checks that do not apply:
 
 ```sh
-bash .github/scripts/ci.sh format
-bash .github/scripts/ci.sh lint
-bash .github/scripts/ci.sh type_check
-bash .github/scripts/ci.sh build
-bash .github/scripts/ci.sh unit
-bash .github/scripts/ci.sh integration
-bash .github/scripts/ci.sh e2e
-bash .github/scripts/ci.sh smoke
+npx code-foundry doctor
+npm run format:check   # or the package manager's equivalent
+npm run lint
+npm run type-check
+npm test
 Security and dependency audits run through the GitHub Security workflow.
 ```
 

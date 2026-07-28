@@ -83,15 +83,14 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Detect
         id: profile
-        run: bash .github/scripts/security.sh profile >> "$GITHUB_OUTPUT"
+        run: node .code-foundry/src/runtime.mjs security profile >> "$GITHUB_OUTPUT"
 
   dependency-audit-javascript:
     name: Dependency Audit (JavaScript)
@@ -124,15 +123,14 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Detect
         id: applicability
-        run: bash .github/scripts/security.sh should_run javascript >> "$GITHUB_OUTPUT"
+        run: node .code-foundry/src/runtime.mjs security should_run javascript >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -141,7 +139,7 @@ jobs:
           cache-save: ${{ github.event_name != 'pull_request' }}
       - name: Audit dependencies
         if: steps.applicability.outputs.applicable == 'true'
-        run: bash .github/scripts/security.sh audit javascript
+        run: node .code-foundry/src/runtime.mjs security audit javascript
 
   dependency-audit-rust:
     name: Dependency Audit (Rust)
@@ -168,15 +166,14 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Detect
         id: applicability
-        run: bash .github/scripts/security.sh should_run rust >> "$GITHUB_OUTPUT"
+        run: node .code-foundry/src/runtime.mjs security should_run rust >> "$GITHUB_OUTPUT"
       - name: Check Rust
         id: system-rust
         if: steps.applicability.outputs.applicable == 'true'
@@ -204,7 +201,7 @@ jobs:
           tool: cargo-audit
       - name: Audit dependencies
         if: steps.applicability.outputs.applicable == 'true'
-        run: bash .github/scripts/security.sh audit rust
+        run: node .code-foundry/src/runtime.mjs security audit rust
 
   dependency-audit-python:
     name: Dependency Audit (Python) / ${{ matrix.requirement }}
@@ -248,19 +245,18 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Setup
         uses: ./.github/actions/setup
         with:
           mise-scope: python
           cache-save: ${{ github.event_name != 'pull_request' }}
       - name: Audit dependencies
-        run: bash .github/scripts/security.sh audit python
+        run: node .code-foundry/src/runtime.mjs security audit python
 
   dependency-audit-python-gate:
     name: Dependency Audit (Python)

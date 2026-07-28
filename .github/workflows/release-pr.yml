@@ -35,7 +35,7 @@ jobs:
             --base main \
             --head staging \
             --state open \
-            --json number | jq 'length')
+            --json number | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
           COMPARE_URL="repos/${GITHUB_REPOSITORY}/compare/main...staging"
           TOTAL_COMMITS=$(gh api "$COMPARE_URL?per_page=1" --jq '.total_commits // 0')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
@@ -53,12 +53,12 @@ jobs:
           COMPARE_URL="repos/${GITHUB_REPOSITORY}/compare/main...staging"
           COMPARE_FILE="$RUNNER_TEMP/release-compare.json"
           gh api "$COMPARE_URL?per_page=100" > "$COMPARE_FILE"
-          TOTAL_COMMITS=$(jq -r '.total_commits // 0' "$COMPARE_FILE")
+          TOTAL_COMMITS=$(node -e 'const d=require(process.argv[1]); console.log(d.total_commits || 0)' "$COMPARE_FILE")
           if [ "$TOTAL_COMMITS" -gt 100 ]; then
             LAST_PAGE=$(( (TOTAL_COMMITS + 99) / 100 ))
             gh api "$COMPARE_URL?per_page=100&page=$LAST_PAGE" > "$COMPARE_FILE"
           fi
-          COMMITS=$(jq -r '.commits[] | "- \(.commit.message | split("\\n")[0]) (\(.sha[0:7]))"' "$COMPARE_FILE")
+          COMMITS=$(node -e 'const d=require(process.argv[1]); for (const c of d.commits || []) console.log(`- ${c.commit.message.split("\\n")[0]} (${c.sha.slice(0, 7)})`)' "$COMPARE_FILE")
           if [ -z "$COMMITS" ]; then
             COMMITS='- No commits found since main.'
           fi

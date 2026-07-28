@@ -88,14 +88,14 @@ For normal feature work, branch from `staging` and target pull requests at `stag
 Use the shared scripts when present. They detect supported tools and skip inapplicable checks:
 
 ```sh
-bash .github/scripts/ci.sh format
-bash .github/scripts/ci.sh lint
-bash .github/scripts/ci.sh type_check
-bash .github/scripts/ci.sh build
-bash .github/scripts/ci.sh unit
-bash .github/scripts/ci.sh integration
-bash .github/scripts/ci.sh e2e
-bash .github/scripts/ci.sh smoke
+node src/runtime.mjs ci format
+node src/runtime.mjs ci lint
+node src/runtime.mjs ci type_check
+node src/runtime.mjs ci build
+node src/runtime.mjs ci unit
+node src/runtime.mjs ci integration
+node src/runtime.mjs ci e2e
+node src/runtime.mjs ci smoke
 Security and dependency audits run through the GitHub Security workflow.
 ```
 

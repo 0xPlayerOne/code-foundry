@@ -12,8 +12,7 @@ const standardFiles = [
   '.github/CODEOWNERS', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
   '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', '.github/dependabot.yml',
   '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml',
-  '.github/ISSUE_TEMPLATE/feature_request.yml', '.github/scripts/profile.sh',
-  '.github/scripts/changed-files.sh', '.github/scripts/ci.sh', '.github/scripts/pre-commit.sh',
+  '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/workflows/ci.yml', '.github/workflows/codeql.yml', '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
   '.github/workflows/security.yml', '.github/workflows/test.yml',
@@ -26,10 +25,12 @@ const protectedFiles = new Set([
 
 const legacyFiles = [
   '.github/code-foundry.yml.example', '.github/template.yml', '.github/template.yml.example',
-  '.github/scripts/bootstrap.sh', '.github/scripts/codeql-languages.sh', '.github/scripts/doctor.sh',
-  '.github/scripts/format-fast-path.sh', '.github/scripts/init-repo.sh', '.github/scripts/security.sh',
-  '.github/scripts/sync-codeowners.sh', '.github/scripts/sync-protection.sh',
-  '.github/scripts/turbo-cache-probe.sh', '.github/licenses/MIT.txt',
+  '.github/scripts/bootstrap.sh', '.github/scripts/changed-files.sh', '.github/scripts/ci.sh',
+  '.github/scripts/codeql-languages.sh', '.github/scripts/doctor.sh', '.github/scripts/format-fast-path.sh',
+  '.github/scripts/init-repo.sh', '.github/scripts/pre-commit.sh', '.github/scripts/profile.sh',
+  '.github/scripts/security.sh', '.github/scripts/sitecustomize.py', '.github/scripts/sync-codeowners.sh',
+  '.github/scripts/sync-protection.sh', '.github/scripts/sync-template.sh', '.github/scripts/turbo-cache-probe.sh',
+  '.github/licenses/MIT.txt',
   '.github/licenses/GPL-3.0-or-later.txt', '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
