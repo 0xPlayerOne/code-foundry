@@ -10,6 +10,17 @@ npx code-foundry sync [options]
 npx code-foundry doctor
 ```
 
+When `.github/code-foundry.yml` already exists, `init` treats it as the primary
+configuration and does not replace its values with CLI defaults. To use another
+file, pass it explicitly:
+
+```bash
+npx code-foundry init --config ./configs/code-foundry.yml
+```
+
+The file is copied to `.github/code-foundry.yml`, normalized, and used to render
+the standard callers. Later edits can be applied with `npx code-foundry sync`.
+
 Use `--dry-run` to preview changes. Use `--no-bootstrap` when the repository is
 being initialized in CI or on a machine without mise. Run
 `bash .github/scripts/bootstrap.sh` later to install tools, enable hooks, and
@@ -38,7 +49,7 @@ npx code-foundry init \
   --runtime-ref v1.2.3
 ```
 
-Both values are persisted in `.github/template.yml` and rendered into the
+Both values are persisted in `.github/code-foundry.yml` and rendered into the
 standard callers. `REPO_FOUNDRY_RUNTIME_REPOSITORY` and
 `REPO_FOUNDRY_RUNTIME_REF` provide equivalent environment/repository-variable
 overrides.
@@ -51,6 +62,6 @@ documentation. Existing licenses are preserved unless a license or license
 file is explicitly selected. Use `--force` only when intentionally refreshing
 protected standard documents.
 
-The initializer generates `.github/template.yml` as the repository-owned
+The initializer generates `.github/code-foundry.yml` as the repository-owned
 configuration contract. Keep project-specific settings there rather than
 editing generated workflow callers by hand.

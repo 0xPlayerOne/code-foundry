@@ -21,7 +21,7 @@ body. Existing `CHANGELOG.md` history remains repository-owned.
 
 ## Configuration
 
-Set these values in `.github/template.yml`:
+Set these values in `.github/code-foundry.yml`:
 
 ```yaml
 release_type: auto   # auto, node, python, rust, simple, or none

@@ -13,6 +13,7 @@ Options:
   --languages LIST  auto or comma-separated: typescript,rust,python,solidity
   --features LIST   all or comma-separated standard features
   --package-manager NAME  auto, bun, pnpm, yarn, or npm
+  --config PATH  Use a .github/code-foundry.yml configuration file
   --runtime-repository OWNER/REPO  Reusable workflow runtime repository
   --runtime-ref REF  Reusable workflow runtime tag or branch
   --license NAME     preserve, agpl-3.0-or-later, mit, or none
@@ -27,11 +28,13 @@ EOF
 source_ref="main"
 mode="check"
 source=""
+config_file="${REPO_FOUNDRY_CONFIG:-}"
 temp_dir=""
 profile="${REPO_FOUNDRY_PROFILE:-auto}"
 languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
 features="${REPO_FOUNDRY_FEATURES:-all}"
 prune=false
+prune_set=false
 force=false
 languages_set=false
 profile_set=false
@@ -51,14 +54,30 @@ runtime_ref_set=false
 template_ref=""
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
+prune_standard="${REPO_FOUNDRY_PRUNE_STANDARD:-false}"
+runner="${REPO_FOUNDRY_RUNNER:-}"
+unit_runner="${REPO_FOUNDRY_UNIT_RUNNER:-}"
+ci_runner="${REPO_FOUNDRY_CI_RUNNER:-}"
+test_runner="${REPO_FOUNDRY_TEST_RUNNER:-}"
+security_runner="${REPO_FOUNDRY_SECURITY_RUNNER:-}"
+codeql_runner="${REPO_FOUNDRY_CODEQL_RUNNER:-}"
+pr_runner="${REPO_FOUNDRY_PR_RUNNER:-}"
+release_runner="${REPO_FOUNDRY_RELEASE_RUNNER:-}"
+cache_packages="${REPO_FOUNDRY_CACHE_PACKAGES:-}"
+cache_build="${REPO_FOUNDRY_CACHE_BUILD:-}"
+coverage_minimum="${REPO_FOUNDRY_COVERAGE_MINIMUM:-}"
+turbo_remote="${REPO_FOUNDRY_TURBO_REMOTE:-}"
 license="${REPO_FOUNDRY_LICENSE:-preserve}"
 license_file="${REPO_FOUNDRY_LICENSE_FILE:-}"
 release_type_set=false
 npm_publish_set=false
 license_set=false
+license_file_set=false
 [ -n "${REPO_FOUNDRY_RELEASE_TYPE:-}" ] && release_type_set=true
 [ -n "${REPO_FOUNDRY_NPM_PUBLISH:-}" ] && npm_publish_set=true
+[ -n "${REPO_FOUNDRY_PRUNE_STANDARD:-}" ] && prune_set=true
 [ -n "${REPO_FOUNDRY_LICENSE:-}" ] && license_set=true
+[ -n "${REPO_FOUNDRY_LICENSE_FILE:-}" ] && license_file_set=true
 node_version="24.18.0"
 bun_version="1.3.14"
 python_version="3.13"
@@ -108,6 +127,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --source) source="${2:?missing source path or URL}"; shift 2 ;;
     --ref) source_ref="${2:?missing ref}"; shift 2 ;;
+    --config) config_file="${2:?missing config path}"; shift 2 ;;
     --profile) profile="${2:?missing profile}"; profile_set=true; shift 2 ;;
     --languages) languages="${2:?missing language list}"; languages_set=true; shift 2 ;;
     --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
@@ -115,10 +135,10 @@ while [ "$#" -gt 0 ]; do
     --runtime-repository) runtime_repository="${2:?missing runtime repository}"; runtime_repository_set=true; shift 2 ;;
     --runtime-ref) runtime_ref="${2:?missing runtime ref}"; runtime_ref_set=true; shift 2 ;;
     --license) license="${2:?missing license}"; license_set=true; shift 2 ;;
-    --license-file) license_file="${2:?missing license file}"; shift 2 ;;
+    --license-file) license_file="${2:?missing license file}"; license_file_set=true; shift 2 ;;
     --check) mode="check"; shift ;;
     --apply) mode="apply"; shift ;;
-    --prune) prune=true; shift ;;
+    --prune) prune=true; prune_set=true; shift ;;
     --force) force=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
@@ -126,43 +146,91 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$source" ] || { usage >&2; exit 2; }
-if [ -f .github/template.yml ]; then
+if [ -n "$config_file" ]; then
+  [ -f "$config_file" ] || { printf 'Configuration file not found: %s\n' "$config_file" >&2; exit 1; }
+  mkdir -p .github
+  if [ "$(cd -- "$(dirname -- "$config_file")" && pwd)/$(basename -- "$config_file")" != "$(pwd)/.github/code-foundry.yml" ]; then
+    cp "$config_file" .github/code-foundry.yml
+  fi
+fi
+config_path=.github/code-foundry.yml
+[ -f "$config_path" ] || config_path=.github/template.yml
+if [ -f "$config_path" ]; then
+  config_value() {
+    awk -F': ' -v key="$1" '$1 == key { value=$2; sub(/[[:space:]]+#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit }' "$config_path"
+  }
   if [ "$profile_set" = false ]; then
-    configured_profile="$(awk -F': ' '/^profile:/ {print $2; exit}' .github/template.yml)"
+    configured_profile="$(config_value profile)"
     [ -n "$configured_profile" ] && profile="$configured_profile"
   fi
   if [ "$languages_set" = false ]; then
-    configured_languages="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml)"
+    configured_languages="$(config_value languages)"
     [ -n "$configured_languages" ] && languages="$configured_languages"
   fi
   if [ "$features_set" = false ]; then
-    configured_features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml)"
+    configured_features="$(config_value features)"
     [ -n "$configured_features" ] && features="$configured_features"
   fi
   if [ "$package_manager_set" = false ]; then
-    package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
+    package_manager="$(config_value package_manager)"
   fi
   if [ "$runtime_repository_set" = false ]; then
-    runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' .github/template.yml)"
+    runtime_repository="$(config_value runtime_repository)"
   fi
   if [ "$runtime_ref_set" = false ]; then
-    runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' .github/template.yml)"
+    runtime_ref="$(config_value runtime_ref)"
   fi
-  template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml)"
+  template_ref="$(config_value template)"
   if [ "$release_type_set" != true ]; then
-    configured_release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml)"
+    configured_release_type="$(config_value release_type)"
     [ -n "$configured_release_type" ] && release_type="$configured_release_type"
   fi
   if [ "$npm_publish_set" != true ]; then
-    configured_npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml)"
+    configured_npm_publish="$(config_value npm_publish)"
     [ -n "$configured_npm_publish" ] && npm_publish="$configured_npm_publish"
   fi
   if [ "$license_set" != true ]; then
-    configured_license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml)"
+    configured_license="$(config_value license)"
     [ -n "$configured_license" ] && license="$configured_license"
   fi
+  if [ "$license_file_set" = false ]; then
+    license_file="$(config_value license_file)"
+  fi
+  if [ "$prune_set" = false ]; then
+    configured_prune="$(config_value prune_standard)"
+    [ -n "$configured_prune" ] && prune_standard="$configured_prune"
+  fi
+  [ -n "$runner" ] || runner="$(config_value runner)"
+  [ -n "$unit_runner" ] || unit_runner="$(config_value unit_runner)"
+  [ -n "$ci_runner" ] || ci_runner="$(config_value ci_runner)"
+  [ -n "$test_runner" ] || test_runner="$(config_value test_runner)"
+  [ -n "$security_runner" ] || security_runner="$(config_value security_runner)"
+  [ -n "$codeql_runner" ] || codeql_runner="$(config_value codeql_runner)"
+  [ -n "$pr_runner" ] || pr_runner="$(config_value pr_runner)"
+  [ -n "$release_runner" ] || release_runner="$(config_value release_runner)"
+  [ -n "$cache_packages" ] || cache_packages="$(config_value cache_packages)"
+  [ -n "$cache_build" ] || cache_build="$(config_value cache_build)"
+  [ -n "$coverage_minimum" ] || coverage_minimum="$(config_value coverage_minimum)"
+  [ -n "$turbo_remote" ] || turbo_remote="$(config_value turbo_remote)"
 fi
 [ -n "$package_manager" ] || package_manager=auto
+[ -n "$runner" ] || runner=ubuntu-latest
+[ -n "$unit_runner" ] || unit_runner=ubuntu-slim
+[ -n "$ci_runner" ] || ci_runner="$runner"
+[ -n "$test_runner" ] || test_runner="$runner"
+[ -n "$security_runner" ] || security_runner=ubuntu-slim
+[ -n "$codeql_runner" ] || codeql_runner="$runner"
+[ -n "$pr_runner" ] || pr_runner=ubuntu-slim
+[ -n "$release_runner" ] || release_runner=ubuntu-slim
+[ -n "$cache_packages" ] || cache_packages=auto
+[ -n "$cache_build" ] || cache_build=auto
+[ -n "$coverage_minimum" ] || coverage_minimum=80
+[ -n "$turbo_remote" ] || turbo_remote=auto
+[ "$prune_standard" = true ] || [ "$prune_standard" = false ] || {
+  printf 'prune_standard must be true or false: %s\n' "$prune_standard" >&2
+  exit 2
+}
+[ "$prune_standard" = true ] && prune=true
 if [ -z "$runtime_repository" ]; then
   source_repository="$source"
   if [ -d "$source" ]; then
@@ -194,6 +262,11 @@ case "$license" in
   *) printf 'Unsupported license: %s\n' "$license" >&2; exit 2 ;;
 esac
 [ -z "$license_file" ] || license=custom
+for configured_runner in "$runner" "$unit_runner" "$ci_runner" "$test_runner" "$security_runner" "$codeql_runner" "$pr_runner" "$release_runner"; do
+  case "$configured_runner" in
+    ''|*[!A-Za-z0-9._/-]*) printf 'Runner contains unsupported characters: %s\n' "$configured_runner" >&2; exit 2 ;;
+  esac
+done
 
 if [ -d "$source" ] && [ -f "$source/.github/scripts/sync-template.sh" ]; then
   template_root="$source"
@@ -206,8 +279,10 @@ fi
 
 # Prefer an explicit CLI/environment value, then the target's saved contract,
 # then the source template's contract, and finally the stable public runtime.
-if [ -z "$runtime_ref" ] && [ -f "$template_root/.github/template.yml" ]; then
-  runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' "$template_root/.github/template.yml")"
+source_config="$template_root/.github/code-foundry.yml"
+[ -f "$source_config" ] || source_config="$template_root/.github/template.yml"
+if [ -z "$runtime_ref" ] && [ -f "$source_config" ]; then
+  runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' "$source_config")"
 fi
 [ -n "$runtime_ref" ] || runtime_ref="v0.20.2"
 case "$runtime_ref" in
@@ -253,7 +328,7 @@ files=(
   ruff.toml
   .prettierrc
   .github/CODEOWNERS
-  .github/template.yml.example
+  .github/code-foundry.yml.example
   .github/CODE_OF_CONDUCT.md
   .github/CONTRIBUTING.md
   .github/PULL_REQUEST_TEMPLATE.md
@@ -264,6 +339,8 @@ files=(
   .github/ISSUE_TEMPLATE/feature_request.yml
   .github/scripts/profile.sh
   .github/scripts/bootstrap.sh
+  # Keep the small local hook runner and its changed-file helper; the full
+  # CI/security implementations used by Actions are loaded from the runtime.
   .github/scripts/changed-files.sh
   .github/scripts/ci.sh
   .github/scripts/doctor.sh
@@ -394,9 +471,11 @@ done
 # the source's configured runtime first so forks remain self-contained.
 source_runtime_repository=""
 source_runtime_ref=""
-if [ -f "$template_root/.github/template.yml" ]; then
-  source_runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' "$template_root/.github/template.yml")"
-  source_runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' "$template_root/.github/template.yml")"
+source_config="$template_root/.github/code-foundry.yml"
+[ -f "$source_config" ] || source_config="$template_root/.github/template.yml"
+if [ -f "$source_config" ]; then
+  source_runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' "$source_config")"
+  source_runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' "$source_config")"
 fi
 [ -n "$source_runtime_repository" ] || source_runtime_repository="0xPlayerOne/code-foundry"
 [ -n "$source_runtime_ref" ] || source_runtime_ref="$runtime_ref"
@@ -407,10 +486,21 @@ for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflow
     if [ "$mode" = "check" ]; then
       printf 'Would render runtime repository in %s\n' "$file"
     else
+      runner_value="$runner"
+      case "$file" in
+        .github/workflows/ci.yml) runner_value="$ci_runner" ;;
+        .github/workflows/test.yml) runner_value="$test_runner" ;;
+        .github/workflows/security.yml) runner_value="$security_runner" ;;
+        .github/workflows/codeql.yml) runner_value="$codeql_runner" ;;
+        .github/workflows/draft-pr.yml|.github/workflows/release-pr.yml) runner_value="$pr_runner" ;;
+        .github/workflows/release.yml) runner_value="$release_runner" ;;
+      esac
       rendered_workflow="$(mktemp)"
       sed -E \
         -e "s#${source_runtime_repository}@[^[:space:]]+#${runtime_repository}@${runtime_ref}#g" \
         -e "s#runtime-ref: [^[:space:]]+#runtime-ref: ${runtime_ref}#g" \
+        -e "s#^      runner: [^[:space:]]+#      runner: ${runner_value}#" \
+        -e "s#^      unit-runner: [^[:space:]]+#      unit-runner: ${unit_runner}#" \
         "$file" > "$rendered_workflow"
       mv "$rendered_workflow" "$file"
       printf 'Rendered runtime repository in %s\n' "$file"
@@ -592,10 +682,26 @@ if [ "$mode" = "apply" ]; then
     fi
     printf 'runtime_repository: %s\n' "$runtime_repository"
     printf 'runtime_ref: %s\n' "$runtime_ref"
+    printf 'runner: %s\n' "$runner"
+    printf 'unit_runner: %s\n' "$unit_runner"
+    printf 'ci_runner: %s\n' "$ci_runner"
+    printf 'test_runner: %s\n' "$test_runner"
+    printf 'security_runner: %s\n' "$security_runner"
+    printf 'codeql_runner: %s\n' "$codeql_runner"
+    printf 'pr_runner: %s\n' "$pr_runner"
+    printf 'release_runner: %s\n' "$release_runner"
+    printf 'prune_standard: %s\n' "$prune_standard"
+    printf 'cache_packages: %s\n' "$cache_packages"
+    printf 'cache_build: %s\n' "$cache_build"
+    printf 'coverage_minimum: %s\n' "$coverage_minimum"
+    printf 'turbo_remote: %s\n' "$turbo_remote"
     printf 'release_type: %s\n' "$release_type"
     printf 'npm_publish: %s\n' "$npm_publish"
     printf 'license: %s\n' "$license"
-  } > .github/template.yml
+    if [ -n "$license_file" ]; then
+      printf 'license_file: %s\n' "$license_file"
+    fi
+  } > .github/code-foundry.yml
 fi
 
 if [ "$prune" = true ]; then
@@ -611,6 +717,15 @@ if [ "$prune" = true ]; then
       fi
     fi
   done
+  if [ -f .github/dependabot.yml ] && ! workflow_enabled dependabot; then
+    changed=$((changed + 1))
+    if [ "$mode" = "check" ]; then
+      printf 'Would remove disabled standard configuration .github/dependabot.yml\n'
+    else
+      rm .github/dependabot.yml
+      printf '%s\n' 'Removed disabled standard configuration .github/dependabot.yml'
+    fi
+  fi
 fi
 
 printf '%s\n' "$changed baseline file(s) differ."

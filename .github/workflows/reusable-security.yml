@@ -12,7 +12,12 @@ on:
         description: Code Foundry runtime tag or ref.
         required: false
         type: string
-        default: v0.20.0
+        default: v0.20.2
+      runner:
+        description: Runner used by Security jobs.
+        required: false
+        type: string
+        default: ubuntu-slim
 
 permissions:
   contents: read
@@ -32,7 +37,7 @@ concurrency:
 jobs:
   profile:
     name: Profile
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
       javascript: ${{ steps.profile.outputs.javascript }}
@@ -90,7 +95,7 @@ jobs:
 
   dependency-audit-javascript:
     name: Dependency Audit (JavaScript)
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -140,7 +145,7 @@ jobs:
 
   dependency-audit-rust:
     name: Dependency Audit (Rust)
-    runs-on: ${{ vars.REPO_FOUNDRY_RUST_AUDIT_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -213,7 +218,7 @@ jobs:
       max-parallel: 8
       matrix:
         requirement: ${{ fromJSON(needs.profile.outputs.python_requirements) }}
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     env:
       REPO_FOUNDRY_PYTHON_REQUIREMENT: ${{ matrix.requirement }}
@@ -261,7 +266,7 @@ jobs:
     name: Dependency Audit (Python)
     needs: [profile, dependency-audit-python]
     if: always()
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     steps:
       - name: Gate
@@ -281,7 +286,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:
       - name: Review

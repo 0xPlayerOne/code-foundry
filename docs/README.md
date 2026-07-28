@@ -7,6 +7,7 @@ its own names, environments, and deployment details.
 ## Guides
 
 - [Initialization and synchronization](INITIALIZATION.md)
+- [Configuration reference](CONFIGURATION.md)
 - [Workflow and CI conventions](WORKFLOWS.md)
 - [Release management](RELEASES.md)
 - [Publishing packages](PUBLISHING.md)

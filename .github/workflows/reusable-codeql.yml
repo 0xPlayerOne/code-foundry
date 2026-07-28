@@ -12,7 +12,12 @@ on:
         description: Code Foundry runtime tag or ref.
         required: false
         type: string
-        default: v0.20.0
+        default: v0.20.2
+      runner:
+        description: Runner used by CodeQL jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
 
 permissions:
   actions: read
@@ -32,7 +37,7 @@ concurrency:
 jobs:
   detect:
     name: Detect
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
       languages: ${{ steps.languages.outputs.languages }}
@@ -115,7 +120,7 @@ jobs:
       ( !github.event.repository.private || needs.detect.outputs.code_security == 'enabled' ) &&
       needs.detect.outputs.actions_available == 'true' &&
       needs.detect.outputs.actions_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -148,7 +153,7 @@ jobs:
       ( !github.event.repository.private || needs.detect.outputs.code_security == 'enabled' ) &&
       needs.detect.outputs.javascript_available == 'true' &&
       needs.detect.outputs.javascript_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -181,7 +186,7 @@ jobs:
       ( !github.event.repository.private || needs.detect.outputs.code_security == 'enabled' ) &&
       needs.detect.outputs.python_available == 'true' &&
       needs.detect.outputs.python_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -214,7 +219,7 @@ jobs:
       ( !github.event.repository.private || needs.detect.outputs.code_security == 'enabled' ) &&
       needs.detect.outputs.rust_available == 'true' &&
       needs.detect.outputs.rust_changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout

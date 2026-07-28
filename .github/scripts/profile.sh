@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Resolve repository settings with this precedence:
 # explicit REPO_FOUNDRY_* values (CLI callers can export them), then
-# .github/template.yml, then detected defaults.
+# .github/code-foundry.yml, then detected defaults. A legacy
+# .github/template.yml is accepted during migration.
 
 root="${REPO_FOUNDRY_ROOT:-$PWD}"
 command="detect"
@@ -31,12 +32,13 @@ while [ "$#" -gt 0 ]; do
 done
 
 cd "$root"
-template_file=.github/template.yml
+template_file=.github/code-foundry.yml
+[ -f "$template_file" ] || template_file=.github/template.yml
 
 config_value() {
   local key="$1"
   [ -f "$template_file" ] || return 0
-  awk -F': *' -v key="$key" '$1 == key { print substr($0, index($0, ":") + 1); exit }' "$template_file" |
+  awk -F': *' -v key="$key" '$1 == key { value=substr($0, index($0, ":") + 1); sub(/[[:space:]]+#.*/, "", value); print value; exit }' "$template_file" |
     sed -e 's/^ *//' -e 's/ *$//' -e 's/^['"'"'"]//' -e 's/['"'"'"]$//'
 }
 
@@ -159,10 +161,17 @@ detect() {
   printf 'npm_publish=%s\n' "$npm_publish"
   printf 'runner=%s\n' "$runner"
   printf 'unit_runner=%s\n' "$unit_runner"
+  printf 'ci_runner=%s\n' "$(raw_value ci_runner "$runner")"
+  printf 'test_runner=%s\n' "$(raw_value test_runner "$runner")"
+  printf 'security_runner=%s\n' "$(raw_value security_runner ubuntu-slim)"
+  printf 'codeql_runner=%s\n' "$(raw_value codeql_runner "$runner")"
+  printf 'pr_runner=%s\n' "$(raw_value pr_runner ubuntu-slim)"
+  printf 'release_runner=%s\n' "$(raw_value release_runner ubuntu-slim)"
   printf 'cache_packages=%s\n' "$(raw_value cache_packages auto)"
   printf 'cache_build=%s\n' "$(raw_value cache_build auto)"
   printf 'coverage_minimum=%s\n' "$(raw_value coverage_minimum 80)"
   printf 'turbo_remote=%s\n' "$(raw_value turbo_remote auto)"
+  printf 'prune_standard=%s\n' "$(raw_value prune_standard false)"
 }
 
 case "$command" in
