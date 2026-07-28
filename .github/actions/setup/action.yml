@@ -457,6 +457,14 @@ runs:
       with:
         bun-version: 1.3.14
 
+    - name: Enable Corepack
+      if: >-
+        steps.profile.outputs.toolchain_mode != 'mise' &&
+        (steps.profile.outputs.javascript_package_manager == 'pnpm' ||
+        steps.profile.outputs.javascript_package_manager == 'yarn')
+      shell: bash
+      run: corepack enable
+
     - name: Setup Python
       if: steps.profile.outputs.toolchain_mode != 'mise' && steps.profile.outputs.python == 'true'
       uses: actions/setup-python@v6
@@ -697,7 +705,7 @@ runs:
         path: ~/.cargo/advisory-db
         # The advisory database is independent of project dependencies. Keep
         # it warm for Security without invalidating it on every lockfile edit.
-        key: ${{ runner.os }}-rust-advisory-${{ hashFiles('.github/scripts/security.sh') }}
+        key: ${{ runner.os }}-rust-advisory-${{ hashFiles('.code-foundry/src/runtime.mjs') }}
         restore-keys: |
           ${{ runner.os }}-rust-advisory-
     - name: Cache Rust builds
@@ -740,7 +748,7 @@ runs:
         REPO_FOUNDRY_INSTALL_PYTHON: ${{ inputs.install-python }}
         REPO_FOUNDRY_INSTALL_RUST: ${{ inputs.install-rust }}
         REPO_FOUNDRY_TASK: ${{ inputs.task }}
-      run: bash .github/scripts/ci.sh install
+      run: node .code-foundry/src/runtime.mjs ci install
     - name: Measure Bun dependencies
       id: javascript-bun-cache
       if: >-

@@ -41,36 +41,24 @@ jobs:
           filter: blob:none
       - name: Detect release profile
         id: profile
-        shell: bash
         run: |
-          if [ -x .github/scripts/profile.sh ]; then
-            release_type="$(bash .github/scripts/profile.sh get release_type)"
-            npm_publish="$(bash .github/scripts/profile.sh get npm_publish)"
-          else
-            config_file=.github/code-foundry.yml
-            release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' "$config_file" 2>/dev/null || true)"
-            npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' "$config_file" 2>/dev/null || true)"
-          fi
-          [ -n "$release_type" ] || release_type=auto
-          [ -n "$npm_publish" ] || npm_publish=false
-
-          if [ "$release_type" = auto ]; then
-            if [ -f package.json ]; then release_type=node
-            elif [ -f pyproject.toml ]; then release_type=python
-            elif [ -f Cargo.toml ]; then release_type=rust
-            elif [ -f version.txt ]; then release_type=simple
-            else release_type=none
-            fi
-          fi
-
-          case "$release_type" in
-            node|python|rust|simple) ;;
-            none) npm_publish=false ;;
-            *) echo "Unsupported release_type: $release_type" >&2; exit 2 ;;
-          esac
-          if [ ! -f package.json ]; then npm_publish=false; fi
-          printf 'release_type=%s\n' "$release_type" >> "$GITHUB_OUTPUT"
-          printf 'npm_publish=%s\n' "$npm_publish" >> "$GITHUB_OUTPUT"
+          node <<'NODE'
+          const fs = require('node:fs')
+          const config = fs.existsSync('.github/code-foundry.yml')
+            ? Object.fromEntries(fs.readFileSync('.github/code-foundry.yml', 'utf8').split(/\r?\n/).flatMap((line) => {
+                const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
+                return match ? [[match[1], match[2].replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')]] : []
+              }))
+            : {}
+          let releaseType = config.release_type || 'auto'
+          let npmPublish = config.npm_publish || 'false'
+          if (releaseType === 'auto') {
+            releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
+          }
+          if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
+          if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_type=${releaseType}\nnpm_publish=${npmPublish}\n`)
+          NODE
       - name: Release Please
         id: release
         if: steps.profile.outputs.release_type != 'none'

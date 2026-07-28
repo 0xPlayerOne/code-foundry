@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { doctor } from './commands/doctor.mjs'
 import { syncRepository } from './commands/sync.mjs'
@@ -62,49 +60,23 @@ function parseArgs(argv) {
   return { command, options }
 }
 
-/** @param {string} script @param {string[]} args @param {string} target */
-function run(script, args, target) {
-  const scriptPath = resolve(packageRoot, '.github/scripts', script)
-  if (!existsSync(scriptPath)) fail(`package is missing ${script}`)
-  const result = spawnSync('bash', [scriptPath, ...args], {
-    cwd: target,
-    stdio: 'inherit',
-    env: process.env,
-  })
-  if (result.error) fail(result.error.message)
-  if (result.status !== 0) process.exit(result.status ?? 1)
-}
-
 function main() {
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
-  const common = ['--source', packageRoot, '--ref', 'main']
-  if (options.dryRun) common.push('--check')
-  else common.push('--apply')
-  if (options.force) common.push('--force')
 
-  if (command === 'init' && process.env.CODE_FOUNDRY_BASH_FALLBACK !== '1') {
+  if (command === 'init') {
     try {
       syncRepository({ target, source: packageRoot, dryRun: options.dryRun, force: options.force, init: true })
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
-  }
-  else if (command === 'sync' && process.env.CODE_FOUNDRY_BASH_FALLBACK !== '1') {
+  } else if (command === 'sync') {
     try {
       syncRepository({ target, source: packageRoot, dryRun: options.dryRun, force: options.force })
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
-  }
-  else if (command === 'init') {
-    const initArgs = ['--source', packageRoot, '--ref', 'main']
-    if (options.dryRun) initArgs.push('--dry-run')
-    if (options.force) initArgs.push('--force')
-    run('init-repo.sh', initArgs, target)
-  }
-  else if (command === 'sync') run('sync-template.sh', common, target)
-  else if (command === 'doctor') {
+  } else if (command === 'doctor') {
     try {
       doctor(target)
     } catch (error) {

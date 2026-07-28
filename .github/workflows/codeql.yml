@@ -93,13 +93,12 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         if: ${{ !github.event.repository.private || steps.security.outputs.status == 'enabled' }}
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - id: languages
         name: Detect languages
         env:
@@ -110,7 +109,7 @@ jobs:
           if [ "$REPO_FOUNDRY_PRIVATE" = "true" ] && [ "$REPO_FOUNDRY_CODE_SECURITY" != "enabled" ]; then
             echo 'languages=[]' >> "$GITHUB_OUTPUT"
           else
-            bash .github/scripts/codeql-languages.sh
+            node .code-foundry/src/runtime.mjs codeql
           fi
 
   analyze-actions:
@@ -133,12 +132,11 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Analyze
         uses: ./.github/actions/codeql
         with:
@@ -166,12 +164,11 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Analyze
         uses: ./.github/actions/codeql
         with:
@@ -199,12 +196,11 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Analyze
         uses: ./.github/actions/codeql
         with:
@@ -232,12 +228,11 @@ jobs:
           path: .code-foundry
           sparse-checkout: |
             .github/actions
-            .github/scripts
+            src/runtime.mjs
       - name: Install runtime
         run: |
-          mkdir -p .github/actions .github/scripts
+          mkdir -p .github/actions
           cp -R .code-foundry/.github/actions/. .github/actions/
-          cp -R .code-foundry/.github/scripts/. .github/scripts/
       - name: Analyze
         uses: ./.github/actions/codeql
         with:
