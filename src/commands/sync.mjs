@@ -74,7 +74,10 @@ export function syncRepository(options) {
     const sourceFile = sourcePath(source, file)
     if (!existsSync(sourceFile)) throw new Error(`Template file missing: ${file}`)
     const destination = join(target, file)
-    if (!force && protectedFiles.has(file) && existsSync(destination)) continue
+    if (!force && protectedFiles.has(file) && existsSync(destination)) {
+      const existing = readFileSync(destination, 'utf8')
+      if (!isLegacyManagedDoc(file, existing)) continue
+    }
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'preserve' && existsSync(destination)) continue
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'none') continue
     if (file === '.github/CODEOWNERS' && existsSync(destination)) continue
@@ -171,6 +174,17 @@ function mergeGitignore(baseline, existing) {
   const marker = '# Repository-specific rules'
   const custom = existing.includes(marker) ? existing.slice(existing.indexOf(marker) + marker.length).trim() : ''
   return custom ? `${baseline.trimEnd()}\n\n${marker}\n${custom}\n` : baseline
+}
+
+/** @param {string} file @param {string} content */
+function isLegacyManagedDoc(file, content) {
+  if (file === 'AGENTS.md') {
+    return content.includes('.github/scripts/bootstrap.sh') && content.includes('bash .github/scripts/ci.sh')
+  }
+  if (file === '.github/CONTRIBUTING.md') {
+    return content.includes('.github/scripts/bootstrap.sh') && content.includes('.github/template.yml')
+  }
+  return false
 }
 
 /** @param {string} target @param {string[]} args */
