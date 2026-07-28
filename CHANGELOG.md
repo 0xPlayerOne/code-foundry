@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.25.0...v0.26.0) (2026-07-28)
+
+
+### Features
+
+* default new repositories to gplv3 ([e200135](https://github.com/0xPlayerOne/code-foundry/commit/e200135939779693eb73a64aaf3587eccdc36ffc))
+
 ## [0.25.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.24.1...v0.25.0) (2026-07-28)
 
 
