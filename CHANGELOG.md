@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.0...v0.27.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** cover framework and native test prerequisites ([53b8209](https://github.com/0xPlayerOne/code-foundry/commit/53b8209104cf52972e867eba65fed46d0b8f57bb))
+* **ci:** install project format and Python tooling ([13fb972](https://github.com/0xPlayerOne/code-foundry/commit/13fb972e774e26c2d5794421a17c4ac685a28b0c))
+
 ## [0.27.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.26.0...v0.27.0) (2026-07-28)
 
 
