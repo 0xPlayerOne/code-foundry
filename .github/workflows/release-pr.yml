@@ -51,24 +51,37 @@ jobs:
             COMMITS='- No commits found since main.'
           fi
 
+          if [ "$TOTAL_COMMITS" -eq 1 ]; then
+            CHANGE_LABEL=change
+          else
+            CHANGE_LABEL=changes
+          fi
+
           cat > "$BODY_FILE" <<EOF
-          ## Release summary
+          ## Environment promotion
 
-          Automated release PR from \`staging\` into \`main\` created on $DATE.
+          Promote the validated \`staging\` environment into \`main\`.
+          This is a deployment-promotion PR, not the version-release PR.
 
-          ### Changes since main
+          - **Source:** \`staging\`
+          - **Target:** \`main\`
+          - **Changes:** $TOTAL_COMMITS $CHANGE_LABEL
+          - **Created:** $DATE
+
+          ### Commit summary
 
           $COMMITS
 
           ### Validation
 
-          - CI and security checks must pass before merge.
-          - Review migrations, configuration changes, and rollback notes.
+          - Required CI, test, security, and CodeQL checks must pass before merge.
+          - Merge with **rebase** to preserve the linear Conventional Commit history.
+          - After merge, Release Please opens a separate versioned release PR with the changelog.
           EOF
 
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base main \
             --head staging \
-            --title "Release: staging -> main ($DATE)" \
+            --title "Promote staging -> main ($DATE)" \
             --body-file "$BODY_FILE"
