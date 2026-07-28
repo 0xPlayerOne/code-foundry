@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.22.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.21.2...v0.22.0) (2026-07-28)
+
+
+### Features
+
+* centralize repository configuration ([e1b4ef1](https://github.com/0xPlayerOne/code-foundry/commit/e1b4ef19ab1ecc899c06331cbfd3477062a73549))
+
+
+### Bug Fixes
+
+* bridge legacy runtime configuration ([d906b0d](https://github.com/0xPlayerOne/code-foundry/commit/d906b0d8f0bc65d2697ababbd5ab658ca2193684))
+* keep legacy runtime callers valid ([c23f9e2](https://github.com/0xPlayerOne/code-foundry/commit/c23f9e2980bfcb8a0b7c685f1a9ba6d26f215eba))
+
 ## [0.21.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.21.1...v0.21.2) (2026-07-28)
 
 
