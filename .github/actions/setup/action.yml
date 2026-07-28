@@ -438,6 +438,24 @@ runs:
         REPO_FOUNDRY_TASK_RUST: ${{ inputs.task-rust }}
         REPO_FOUNDRY_CACHE_PACKAGES: ${{ inputs.cache-packages }}
 
+    - name: Install native test libraries
+      if: >-
+        inputs.install == 'true' &&
+        inputs.task == 'unit' &&
+        hashFiles('**/package.json') != '' &&
+        steps.profile.outputs.javascript == 'true'
+      shell: bash
+      run: |
+        if node -e '
+          const fs = require("node:fs");
+          const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const all = { ...p.dependencies, ...p.devDependencies, ...p.optionalDependencies };
+          process.exit(all["matchstick-as"] ? 0 : 1);
+        ' 2>/dev/null; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libpq5
+        fi
+
     - name: Setup Node
       if: >-
         steps.profile.outputs.toolchain_mode != 'mise' &&
