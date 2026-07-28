@@ -243,17 +243,11 @@ files=(
   .github/ISSUE_TEMPLATE/bug_report.yml
   .github/ISSUE_TEMPLATE/config.yml
   .github/ISSUE_TEMPLATE/feature_request.yml
-  .github/actions/setup/action.yml
-  .github/actions/cache/action.yml
-  .github/actions/codeql/action.yml
   .github/scripts/profile.sh
   .github/scripts/bootstrap.sh
   .github/scripts/changed-files.sh
   .github/scripts/ci.sh
-  .github/scripts/codeql-languages.sh
   .github/scripts/doctor.sh
-  .github/scripts/security.sh
-  .github/scripts/sitecustomize.py
   .github/scripts/pre-commit.sh
   .github/scripts/sync-template.sh
   .github/scripts/init-repo.sh
