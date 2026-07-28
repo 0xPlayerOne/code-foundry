@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.13.0...v0.14.0) (2026-07-28)
+
+
+### Features
+
+* **init:** minimize consumer workflow footprint ([4427c1f](https://github.com/0xPlayerOne/code-foundry/commit/4427c1f964c3a0dc6ffe080ea3779ad2b8a1d170))
+
 ## [0.13.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.12.0...v0.13.0) (2026-07-28)
 
 
