@@ -18,6 +18,7 @@ Options:
   --check           Preview changes (default)
   --apply           Apply changes
   --prune           Remove disabled standard workflows
+  --force           Replace protected standard docs/templates
 EOF
 }
 
@@ -29,6 +30,7 @@ profile="${REPO_FOUNDRY_PROFILE:-auto}"
 languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
 features="${REPO_FOUNDRY_FEATURES:-all}"
 prune=false
+force=false
 languages_set=false
 profile_set=false
 features_set=false
@@ -107,6 +109,7 @@ while [ "$#" -gt 0 ]; do
     --check) mode="check"; shift ;;
     --apply) mode="apply"; shift ;;
     --prune) prune=true; shift ;;
+    --force) force=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -270,6 +273,14 @@ standard_workflow() {
   esac
 }
 
+protected_standard_file() {
+  case "$1" in
+    AGENTS.md|.github/CODE_OF_CONDUCT.md|.github/CONTRIBUTING.md|.github/PULL_REQUEST_TEMPLATE.md|.github/SECURITY.md|.github/ISSUE_TEMPLATE/*)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 custom_workflows=()
 if [ -d .github/workflows ]; then
   while IFS= read -r workflow; do
@@ -293,6 +304,10 @@ for file in "${files[@]}"; do
   if [ ! -f "$template_file" ]; then
     echo "Template file missing: $file" >&2
     exit 1
+  fi
+  if [ "$force" != true ] && [ -f "$file" ] && protected_standard_file "$file"; then
+    printf 'Preserving existing authored file %s (use --force to refresh).\n' "$file"
+    continue
   fi
   if { [ "$file" = LICENSE ] || [ "$file" = NOTICE ]; } && [ "$license" = preserve ] && [ -f "$file" ]; then
     continue

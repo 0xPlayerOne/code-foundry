@@ -27,6 +27,7 @@ Init/sync options:
   --license-file PATH        Use an exact custom license file
   --npm-publish              Enable npm publication in the release workflow
   --dry-run                 Preview changes without writing files
+  --force                   Replace protected standard docs/templates
   --prune                   Remove disabled standard workflows
   --protection              Synchronize main branch protections (init only)
   --no-bootstrap            Skip mise/hooks/doctor bootstrap after init
@@ -56,6 +57,7 @@ function parseArgs(argv) {
     featuresSet: false,
     dryRun: false,
     prune: false,
+    force: false,
     protection: false,
     bootstrap: true,
   }
@@ -87,6 +89,7 @@ function parseArgs(argv) {
       continue
     }
     if (arg === '--dry-run') options.dryRun = true
+    else if (arg === '--force') options.force = true
     else if (arg === '--prune') options.prune = true
     else if (arg === '--protection') options.protection = true
     else if (arg === '--no-bootstrap') options.bootstrap = false
@@ -118,6 +121,7 @@ function main() {
   if (options.languagesSet) common.push('--languages', options.languages)
   if (options.featuresSet) common.push('--features', options.features)
   if (options.prune) common.push('--prune')
+  if (options.force) common.push('--force')
   if (options.dryRun) common.push('--check')
   else common.push('--apply')
 
@@ -136,6 +140,7 @@ function main() {
     if (options.protection) initArgs.push('--protection')
     if (options.dryRun) initArgs.push('--dry-run')
     if (options.prune) initArgs.push('--prune')
+    if (options.force) initArgs.push('--force')
     if (options.npmPublish) initArgs.push('--npm-publish')
     if (!options.bootstrap) initArgs.push('--no-bootstrap')
     run('init-repo.sh', initArgs, target)

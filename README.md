@@ -65,6 +65,10 @@ Use `bash .github/scripts/sync-template.sh --source ... --check` to preview diff
 
 The initializer is intentionally flag-driven so the same baseline can be used as a small repository package. Language selection controls CodeQL and records the repository profile; feature selection controls which standard workflows are installed. `auto` detects supported languages, while `all` enables every standard workflow. The resolver profiles the repository for language, package manager, project shape, release type, runners, and cache policy.
 
+Existing authored documentation and issue/PR templates are preserved by
+default. Pass `--force` when intentionally refreshing those files from the
+baseline; repository-specific workflows and application files remain protected.
+
 ```bash
 # Preview a TypeScript + Python repository without changing files
 bash .github/scripts/init-repo.sh \
