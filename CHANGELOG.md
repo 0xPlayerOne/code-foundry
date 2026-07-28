@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.4...v0.27.5) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** install Rust formatting and lint components ([16da3fc](https://github.com/0xPlayerOne/code-foundry/commit/16da3fc416e64b2c5c62d2f3a7feaa270134c1a2))
+* **test:** skip absent Python integration suites ([ee932ce](https://github.com/0xPlayerOne/code-foundry/commit/ee932cea048dc94175f395ac49ca65ed9dbb466f))
+
 ## [0.27.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.3...v0.27.4) (2026-07-28)
 
 
