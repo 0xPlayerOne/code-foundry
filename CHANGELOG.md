@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.21.1...v0.21.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **docs:** clarify package verification ([b2bb12d](https://github.com/0xPlayerOne/code-foundry/commit/b2bb12d1674acefe5e874df280dfd083f9966e19))
+
 ## [0.21.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.21.0...v0.21.1) (2026-07-28)
 
 
