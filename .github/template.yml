@@ -1,0 +1,4 @@
+# Temporary compatibility shim for reusable workflow runtime v0.20.2.
+# Removed after the runtime tag that understands .github/code-foundry.yml is published.
+package_manager: bun
+languages: typescript
