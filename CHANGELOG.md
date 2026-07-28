@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.6](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.5...v0.27.6) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** force complete Bun workspace installs ([1d391b8](https://github.com/0xPlayerOne/code-foundry/commit/1d391b8e481acd91d7ae293cdbbfc090a891dc47))
+
 ## [0.27.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.4...v0.27.5) (2026-07-28)
 
 
