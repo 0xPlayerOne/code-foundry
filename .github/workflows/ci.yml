@@ -1,21 +1,184 @@
-name: CI
+name: Code Foundry CI
 
 on:
-  push:
-    branches: [main, staging]
-  pull_request:
-    branches: [staging]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: false
+        type: string
+        default: 0xPlayerOne/code-foundry
+      runtime-ref:
+        description: Code Foundry runtime tag or ref.
+        required: false
+        type: string
+        default: v0.20.2
+      runner:
+        description: Runner used by CI jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
 
 permissions:
   contents: read
 
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
+  REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
+  REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
+  REPO_FOUNDRY_PACKAGE_MANAGER: ${{ vars.REPO_FOUNDRY_PACKAGE_MANAGER }}
+  REPO_FOUNDRY_RUNNER: ${{ vars.REPO_FOUNDRY_RUNNER }}
+  REPO_FOUNDRY_CACHE_PACKAGES: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+  REPO_FOUNDRY_CACHE_BUILD: ${{ vars.REPO_FOUNDRY_CACHE_BUILD || 'auto' }}
+  REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
-    name: CI
-    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-ci.yml@v0.22.0
-    with:
-      runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: v0.22.0
-      runner: ubuntu-latest
-    secrets: inherit
+  format:
+    name: Format
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .code-foundry
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions .github/scripts
+          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .code-foundry/.github/scripts/. .github/scripts/
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run format >> "$GITHUB_OUTPUT"
+      - name: Fast path
+        if: steps.applicability.outputs.applicable == 'true'
+        run: bash .github/scripts/format-fast-path.sh
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: 'false'
+          cache-format: 'true'
+          cache-lint: 'false'
+          cache-build: 'false'
+          task: format
+          task-javascript: 'true'
+          task-python: 'false'
+          task-rust: 'false'
+      - name: Format
+        if: steps.applicability.outputs.applicable == 'true'
+        run: bash .github/scripts/ci.sh format
+
+  lint:
+    name: Lint
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .code-foundry
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions .github/scripts
+          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .code-foundry/.github/scripts/. .github/scripts/
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run lint >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-lint: 'true'
+          task: lint
+      - name: Lint
+        if: steps.applicability.outputs.applicable == 'true'
+        run: bash .github/scripts/ci.sh lint
+
+  type-check:
+    name: Type-Check
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .code-foundry
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions .github/scripts
+          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .code-foundry/.github/scripts/. .github/scripts/
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run type_check >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-build: 'true'
+          task: type_check
+      - name: Type-Check
+        if: steps.applicability.outputs.applicable == 'true'
+        run: bash .github/scripts/ci.sh type_check
+
+  build:
+    name: Build
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .code-foundry
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions .github/scripts
+          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .code-foundry/.github/scripts/. .github/scripts/
+      - name: Detect
+        id: applicability
+        run: bash .github/scripts/ci.sh should_run build >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-build: 'true'
+          task: build
+      - name: Build
+        if: steps.applicability.outputs.applicable == 'true'
+        run: bash .github/scripts/ci.sh build
