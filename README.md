@@ -63,6 +63,8 @@ Supported profiles are `application`, `monorepo`, and `minimal`; use `auto` to d
 
 Profile precedence is consistent everywhere: explicit CLI flags, then `REPO_FOUNDRY_*` GitHub repository variables/environment values, then `.github/template.yml`, then automatic detection and standard defaults. Useful repository variables include `REPO_FOUNDRY_PROFILE`, `REPO_FOUNDRY_LANGUAGES`, `REPO_FOUNDRY_FEATURES`, `REPO_FOUNDRY_PACKAGE_MANAGER`, `REPO_FOUNDRY_RUNNER`, `REPO_FOUNDRY_UNIT_RUNNER`, `REPO_FOUNDRY_CACHE_PACKAGES`, `REPO_FOUNDRY_CACHE_BUILD`, `REPO_FOUNDRY_COVERAGE_MINIMUM`, and `REPO_FOUNDRY_TURBO_REMOTE`. Use CLI flags for one-off initialization; use repository variables for local overrides that should not be committed.
 
+Inspect the resolved profile at any time with `bash .github/scripts/profile.sh detect`; use `profile.sh get KEY` when another script needs one setting.
+
 ## Releases and publishing
 
 The standard release workflow uses [Release Please](https://github.com/googleapis/release-please) after changes reach `main`. It opens or updates a versioned release pull request, maintains `CHANGELOG.md`, creates the GitHub release after that PR is merged, and applies semantic version bumps from Conventional Commits. The reusable `release-please-config.json` groups feature, fix, performance, dependency, documentation, test, CI, and maintenance changes in generated notes:

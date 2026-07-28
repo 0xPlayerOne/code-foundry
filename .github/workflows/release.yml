@@ -77,7 +77,6 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.release_type }}
-          bump-minor-pre-major: true
 
   npm:
     name: Release / Publish npm
