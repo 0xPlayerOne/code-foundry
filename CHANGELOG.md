@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.25.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.24.1...v0.25.0) (2026-07-28)
+
+
+### Features
+
+* simplify reusable workflow layout ([293b2a8](https://github.com/0xPlayerOne/code-foundry/commit/293b2a877500853778f311763cd4176e86f0b4f8))
+
+
+### Bug Fixes
+
+* use local self workflow references ([31ea5a5](https://github.com/0xPlayerOne/code-foundry/commit/31ea5a5a621039afd8e19febe9d2a9f814c9d6fa))
+
 ## [0.24.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.24.0...v0.24.1) (2026-07-28)
 
 
