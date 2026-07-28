@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.21.0...v0.21.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **template:** align reusable runtime pins ([c3195e8](https://github.com/0xPlayerOne/code-foundry/commit/c3195e8a3320821c5f891ef942cf5df59ecd09bb))
+
 ## [0.21.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.3...v0.21.0) (2026-07-28)
 
 
