@@ -12,5 +12,4 @@ jobs:
   release-pr:
     name: Release PR
     uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-release-pr.yml@v0.20.2
-    with:
     secrets: inherit
