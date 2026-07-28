@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.17.0...v0.18.0) (2026-07-28)
+
+
+### Features
+
+* **init:** infer runtime from source template ([81a545b](https://github.com/0xPlayerOne/code-foundry/commit/81a545bc6a2d89c31be51a711e477c4e4ceca7dd))
+
 ## [0.17.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.16.0...v0.17.0) (2026-07-28)
 
 
