@@ -61,6 +61,11 @@ main-branch wrapper while the shared runtime handles Release Please, GitHub
 release metadata, optional npm publication, provenance, and token/trusted
 publishing fallback.
 
+The promotion runtimes for Draft PR and Release PR are maintained in the same
+versioned repository. They are introduced before their consumer wrappers move
+to a release tag, avoiding a bootstrap cycle when a new runtime version is
+being published.
+
 Initialization defaults to AGPL for new repositories. Synchronization defaults
 to `--license preserve`, so an existing repository's license is never replaced
 unless you explicitly select a license or provide `--license-file`.
