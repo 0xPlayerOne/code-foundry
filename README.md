@@ -41,7 +41,8 @@ example, initializing from `NiftyLeague/template-repo` selects that fork's
 runtime without extra flags. Use `--runtime-repository OWNER/REPO` (or
 `REPO_FOUNDRY_RUNTIME_REPOSITORY`) only when you want to override it. The
 selected repository is saved in `.github/template.yml` and rendered into the
-small CI, Test, Security, and CodeQL wrappers automatically.
+small CI, Test, Security, CodeQL, Draft PR, and Release PR wrappers
+automatically.
 
 Normal synchronization imports only the local hook, agent-facing command,
 profile/release, initializer, doctor, ownership, and protection entrypoints.
@@ -62,9 +63,8 @@ release metadata, optional npm publication, provenance, and token/trusted
 publishing fallback.
 
 The promotion runtimes for Draft PR and Release PR are maintained in the same
-versioned repository. They are introduced before their consumer wrappers move
-to a release tag, avoiding a bootstrap cycle when a new runtime version is
-being published.
+versioned repository and are released before their short consumer callers move
+to a new tag, avoiding a bootstrap cycle.
 
 Initialization defaults to AGPL for new repositories. Synchronization defaults
 to `--license preserve`, so an existing repository's license is never replaced

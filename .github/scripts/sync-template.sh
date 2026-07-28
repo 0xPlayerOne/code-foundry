@@ -378,7 +378,7 @@ if [ -f "$template_root/.github/template.yml" ]; then
   source_runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' "$template_root/.github/template.yml")"
 fi
 [ -n "$source_runtime_repository" ] || source_runtime_repository="0xPlayerOne/code-foundry"
-for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflows/security.yml .github/workflows/codeql.yml; do
+for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflows/security.yml .github/workflows/codeql.yml .github/workflows/draft-pr.yml .github/workflows/release-pr.yml; do
   [ -f "$file" ] || continue
   if grep -qF "$source_runtime_repository" "$file" && [ "$source_runtime_repository" != "$runtime_repository" ]; then
     changed=$((changed + 1))
