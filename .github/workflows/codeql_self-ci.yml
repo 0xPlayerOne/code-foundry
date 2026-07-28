@@ -21,6 +21,6 @@ jobs:
     uses: ./.github/workflows/codeql.yml
     with:
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: v0.26.0
+      runtime-ref: staging
       runner: ubuntu-latest
     secrets: inherit

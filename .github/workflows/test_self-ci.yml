@@ -16,7 +16,7 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: v0.26.0
+      runtime-ref: staging
       runner: ubuntu-latest
       unit-runner: ubuntu-slim
     secrets: inherit
