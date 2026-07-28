@@ -27,9 +27,29 @@ warn() {
   printf 'WARN: %s\n' "$1" >&2
 }
 
-if [ ! -f .mise.toml ]; then
-  error ".mise.toml is missing"
+toolchain="auto"
+if [ -f "$config_file" ]; then
+  toolchain="$(awk -F': ' '/^toolchain:/ {print $2; exit}' "$config_file")"
+  [ -n "$toolchain" ] || toolchain="auto"
 fi
+case "$toolchain" in
+  auto)
+    if [ -f .mise.toml ]; then
+      printf '%s\n' 'INFO: using the existing mise toolchain'
+    else
+      printf '%s\n' 'INFO: using repository-native tools; mise is optional'
+    fi
+    ;;
+  native)
+    printf '%s\n' 'INFO: using repository-native tools'
+    ;;
+  mise)
+    [ -f .mise.toml ] || error ".mise.toml is required when toolchain: mise"
+    ;;
+  *)
+    error "unsupported toolchain: $toolchain (use auto, native, or mise)"
+    ;;
+esac
 
 if [ "$(git config --get core.hooksPath || true)" != ".githooks" ]; then
   warn "Git hooks are not enabled; run bash .github/scripts/bootstrap.sh"

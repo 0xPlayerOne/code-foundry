@@ -17,7 +17,14 @@ export function doctor(root) {
   /** @param {string} message */
   const warn = (message) => console.warn(`WARN: ${message}`)
 
-  if (!existsSync(join(target, '.mise.toml'))) error('.mise.toml is missing')
+  const toolchain = config.toolchain ?? 'auto'
+  if (!['auto', 'native', 'mise'].includes(toolchain)) error(`unsupported toolchain: ${toolchain}`)
+  if (toolchain === 'mise' && !existsSync(join(target, '.mise.toml'))) error('.mise.toml is required when toolchain: mise')
+  if (toolchain === 'auto') {
+    console.log(existsSync(join(target, '.mise.toml'))
+      ? 'Toolchain: mise (detected from existing .mise.toml).'
+      : 'Toolchain: native (mise not configured).')
+  }
   const hooks = git(target, ['config', '--get', 'core.hooksPath'])
   if (hooks !== '.githooks') warn('Git hooks are not enabled; run `npx code-foundry init`')
 

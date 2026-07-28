@@ -9,6 +9,10 @@ npx code-foundry init
 Initialization detects the repository and writes a fully resolved configuration.
 Edit that file directly, then run `npx code-foundry sync`.
 
+The default `toolchain: auto` reuses an existing `.mise.toml`; otherwise it
+selects native setup for the detected languages. Use `toolchain: native` to
+prohibit mise or `toolchain: mise` to require it.
+
 ## Configuration flow
 
 ```text
@@ -30,6 +34,7 @@ repository manifests and source
 | `profile` | `auto`, `application`, `monorepo`, `minimal` | Repository shape |
 | `languages` | detected list | TypeScript, Rust, Python, Solidity |
 | `package_manager` | `bun`, `pnpm`, `yarn`, `npm`, `none` | JavaScript setup |
+| `toolchain` | `auto`, `native`, `mise` | Environment setup policy; defaults to `auto` |
 | `features` | `all` or a list | Standard workflow callers |
 | `prune_standard` | `true` or `false` | Remove disabled standard callers |
 | `runtime_repository` | `OWNER/REPO` | Reusable workflow source |

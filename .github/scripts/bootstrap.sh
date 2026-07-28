@@ -3,7 +3,7 @@ set -euo pipefail
 
 git config core.hooksPath .githooks
 
-if command -v mise >/dev/null 2>&1; then
+if [ -f .mise.toml ] && command -v mise >/dev/null 2>&1; then
   mise trust --yes .mise.toml >/dev/null 2>&1 || true
   if [ -f .mise.toml ] && [ ! -f mise.lock ]; then
     if MISE_TRUSTED_CONFIG_PATHS="$PWD" mise lock >/dev/null 2>&1; then
@@ -14,8 +14,7 @@ if command -v mise >/dev/null 2>&1; then
   fi
   mise install
 else
-  printf '%s\n' "mise is not installed; install it from https://mise.jdx.dev/ and rerun this script." >&2
-  exit 1
+  printf '%s\n' 'Using the repository-native toolchain (mise is optional).'
 fi
 
 bash .github/scripts/doctor.sh

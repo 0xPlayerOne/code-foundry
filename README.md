@@ -19,7 +19,7 @@ npx code-foundry init
 ```
 
 Initialization is repository-aware. It detects supported languages, package
-manager, profile, release strategy, and required mise tools, then writes the
+manager, profile, release strategy, and toolchain preference, then writes the
 resolved choices to `.github/code-foundry.yml`.
 
 ```bash
@@ -39,7 +39,7 @@ contract. For normal updates, edit that file and run `npx code-foundry sync`.
   and Release.
 - A small `.githooks/pre-commit` launcher with language-aware formatting and
   linting.
-- `.mise.toml`, optional `mise.lock`, repository profile configuration, and
+- An optional `.mise.toml`/`mise.lock`, repository profile configuration, and
   standard GitHub forms and policy files.
 - AGENTS instructions, CODEOWNERS, license/notice files, and reusable release
   configuration.
@@ -60,7 +60,9 @@ New repositories default to GPL-3.0-or-later. Existing projects preserve an
 authored license unless a replacement is explicitly selected. Our maintained
 repositories explicitly select AGPL-3.0-or-later. Authored
 documentation, application files, custom workflows, and existing `.mise.toml`
-files are preserved by default.
+files are preserved by default. `toolchain: auto` uses an existing mise setup
+when present and otherwise uses native language tooling; choose `native` or
+`mise` explicitly when a repository needs a fixed policy.
 
 ## Workflow model
 
