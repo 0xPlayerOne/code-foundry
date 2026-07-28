@@ -1,7 +1,14 @@
 version: 1
 template: code-foundry@latest
+profile: auto
 languages: typescript
 features: all
 package_manager: bun
 release_type: node
 npm_publish: true
+runner: ubuntu-latest
+unit_runner: ubuntu-slim
+cache_packages: auto
+cache_build: auto
+coverage_minimum: 80
+turbo_remote: auto

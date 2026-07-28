@@ -9,6 +9,7 @@ Synchronize the repository-owned baseline without replacing project-specific
 README files, mise tool selections, or additional workflows.
 
 Options:
+  --profile NAME    auto, application, monorepo, or minimal
   --languages LIST  auto or comma-separated: typescript,rust,python,solidity
   --features LIST   all or comma-separated standard features
   --package-manager NAME  auto, bun, pnpm, yarn, or npm
@@ -22,16 +23,26 @@ source_ref="main"
 mode="check"
 source=""
 temp_dir=""
-languages="auto"
-features="all"
+profile="${REPO_FOUNDRY_PROFILE:-auto}"
+languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
+features="${REPO_FOUNDRY_FEATURES:-all}"
 prune=false
 languages_set=false
+profile_set=false
 features_set=false
-package_manager=""
+[ -n "${REPO_FOUNDRY_LANGUAGES:-}" ] && languages_set=true
+[ -n "${REPO_FOUNDRY_PROFILE:-}" ] && profile_set=true
+[ -n "${REPO_FOUNDRY_FEATURES:-}" ] && features_set=true
+package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-}"
 package_manager_set=false
+[ -n "${REPO_FOUNDRY_PACKAGE_MANAGER:-}" ] && package_manager_set=true
 template_ref=""
-release_type="auto"
-npm_publish="false"
+release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
+npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
+release_type_set=false
+npm_publish_set=false
+[ -n "${REPO_FOUNDRY_RELEASE_TYPE:-}" ] && release_type_set=true
+[ -n "${REPO_FOUNDRY_NPM_PUBLISH:-}" ] && npm_publish_set=true
 node_version="24.18.0"
 bun_version="1.3.14"
 python_version="3.13"
@@ -43,6 +54,7 @@ custom_ignores=""
 
 valid_languages="typescript rust python solidity"
 valid_features="ci codeql security test draft-pr release-pr release dependabot"
+valid_profiles="auto application monorepo minimal"
 valid_release_types="auto node python rust simple none"
 
 contains_word() {
@@ -80,6 +92,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --source) source="${2:?missing source path or URL}"; shift 2 ;;
     --ref) source_ref="${2:?missing ref}"; shift 2 ;;
+    --profile) profile="${2:?missing profile}"; profile_set=true; shift 2 ;;
     --languages) languages="${2:?missing language list}"; languages_set=true; shift 2 ;;
     --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
     --package-manager) package_manager="${2:?missing package manager}"; package_manager_set=true; shift 2 ;;
@@ -93,6 +106,10 @@ done
 
 [ -n "$source" ] || { usage >&2; exit 2; }
 if [ -f .github/template.yml ]; then
+  if [ "$profile_set" = false ]; then
+    configured_profile="$(awk -F': ' '/^profile:/ {print $2; exit}' .github/template.yml)"
+    [ -n "$configured_profile" ] && profile="$configured_profile"
+  fi
   if [ "$languages_set" = false ]; then
     configured_languages="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml)"
     [ -n "$configured_languages" ] && languages="$configured_languages"
@@ -105,10 +122,14 @@ if [ -f .github/template.yml ]; then
     package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml)"
   fi
   template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml)"
-  configured_release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml)"
-  configured_npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml)"
-  [ -n "$configured_release_type" ] && release_type="$configured_release_type"
-  [ -n "$configured_npm_publish" ] && npm_publish="$configured_npm_publish"
+  if [ "$release_type_set" != true ]; then
+    configured_release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml)"
+    [ -n "$configured_release_type" ] && release_type="$configured_release_type"
+  fi
+  if [ "$npm_publish_set" != true ]; then
+    configured_npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml)"
+    [ -n "$configured_npm_publish" ] && npm_publish="$configured_npm_publish"
+  fi
 fi
 [ -n "$package_manager" ] || package_manager=auto
 case "$package_manager" in
@@ -117,6 +138,10 @@ case "$package_manager" in
 esac
 validate_list language "$languages" "$valid_languages"
 validate_list feature "$features" "$valid_features"
+contains_word "$valid_profiles" "$profile" || {
+  printf 'Unsupported profile: %s\n' "$profile" >&2
+  exit 2
+}
 contains_word "$valid_release_types" "$release_type" || {
   printf 'Unsupported release type: %s\n' "$release_type" >&2
   exit 2
@@ -129,6 +154,26 @@ else
   temp_dir="$(mktemp -d)"
   git clone --quiet --depth 1 --branch "$source_ref" "$source" "$temp_dir/template-repo"
   template_root="$temp_dir/template-repo"
+fi
+
+# Resolve the effective profile after the template is available. This gives
+# CLI flags and GitHub repository variables priority over template defaults,
+# while making automatic detection concrete in the generated profile.
+if [ -f "$template_root/.github/scripts/profile.sh" ]; then
+  profile_output="$(
+    REPO_FOUNDRY_PROFILE="$profile" \
+    REPO_FOUNDRY_LANGUAGES="$languages" \
+    REPO_FOUNDRY_FEATURES="$features" \
+    REPO_FOUNDRY_PACKAGE_MANAGER="$package_manager" \
+    REPO_FOUNDRY_RELEASE_TYPE="$release_type" \
+    REPO_FOUNDRY_NPM_PUBLISH="$npm_publish" \
+    bash "$template_root/.github/scripts/profile.sh" detect --root "$PWD"
+  )"
+  profile="$(printf '%s\n' "$profile_output" | awk -F= '$1 == "profile" {print substr($0, index($0, "=") + 1)}')"
+  languages="$(printf '%s\n' "$profile_output" | awk -F= '$1 == "languages" {print substr($0, index($0, "=") + 1)}')"
+  package_manager="$(printf '%s\n' "$profile_output" | awk -F= '$1 == "package_manager" {print substr($0, index($0, "=") + 1)}')"
+  release_type="$(printf '%s\n' "$profile_output" | awk -F= '$1 == "release_type" {print substr($0, index($0, "=") + 1)}')"
+  npm_publish="$(printf '%s\n' "$profile_output" | awk -F= '$1 == "npm_publish" {print substr($0, index($0, "=") + 1)}')"
 fi
 
 if [ -f "$template_root/package.json" ]; then
@@ -160,6 +205,7 @@ files=(
   .github/actions/setup/action.yml
   .github/actions/cache/action.yml
   .github/actions/codeql/action.yml
+  .github/scripts/profile.sh
   .github/scripts/bootstrap.sh
   .github/scripts/changed-files.sh
   .github/scripts/ci.sh
@@ -404,6 +450,7 @@ if [ "$mode" = "apply" ]; then
     if [ -n "$template_ref" ]; then
       printf 'template: %s\n' "$template_ref"
     fi
+    printf 'profile: %s\n' "$profile"
     printf 'languages: %s\n' "$languages"
     printf 'features: %s\n' "$features"
     if [ -n "$package_manager" ]; then

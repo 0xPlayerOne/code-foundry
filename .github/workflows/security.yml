@@ -11,6 +11,11 @@ permissions:
   contents: read
 
 env:
+  REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
+  REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
+  REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
+  REPO_FOUNDRY_PACKAGE_MANAGER: ${{ vars.REPO_FOUNDRY_PACKAGE_MANAGER }}
+  REPO_FOUNDRY_CACHE_PACKAGES: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
   REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
 
 concurrency:

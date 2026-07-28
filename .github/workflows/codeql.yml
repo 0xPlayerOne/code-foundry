@@ -15,6 +15,11 @@ permissions:
   packages: read
   security-events: write
 
+env:
+  REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
+  REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
+  REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true

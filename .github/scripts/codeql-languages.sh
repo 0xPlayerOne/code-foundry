@@ -23,7 +23,9 @@ esac
 
 if find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print -quit | grep -q .; then languages+=(actions); fi
 configured=""
-if [ -f .github/template.yml ]; then
+if [ -x .github/scripts/profile.sh ]; then
+  configured="$(bash .github/scripts/profile.sh get languages 2>/dev/null || true)"
+elif [ -f .github/template.yml ]; then
   configured="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml)"
 fi
 

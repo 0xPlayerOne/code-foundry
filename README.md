@@ -44,7 +44,7 @@ bash .github/scripts/init-repo.sh
 
 Use `bash .github/scripts/sync-template.sh --source ... --check` to preview differences. For local template development, pass the template checkout as `--source` and `--ref staging`.
 
-The initializer is intentionally flag-driven so the same baseline can be used as a small repository package. Language selection controls CodeQL and records the repository profile; feature selection controls which standard workflows are installed. `auto` detects supported languages, while `all` enables every standard workflow.
+The initializer is intentionally flag-driven so the same baseline can be used as a small repository package. Language selection controls CodeQL and records the repository profile; feature selection controls which standard workflows are installed. `auto` detects supported languages, while `all` enables every standard workflow. The resolver profiles the repository for language, package manager, project shape, release type, runners, and cache policy.
 
 ```bash
 # Preview a TypeScript + Python repository without changing files
@@ -59,7 +59,9 @@ bash .github/scripts/init-repo.sh \
   --features ci,codeql,security,test
 ```
 
-Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supported feature flags are `ci`, `codeql`, `security`, `test`, `draft-pr`, `release-pr`, `release`, and `dependabot`. Use `--prune` only when you explicitly want disabled standard workflows removed; custom workflows are always preserved. The selected profile is stored in `.github/template.yml`, which makes later syncs repeatable and lets workflows consume repository-specific settings without duplicating the template scripts.
+Supported profiles are `application`, `monorepo`, and `minimal`; use `auto` to detect one. Supported languages are `typescript`, `rust`, `python`, and `solidity`. Supported feature flags are `ci`, `codeql`, `security`, `test`, `draft-pr`, `release-pr`, `release`, and `dependabot`. Use `--prune` only when you explicitly want disabled standard workflows removed; custom workflows are always preserved. The selected profile is stored in `.github/template.yml`, which makes later syncs repeatable and lets workflows consume repository-specific settings without duplicating the template scripts.
+
+Profile precedence is consistent everywhere: explicit CLI flags, then `REPO_FOUNDRY_*` GitHub repository variables/environment values, then `.github/template.yml`, then automatic detection and standard defaults. Useful repository variables include `REPO_FOUNDRY_PROFILE`, `REPO_FOUNDRY_LANGUAGES`, `REPO_FOUNDRY_FEATURES`, `REPO_FOUNDRY_PACKAGE_MANAGER`, `REPO_FOUNDRY_RUNNER`, `REPO_FOUNDRY_UNIT_RUNNER`, `REPO_FOUNDRY_CACHE_PACKAGES`, `REPO_FOUNDRY_CACHE_BUILD`, `REPO_FOUNDRY_COVERAGE_MINIMUM`, and `REPO_FOUNDRY_TURBO_REMOTE`. Use CLI flags for one-off initialization; use repository variables for local overrides that should not be committed.
 
 ## Releases and publishing
 
