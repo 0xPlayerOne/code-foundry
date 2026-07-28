@@ -23,6 +23,7 @@ Init/sync options:
   --features LIST           all or ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME    auto, bun, pnpm, yarn, or npm
   --runtime-repository OWNER/REPO  Reusable workflow runtime repository
+  --runtime-ref REF          Reusable workflow runtime tag or branch
   --release-type NAME        auto, node, python, rust, simple, or none
   --license NAME             agpl-3.0-or-later, mit, preserve, or none
   --license-file PATH        Use an exact custom license file
@@ -54,6 +55,7 @@ function parseArgs(argv) {
     // initializer can then derive the runtime from --source, which keeps
     // organization forks plug-and-play.
     runtimeRepository: process.env.REPO_FOUNDRY_RUNTIME_REPOSITORY || '',
+    runtimeRef: process.env.REPO_FOUNDRY_RUNTIME_REF || '',
     releaseType: process.env.REPO_FOUNDRY_RELEASE_TYPE || 'auto',
     license: process.env.REPO_FOUNDRY_LICENSE || (command === 'init' ? 'agpl-3.0-or-later' : 'preserve'),
     licenseFile: process.env.REPO_FOUNDRY_LICENSE_FILE || '',
@@ -75,6 +77,7 @@ function parseArgs(argv) {
     ['--features', 'features'],
     ['--package-manager', 'packageManager'],
     ['--runtime-repository', 'runtimeRepository'],
+    ['--runtime-ref', 'runtimeRef'],
     ['--release-type', 'releaseType'],
     ['--license', 'license'],
     ['--license-file', 'licenseFile'],
@@ -127,6 +130,7 @@ function main() {
   if (options.languagesSet) common.push('--languages', options.languages)
   if (options.featuresSet) common.push('--features', options.features)
   if (options.runtimeRepository) common.push('--runtime-repository', options.runtimeRepository)
+  if (options.runtimeRef) common.push('--runtime-ref', options.runtimeRef)
   if (options.prune) common.push('--prune')
   if (options.force) common.push('--force')
   if (options.dryRun) common.push('--check')
@@ -144,6 +148,7 @@ function main() {
       '--license', options.license,
     ]
     if (options.runtimeRepository) initArgs.push('--runtime-repository', options.runtimeRepository)
+    if (options.runtimeRef) initArgs.push('--runtime-ref', options.runtimeRef)
     if (options.licenseFile) initArgs.push('--license-file', options.licenseFile)
     if (options.protection) initArgs.push('--protection')
     if (options.dryRun) initArgs.push('--dry-run')
