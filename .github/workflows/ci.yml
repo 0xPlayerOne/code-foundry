@@ -13,5 +13,5 @@ permissions:
 jobs:
   ci:
     name: CI
-    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-ci.yml@v0.6.0
+    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-ci.yml@v0.7.0
     secrets: inherit
