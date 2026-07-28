@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
+import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
@@ -45,10 +46,12 @@ describe('code-foundry CLI', () => {
     syncRepository({ target: root, source: process.cwd(), init: true })
 
     assert.equal(resolveProfile(root).languages, 'none')
+    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /toolchain: auto/)
     assert.equal(exists(join(root, 'ruff.toml')), false)
     assert.equal(exists(join(root, '.prettierrc')), false)
     assert.match(readFileSync(join(root, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/)
     assert.match(readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'), /code-foundry\/\.github\/workflows\/ci\.yml@v/)
+    doctor(root)
   })
 })
 

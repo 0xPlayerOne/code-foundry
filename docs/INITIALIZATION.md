@@ -11,7 +11,7 @@ npx code-foundry doctor
 ```
 
 `init` detects supported languages, package manager, repository profile,
-release strategy, mise tools, and standard features. It writes the resolved
+release strategy, toolchain preference, and standard features. It writes the resolved
 choices to `.github/code-foundry.yml`, initializes the local environment, and
 renders the standard baseline.
 
@@ -40,7 +40,8 @@ Sync updates standard Code Foundry files only. It preserves application code,
 authored documentation, existing `.mise.toml` selections, and custom workflows
 such as deployment, search, Slither, or monitoring workflows.
 
-The environment bootstrap installs or reuses mise-managed tools and enables
-the repository hooks. Use `npx code-foundry doctor` when local setup needs to
-be checked; the CLI supplies the implementation without adding maintenance
-scripts to the consumer repository.
+The environment bootstrap enables repository hooks and uses mise only when an
+existing `.mise.toml` is present or `toolchain: mise` is selected. Otherwise it
+uses the repository's native tools. Use `npx code-foundry doctor` when local
+setup needs to be checked; the CLI supplies the implementation without adding
+maintenance scripts to the consumer repository.

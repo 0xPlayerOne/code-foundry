@@ -52,6 +52,10 @@ export function syncRepository(options) {
   const features = configured(config.features, 'all')
   const runtimeRepository = configured(config.runtime_repository, '0xPlayerOne/code-foundry')
   const runtimeRef = configured(config.runtime_ref, `v${readPackageVersion(source)}`)
+  const toolchain = configured(config.toolchain, 'auto')
+  if (!['auto', 'native', 'mise'].includes(toolchain)) {
+    throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
+  }
   const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
   const changed = []
 
@@ -180,6 +184,7 @@ function createDefaultConfig(root, source) {
     version: '1', profile: detectProfile(root), languages, features: 'all', package_manager: packageManager,
     runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
     runner: 'ubuntu-latest', unit_runner: 'ubuntu-slim', ci_runner: 'ubuntu-latest', test_runner: 'ubuntu-latest',
+    toolchain: 'auto',
     security_runner: 'ubuntu-slim', codeql_runner: 'ubuntu-latest', pr_runner: 'ubuntu-slim', release_runner: 'ubuntu-slim',
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
