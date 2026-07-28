@@ -7,6 +7,7 @@ profile="${REPO_FOUNDRY_PROFILE:-auto}"
 protection=false
 dry_run=false
 prune=false
+force=false
 languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
 features="${REPO_FOUNDRY_FEATURES:-all}"
 package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-auto}"
@@ -41,6 +42,7 @@ Options:
   --license-file PATH        Use an exact custom license file
   --npm-publish              Enable npm publication in the release workflow
   --dry-run                  Preview changes without writing files
+  --force                    Replace protected standard docs/templates
   --prune                    Remove disabled standard workflows (never custom workflows)
   --protection               Synchronize main branch required checks
   --no-bootstrap             Skip mise/hooks/doctor bootstrap after init
@@ -66,6 +68,7 @@ while [ "$#" -gt 0 ]; do
     --license-file) license_file="${2:?missing license file}"; shift 2 ;;
     --npm-publish) npm_publish=true; shift ;;
     --dry-run) dry_run=true; shift ;;
+    --force) force=true; shift ;;
     --prune) prune=true; shift ;;
     --protection) protection=true; shift ;;
     --no-bootstrap) bootstrap=false; shift ;;
@@ -110,6 +113,7 @@ sync_args=(
 if [ -n "$license_file" ]; then sync_args+=(--license-file "$license_file"); fi
 if [ "$dry_run" = true ]; then sync_args+=(--check); else sync_args+=(--apply); fi
 if [ "$prune" = true ]; then sync_args+=(--prune); fi
+if [ "$force" = true ]; then sync_args+=(--force); fi
 bash "$sync_script" "${sync_args[@]}"
 
 if [ "$dry_run" = true ]; then
