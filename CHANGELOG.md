@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.0...v0.20.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **workflows:** align callers with current runtime ([11629d3](https://github.com/0xPlayerOne/code-foundry/commit/11629d32b4c41a8bfd1ff8fdaa5638c43236e889))
+* **workflows:** correct release caller indentation ([2688ca9](https://github.com/0xPlayerOne/code-foundry/commit/2688ca924552c9537151e76f486f6485bd4fb0d9))
+
 ## [0.20.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.19.0...v0.20.0) (2026-07-28)
 
 
