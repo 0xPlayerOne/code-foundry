@@ -55,6 +55,11 @@ CodeQL is also independently reusable through the same contract. It retains
 GitHub's native security-event permissions and language-specific analysis while
 keeping CodeQL separate from CI and dependency security checks.
 
+Release automation follows the same model: the consumer keeps a short
+main-branch wrapper while the shared runtime handles Release Please, GitHub
+release metadata, optional npm publication, provenance, and token/trusted
+publishing fallback.
+
 Initialization defaults to AGPL for new repositories. Synchronization defaults
 to `--license preserve`, so an existing repository's license is never replaced
 unless you explicitly select a license or provide `--license-file`.
