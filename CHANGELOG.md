@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.23.1...v0.24.0) (2026-07-28)
+
+
+### Features
+
+* minimize consumer footprint ([2b29d2e](https://github.com/0xPlayerOne/code-foundry/commit/2b29d2e09072492c8ee8fc642d0477f416805cf2))
+
 ## [0.23.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.23.0...v0.23.1) (2026-07-28)
 
 
