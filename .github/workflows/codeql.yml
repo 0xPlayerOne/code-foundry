@@ -18,8 +18,8 @@ permissions:
 jobs:
   codeql:
     name: CodeQL
-    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-codeql.yml@v0.14.0
+    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-codeql.yml@v0.20.0
     with:
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: v0.14.0
+      runtime-ref: v0.20.0
     secrets: inherit
