@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.8.0...v0.9.0) (2026-07-28)
+
+
+### Features
+
+* **init:** configure reusable workflow repository ([95d17e9](https://github.com/0xPlayerOne/code-foundry/commit/95d17e9a4af2e2075fcdc2c357af414876655fb3))
+
 ## [0.8.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.7.0...v0.8.0) (2026-07-28)
 
 
