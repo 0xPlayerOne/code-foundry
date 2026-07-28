@@ -25,6 +25,7 @@ permissions:
   packages: read
   security-events: write
 
+# Every analyzer emits a successful check, including when its language is not applicable.
 env:
   REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
   REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
