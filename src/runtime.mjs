@@ -194,6 +194,7 @@ function security(task, ecosystem) {
     writeOutput('python', hasDependencyManifest('python') ? 'true' : 'false')
     const requirements = capture('git', ['ls-files', '*requirements*.txt']).split('\n').filter(Boolean)
     writeOutput('python_requirements', hasDependencyManifest('python') ? (requirements.length ? requirements : ['project']) : ['none'])
+    writeOutput('dependency_review', featureEnabled('dependency_review') ? 'true' : 'false')
     return
   }
   if (task === 'should_run') {
@@ -227,7 +228,32 @@ function security(task, ecosystem) {
   }
 }
 
+/** @param {string} key */
+function featureEnabled(key) {
+  const policy = config[key] ?? 'auto'
+  if (policy === 'false') return false
+  if (policy === 'true') return true
+  return isPublicRepository()
+}
+
+function isPublicRepository() {
+  const visibility = process.env.REPO_FOUNDRY_VISIBILITY
+  return visibility ? visibility === 'public' : process.env.REPO_FOUNDRY_PRIVATE !== 'true'
+}
+
 function codeql() {
+  const enabled = featureEnabled('codeql') &&
+    (isPublicRepository() || process.env.REPO_FOUNDRY_CODE_SECURITY === 'enabled')
+  writeOutput('enabled', enabled ? 'true' : 'false')
+  if (!enabled) {
+    writeOutput('languages', [])
+    for (const language of ['actions', 'javascript', 'python', 'rust']) {
+      writeOutput(`${language}_available`, 'false')
+      writeOutput(`${language}_changed`, 'false')
+      writeOutput(`${language}_build_mode`, 'none')
+    }
+    return
+  }
   const available = []
   if (existsSync(resolve(root, '.github/workflows'))) available.push('actions')
   if (hasLanguage('typescript') || hasLanguage('javascript')) available.push('javascript-typescript')

@@ -3,6 +3,8 @@ version: 1
 profile: auto
 languages: typescript
 features: all
+codeql: auto
+dependency_review: auto
 package_manager: bun
 toolchain: auto
 runtime_repository: 0xPlayerOne/code-foundry
