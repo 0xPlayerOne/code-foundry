@@ -12,6 +12,11 @@ Keep commits Conventional Commit-shaped (`feat:`, `fix:`, `docs:`, `ci:`,
 `chore:`, and so on). Release Please uses them to select patch/minor/major
 versions and generate grouped changelog notes.
 
+The default `merge_strategy` is `rebase`, matching the repository's linear
+history policy. Set it to `squash` or `merge` in `.github/code-foundry.yml` when
+that repository intentionally uses a different merge convention. The current
+supported `git_workflow` is `staging-release`.
+
 The release workflow opens or updates a versioned PR after changes reach
 `main`. Merging that PR updates the changelog, creates the Git tag and GitHub
 Release, and triggers any configured package publication.

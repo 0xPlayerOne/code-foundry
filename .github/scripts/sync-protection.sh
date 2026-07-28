@@ -6,14 +6,23 @@ repo=""
 mode="check"
 configured_features="all"
 configured_languages="auto"
+merge_strategy="rebase"
 
 config_file=.github/code-foundry.yml
 if [ -f "$config_file" ]; then
   configured_features="$(awk -F': ' '/^features:/ {print $2; exit}' "$config_file")"
   configured_languages="$(awk -F': ' '/^languages:/ {print $2; exit}' "$config_file")"
+  merge_strategy="$(awk -F': ' '/^merge_strategy:/ {print $2; exit}' "$config_file")"
   [ -n "$configured_features" ] || configured_features="all"
   [ -n "$configured_languages" ] || configured_languages="auto"
+  [ -n "$merge_strategy" ] || merge_strategy="rebase"
 fi
+
+case "$merge_strategy" in
+  rebase|squash) linear_history=true ;;
+  merge) linear_history=false ;;
+  *) printf 'Unsupported merge strategy: %s\n' "$merge_strategy" >&2; exit 2 ;;
+esac
 
 feature_enabled() {
   [ "$configured_features" = all ] && return 0
@@ -104,7 +113,7 @@ if [ "$mode" = check ]; then
 fi
 
 current="$protection"
-full_payload="$(jq --argjson checks "$payload" '
+full_payload="$(jq --argjson checks "$payload" --argjson linear "$linear_history" '
   {
     required_status_checks: $checks,
     enforce_admins: .enforce_admins.enabled,
@@ -123,7 +132,7 @@ full_payload="$(jq --argjson checks "$payload" '
         apps: [.restrictions.apps[].slug]
       } end
     ),
-    required_linear_history: .required_linear_history.enabled,
+    required_linear_history: $linear,
     allow_force_pushes: .allow_force_pushes.enabled,
     allow_deletions: .allow_deletions.enabled,
     block_creations: .block_creations.enabled,

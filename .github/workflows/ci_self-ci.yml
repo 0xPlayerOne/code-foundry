@@ -16,6 +16,6 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: v0.22.0
+      runtime-ref: v0.26.0
       runner: ubuntu-latest
     secrets: inherit

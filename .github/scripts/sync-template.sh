@@ -64,6 +64,8 @@ cache_packages="${REPO_FOUNDRY_CACHE_PACKAGES:-}"
 cache_build="${REPO_FOUNDRY_CACHE_BUILD:-}"
 coverage_minimum="${REPO_FOUNDRY_COVERAGE_MINIMUM:-}"
 turbo_remote="${REPO_FOUNDRY_TURBO_REMOTE:-}"
+git_workflow="${REPO_FOUNDRY_GIT_WORKFLOW:-}"
+merge_strategy="${REPO_FOUNDRY_MERGE_STRATEGY:-}"
 license="${REPO_FOUNDRY_LICENSE:-preserve}"
 license_file="${REPO_FOUNDRY_LICENSE_FILE:-}"
 release_type_set=false
@@ -184,6 +186,8 @@ if [ -f "$config_path" ]; then
     configured_license="$(config_value license)"
     [ -n "$configured_license" ] && license="$configured_license"
   fi
+  [ -n "$git_workflow" ] || git_workflow="$(config_value git_workflow)"
+  [ -n "$merge_strategy" ] || merge_strategy="$(config_value merge_strategy)"
   if [ "$license_file_set" = false ]; then
     license_file="$(config_value license_file)"
   fi
@@ -217,6 +221,8 @@ fi
 [ -n "$cache_build" ] || cache_build=auto
 [ -n "$coverage_minimum" ] || coverage_minimum=80
 [ -n "$turbo_remote" ] || turbo_remote=auto
+[ -n "$git_workflow" ] || git_workflow=staging-release
+[ -n "$merge_strategy" ] || merge_strategy=rebase
 [ "$prune_standard" = true ] || [ "$prune_standard" = false ] || {
   printf 'prune_standard must be true or false: %s\n' "$prune_standard" >&2
   exit 2
@@ -248,6 +254,14 @@ contains_word "$valid_release_types" "$release_type" || {
   printf 'Unsupported release type: %s\n' "$release_type" >&2
   exit 2
 }
+case "$git_workflow" in
+  staging-release) ;;
+  *) printf 'Unsupported git workflow: %s (only staging-release is currently supported)\n' "$git_workflow" >&2; exit 2 ;;
+esac
+case "$merge_strategy" in
+  rebase|squash|merge) ;;
+  *) printf 'Unsupported merge strategy: %s\n' "$merge_strategy" >&2; exit 2 ;;
+esac
 case "$license" in
   preserve|gpl-3.0-or-later|agpl-3.0-or-later|mit|custom|none) ;;
   *) printf 'Unsupported license: %s\n' "$license" >&2; exit 2 ;;
@@ -715,6 +729,8 @@ if [ "$mode" = "apply" ]; then
     printf 'release_type: %s\n' "$release_type"
     printf 'npm_publish: %s\n' "$npm_publish"
     printf 'license: %s\n' "$license"
+    printf 'git_workflow: %s\n' "$git_workflow"
+    printf 'merge_strategy: %s\n' "$merge_strategy"
     if [ -n "$license_file" ]; then
       printf 'license_file: %s\n' "$license_file"
     fi

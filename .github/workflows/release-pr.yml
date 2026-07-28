@@ -87,7 +87,7 @@ jobs:
           ### Validation
 
           - Required CI, test, security, and CodeQL checks must pass before merge.
-          - Merge with **rebase** to preserve the linear Conventional Commit history.
+          - Merge using the repository's configured \`merge_strategy\` (default: **rebase**).
           - After merge, Release Please opens a separate versioned release PR with the changelog.
           EOF
 

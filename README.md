@@ -83,6 +83,11 @@ Python, and Rust audits remain available without GitHub Advanced Security.
 See [Workflow and CI conventions](docs/WORKFLOWS.md) for triggers, required
 checks, runners, coverage, caching, and custom workflow extensions.
 
+The default contribution policy uses the `staging-release` workflow with
+rebase merges. Repositories can set `merge_strategy: squash` or
+`merge_strategy: merge` in `.github/code-foundry.yml` when their governance
+requires another merge convention.
+
 ## Releases and publishing
 
 The standard flow promotes `staging` into `main`, lets Release Please open a

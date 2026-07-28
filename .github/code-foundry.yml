@@ -5,10 +5,12 @@ languages: typescript
 features: all
 package_manager: bun
 runtime_repository: 0xPlayerOne/code-foundry
-runtime_ref: v0.22.2
+runtime_ref: v0.26.0
 release_type: node
 npm_publish: true
 license: agpl-3.0-or-later
+git_workflow: staging-release
+merge_strategy: rebase
 runner: ubuntu-latest
 unit_runner: ubuntu-slim
 cache_packages: auto
