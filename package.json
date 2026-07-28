@@ -18,6 +18,7 @@
   },
   "files": [
     "src",
+    "docs",
     ".github",
     ".githooks",
     ".editorconfig",
