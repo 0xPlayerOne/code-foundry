@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.22.0...v0.22.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* pin callers to the canonical runtime ([321b93f](https://github.com/0xPlayerOne/code-foundry/commit/321b93fff2089ee61fa41f968ee584af864692b2))
+
 ## [0.22.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.21.2...v0.22.0) (2026-07-28)
 
 
