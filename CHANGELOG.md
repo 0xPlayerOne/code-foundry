@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.3.0...v0.4.0) (2026-07-28)
+
+
+### Features
+
+* **hooks:** centralize generated pre-commit runtime ([8e8111c](https://github.com/0xPlayerOne/code-foundry/commit/8e8111c1b1b95fcb356fe1b1366e369393cbf946))
+
 ## [0.3.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.2.0...v0.3.0) (2026-07-28)
 
 
