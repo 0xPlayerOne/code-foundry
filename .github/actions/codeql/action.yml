@@ -1,5 +1,5 @@
 name: CodeQL Analyze
-description: Analyze one CodeQL language using the repository baseline.
+description: Initialize and analyze one CodeQL language using the repository baseline.
 
 inputs:
   language:
@@ -16,8 +16,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Checkout
-      uses: actions/checkout@v7
     - name: Initialize
       uses: github/codeql-action/init@v4
       with:
