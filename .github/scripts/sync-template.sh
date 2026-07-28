@@ -363,6 +363,7 @@ removed_files=(
   .github/scripts/bootstrap.sh
   .github/scripts/codeql-languages.sh
   .github/scripts/doctor.sh
+  .github/scripts/format-fast-path.sh
   .github/scripts/init-repo.sh
   .github/scripts/security.sh
   .github/scripts/sync-codeowners.sh
