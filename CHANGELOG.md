@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.22.1...v0.22.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* remove legacy config after migration ([839a4bd](https://github.com/0xPlayerOne/code-foundry/commit/839a4bd7d818633f1aef201b4a2b3292218563f4))
+
 ## [0.22.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.22.0...v0.22.1) (2026-07-28)
 
 
