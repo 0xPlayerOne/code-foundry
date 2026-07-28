@@ -100,7 +100,7 @@ function install() {
     if (lock) {
       /** @type {Record<string, [string, string[]]>} */
       const commands = {
-        bun: ['bun', ['install', '--frozen-lockfile', '--ignore-scripts', ...(readPackage()?.workspaces ? ['--force'] : [])]],
+        bun: ['bun', ['install', '--frozen-lockfile', '--ignore-scripts', ...(readPackage()?.workspaces ? ['--force', '--linker=hoisted'] : [])]],
         pnpm: ['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']],
         yarn: ['yarn', ['install', '--immutable']],
         npm: ['npm', ['ci', '--prefer-offline', '--no-audit', '--fund=false']],
