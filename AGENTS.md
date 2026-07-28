@@ -7,7 +7,8 @@ They complement `CONTRIBUTING.md`. More specific instructions in nested `AGENTS.
 ## Mission
 
 - Keep formatting, linting, type checking, builds, tests, and coverage reproducible locally and in CI.
-- Prefer the versions pinned in `.mise.toml`.
+- Prefer the repository's configured toolchain; `toolchain: auto` uses native
+  tools unless an existing `.mise.toml` is present.
 - Do not commit secrets, generated credentials, local environment files, or machine-specific paths.
 - Add tests for behavior changes and keep coverage thresholds explicit in the project configuration.
 - Make the smallest complete, well-tested change that solves the requested problem without disturbing unrelated work.
@@ -72,7 +73,9 @@ For normal feature work, branch from `staging` and target pull requests at `stag
 
 ## Toolchain and dependencies
 
-- Use the versions pinned in `.mise.toml`; run `mise install` when needed.
+- Follow `toolchain: auto` in `.github/code-foundry.yml`; use native tools by
+  default and reuse mise only when the repository already has `.mise.toml`.
+- If `toolchain: mise` is selected, run `mise install` before validation.
 - Use the package manager indicated by the existing lockfile:
   - `bun.lock` or `bun.lockb` → Bun
   - `pnpm-lock.yaml` → pnpm
