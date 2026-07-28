@@ -34,6 +34,10 @@ npx code-foundry init --dry-run
 For an existing installation, use `npx code-foundry sync`. Run
 `npx code-foundry doctor` to inspect the resulting repository configuration.
 
+If `.github/code-foundry.yml` already exists, initialization uses it automatically.
+You can also supply a different file with `--config PATH`; after changing the
+file, run `npx code-foundry sync` to render the selected configuration.
+
 ## What it installs
 
 - Short workflow callers for CI, Test, Security, CodeQL, Draft PR, Release PR,
@@ -66,11 +70,12 @@ Initialization is flag-driven. The most important options are:
 --license-file PATH
 ```
 
-The selected profile is saved in `.github/template.yml`. Explicit flags take
+The selected profile is saved in `.github/code-foundry.yml`. Explicit flags take
 precedence over `REPO_FOUNDRY_*` environment/repository variables, which take
 precedence over that file and automatic detection. See
-[Initialization and synchronization](docs/INITIALIZATION.md) for the full
-configuration contract.
+[Configuration reference](docs/CONFIGURATION.md) for the visual configuration
+guide and [Initialization and synchronization](docs/INITIALIZATION.md) for
+the safety and precedence rules.
 
 New repositories default to AGPL-3.0-or-later. Synchronization preserves an
 existing license unless a replacement is explicitly selected. Authored

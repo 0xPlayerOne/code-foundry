@@ -1,3 +1,4 @@
+# Canonical Code Foundry repository configuration.
 version: 1
 template: code-foundry@latest
 profile: auto
@@ -15,3 +16,10 @@ cache_packages: auto
 cache_build: auto
 coverage_minimum: 80
 turbo_remote: auto
+ci_runner: ubuntu-latest
+test_runner: ubuntu-latest
+security_runner: ubuntu-slim
+codeql_runner: ubuntu-latest
+pr_runner: ubuntu-slim
+release_runner: ubuntu-slim
+prune_standard: false

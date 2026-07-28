@@ -2,6 +2,12 @@ name: Code Foundry Release
 
 on:
   workflow_call:
+    inputs:
+      runner:
+        description: Runner used by release jobs.
+        required: false
+        type: string
+        default: ubuntu-slim
 
 permissions:
   contents: write
@@ -19,7 +25,7 @@ env:
 jobs:
   release:
     name: Release / Version
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,8 +47,10 @@ jobs:
             release_type="$(bash .github/scripts/profile.sh get release_type)"
             npm_publish="$(bash .github/scripts/profile.sh get npm_publish)"
           else
-            release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-            npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+            config_file=.github/code-foundry.yml
+            [ -f "$config_file" ] || config_file=.github/template.yml
+            release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' "$config_file" 2>/dev/null || true)"
+            npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' "$config_file" 2>/dev/null || true)"
           fi
           [ -n "$release_type" ] || release_type=auto
           [ -n "$npm_publish" ] || npm_publish=false
@@ -77,7 +85,7 @@ jobs:
     name: Release / Publish npm
     needs: release
     if: needs.release.outputs.release_created == 'true' && needs.release.outputs.npm_publish == 'true'
-    runs-on: ubuntu-slim
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     permissions:
       contents: read

@@ -3,6 +3,7 @@ set -euo pipefail
 
 source="${REPO_FOUNDRY_SOURCE:-https://github.com/${GITHUB_REPOSITORY_OWNER:-OWNER}/code-foundry.git}"
 ref="main"
+config_file="${REPO_FOUNDRY_CONFIG:-}"
 profile="${REPO_FOUNDRY_PROFILE:-auto}"
 protection=false
 dry_run=false
@@ -16,8 +17,40 @@ runtime_ref="${REPO_FOUNDRY_RUNTIME_REF:-}"
 bootstrap=true
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
+prune_standard="${REPO_FOUNDRY_PRUNE_STANDARD:-false}"
 license="${REPO_FOUNDRY_LICENSE:-agpl-3.0-or-later}"
 license_file="${REPO_FOUNDRY_LICENSE_FILE:-}"
+runner="${REPO_FOUNDRY_RUNNER:-ubuntu-latest}"
+unit_runner="${REPO_FOUNDRY_UNIT_RUNNER:-ubuntu-slim}"
+ci_runner="${REPO_FOUNDRY_CI_RUNNER:-ubuntu-latest}"
+test_runner="${REPO_FOUNDRY_TEST_RUNNER:-ubuntu-latest}"
+security_runner="${REPO_FOUNDRY_SECURITY_RUNNER:-ubuntu-slim}"
+codeql_runner="${REPO_FOUNDRY_CODEQL_RUNNER:-ubuntu-latest}"
+pr_runner="${REPO_FOUNDRY_PR_RUNNER:-ubuntu-slim}"
+release_runner="${REPO_FOUNDRY_RELEASE_RUNNER:-ubuntu-slim}"
+cache_packages="${REPO_FOUNDRY_CACHE_PACKAGES:-auto}"
+cache_build="${REPO_FOUNDRY_CACHE_BUILD:-auto}"
+coverage_minimum="${REPO_FOUNDRY_COVERAGE_MINIMUM:-80}"
+turbo_remote="${REPO_FOUNDRY_TURBO_REMOTE:-auto}"
+
+profile_set=false
+languages_set=false
+features_set=false
+package_manager_set=false
+runtime_repository_set=false
+runtime_ref_set=false
+release_type_set=false
+npm_publish_set=false
+license_set=false
+[ -n "${REPO_FOUNDRY_PROFILE:-}" ] && profile_set=true
+[ -n "${REPO_FOUNDRY_LANGUAGES:-}" ] && languages_set=true
+[ -n "${REPO_FOUNDRY_FEATURES:-}" ] && features_set=true
+[ -n "${REPO_FOUNDRY_PACKAGE_MANAGER:-}" ] && package_manager_set=true
+[ -n "${REPO_FOUNDRY_RUNTIME_REPOSITORY:-}" ] && runtime_repository_set=true
+[ -n "${REPO_FOUNDRY_RUNTIME_REF:-}" ] && runtime_ref_set=true
+[ -n "${REPO_FOUNDRY_RELEASE_TYPE:-}" ] && release_type_set=true
+[ -n "${REPO_FOUNDRY_NPM_PUBLISH:-}" ] && npm_publish_set=true
+[ -n "${REPO_FOUNDRY_LICENSE:-}" ] && license_set=true
 tool_dir=""
 
 cleanup() {
@@ -34,6 +67,7 @@ Initialize or synchronize a repository from the shared baseline.
 Options:
   --source PATH_OR_URL       Template source (default: REPO_FOUNDRY_SOURCE or GitHub owner)
   --ref REF                  Template branch or tag (default: main)
+  --config PATH              Use a .github/code-foundry.yml configuration file
   --profile NAME             auto, application, monorepo, or minimal
   --languages LIST           auto or comma-separated: typescript,rust,python,solidity
   --features LIST            all or comma-separated optional features:
@@ -63,14 +97,15 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --source) source="${2:?missing source path or URL}"; shift 2 ;;
     --ref) ref="${2:?missing ref}"; shift 2 ;;
-    --profile) profile="${2:?missing profile}"; shift 2 ;;
-    --languages) languages="${2:?missing language list}"; shift 2 ;;
-    --features) features="${2:?missing feature list}"; shift 2 ;;
-    --package-manager) package_manager="${2:?missing package manager}"; shift 2 ;;
-    --runtime-repository) runtime_repository="${2:?missing runtime repository}"; shift 2 ;;
-    --runtime-ref) runtime_ref="${2:?missing runtime ref}"; shift 2 ;;
-    --release-type) release_type="${2:?missing release type}"; shift 2 ;;
-    --license) license="${2:?missing license}"; shift 2 ;;
+    --config) config_file="${2:?missing config path}"; shift 2 ;;
+    --profile) profile="${2:?missing profile}"; profile_set=true; shift 2 ;;
+    --languages) languages="${2:?missing language list}"; languages_set=true; shift 2 ;;
+    --features) features="${2:?missing feature list}"; features_set=true; shift 2 ;;
+    --package-manager) package_manager="${2:?missing package manager}"; package_manager_set=true; shift 2 ;;
+    --runtime-repository) runtime_repository="${2:?missing runtime repository}"; runtime_repository_set=true; shift 2 ;;
+    --runtime-ref) runtime_ref="${2:?missing runtime ref}"; runtime_ref_set=true; shift 2 ;;
+    --release-type) release_type="${2:?missing release type}"; release_type_set=true; shift 2 ;;
+    --license) license="${2:?missing license}"; license_set=true; shift 2 ;;
     --license-file) license_file="${2:?missing license file}"; shift 2 ;;
     --npm-publish) npm_publish=true; shift ;;
     --dry-run) dry_run=true; shift ;;
@@ -85,6 +120,59 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [ -n "$config_file" ]; then
+  [ -f "$config_file" ] || { printf 'Configuration file not found: %s\n' "$config_file" >&2; exit 1; }
+  mkdir -p .github
+  if [ "$(cd -- "$(dirname -- "$config_file")" && pwd)/$(basename -- "$config_file")" != "$(pwd)/.github/code-foundry.yml" ]; then
+    cp "$config_file" .github/code-foundry.yml
+  fi
+fi
+
+config_path=.github/code-foundry.yml
+[ -f "$config_path" ] || config_path=.github/template.yml
+if [ -f "$config_path" ]; then
+  config_value() {
+    awk -F': ' -v key="$1" '$1 == key { value=$2; sub(/[[:space:]]+#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit }' "$config_path"
+  }
+  if [ "$profile_set" = false ]; then profile="$(config_value profile)"; fi
+  if [ "$languages_set" = false ]; then languages="$(config_value languages)"; fi
+  if [ "$features_set" = false ]; then features="$(config_value features)"; fi
+  if [ "$package_manager_set" = false ]; then package_manager="$(config_value package_manager)"; fi
+  if [ "$runtime_repository_set" = false ]; then runtime_repository="$(config_value runtime_repository)"; fi
+  if [ "$runtime_ref_set" = false ]; then runtime_ref="$(config_value runtime_ref)"; fi
+  if [ "$release_type_set" = false ]; then release_type="$(config_value release_type)"; fi
+  if [ "$npm_publish_set" = false ]; then npm_publish="$(config_value npm_publish)"; fi
+  if [ "$license_set" = false ]; then license="$(config_value license)"; fi
+  [ -n "$license_file" ] || license_file="$(config_value license_file)"
+  prune_standard="$(config_value prune_standard)"
+  [ -n "${REPO_FOUNDRY_RUNNER:-}" ] || runner="$(config_value runner)"
+  [ -n "${REPO_FOUNDRY_UNIT_RUNNER:-}" ] || unit_runner="$(config_value unit_runner)"
+  [ -n "${REPO_FOUNDRY_CI_RUNNER:-}" ] || ci_runner="$(config_value ci_runner)"
+  [ -n "${REPO_FOUNDRY_TEST_RUNNER:-}" ] || test_runner="$(config_value test_runner)"
+  [ -n "${REPO_FOUNDRY_SECURITY_RUNNER:-}" ] || security_runner="$(config_value security_runner)"
+  [ -n "${REPO_FOUNDRY_CODEQL_RUNNER:-}" ] || codeql_runner="$(config_value codeql_runner)"
+  [ -n "${REPO_FOUNDRY_PR_RUNNER:-}" ] || pr_runner="$(config_value pr_runner)"
+  [ -n "${REPO_FOUNDRY_RELEASE_RUNNER:-}" ] || release_runner="$(config_value release_runner)"
+  [ -n "${REPO_FOUNDRY_CACHE_PACKAGES:-}" ] || cache_packages="$(config_value cache_packages)"
+  [ -n "${REPO_FOUNDRY_CACHE_BUILD:-}" ] || cache_build="$(config_value cache_build)"
+  [ -n "${REPO_FOUNDRY_COVERAGE_MINIMUM:-}" ] || coverage_minimum="$(config_value coverage_minimum)"
+  [ -n "${REPO_FOUNDRY_TURBO_REMOTE:-}" ] || turbo_remote="$(config_value turbo_remote)"
+  [ -n "$runner" ] || runner=ubuntu-latest
+  [ -n "$unit_runner" ] || unit_runner=ubuntu-slim
+  [ -n "$ci_runner" ] || ci_runner="$runner"
+  [ -n "$test_runner" ] || test_runner="$runner"
+  [ -n "$security_runner" ] || security_runner=ubuntu-slim
+  [ -n "$codeql_runner" ] || codeql_runner="$runner"
+  [ -n "$pr_runner" ] || pr_runner=ubuntu-slim
+  [ -n "$release_runner" ] || release_runner=ubuntu-slim
+  [ -n "$cache_packages" ] || cache_packages=auto
+  [ -n "$cache_build" ] || cache_build=auto
+  [ -n "$coverage_minimum" ] || coverage_minimum=80
+  [ -n "$turbo_remote" ] || turbo_remote=auto
+  [ -n "$prune_standard" ] || prune_standard=false
+  [ "$prune_standard" = true ] && prune=true
+fi
 
 case "$package_manager" in
   auto|bun|pnpm|yarn|npm) ;;
@@ -130,16 +218,19 @@ if [ "$dry_run" = true ]; then
 fi
 
 mkdir -p .github
-template_ref="$(awk -F': ' '/^template:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-profile="$(awk -F': ' '/^profile:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-languages="$(awk -F': ' '/^languages:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-features="$(awk -F': ' '/^features:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-runtime_ref="$(awk -F': ' '/^runtime_ref:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-release_type="$(awk -F': ' '/^release_type:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-npm_publish="$(awk -F': ' '/^npm_publish:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
-license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml 2>/dev/null || true)"
+config_value() {
+  awk -F': ' -v key="$1" '$1 == key { value=$2; sub(/[[:space:]]+#.*/, "", value); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit }' .github/code-foundry.yml
+}
+template_ref="$(config_value template 2>/dev/null || true)"
+profile="$(config_value profile 2>/dev/null || true)"
+languages="$(config_value languages 2>/dev/null || true)"
+features="$(config_value features 2>/dev/null || true)"
+package_manager="$(config_value package_manager 2>/dev/null || true)"
+runtime_repository="$(config_value runtime_repository 2>/dev/null || true)"
+runtime_ref="$(config_value runtime_ref 2>/dev/null || true)"
+release_type="$(config_value release_type 2>/dev/null || true)"
+npm_publish="$(config_value npm_publish 2>/dev/null || true)"
+license="$(config_value license 2>/dev/null || true)"
 {
   printf 'version: 1\n'
   if [ -n "$template_ref" ]; then
@@ -151,10 +242,26 @@ license="$(awk -F': ' '/^license:/ {print $2; exit}' .github/template.yml 2>/dev
   printf 'package_manager: %s\n' "$package_manager"
   printf 'runtime_repository: %s\n' "$runtime_repository"
   printf 'runtime_ref: %s\n' "$runtime_ref"
+  printf 'runner: %s\n' "$runner"
+  printf 'unit_runner: %s\n' "$unit_runner"
+  printf 'ci_runner: %s\n' "$ci_runner"
+  printf 'test_runner: %s\n' "$test_runner"
+  printf 'security_runner: %s\n' "$security_runner"
+  printf 'codeql_runner: %s\n' "$codeql_runner"
+  printf 'pr_runner: %s\n' "$pr_runner"
+  printf 'release_runner: %s\n' "$release_runner"
   printf 'release_type: %s\n' "$release_type"
   printf 'npm_publish: %s\n' "$npm_publish"
   printf 'license: %s\n' "$license"
-} > .github/template.yml
+  if [ -n "$license_file" ]; then
+    printf 'license_file: %s\n' "$license_file"
+  fi
+  printf 'prune_standard: %s\n' "$prune_standard"
+  printf 'cache_packages: %s\n' "$cache_packages"
+  printf 'cache_build: %s\n' "$cache_build"
+  printf 'coverage_minimum: %s\n' "$coverage_minimum"
+  printf 'turbo_remote: %s\n' "$turbo_remote"
+} > .github/code-foundry.yml
 
 if [ "$bootstrap" = false ]; then
   printf '%s\n' 'Bootstrap skipped.'

@@ -15,4 +15,5 @@ jobs:
   release:
     name: Release
     uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-release.yml@v0.20.2
+    with:
     secrets: inherit

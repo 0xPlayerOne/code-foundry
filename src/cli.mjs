@@ -18,6 +18,7 @@ Init/sync options:
   --target PATH             Repository directory (default: current directory)
   --source PATH_OR_URL      Template source override
   --ref REF                 Template branch or tag (default: main)
+  --config PATH             Use a .github/code-foundry.yml configuration file
   --profile NAME            auto, application, monorepo, or minimal
   --languages LIST          auto or typescript,rust,python,solidity
   --features LIST           all or ci,codeql,security,test,draft-pr,release-pr,release,dependabot
@@ -47,6 +48,7 @@ function parseArgs(argv) {
     target: process.cwd(),
     source: packageRoot,
     ref: 'main',
+    config: process.env.REPO_FOUNDRY_CONFIG || '',
     profile: process.env.REPO_FOUNDRY_PROFILE || 'auto',
     languages: process.env.REPO_FOUNDRY_LANGUAGES || 'auto',
     features: process.env.REPO_FOUNDRY_FEATURES || 'all',
@@ -62,6 +64,14 @@ function parseArgs(argv) {
     npmPublish: process.env.REPO_FOUNDRY_NPM_PUBLISH === 'true',
     languagesSet: false,
     featuresSet: false,
+    profileSet: Boolean(process.env.REPO_FOUNDRY_PROFILE),
+    packageManagerSet: Boolean(process.env.REPO_FOUNDRY_PACKAGE_MANAGER),
+    runtimeRepositorySet: Boolean(process.env.REPO_FOUNDRY_RUNTIME_REPOSITORY),
+    runtimeRefSet: Boolean(process.env.REPO_FOUNDRY_RUNTIME_REF),
+    releaseTypeSet: Boolean(process.env.REPO_FOUNDRY_RELEASE_TYPE),
+    licenseSet: Boolean(process.env.REPO_FOUNDRY_LICENSE),
+    licenseFileSet: Boolean(process.env.REPO_FOUNDRY_LICENSE_FILE),
+    npmPublishSet: Boolean(process.env.REPO_FOUNDRY_NPM_PUBLISH),
     dryRun: false,
     prune: false,
     force: false,
@@ -72,6 +82,7 @@ function parseArgs(argv) {
     ['--target', 'target'],
     ['--source', 'source'],
     ['--ref', 'ref'],
+    ['--config', 'config'],
     ['--profile', 'profile'],
     ['--languages', 'languages'],
     ['--features', 'features'],
@@ -95,6 +106,13 @@ function parseArgs(argv) {
       options[values.get(arg)] = value
       if (arg === '--languages') options.languagesSet = true
       if (arg === '--features') options.featuresSet = true
+      if (arg === '--profile') options.profileSet = true
+      if (arg === '--package-manager') options.packageManagerSet = true
+      if (arg === '--runtime-repository') options.runtimeRepositorySet = true
+      if (arg === '--runtime-ref') options.runtimeRefSet = true
+      if (arg === '--release-type') options.releaseTypeSet = true
+      if (arg === '--license') options.licenseSet = true
+      if (arg === '--license-file') options.licenseFileSet = true
       continue
     }
     if (arg === '--dry-run') options.dryRun = true
@@ -102,7 +120,7 @@ function parseArgs(argv) {
     else if (arg === '--prune') options.prune = true
     else if (arg === '--protection') options.protection = true
     else if (arg === '--no-bootstrap') options.bootstrap = false
-    else if (arg === '--npm-publish') options.npmPublish = true
+    else if (arg === '--npm-publish') { options.npmPublish = true; options.npmPublishSet = true }
     else fail(`unknown option: ${arg}`)
   }
 
@@ -125,12 +143,16 @@ function main() {
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
   const common = ['--source', options.source, '--ref', options.ref]
-  common.push('--license', options.license)
-  if (options.licenseFile) common.push('--license-file', options.licenseFile)
+  if (options.config) common.push('--config', options.config)
+  if (options.profileSet) common.push('--profile', options.profile)
   if (options.languagesSet) common.push('--languages', options.languages)
   if (options.featuresSet) common.push('--features', options.features)
-  if (options.runtimeRepository) common.push('--runtime-repository', options.runtimeRepository)
-  if (options.runtimeRef) common.push('--runtime-ref', options.runtimeRef)
+  if (options.packageManagerSet) common.push('--package-manager', options.packageManager)
+  if (options.runtimeRepositorySet) common.push('--runtime-repository', options.runtimeRepository)
+  if (options.runtimeRefSet) common.push('--runtime-ref', options.runtimeRef)
+  if (options.releaseTypeSet) common.push('--release-type', options.releaseType)
+  if (options.licenseSet) common.push('--license', options.license)
+  if (options.licenseFileSet && options.licenseFile) common.push('--license-file', options.licenseFile)
   if (options.prune) common.push('--prune')
   if (options.force) common.push('--force')
   if (options.dryRun) common.push('--check')
@@ -140,21 +162,22 @@ function main() {
     const initArgs = [
       '--source', options.source,
       '--ref', options.ref,
-      '--profile', options.profile,
-      '--languages', options.languages,
-      '--features', options.features,
-      '--package-manager', options.packageManager,
-      '--release-type', options.releaseType,
-      '--license', options.license,
     ]
-    if (options.runtimeRepository) initArgs.push('--runtime-repository', options.runtimeRepository)
-    if (options.runtimeRef) initArgs.push('--runtime-ref', options.runtimeRef)
-    if (options.licenseFile) initArgs.push('--license-file', options.licenseFile)
+    if (options.profileSet) initArgs.push('--profile', options.profile)
+    if (options.languagesSet) initArgs.push('--languages', options.languages)
+    if (options.featuresSet) initArgs.push('--features', options.features)
+    if (options.packageManagerSet) initArgs.push('--package-manager', options.packageManager)
+    if (options.releaseTypeSet) initArgs.push('--release-type', options.releaseType)
+    if (options.licenseSet) initArgs.push('--license', options.license)
+    if (options.config) initArgs.push('--config', options.config)
+    if (options.runtimeRepositorySet) initArgs.push('--runtime-repository', options.runtimeRepository)
+    if (options.runtimeRefSet) initArgs.push('--runtime-ref', options.runtimeRef)
+    if (options.licenseFileSet && options.licenseFile) initArgs.push('--license-file', options.licenseFile)
     if (options.protection) initArgs.push('--protection')
     if (options.dryRun) initArgs.push('--dry-run')
     if (options.prune) initArgs.push('--prune')
     if (options.force) initArgs.push('--force')
-    if (options.npmPublish) initArgs.push('--npm-publish')
+    if (options.npmPublishSet && options.npmPublish) initArgs.push('--npm-publish')
     if (!options.bootstrap) initArgs.push('--no-bootstrap')
     run('init-repo.sh', initArgs, target)
   } else if (command === 'sync') {

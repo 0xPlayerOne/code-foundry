@@ -19,4 +19,5 @@ jobs:
   draft-pr:
     name: Draft PR
     uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-draft-pr.yml@v0.20.2
+    with:
     secrets: inherit
