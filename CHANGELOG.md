@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.2...v0.20.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **release-pr:** pin no-op runtime ([af662ef](https://github.com/0xPlayerOne/code-foundry/commit/af662ef7206269f03438bc3983878024629f6056))
+
 ## [0.20.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.1...v0.20.2) (2026-07-28)
 
 
