@@ -21,6 +21,10 @@ Publication occurs only from a Release Please tag; ordinary pushes do not
 publish. The release workflow fails clearly when npm publication is enabled but
 neither trusted publishing nor a token is configured.
 
+After enabling publication, make one controlled release and verify both the
+registry version and the provenance link before treating the repository as
+fully configured.
+
 ## GitHub Releases and GitHub Packages
 
 A GitHub Release is release metadata attached to a Git tag. It is independent
