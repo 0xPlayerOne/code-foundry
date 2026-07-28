@@ -370,16 +370,22 @@ for file in "${files[@]}"; do
 done
 
 # Reusable workflow callers must use a literal repository/ref. Render the
-# selected runtime repository while leaving custom workflows untouched.
+# selected runtime repository while leaving custom workflows untouched. Read
+# the source's configured runtime first so forks remain self-contained.
+source_runtime_repository=""
+if [ -f "$template_root/.github/template.yml" ]; then
+  source_runtime_repository="$(awk -F': ' '/^runtime_repository:/ {print $2; exit}' "$template_root/.github/template.yml")"
+fi
+[ -n "$source_runtime_repository" ] || source_runtime_repository="0xPlayerOne/code-foundry"
 for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflows/security.yml .github/workflows/codeql.yml; do
   [ -f "$file" ] || continue
-  if grep -q '0xPlayerOne/code-foundry' "$file"; then
+  if grep -qF "$source_runtime_repository" "$file" && [ "$source_runtime_repository" != "$runtime_repository" ]; then
     changed=$((changed + 1))
     if [ "$mode" = "check" ]; then
       printf 'Would render runtime repository in %s\n' "$file"
     else
       rendered_workflow="$(mktemp)"
-      sed "s#0xPlayerOne/code-foundry#$runtime_repository#g" "$file" > "$rendered_workflow"
+      sed "s#${source_runtime_repository}#${runtime_repository}#g" "$file" > "$rendered_workflow"
       mv "$rendered_workflow" "$file"
       printf 'Rendered runtime repository in %s\n' "$file"
     fi
