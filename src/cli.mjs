@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { doctor } from './commands/doctor.mjs'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
@@ -88,7 +89,14 @@ function main() {
     run('init-repo.sh', initArgs, target)
   }
   else if (command === 'sync') run('sync-template.sh', common, target)
-  else if (command === 'doctor') run('doctor.sh', [], target)
+  else if (command === 'doctor') {
+    try {
+      doctor(target)
+    } catch (error) {
+      console.error(`code-foundry: ${error instanceof Error ? error.message : String(error)}`)
+      process.exitCode = 1
+    }
+  }
   else fail(`unknown command: ${command}`)
 }
 
