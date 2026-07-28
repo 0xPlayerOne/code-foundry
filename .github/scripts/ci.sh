@@ -14,6 +14,10 @@ has_script() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.[process.argv[1]] ? 0 : 1)' "$1"
 }
 
+has_turbo_script() {
+  [ -f package.json ] && node -e 'const p=require("./package.json"); const script=p.scripts?.[process.argv[1]] || ""; process.exit(/(^|[\s;&|])turbo(\s|$)/.test(script) ? 0 : 1)' "$1"
+}
+
 has_bun_native_coverage() {
   [ -f package.json ] && node -e 'const p=require("./package.json"); process.exit(p.scripts?.["test:coverage"]?.includes("bun test") ? 0 : 1)'
 }
@@ -118,6 +122,15 @@ cargo_run() {
 
 run_script() {
   if ! has_script "$1"; then echo "Skipping $1 (script not defined)"; return; fi
+  if [ "${REPO_FOUNDRY_TURBO_REMOTE_ONLY:-false}" = true ] && has_turbo_script "$1"; then
+    case "$(package_manager)" in
+      bun) bun run "$1" -- --cache=remote:rw ;;
+      pnpm) corepack pnpm run "$1" -- --cache=remote:rw ;;
+      yarn) corepack yarn run "$1" -- --cache=remote:rw ;;
+      npm) npm run "$1" -- --cache=remote:rw ;;
+    esac
+    return
+  fi
   case "$(package_manager)" in
     bun) bun run "$1" ;;
     pnpm) corepack pnpm run "$1" ;;
@@ -174,6 +187,10 @@ PY
 }
 
 install_javascript() {
+  if [ -n "${REPO_FOUNDRY_TASK:-}" ] && ! task_uses_javascript "$REPO_FOUNDRY_TASK"; then
+    echo "Skipping JavaScript dependency install (no $REPO_FOUNDRY_TASK JavaScript suite)"
+    return
+  fi
   if [ "${REPO_FOUNDRY_INSTALL_JAVASCRIPT:-true}" = true ] && [ -f package.json ] && has_javascript_dependencies &&
     { [ "${REPO_FOUNDRY_JAVASCRIPT_CACHE_HIT:-false}" != true ] || [ ! -d node_modules ]; }; then
     case "$(package_manager)" in
@@ -190,6 +207,10 @@ install_javascript() {
 }
 
 install_rust() {
+  if [ -n "${REPO_FOUNDRY_TASK:-}" ] && ! task_uses_rust "$REPO_FOUNDRY_TASK"; then
+    echo "Skipping Rust dependency install (no $REPO_FOUNDRY_TASK Rust suite)"
+    return
+  fi
   if [ "${REPO_FOUNDRY_INSTALL_RUST:-true}" = true ] && [ -f Cargo.toml ] && [ "${REPO_FOUNDRY_RUST_CACHE_HIT:-false}" != true ]; then
     cargo_run fetch
   elif [ "${REPO_FOUNDRY_INSTALL_RUST:-true}" = true ] && [ -f Cargo.toml ]; then
@@ -198,6 +219,10 @@ install_rust() {
 }
 
 install_python() {
+  if [ -n "${REPO_FOUNDRY_TASK:-}" ] && ! task_uses_python "$REPO_FOUNDRY_TASK"; then
+    echo "Skipping Python dependency install (no $REPO_FOUNDRY_TASK Python suite)"
+    return
+  fi
   if [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python &&
     needs_python_environment &&
     { [ "${REPO_FOUNDRY_PYTHON_CACHE_HIT:-false}" != true ] || [ ! -x .venv/bin/python ]; }; then
@@ -231,6 +256,66 @@ install_python() {
     echo "Using cached Python environment"
   elif [ "${REPO_FOUNDRY_INSTALL_PYTHON:-true}" = true ] && has_python; then
     echo "Using shared Python tools; project environment not required"
+  fi
+}
+
+task_uses_javascript() {
+  local task="$1"
+  case "$task" in
+    unit) has_script test:unit || has_script test:coverage || { has_script test && ! has_script test:integration; } ;;
+    integration) has_script test:integration ;;
+    e2e) has_script test:e2e || has_script e2e ;;
+    smoke) has_script test:smoke || has_script smoke ;;
+    *) return 0 ;;
+  esac
+}
+
+task_uses_rust() {
+  local task="$1"
+  [ -f Cargo.toml ] || return 1
+  case "$task" in
+    unit) has_rust_target lib || has_rust_target bin ;;
+    integration) [ -d tests ] ;;
+    e2e|smoke) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+task_uses_python() {
+  local task="$1"
+  has_python_tests() {
+    local directory="$1"
+    [ -d "$directory" ] && find "$directory" -type f -name '*.py' -print -quit | grep -q .
+  }
+  has_python || return 1
+  case "$task" in
+    unit) has_python_tests tests/unit || { [ ! -d tests/unit ] && [ ! -d tests/integration ] && has_python_tests tests; } ;;
+    integration) has_python_tests tests/integration ;;
+    e2e) has_python_tests tests/e2e ;;
+    smoke) has_python_tests tests/smoke ;;
+    *) return 0 ;;
+  esac
+}
+
+task_profile() {
+  local task="${1:?missing test task}"
+  local output applicable
+  case "$task" in
+    unit|integration|e2e|smoke) ;;
+    *) echo "unknown test task: $task" >&2; return 2 ;;
+  esac
+  output="$(should_run "$task")"
+  applicable="$(printf '%s\n' "$output" | awk -F= '$1 == "applicable" {print $2; exit}')"
+  printf 'applicable=%s\n' "${applicable:-false}"
+  if [ "$task" = e2e ]; then
+    printf 'browser=%s\n' "$(printf '%s\n' "$output" | awk -F= '$1 == "browser" {print $2; exit}' | awk 'NF {print; found=1} END {if (!found) print "false"}')"
+  fi
+  if [ "${applicable:-false}" = true ]; then
+    task_uses_javascript "$task" && printf 'javascript=true\n' || printf 'javascript=false\n'
+    task_uses_python "$task" && printf 'python=true\n' || printf 'python=false\n'
+    task_uses_rust "$task" && printf 'rust=true\n' || printf 'rust=false\n'
+  else
+    printf '%s\n' 'javascript=false' 'python=false' 'rust=false'
   fi
 }
 
@@ -546,5 +631,6 @@ should_run() {
 
 case "${1:-}" in
   install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run) "$1" "${2:-}" ;;
-  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run}" >&2; exit 2 ;;
+  task_profile) task_profile "${2:-}" ;;
+  *) echo "usage: $0 {install|format|lint|type_check|build|unit|integration|e2e|smoke|should_run|task_profile}" >&2; exit 2 ;;
 esac

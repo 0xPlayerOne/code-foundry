@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source="https://github.com/0xPlayerOne/repo-foundry.git"
+source="${REPO_FOUNDRY_SOURCE:-https://github.com/${GITHUB_REPOSITORY_OWNER:-OWNER}/code-foundry.git}"
 ref="main"
 protection=false
 dry_run=false
@@ -26,7 +26,7 @@ Usage: init-repo.sh [options]
 Initialize or synchronize a repository from the shared baseline.
 
 Options:
-  --source PATH_OR_URL       Template source (default: 0xPlayerOne/template-repo)
+  --source PATH_OR_URL       Template source (default: REPO_FOUNDRY_SOURCE or GitHub owner)
   --ref REF                  Template branch or tag (default: main)
   --languages LIST           auto or comma-separated: typescript,rust,python,solidity
   --features LIST            all or comma-separated optional features:

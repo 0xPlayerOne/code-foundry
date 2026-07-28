@@ -49,15 +49,19 @@ done
 command -v gh >/dev/null 2>&1 || { echo "gh is required" >&2; exit 1; }
 
 is_private="$(gh repo view "$repo" --json isPrivate --jq '.isPrivate')"
+code_security_status="disabled"
+if [ "$is_private" = true ]; then
+  code_security_status="$(gh api "repos/$repo" --jq '.security_and_analysis.code_security.status // "disabled"' 2>/dev/null || printf 'disabled')"
+fi
 contexts=()
 if feature_enabled ci; then contexts+=(Format Lint Type-Check Build); fi
 if feature_enabled test; then contexts+=(Unit Integration E2E Smoke); fi
 if feature_enabled security; then
-  contexts+=('Dependency Audit (JavaScript)' 'Dependency Audit (Rust)' 'Dependency Audit (Python)')
+  contexts+=(Profile 'Dependency Audit (JavaScript)' 'Dependency Audit (Rust)' 'Dependency Audit (Python)')
 fi
 if feature_enabled codeql; then contexts+=(Detect); fi
 
-if [ "$is_private" != true ] && feature_enabled codeql; then
+if { [ "$is_private" != true ] || [ "$code_security_status" = enabled ]; } && feature_enabled codeql; then
   contexts+=("Analyze (Actions)")
   if language_enabled typescript && git ls-files -- '*.ts' '*.tsx' '*.js' '*.jsx' package.json tsconfig\*.json | grep -q .; then contexts+=("Analyze (TypeScript)"); fi
   if language_enabled python && git ls-files -- '*.py' pyproject.toml requirements\*.txt setup.py ':!.github/**' | grep -q .; then contexts+=("Analyze (Python)"); fi
@@ -79,7 +83,14 @@ while IFS= read -r context; do
   [ -n "$context" ] || continue
   case "$context" in
     'Slither / Analyze') continue ;; # removed from the standard workflow set
-    'Dependency Audit'|'Dependency Audit ('*|'CI / '*|'Test / '*|'Security / '*|'CodeQL / '*) ;;
+    # Remove both the current concise job names and older workflow-prefixed
+    # names before rebuilding the standard set. This prevents stale required
+    # checks from remaining required after a repository changes visibility or
+    # template version.
+    'Dependency Audit'|'Dependency Audit ('*|'Profile'|'Test Profile'|\
+    'Format'|'Lint'|'Type-Check'|'Build'|'Unit'|'Integration'|'E2E'|'Smoke'|\
+    'Detect'|'Analyze'|'Analyze ('*|\
+    'CI / '*|'Test / '*|'Security / '*|'CodeQL / '*) ;;
     *) preserved+=("$context") ;;
   esac
 done <<< "$existing"

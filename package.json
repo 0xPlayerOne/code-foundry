@@ -1,12 +1,12 @@
 {
-  "name": "repo-foundry",
+  "name": "code-foundry",
   "version": "0.1.4",
   "description": "A fast, language-aware repository factory for agent-ready workflows, testing, security, and release automation.",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "packageManager": "bun@1.3.14",
   "bin": {
-    "repo-foundry": "src/cli.mjs"
+    "code-foundry": "src/cli.mjs"
   },
   "files": [
     "src",

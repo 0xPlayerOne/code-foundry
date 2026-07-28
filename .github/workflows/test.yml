@@ -16,25 +16,39 @@ env:
   REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   unit:
     name: Unit
-    runs-on: ubuntu-latest
+    # Keep ordinary suites on the lean image. Set the repository variable
+    # REPO_FOUNDRY_UNIT_RUNNER=ubuntu-latest for native/system-dependent tests.
+    runs-on: ${{ vars.REPO_FOUNDRY_UNIT_RUNNER || 'ubuntu-slim' }}
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run unit >> "$GITHUB_OUTPUT"
+        run: bash .github/scripts/ci.sh task_profile unit >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
           cache-build: false
+          cache-environment: false
+          cache-packages: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+          task: unit
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Unit
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh unit
@@ -58,18 +72,30 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run integration >> "$GITHUB_OUTPUT"
+        run: bash .github/scripts/ci.sh task_profile integration >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
-          cache-build: false
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          task: integration
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Integration
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh integration
@@ -77,16 +103,20 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run e2e >> "$GITHUB_OUTPUT"
+        run: bash .github/scripts/ci.sh task_profile e2e >> "$GITHUB_OUTPUT"
       - name: Cache browser binaries
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.browser == 'true'
-        uses: actions/cache@v5
+        uses: ./.github/actions/cache
         with:
+          save: ${{ github.event_name == 'push' }}
           path: |
             ~/.cache/ms-playwright
             ~/.cache/Cypress
@@ -99,6 +129,16 @@ jobs:
         uses: ./.github/actions/setup
         with:
           install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          task: e2e
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: E2E
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh e2e
@@ -106,17 +146,30 @@ jobs:
   smoke:
     name: Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Detect
         id: applicability
-        run: bash .github/scripts/ci.sh should_run smoke >> "$GITHUB_OUTPUT"
+        run: bash .github/scripts/ci.sh task_profile smoke >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
         with:
           install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          task: smoke
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Smoke
         if: steps.applicability.outputs.applicable == 'true'
         run: bash .github/scripts/ci.sh smoke

@@ -7,12 +7,12 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-const usage = `repo-foundry — initialize and maintain agent-ready repositories
+const usage = `code-foundry — initialize and maintain agent-ready repositories
 
 Usage:
-  repo-foundry init [options]
-  repo-foundry sync [options]
-  repo-foundry doctor [--target PATH]
+  code-foundry init [options]
+  code-foundry sync [options]
+  code-foundry doctor [--target PATH]
 
 Init/sync options:
   --target PATH             Repository directory (default: current directory)
@@ -31,7 +31,7 @@ Init/sync options:
 `
 
 function fail(message) {
-  console.error(`repo-foundry: ${message}`)
+  console.error(`code-foundry: ${message}`)
   process.exit(2)
 }
 
