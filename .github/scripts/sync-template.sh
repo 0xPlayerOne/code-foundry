@@ -371,7 +371,7 @@ done
 
 # Reusable workflow callers must use a literal repository/ref. Render the
 # selected runtime repository while leaving custom workflows untouched.
-for file in .github/workflows/ci.yml .github/workflows/test.yml; do
+for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflows/security.yml .github/workflows/codeql.yml; do
   [ -f "$file" ] || continue
   if grep -q '0xPlayerOne/code-foundry' "$file"; then
     changed=$((changed + 1))
