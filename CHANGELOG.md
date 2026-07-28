@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.18.0...v0.19.0) (2026-07-28)
+
+
+### Features
+
+* **workflows:** add reusable promotion runtimes ([ac113a9](https://github.com/0xPlayerOne/code-foundry/commit/ac113a902700957cbf26d4a47b4e7828b157dd13))
+
 ## [0.18.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.17.0...v0.18.0) (2026-07-28)
 
 
