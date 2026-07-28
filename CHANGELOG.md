@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.8](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.7...v0.27.8) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** run required Bun postinstall setup safely ([0302604](https://github.com/0xPlayerOne/code-foundry/commit/0302604f877bedbef8d3ab06794ffd9599fb774c))
+
 ## [0.27.7](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.6...v0.27.7) (2026-07-28)
 
 
