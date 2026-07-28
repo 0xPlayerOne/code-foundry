@@ -41,43 +41,62 @@ NODE
 )"
 [ -n "$turbo_version" ] || exit 0
 
+turbo_home="${RUNNER_TEMP:-/tmp}/repo-foundry-turbo"
 probe_file="$(mktemp)"
-cleanup() { rm -f "$probe_file"; }
+install_file="$(mktemp)"
+result_file="$(mktemp)"
+cleanup() { rm -f "$probe_file" "$install_file" "$result_file"; }
 trap cleanup EXIT
 
-if ! bunx --package "turbo@${turbo_version}" turbo run "$task" \
-  --dry=json --cache=remote:r --output-logs=none >"$probe_file" 2>&1; then
+if ! npm install --prefix "$turbo_home" --no-save --ignore-scripts --no-audit --no-fund \
+  "turbo@${turbo_version}" >"$install_file" 2>&1; then
+  echo "Turbo Probe: CLI unavailable; using full install"
   exit 0
 fi
 
-if ! node - "$probe_file" <<'NODE'
+turbo_bin="$turbo_home/node_modules/.bin/turbo"
+if [ ! -x "$turbo_bin" ]; then
+  echo "Turbo Probe: CLI unavailable; using full install"
+  exit 0
+fi
+
+if ! "$turbo_bin" run "$task" \
+  --dry=json --cache=remote:r --output-logs=none >"$probe_file" 2>&1; then
+  echo "Turbo Probe: CLI unavailable; using full install"
+  exit 0
+fi
+
+node - "$probe_file" >"$result_file" <<'NODE'
 const fs = require('node:fs');
 const file = process.argv[2];
 const text = fs.readFileSync(file, 'utf8');
 const start = text.indexOf('{');
-if (start < 0) process.exit(1);
+if (start < 0) {
+  console.log('invalid-json');
+  process.exit(0);
+}
 let report;
 try {
   report = JSON.parse(text.slice(start));
 } catch {
-  process.exit(1);
+  console.log('invalid-json');
+  process.exit(0);
 }
 const runnable = (report.tasks || []).filter((entry) =>
   entry.command !== '<NONEXISTENT>' && entry.resolvedTaskDefinition?.cache !== false,
 );
-process.exit(runnable.length > 0 && runnable.every((entry) => entry.cache?.status === 'HIT') ? 0 : 1);
+const hits = runnable.filter((entry) => entry.cache?.status === 'HIT').length;
+const hit = runnable.length > 0 && hits === runnable.length;
+console.log(`tasks=${report.tasks?.length || 0} runnable=${runnable.length} hits=${hits} hit=${hit}`);
 NODE
-then
+probe_result="$(cat "$result_file")"
+echo "Turbo Probe: $probe_result"
+if ! grep -q 'hit=true' <<<"$probe_result"; then
+  echo "Turbo Probe: remote cache incomplete; using full install"
   exit 0
 fi
 
-bin_dir="${RUNNER_TEMP:-/tmp}/repo-foundry-turbo-bin"
-mkdir -p "$bin_dir"
-cat > "$bin_dir/turbo" <<EOF
-#!/usr/bin/env bash
-exec bunx --package "turbo@${turbo_version}" turbo "\$@"
-EOF
-chmod +x "$bin_dir/turbo"
-echo "$bin_dir" >> "${GITHUB_PATH:-/dev/null}"
+turbo_bin_dir="${turbo_bin%/*}"
+echo "$turbo_bin_dir" >> "${GITHUB_PATH:-/dev/null}"
 printf 'REPO_FOUNDRY_TURBO_REMOTE_ONLY=true\n' >> "${GITHUB_ENV:-/dev/null}"
 set_output hit true
