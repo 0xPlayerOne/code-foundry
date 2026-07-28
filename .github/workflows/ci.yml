@@ -74,9 +74,6 @@ jobs:
           cache-lint: 'false'
           cache-build: 'false'
           task: format
-          task-javascript: 'true'
-          task-python: 'false'
-          task-rust: 'false'
       - name: Format
         if: steps.applicability.outputs.applicable == 'true'
         run: node .code-foundry/src/runtime.mjs ci format
