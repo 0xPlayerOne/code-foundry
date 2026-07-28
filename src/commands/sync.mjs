@@ -20,7 +20,7 @@ const standardFiles = [
 
 const protectedFiles = new Set([
   'AGENTS.md', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
-  '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md',
+  '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', 'NOTICE',
 ])
 
 const legacyFiles = [
