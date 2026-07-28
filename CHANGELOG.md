@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.6.0...v0.7.0) (2026-07-28)
+
+
+### Features
+
+* **ci:** use reusable workflow wrapper ([77c7075](https://github.com/0xPlayerOne/code-foundry/commit/77c7075d23f48b44da276406c0000fe23c7f1dcf))
+
+
+### Bug Fixes
+
+* **ci:** declare read-only workflow permissions ([e7b7397](https://github.com/0xPlayerOne/code-foundry/commit/e7b739739979b1572760c1f81d9c7229d156c7e3))
+* **ci:** name reusable checks consistently ([4a194f4](https://github.com/0xPlayerOne/code-foundry/commit/4a194f40b4f2a2660526eefac0e366402de0782d))
+
 ## [0.6.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.5.0...v0.6.0) (2026-07-28)
 
 
