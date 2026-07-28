@@ -46,6 +46,10 @@ The standard Security wrapper uses the same runtime contract, so dependency
 audits and the public-only Dependency Review policy can be upgraded centrally
 without copying security scripts into every consumer repository.
 
+CodeQL is also independently reusable through the same contract. It retains
+GitHub's native security-event permissions and language-specific analysis while
+keeping CodeQL separate from CI and dependency security checks.
+
 Initialization defaults to AGPL for new repositories. Synchronization defaults
 to `--license preserve`, so an existing repository's license is never replaced
 unless you explicitly select a license or provide `--license-file`.
