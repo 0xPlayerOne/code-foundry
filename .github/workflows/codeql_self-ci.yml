@@ -18,7 +18,7 @@ permissions:
 jobs:
   codeql:
     name: CodeQL
-    uses: 0xPlayerOne/code-foundry/.github/workflows/codeql.yml@v0.22.0
+    uses: ./.github/workflows/codeql.yml
     with:
       runtime-repository: 0xPlayerOne/code-foundry
       runtime-ref: v0.22.0

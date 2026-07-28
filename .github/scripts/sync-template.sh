@@ -496,7 +496,7 @@ fi
 [ -n "$source_runtime_ref" ] || source_runtime_ref="$runtime_ref"
 for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflows/security.yml .github/workflows/codeql.yml .github/workflows/draft-pr.yml .github/workflows/release-pr.yml .github/workflows/release.yml; do
   [ -f "$file" ] || continue
-  if grep -qF "$source_runtime_repository@" "$file" || grep -q 'runtime-ref:' "$file"; then
+  if grep -qF "$source_runtime_repository@" "$file" || grep -q 'runtime-ref:' "$file" || grep -qF 'uses: ./.github/workflows/' "$file"; then
     changed=$((changed + 1))
     if [ "$mode" = "check" ]; then
       printf 'Would render runtime repository in %s\n' "$file"
@@ -513,6 +513,7 @@ for file in .github/workflows/ci.yml .github/workflows/test.yml .github/workflow
       rendered_workflow="$(mktemp)"
       sed -E \
         -e "s#${source_runtime_repository}@[^[:space:]]+#${runtime_repository}@${runtime_ref}#g" \
+        -e "s#uses: \.\/.github/workflows/([^[:space:]]+)#uses: ${runtime_repository}/.github/workflows/\\1@${runtime_ref}#g" \
         -e "s#runtime-ref: [^[:space:]]+#runtime-ref: ${runtime_ref}#g" \
         -e "s#^      runner: [^[:space:]]+#      runner: ${runner_value}#" \
         -e "s#^      unit-runner: [^[:space:]]+#      unit-runner: ${unit_runner}#" \
