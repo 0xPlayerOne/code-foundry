@@ -100,13 +100,14 @@ function install() {
     if (lock) {
       /** @type {Record<string, [string, string[]]>} */
       const commands = {
-        bun: ['bun', ['install', '--frozen-lockfile', ...(readPackage()?.workspaces ? ['--force'] : [])]],
+        bun: ['bun', ['install', '--frozen-lockfile', '--ignore-scripts', ...(readPackage()?.workspaces ? ['--force'] : [])]],
         pnpm: ['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']],
         yarn: ['yarn', ['install', '--immutable']],
         npm: ['npm', ['ci', '--prefer-offline', '--no-audit', '--fund=false']],
       }
       const command = commands[packageManager]
       if (command) run(command[0], command[1])
+      if (packageManager === 'bun') runScript(['prepare'])
     }
   }
   if (hasLanguage('python') && (existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'requirements.txt')))) {
