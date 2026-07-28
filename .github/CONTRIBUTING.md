@@ -55,8 +55,8 @@ Use squash merges unless the repository documents another strategy. Re-align `st
 ### Toolchain
 
 1. Install [mise](https://mise.jdx.dev/).
-2. Run `bash .github/scripts/bootstrap.sh` to install the pinned toolchain, enable hooks, and validate the checkout.
-3. Use `bash .github/scripts/doctor.sh` when setup, lockfiles, or hooks appear out of sync.
+2. Run `npx code-foundry init` to install the pinned toolchain, enable hooks, and validate the checkout.
+3. Use `npx code-foundry doctor` when setup, lockfiles, or hooks appear out of sync.
 4. Use the repository's existing package manager and lockfile. Do not introduce a second package manager.
 5. Copy `.env.example` to the appropriate local environment file when provided. Never commit the copy.
 
@@ -85,7 +85,7 @@ bash .github/scripts/ci.sh unit
 bash .github/scripts/ci.sh integration
 bash .github/scripts/ci.sh e2e
 bash .github/scripts/ci.sh smoke
-bash .github/scripts/security.sh
+Security and dependency audits run through the GitHub Security workflow.
 ```
 
 Run the checks relevant to the change. For a release or security-sensitive change, run the complete set. Record the commands and results in the pull request.

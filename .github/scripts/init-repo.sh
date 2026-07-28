@@ -252,7 +252,9 @@ if [ "$bootstrap" = false ]; then
   exit 0
 fi
 
-bash .github/scripts/bootstrap.sh
+bootstrap_script="$script_dir/bootstrap.sh"
+[ -x "$bootstrap_script" ] || { echo "Package is missing bootstrap.sh" >&2; exit 1; }
+bash "$bootstrap_script"
 
 if [ "$protection" = true ]; then
   remote="$(git remote get-url origin 2>/dev/null || true)"

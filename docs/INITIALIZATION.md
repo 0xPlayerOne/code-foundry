@@ -37,6 +37,7 @@ Sync updates standard Code Foundry files only. It preserves application code,
 authored documentation, existing `.mise.toml` selections, and custom workflows
 such as deployment, search, Slither, or monitoring workflows.
 
-The environment bootstrap installs or reuses mise-managed tools, enables the
-repository hooks, and runs the repository doctor. Re-run
-`bash .github/scripts/bootstrap.sh` if local tools need to be repaired.
+The environment bootstrap installs or reuses mise-managed tools and enables
+the repository hooks. Use `npx code-foundry doctor` when local setup needs to
+be checked; the CLI supplies the implementation without adding maintenance
+scripts to the consumer repository.

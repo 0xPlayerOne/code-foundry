@@ -313,7 +313,6 @@ files=(
   ruff.toml
   .prettierrc
   .github/CODEOWNERS
-  .github/code-foundry.yml.example
   .github/CODE_OF_CONDUCT.md
   .github/CONTRIBUTING.md
   .github/PULL_REQUEST_TEMPLATE.md
@@ -322,18 +321,13 @@ files=(
   .github/ISSUE_TEMPLATE/bug_report.yml
   .github/ISSUE_TEMPLATE/config.yml
   .github/ISSUE_TEMPLATE/feature_request.yml
+  # Keep only the small local hook runner and its language-aware formatter.
+  # Full CI, security, CodeQL, and release implementations are loaded from
+  # the reusable runtime and are not copied into consumer repositories.
   .github/scripts/profile.sh
-  .github/scripts/bootstrap.sh
-  # Keep the small local hook runner and its changed-file helper; the full
-  # CI/security implementations used by Actions are loaded from the runtime.
   .github/scripts/changed-files.sh
   .github/scripts/ci.sh
-  .github/scripts/doctor.sh
   .github/scripts/pre-commit.sh
-  .github/scripts/sync-template.sh
-  .github/scripts/init-repo.sh
-  .github/scripts/sync-codeowners.sh
-  .github/scripts/sync-protection.sh
   .github/workflows/ci.yml
   .github/workflows/codeql.yml
   .github/workflows/draft-pr.yml
@@ -358,6 +352,36 @@ for file in "${files[@]}"; do
   esac
 done
 files=("${filtered_files[@]}")
+changed=0
+
+# These files belonged to older Code Foundry layouts. They are intentionally
+# removed now that the npm CLI owns initialization and synchronization.
+removed_files=(
+  .github/code-foundry.yml.example
+  .github/template.yml
+  .github/template.yml.example
+  .github/scripts/bootstrap.sh
+  .github/scripts/codeql-languages.sh
+  .github/scripts/doctor.sh
+  .github/scripts/init-repo.sh
+  .github/scripts/security.sh
+  .github/scripts/sync-codeowners.sh
+  .github/scripts/sync-protection.sh
+  .github/scripts/sync-template.sh
+  .github/scripts/sitecustomize.py
+  .github/scripts/turbo-cache-probe.sh
+)
+for file in "${removed_files[@]}"; do
+  if [ -e "$file" ]; then
+    changed=$((changed + 1))
+    if [ "$mode" = "check" ]; then
+      printf 'Would remove legacy managed file %s\n' "$file"
+    else
+      rm -f "$file"
+      printf 'Removed legacy managed file %s\n' "$file"
+    fi
+  fi
+done
 
 # Workflows outside the standard baseline are repository-owned extensions.
 # The sync operation never deletes or replaces them; surface them explicitly
@@ -390,7 +414,6 @@ if [ "${#custom_workflows[@]}" -gt 0 ]; then
   printf 'Preserving custom workflows: %s\n' "${custom_workflows[*]}"
 fi
 
-changed=0
 for file in "${files[@]}"; do
   template_file="$template_root/$file"
   # npm renames .gitignore to .npmignore when installing a package. Treat the
@@ -629,11 +652,11 @@ initialize_mise_lock() {
 
 initialize_mise_lock
 
-if [ -x .github/scripts/sync-codeowners.sh ]; then
+if [ -x "$template_root/.github/scripts/sync-codeowners.sh" ]; then
   if [ "$mode" = "check" ]; then
-    bash .github/scripts/sync-codeowners.sh --check
+    bash "$template_root/.github/scripts/sync-codeowners.sh" --check
   else
-    bash .github/scripts/sync-codeowners.sh --apply
+    bash "$template_root/.github/scripts/sync-codeowners.sh" --apply
   fi
 fi
 
