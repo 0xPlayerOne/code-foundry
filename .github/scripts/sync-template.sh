@@ -702,6 +702,10 @@ if [ "$mode" = "apply" ]; then
       printf 'license_file: %s\n' "$license_file"
     fi
   } > .github/code-foundry.yml
+  if [ "$config_path" = .github/template.yml ] && [ -f .github/template.yml ]; then
+    rm .github/template.yml
+    printf '%s\n' 'Migrated .github/template.yml to .github/code-foundry.yml.'
+  fi
 fi
 
 if [ "$prune" = true ]; then
