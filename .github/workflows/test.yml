@@ -13,8 +13,10 @@ permissions:
 jobs:
   test:
     name: Test
-    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-test.yml@v0.20.2
+    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-test.yml@v0.22.0
     with:
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: v0.20.2
+      runtime-ref: v0.22.0
+      runner: ubuntu-latest
+      unit-runner: ubuntu-slim
     secrets: inherit

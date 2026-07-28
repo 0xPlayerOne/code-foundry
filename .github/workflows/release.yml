@@ -14,5 +14,7 @@ permissions:
 jobs:
   release:
     name: Release
-    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-release.yml@v0.20.2
+    uses: 0xPlayerOne/code-foundry/.github/workflows/reusable-release.yml@v0.22.0
+    with:
+      runner: ubuntu-slim
     secrets: inherit
