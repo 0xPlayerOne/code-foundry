@@ -11,6 +11,7 @@ import { syncRepository } from '../src/commands/sync.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
+const testEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT'))
 
 function run(...args) {
   return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
@@ -34,7 +35,7 @@ describe('code-foundry CLI', () => {
   it('keeps paid GitHub security features opt-in for private repositories', () => {
     const result = spawnSync(process.execPath, [runtime, 'codeql'], {
       encoding: 'utf8',
-      env: { ...process.env, REPO_FOUNDRY_PRIVATE: 'true' },
+      env: { ...testEnv, REPO_FOUNDRY_PRIVATE: 'true' },
     })
 
     assert.equal(result.status, 0)
@@ -45,7 +46,7 @@ describe('code-foundry CLI', () => {
   it('treats internal repositories like private repositories for auto policies', () => {
     const result = spawnSync(process.execPath, [runtime, 'codeql'], {
       encoding: 'utf8',
-      env: { ...process.env, REPO_FOUNDRY_VISIBILITY: 'internal', REPO_FOUNDRY_PRIVATE: 'false' },
+      env: { ...testEnv, REPO_FOUNDRY_VISIBILITY: 'internal', REPO_FOUNDRY_PRIVATE: 'false' },
     })
 
     assert.equal(result.status, 0)
