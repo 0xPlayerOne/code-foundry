@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.27.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.26.0...v0.27.0) (2026-07-28)
+
+
+### Features
+
+* add typed javascript cli checks ([2d9464b](https://github.com/0xPlayerOne/code-foundry/commit/2d9464bcbef8aa51607cdf52a6a60e3fc1bdb054))
+* make mise an optional toolchain ([e62f023](https://github.com/0xPlayerOne/code-foundry/commit/e62f0238f4ddc2d1b0f89e0f2b23bca3679b934e))
+* make paid github security checks opt-in ([bbfe899](https://github.com/0xPlayerOne/code-foundry/commit/bbfe8993d88a8415129ce29bfa5d2181807232ba))
+* skip irrelevant language configuration ([39a0003](https://github.com/0xPlayerOne/code-foundry/commit/39a00037ba92152926e7a89759f3255d86a4f26e))
+* standardize optional github security policies ([2cf6bc3](https://github.com/0xPlayerOne/code-foundry/commit/2cf6bc3af161ed8757a03447aab16f3e7ea310d7))
+
+
+### Bug Fixes
+
+* include runtime libraries in every workflow job ([ce94cd9](https://github.com/0xPlayerOne/code-foundry/commit/ce94cd96a32eff54048712e1bf4b2d34a868ba2e))
+* include runtime libraries in workflow checkout ([4b2c252](https://github.com/0xPlayerOne/code-foundry/commit/4b2c2527c37c82b498c2b3457df5dd52ef7c694f))
+* migrate stale managed docs during sync ([380bab1](https://github.com/0xPlayerOne/code-foundry/commit/380bab1334c9125f97bf333cc29c796e1a16d57d))
+* preserve authored notice files ([342e666](https://github.com/0xPlayerOne/code-foundry/commit/342e666f4e218e094180f10ecdc5a24b85a27b28))
+* preserve repository notice attribution ([7d43911](https://github.com/0xPlayerOne/code-foundry/commit/7d439117ec89882d8d06895528d94ed717ade471))
+* use pinned bun lockfile format ([0f75faf](https://github.com/0xPlayerOne/code-foundry/commit/0f75faf2c7614cc7055cbb4f26a01b3cf1639f85))
+
 ## [0.26.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.25.0...v0.26.0) (2026-07-28)
 
 
