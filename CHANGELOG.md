@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.7](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.6...v0.27.7) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** avoid recursive Bun install lifecycle scripts ([780e90d](https://github.com/0xPlayerOne/code-foundry/commit/780e90dcbc4a93005091465594cb57d9d2154003))
+
 ## [0.27.6](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.5...v0.27.6) (2026-07-28)
 
 
