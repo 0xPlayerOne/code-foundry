@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.23.0...v0.23.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* support repositories without package managers ([a126945](https://github.com/0xPlayerOne/code-foundry/commit/a126945d259875763ce89ddb3c0dbc182b74bb76))
+
 ## [0.23.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.22.2...v0.23.0) (2026-07-28)
 
 
