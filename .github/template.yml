@@ -1,5 +1,5 @@
 version: 1
-template: repo-foundry@latest
+template: code-foundry@latest
 languages: typescript
 features: all
 package_manager: bun

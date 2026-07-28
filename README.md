@@ -1,6 +1,11 @@
-# Repo Foundry
+# Code Foundry
 
-`repo-foundry` is a repository factory for TypeScript, Rust, Python, Solidity,
+[![npm version](https://img.shields.io/npm/v/code-foundry?logo=npm&logoColor=white)](https://www.npmjs.com/package/code-foundry)
+[![npm downloads](https://img.shields.io/npm/dm/code-foundry?logo=npm&logoColor=white)](https://www.npmjs.com/package/code-foundry)
+[![CI](../../actions/workflows/ci.yml/badge.svg?branch=main)](../../actions/workflows/ci.yml)
+[![Latest GitHub release](https://img.shields.io/badge/GitHub%20release-latest-181717?logo=github)](../../releases/latest)
+
+`code-foundry` is a repository factory for TypeScript, Rust, Python, Solidity,
 and mixed-language projects. It installs agent-ready instructions, fast native
 testing, security automation, release workflows, hooks, and repository policy
 from one versioned package.
@@ -8,20 +13,20 @@ from one versioned package.
 ## Quick start
 
 ```bash
-npx repo-foundry init
+npx code-foundry init
 ```
 
 Or select the project profile explicitly:
 
 ```bash
-npx repo-foundry init \
+npx code-foundry init \
   --languages typescript,python \
   --features all \
   --package-manager bun
 ```
 
-Use `repo-foundry sync` to update an existing repository and
-`repo-foundry doctor` to validate it. Add `--dry-run` to preview changes.
+Use `code-foundry sync` to update an existing repository and
+`code-foundry doctor` to validate it. Add `--dry-run` to preview changes.
 
 ## Setup
 
@@ -83,7 +88,7 @@ For npm publication, set `npm_publish: true` and configure npm trusted publishin
 
 The release flow is: promote `staging` into `main`; let Release Please open or update the version/changelog PR; merge that PR to create the GitHub release and tag; then publish to npm only when `npm_publish: true`.
 
-For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published template checkout or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract for a future npm/package wrapper around these same operations.
+For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published package or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract used by the package and later syncs.
 
 CI formatting and linting use the preloaded `ubuntu-latest` runner by default because dependency setup is usually faster there. Set `REPO_FOUNDRY_FAST_RUNNER=ubuntu-slim` only after measuring a repository where the lean image is faster; use `ubuntu-latest` for dependency-heavy or native-toolchain projects.
 

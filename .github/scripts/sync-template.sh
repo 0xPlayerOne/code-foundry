@@ -133,7 +133,7 @@ fi
 
 if [ -f "$template_root/package.json" ]; then
   template_version="$(awk -F'"' '/"version"[[:space:]]*:/ {print $4; exit}' "$template_root/package.json")"
-  [ -n "$template_version" ] && template_ref="repo-foundry@$template_version"
+  [ -n "$template_version" ] && template_ref="code-foundry@$template_version"
 fi
 
 files=(
