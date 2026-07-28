@@ -78,9 +78,12 @@ test runner. Rust uses `rustfmt`, Clippy with warnings as errors, and native
 Cargo tests. Python uses Ruff, uv/pip-compatible setup, and native Python
 tests. Solidity projects retain their native toolchain and test runner.
 
-CodeQL remains separate from CI and Security. Dependency Review is isolated in
-Security and is skipped where GitHub does not support it, while JavaScript,
-Python, and Rust audits remain available without GitHub Advanced Security.
+CodeQL remains separate from CI and Security. With the default `codeql: auto`
+and `dependency_review: auto` policies, public repositories use the free GitHub
+security checks while private repositories skip them unless explicitly opted
+in and supported by GitHub Advanced Security. JavaScript, Python, and Rust
+audits remain available without Advanced Security. Code Foundry does not enable
+GitHub Code Quality or other paid GitHub features.
 
 See [Workflow and CI conventions](docs/WORKFLOWS.md) for triggers, required
 checks, runners, coverage, caching, and custom workflow extensions.

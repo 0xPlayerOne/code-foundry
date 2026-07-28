@@ -10,6 +10,7 @@ import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
+const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
 
 function run(...args) {
   return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
@@ -28,6 +29,27 @@ describe('code-foundry CLI', () => {
 
     assert.equal(result.status, 2)
     assert.match(result.stderr, /unknown command: unknown-command/)
+  })
+
+  it('keeps paid GitHub security features opt-in for private repositories', () => {
+    const result = spawnSync(process.execPath, [runtime, 'codeql'], {
+      encoding: 'utf8',
+      env: { ...process.env, REPO_FOUNDRY_PRIVATE: 'true' },
+    })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /enabled=false/)
+    assert.match(result.stdout, /languages=\[\]/)
+  })
+
+  it('treats internal repositories like private repositories for auto policies', () => {
+    const result = spawnSync(process.execPath, [runtime, 'codeql'], {
+      encoding: 'utf8',
+      env: { ...process.env, REPO_FOUNDRY_VISIBILITY: 'internal', REPO_FOUNDRY_PRIVATE: 'false' },
+    })
+
+    assert.equal(result.status, 0)
+    assert.match(result.stdout, /enabled=false/)
   })
 
   it('profiles language-specific repositories without scanning dependencies', () => {

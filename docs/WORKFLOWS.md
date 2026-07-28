@@ -46,11 +46,18 @@ ambiguous for mixed-language repositories.
 
 ## Security behavior
 
-CodeQL is a separate workflow using GitHub's official actions. Dependency
-Review is skipped where GitHub does not support it, while JavaScript, Python,
-and Rust audits remain available without Advanced Security. If GitHub default
-setup is enabled, disable its generated CodeQL workflow to avoid duplicate
-analysis.
+CodeQL is a separate workflow using GitHub's official actions. The default
+`codeql: auto` policy enables it for public repositories and skips it for
+private repositories unless explicitly enabled and Advanced Security is
+available. Dependency Review follows the same policy through
+`dependency_review: auto`; JavaScript, Python, and Rust audits remain
+available without Advanced Security. If GitHub default setup is enabled,
+disable its generated CodeQL workflow to avoid duplicate analysis.
+
+Code Foundry does not enable GitHub Code Quality or any paid GitHub feature.
+The repository's format and lint jobs are ordinary CI checks. Set `codeql:
+false` or `dependency_review: false` when a public repository also needs those
+checks disabled.
 
 ## Branch protection
 

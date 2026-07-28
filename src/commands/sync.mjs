@@ -182,7 +182,7 @@ function createDefaultConfig(root, source) {
   const languages = detectLanguages(root).join(',')
   const packageManager = detectPackageManager(root)
   return {
-    version: '1', profile: detectProfile(root), languages, features: 'all', package_manager: packageManager,
+    version: '1', profile: detectProfile(root), languages, features: 'all', codeql: 'auto', dependency_review: 'auto', package_manager: packageManager,
     runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
     runner: 'ubuntu-latest', unit_runner: 'ubuntu-slim', ci_runner: 'ubuntu-latest', test_runner: 'ubuntu-latest',
     toolchain: 'auto',

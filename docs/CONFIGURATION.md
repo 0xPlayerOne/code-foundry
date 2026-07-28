@@ -36,6 +36,8 @@ repository manifests and source
 | `package_manager` | `bun`, `pnpm`, `yarn`, `npm`, `none` | JavaScript setup |
 | `toolchain` | `auto`, `native`, `mise` | Environment setup policy; defaults to `auto` |
 | `features` | `all` or a list | Standard workflow callers |
+| `codeql` | `auto`, `true`, `false` | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled |
+| `dependency_review` | `auto`, `true`, `false` | Dependency Review policy; public repositories default to enabled, non-public repositories default to disabled |
 | `prune_standard` | `true` or `false` | Remove disabled standard callers |
 | `runtime_repository` | `OWNER/REPO` | Reusable workflow source |
 | `runtime_ref` | tag or branch | Reusable workflow version |

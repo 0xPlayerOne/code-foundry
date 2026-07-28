@@ -44,6 +44,7 @@ jobs:
       rust: ${{ steps.profile.outputs.rust }}
       python: ${{ steps.profile.outputs.python }}
       python_requirements: ${{ steps.profile.outputs.python_requirements }}
+      dependency_review: ${{ steps.profile.outputs.dependency_review }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -90,6 +91,9 @@ jobs:
           cp -R .code-foundry/.github/actions/. .github/actions/
       - name: Detect
         id: profile
+        env:
+          REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
+          REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
         run: node .code-foundry/src/runtime.mjs security profile >> "$GITHUB_OUTPUT"
 
   dependency-audit-javascript:
@@ -281,7 +285,8 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
+    needs: profile
+    if: ${{ github.event_name == 'pull_request' && needs.profile.outputs.dependency_review == 'true' }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:
