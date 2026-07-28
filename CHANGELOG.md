@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.1...v0.27.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **runtime:** harden dependency setup and audits ([f3c4f85](https://github.com/0xPlayerOne/code-foundry/commit/f3c4f85263232e5023e7e6b3ae50ad2c27f3a47a))
+
 ## [0.27.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.0...v0.27.1) (2026-07-28)
 
 
