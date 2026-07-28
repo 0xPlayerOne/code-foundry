@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { doctor } from './commands/doctor.mjs'
+import { syncRepository } from './commands/sync.mjs'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
@@ -82,7 +83,21 @@ function main() {
   else common.push('--apply')
   if (options.force) common.push('--force')
 
-  if (command === 'init') {
+  if (command === 'init' && process.env.CODE_FOUNDRY_BASH_FALLBACK !== '1') {
+    try {
+      syncRepository({ target, source: packageRoot, dryRun: options.dryRun, force: options.force, init: true })
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
+  }
+  else if (command === 'sync' && process.env.CODE_FOUNDRY_BASH_FALLBACK !== '1') {
+    try {
+      syncRepository({ target, source: packageRoot, dryRun: options.dryRun, force: options.force })
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
+  }
+  else if (command === 'init') {
     const initArgs = ['--source', packageRoot, '--ref', 'main']
     if (options.dryRun) initArgs.push('--dry-run')
     if (options.force) initArgs.push('--force')

@@ -2,10 +2,11 @@ import { strict as assert } from 'node:assert'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
+import { syncRepository } from '../src/commands/sync.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 
@@ -38,4 +39,24 @@ describe('code-foundry CLI', () => {
     assert.deepEqual(detectLanguages(root), ['rust'])
     assert.equal(resolveProfile(root).package_manager, 'none')
   })
+
+  it('initializes a language-neutral repository without formatter configs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-init-'))
+    syncRepository({ target: root, source: process.cwd(), init: true })
+
+    assert.equal(resolveProfile(root).languages, 'none')
+    assert.equal(exists(join(root, 'ruff.toml')), false)
+    assert.equal(exists(join(root, '.prettierrc')), false)
+    assert.match(readFileSync(join(root, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/)
+    assert.match(readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'), /code-foundry\/\.github\/workflows\/ci\.yml@v/)
+  })
 })
+
+function exists(file) {
+  try {
+    readFileSync(file)
+    return true
+  } catch {
+    return false
+  }
+}
