@@ -50,7 +50,10 @@ function parseArgs(argv) {
     languages: process.env.REPO_FOUNDRY_LANGUAGES || 'auto',
     features: process.env.REPO_FOUNDRY_FEATURES || 'all',
     packageManager: process.env.REPO_FOUNDRY_PACKAGE_MANAGER || 'auto',
-    runtimeRepository: process.env.REPO_FOUNDRY_RUNTIME_REPOSITORY || '0xPlayerOne/code-foundry',
+    // Leave this empty unless the caller explicitly selects a runtime. The
+    // initializer can then derive the runtime from --source, which keeps
+    // organization forks plug-and-play.
+    runtimeRepository: process.env.REPO_FOUNDRY_RUNTIME_REPOSITORY || '',
     releaseType: process.env.REPO_FOUNDRY_RELEASE_TYPE || 'auto',
     license: process.env.REPO_FOUNDRY_LICENSE || (command === 'init' ? 'agpl-3.0-or-later' : 'preserve'),
     licenseFile: process.env.REPO_FOUNDRY_LICENSE_FILE || '',
@@ -123,7 +126,7 @@ function main() {
   if (options.licenseFile) common.push('--license-file', options.licenseFile)
   if (options.languagesSet) common.push('--languages', options.languages)
   if (options.featuresSet) common.push('--features', options.features)
-  common.push('--runtime-repository', options.runtimeRepository)
+  if (options.runtimeRepository) common.push('--runtime-repository', options.runtimeRepository)
   if (options.prune) common.push('--prune')
   if (options.force) common.push('--force')
   if (options.dryRun) common.push('--check')
@@ -137,10 +140,10 @@ function main() {
       '--languages', options.languages,
       '--features', options.features,
       '--package-manager', options.packageManager,
-      '--runtime-repository', options.runtimeRepository,
       '--release-type', options.releaseType,
       '--license', options.license,
     ]
+    if (options.runtimeRepository) initArgs.push('--runtime-repository', options.runtimeRepository)
     if (options.licenseFile) initArgs.push('--license-file', options.licenseFile)
     if (options.protection) initArgs.push('--protection')
     if (options.dryRun) initArgs.push('--dry-run')
