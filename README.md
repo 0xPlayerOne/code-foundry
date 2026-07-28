@@ -85,6 +85,8 @@ The release flow is: promote `staging` into `main`; let Release Please open or u
 
 For a repository that does not yet contain the scripts, the initializer can be invoked directly from the published template checkout or a downloaded copy of `init-repo.sh`; it fetches the matching sync helper automatically. The generated `.github/template.yml` is the stable configuration contract for a future npm/package wrapper around these same operations.
 
+Fast CI jobs use the lean `ubuntu-slim` runner for formatting and linting by default. Set the repository variable `REPO_FOUNDRY_FAST_RUNNER=ubuntu-latest` when a project needs a full host image for those jobs.
+
 Branch protection is an administrator operation and is opt-in:
 
 ```bash
