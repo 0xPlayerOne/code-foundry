@@ -159,9 +159,10 @@ contains_word "$valid_release_types" "$release_type" || {
   exit 2
 }
 case "$license" in
-  preserve|agpl-3.0-or-later|mit|none) ;;
+  preserve|agpl-3.0-or-later|mit|custom|none) ;;
   *) printf 'Unsupported license: %s\n' "$license" >&2; exit 2 ;;
 esac
+[ -z "$license_file" ] || license=custom
 
 if [ -d "$source" ] && [ -f "$source/.github/scripts/sync-template.sh" ]; then
   template_root="$source"
@@ -229,6 +230,7 @@ files=(
   .github/scripts/doctor.sh
   .github/scripts/security.sh
   .github/scripts/sitecustomize.py
+  .github/scripts/pre-commit.sh
   .github/scripts/sync-template.sh
   .github/scripts/init-repo.sh
   .github/scripts/sync-codeowners.sh

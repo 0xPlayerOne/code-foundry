@@ -40,6 +40,10 @@ Initialization defaults to AGPL for new repositories. Synchronization defaults
 to `--license preserve`, so an existing repository's license is never replaced
 unless you explicitly select a license or provide `--license-file`.
 
+The generated Git hook is intentionally a small launcher. It points at the
+package-managed `.github/scripts/pre-commit.sh`, so repositories do not need to
+maintain a second copy of the language-aware hook logic.
+
 ## Setup
 
 1. Install [mise](https://mise.jdx.dev/).
