@@ -390,7 +390,7 @@ done
 standard_workflow() {
   case "$1" in
     ci.yml|codeql.yml|draft-pr.yml|release-pr.yml|release.yml|security.yml|test.yml) return 0 ;;
-    reusable-draft-pr.yml|reusable-release-pr.yml) return 0 ;;
+    *_self-ci.yml) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -417,6 +417,13 @@ fi
 
 for file in "${files[@]}"; do
   template_file="$template_root/$file"
+  case "$file" in
+    .github/workflows/*.yml)
+      workflow_name="${file##*/}"
+      workflow_name="${workflow_name%.yml}"
+      template_file="$template_root/.github/workflows/${workflow_name}_self-ci.yml"
+      ;;
+  esac
   # npm renames .gitignore to .npmignore when installing a package. Treat the
   # renamed file as the same template asset so packaged initialization works.
   if [ "$file" = .gitignore ] && [ ! -f "$template_file" ] && [ -f "$template_root/.npmignore" ]; then
