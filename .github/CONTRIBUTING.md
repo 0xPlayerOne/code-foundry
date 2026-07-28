@@ -54,8 +54,8 @@ The default Git workflow is `staging-release`: topic branches merge into `stagin
 
 ### Toolchain
 
-1. Install [mise](https://mise.jdx.dev/).
-2. Run `npx code-foundry init` to install the pinned toolchain, enable hooks, and validate the checkout.
+1. Run `npx code-foundry init` to detect the repository and enable hooks.
+2. Follow `toolchain: auto` in `.github/code-foundry.yml`; install mise only if the repository already uses it or explicitly selects it.
 3. Use `npx code-foundry doctor` when setup, lockfiles, or hooks appear out of sync.
 4. Use the repository's existing package manager and lockfile. Do not introduce a second package manager.
 5. Copy `.env.example` to the appropriate local environment file when provided. Never commit the copy.

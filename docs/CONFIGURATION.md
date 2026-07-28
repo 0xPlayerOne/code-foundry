@@ -21,7 +21,7 @@ repository manifests and source
             v
   .github/code-foundry.yml
             |
-            +--> mise and environment setup
+            +--> native or mise toolchain setup
             +--> standard workflow callers
             +--> runtime repository and version
             +--> release, license, cache, and coverage policy
