@@ -107,7 +107,12 @@ function install() {
   }
   if (hasLanguage('python') && (existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'requirements.txt')))) {
     if (commandExists('uv') && existsSync(resolve(root, 'uv.lock'))) run('uv', ['sync', '--frozen'])
-    else if (!existsSync(resolve(root, '.venv'))) run('python', ['-m', 'venv', '.venv'])
+    else {
+      if (!existsSync(resolve(root, '.venv'))) run('python', ['-m', 'venv', '.venv'])
+      const python = resolve(root, '.venv/bin/python')
+      if (existsSync(resolve(root, 'requirements.txt'))) run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements.txt'])
+      if (existsSync(resolve(root, 'requirements-dev.txt'))) run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements-dev.txt'])
+    }
   }
   if (hasLanguage('rust') && existsSync(resolve(root, 'Cargo.toml'))) run('cargo', ['fetch'])
 }
