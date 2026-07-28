@@ -36,11 +36,12 @@ npx code-foundry init --license agpl-3.0-or-later
 npx code-foundry init --license-file ./legal/LICENSE.txt
 ```
 
-Reusable workflow callers default to this package's public runtime. Use
-`--runtime-repository OWNER/REPO` when initializing from an organization fork;
-the selected repository is saved in `.github/template.yml` and rendered into
-the small `ci.yml` and `test.yml` wrappers automatically. The equivalent
-environment variable is `REPO_FOUNDRY_RUNTIME_REPOSITORY`.
+Reusable workflow callers use the source template's runtime automatically. For
+example, initializing from `NiftyLeague/template-repo` selects that fork's
+runtime without extra flags. Use `--runtime-repository OWNER/REPO` (or
+`REPO_FOUNDRY_RUNTIME_REPOSITORY`) only when you want to override it. The
+selected repository is saved in `.github/template.yml` and rendered into the
+small CI, Test, Security, and CodeQL wrappers automatically.
 
 Normal synchronization imports only the local hook, agent-facing command,
 profile/release, initializer, doctor, ownership, and protection entrypoints.

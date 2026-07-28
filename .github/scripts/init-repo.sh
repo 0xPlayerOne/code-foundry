@@ -11,7 +11,7 @@ force=false
 languages="${REPO_FOUNDRY_LANGUAGES:-auto}"
 features="${REPO_FOUNDRY_FEATURES:-all}"
 package_manager="${REPO_FOUNDRY_PACKAGE_MANAGER:-auto}"
-runtime_repository="${REPO_FOUNDRY_RUNTIME_REPOSITORY:-0xPlayerOne/code-foundry}"
+runtime_repository="${REPO_FOUNDRY_RUNTIME_REPOSITORY:-}"
 bootstrap=true
 release_type="${REPO_FOUNDRY_RELEASE_TYPE:-auto}"
 npm_publish="${REPO_FOUNDRY_NPM_PUBLISH:-false}"
@@ -38,7 +38,7 @@ Options:
   --features LIST            all or comma-separated optional features:
                              ci,codeql,security,test,draft-pr,release-pr,release,dependabot
   --package-manager NAME     auto, bun, pnpm, yarn, or npm
-  --runtime-repository OWNER/REPO  Reusable workflow runtime repository
+  --runtime-repository OWNER/REPO  Reusable workflow runtime repository (auto from source)
   --release-type NAME        auto, node, python, rust, or simple
   --license NAME             agpl-3.0-or-later, mit, preserve, or none
   --license-file PATH        Use an exact custom license file
@@ -111,9 +111,9 @@ sync_args=(
   --languages "$languages"
   --features "$features"
   --package-manager "$package_manager"
-  --runtime-repository "$runtime_repository"
   --license "$license"
 )
+if [ -n "$runtime_repository" ]; then sync_args+=(--runtime-repository "$runtime_repository"); fi
 if [ -n "$license_file" ]; then sync_args+=(--license-file "$license_file"); fi
 if [ "$dry_run" = true ]; then sync_args+=(--check); else sync_args+=(--apply); fi
 if [ "$prune" = true ]; then sync_args+=(--prune); fi
