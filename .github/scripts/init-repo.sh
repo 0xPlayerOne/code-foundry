@@ -163,7 +163,7 @@ if [ -f "$config_path" ]; then
 fi
 
 case "$package_manager" in
-  auto|bun|pnpm|yarn|npm) ;;
+  auto|none|bun|pnpm|yarn|npm) ;;
   *) printf 'Unsupported package manager: %s\n' "$package_manager" >&2; exit 2 ;;
 esac
 case "$release_type" in
