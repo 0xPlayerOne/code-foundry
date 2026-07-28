@@ -139,7 +139,7 @@ Lightweight orchestration jobs use GitHub's `ubuntu-slim` runner: Draft PR, Rele
 
 Release and Security metadata jobs also use blobless checkouts where a checkout is needed, reducing source transfer while preserving on-demand manifest access.
 
-CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Unchanged analyzer jobs use `ubuntu-slim` and skip both checkout and analysis while remaining visible to branch protection; changed analyzers use full `ubuntu-latest` runners. Its detection job uses a `blob:none` partial clone because it only needs Git paths and metadata. Scheduled and manually dispatched CodeQL runs remain full scans.
+CodeQL keeps every configured language check visible but skips analyzers whose source, dependencies, or configuration were untouched by a push or pull request. Unchanged analyzer jobs use `ubuntu-slim` and skip both checkout and analysis while remaining visible to branch protection; changed analyzers use full `ubuntu-latest` runners. Its detection job uses a blobless, sparse checkout because it only needs Git paths, metadata, and repository manifests; analyzer jobs still use full checkouts. Scheduled and manually dispatched CodeQL runs remain full scans.
 
 CodeQL uploads SARIF findings for GitHub code scanning but does not archive the intermediate database in the reusable baseline; this keeps coverage and alert processing while avoiding an unnecessary database transfer. The required workflow check gates on successful SARIF upload acknowledgment and does not wait for GitHub’s asynchronous post-upload processing, shortening the CI critical path while retaining the uploaded findings.
 
