@@ -82,6 +82,10 @@ function runScript(names) {
 
 /** @param {string} tool @param {string[]} [args] */
 function runTool(tool, args = []) {
+  if (['ruff', 'pytest', 'pylint'].includes(tool)) {
+    const venvTool = resolve(root, `.venv/bin/${tool}`)
+    if (existsSync(venvTool)) return run(venvTool, args)
+  }
   const [manager] = packageCommand([])
   if (manager === 'bun') return run('bunx', ['--no-install', tool, ...args])
   if (manager === 'pnpm') return run('pnpm', ['exec', tool, ...args])
