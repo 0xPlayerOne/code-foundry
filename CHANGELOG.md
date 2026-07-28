@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.1...v0.20.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **release-pr:** skip empty promotions ([7c3b21b](https://github.com/0xPlayerOne/code-foundry/commit/7c3b21b19e03ac8319b1217d4e3d0d8a6f0e2317))
+
 ## [0.20.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.20.0...v0.20.1) (2026-07-28)
 
 
