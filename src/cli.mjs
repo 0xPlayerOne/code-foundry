@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { doctor } from './commands/doctor.mjs'
-import { dispatchPostReleaseHook, reconcileRelease, validateReleasePullRequestDiffs } from './commands/release.mjs'
+import { dispatchPostReleaseHook, reconcileRelease, releaseRecoveryPlan, validateReleasePullRequestDiffs } from './commands/release.mjs'
 import { discoverRepositories, upgradeFleet } from './commands/fleet.mjs'
 import { syncRepository } from './commands/sync.mjs'
 
@@ -61,7 +61,7 @@ function parseArgs(argv) {
 
   if (command === 'release') {
     const subcommand = argv.shift() ?? ''
-    if (!['reconcile', 'hook', 'validate-prs'].includes(subcommand)) fail(`unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, or release validate-prs`)
+    if (!['reconcile', 'hook', 'validate-prs', 'recovery-plan'].includes(subcommand)) fail(`unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, release validate-prs, or release recovery-plan`)
     options.releaseSubcommand = subcommand
   } else if (command === 'fleet') {
     const subcommand = argv.shift() ?? ''
@@ -123,6 +123,7 @@ function main() {
     try {
       if (options.releaseSubcommand === 'hook') dispatchPostReleaseHook(target, options)
       else if (options.releaseSubcommand === 'validate-prs') validateReleasePullRequestDiffs(target)
+      else if (options.releaseSubcommand === 'recovery-plan') releaseRecoveryPlan(target)
       else reconcileRelease(target, options)
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))

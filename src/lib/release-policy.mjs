@@ -106,6 +106,46 @@ export function validateReleasePullRequests(prs, changedPathsByPr, allowed) {
 }
 
 /**
+ * Build a non-destructive release recovery plan from independent release
+ * metadata sources.
+ * @param {{ tags: string[], releases: Array<{tagName?: string}>, releasePrs: Array<{number?: number,title?: string}>, packageVersions: string[] }} input
+ */
+export function buildReleaseRecoveryPlan(input) {
+  const tags = [...new Set(input.tags.filter((tag) => /^v?\d+\.\d+\.\d+/.test(tag)))]
+  /** @type {string[]} */
+  const releaseTags = [...new Set(input.releases.map((release) => release.tagName).filter((tag) => typeof tag === 'string'))]
+  const tagSet = new Set(tags)
+  const releaseSet = new Set(releaseTags)
+  const missingGitHubReleases = tags.filter((tag) => !releaseSet.has(tag) && !releaseSet.has(tag.replace(/^v/, '')))
+  const orphanGitHubReleases = releaseTags.filter((tag) => !tagSet.has(tag) && !tagSet.has(tag.replace(/^v/, '')))
+  const latestTag = [...tags].sort(compareVersions).at(-1) ?? ''
+  const latestPackageVersion = [...input.packageVersions].sort(compareVersions).at(-1) ?? ''
+  return {
+    latestTag,
+    latestPackageVersion,
+    missingGitHubReleases,
+    orphanGitHubReleases,
+    pendingReleasePullRequests: input.releasePrs,
+    packageVersionMismatch: Boolean(latestTag && latestPackageVersion && normalizeVersion(latestTag) !== normalizeVersion(latestPackageVersion)),
+    actions: [
+      ...missingGitHubReleases.map((tag) => `create GitHub release metadata for ${tag}`),
+      ...(latestTag && latestPackageVersion && normalizeVersion(latestTag) !== normalizeVersion(latestPackageVersion) ? [`review package/tag mismatch (${latestPackageVersion} vs ${latestTag})`] : []),
+    ],
+  }
+}
+
+/** @param {string} value */
+function normalizeVersion(value) { return value.replace(/^v/, '').split('-')[0] }
+
+/** @param {string} a @param {string} b */
+function compareVersions(a, b) {
+  const left = normalizeVersion(a).split('.').map(Number)
+  const right = normalizeVersion(b).split('.').map(Number)
+  for (let index = 0; index < 3; index += 1) if ((left[index] ?? 0) !== (right[index] ?? 0)) return (left[index] ?? 0) - (right[index] ?? 0)
+  return a.localeCompare(b)
+}
+
+/**
  * Classify the relationship between main and staging. A fast-forward is safe
  * only when main is the ancestor of staging or staging is the ancestor of main
  * and the intervening main files are release metadata.
