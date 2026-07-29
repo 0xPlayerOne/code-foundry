@@ -20,6 +20,7 @@ on:
         default: v0.27.18
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
