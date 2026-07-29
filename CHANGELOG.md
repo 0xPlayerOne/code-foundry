@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.31.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.0...v0.31.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** build clean staging sync branches ([03a7c19](https://github.com/0xPlayerOne/code-foundry/commit/03a7c191d7a5a6b95cce639e6ed9201b374f1010))
+
+## [0.31.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.4...v0.31.0) (2026-07-29)
+
+
+### Features
+
+* **release:** open safe staging sync PRs ([6adb1dc](https://github.com/0xPlayerOne/code-foundry/commit/6adb1dc63966e5bfe70deb3ccd3c3aa5e93ccfad))
+
+
+### Bug Fixes
+
+* **release:** compare promoted branch tips ([081666b](https://github.com/0xPlayerOne/code-foundry/commit/081666b774418ab333d34eb9a3ca2a8c3bd60c78))
+
+## [0.30.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.3...v0.30.4) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ci:** isolate runtime from consumer tooling ([32fe3ee](https://github.com/0xPlayerOne/code-foundry/commit/32fe3eea20ddad6086c1cfcacff6e7cb90606da0))
+* **self-ci:** test the checked-out runtime revision ([93973ba](https://github.com/0xPlayerOne/code-foundry/commit/93973bac19da7d250e3ccda4d4c79b1b0033008b))
+
 ## [0.30.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.2...v0.30.3) (2026-07-29)
 
 
