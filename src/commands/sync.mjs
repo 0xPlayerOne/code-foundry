@@ -144,6 +144,10 @@ function shouldInclude(file, languages, features) {
 
 /** @param {string} source @param {string} file */
 function sourcePath(source, file) {
+  if (file === '.gitignore') {
+    const rootTemplate = join(source, file)
+    return existsSync(rootTemplate) ? rootTemplate : join(source, 'src/templates/gitignore')
+  }
   if (file.startsWith('.github/workflows/')) {
     const name = file.slice('.github/workflows/'.length, -4)
     return join(source, '.github/workflows', `${name}_self-ci.yml`)
