@@ -56,7 +56,7 @@ export function syncRepository(options) {
     const missing = Object.keys(defaults).filter((key) => !(key in existingConfig))
     if (missing.length) {
       const current = readFileSync(configPath, 'utf8').trimEnd()
-      const additions = missing.map((key) => `${key}: ${defaults[key]}`).join('\n')
+      const additions = missing.map((key) => renderConfigLine(key, defaults[key])).join('\n')
       writeOrReport(configPath, `${current}\n${additions}\n`, dryRun)
     }
   }
@@ -259,7 +259,9 @@ function createDefaultConfig(root, source) {
 }
 
 /** @param {Record<string,string>} config */
-function renderConfig(config) { return `${Object.entries(config).map(([key, value]) => `${key}: ${value}`).join('\n')}\n` }
+function renderConfig(config) { return `${Object.entries(config).map(([key, value]) => renderConfigLine(key, value)).join('\n')}\n` }
+/** @param {string} key @param {string} value */
+function renderConfigLine(key, value) { return value === '' ? `${key}:` : `${key}: ${value}` }
 /** @param {string} root */
 function readPackageVersion(root) {
   try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0' } catch { return '0.0.0' }
