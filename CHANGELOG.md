@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.13](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.12...v0.27.13) (2026-07-29)
+
+
+### Bug Fixes
+
+* **sync:** package the gitignore template ([e65c63d](https://github.com/0xPlayerOne/code-foundry/commit/e65c63dcb09a623d5ce0b55f734bbe73719c72f2))
+
 ## [0.27.12](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.11...v0.27.12) (2026-07-29)
 
 
