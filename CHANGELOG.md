@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.3...v0.31.4) (2026-07-29)
+
+
+### Bug Fixes
+
+* harden fleet pins and github doctor ([c6efa7a](https://github.com/0xPlayerOne/code-foundry/commit/c6efa7a436308959950d958c5897574193cd763b))
+
 ## [0.31.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.2...v0.31.3) (2026-07-29)
 
 
