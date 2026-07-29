@@ -70,6 +70,41 @@ export function unexpectedReleasePaths(paths, allowed) {
     .filter((path) => !allowed.has(path))
 }
 
+/** @param {{ releasePleaseToken?: string, githubToken?: string }} input */
+export function selectReleaseCredential(input) {
+  if (input.releasePleaseToken) return { token: input.releasePleaseToken, source: 'release-please-token', autoMerge: true }
+  if (input.githubToken) return { token: input.githubToken, source: 'github-token', autoMerge: false }
+  return { token: '', source: 'missing', autoMerge: false }
+}
+
+/** @param {Array<{number?: number, title?: string, headRefName?: string}>} prs */
+export function selectGeneratedReleasePrs(prs) {
+  return prs.filter((pr) => /^chore\(main\): release /.test(pr.title ?? '') && String(pr.headRefName ?? '').startsWith('release-please--branches--main'))
+}
+
+/**
+ * Validate all generated release PR diffs before any merge is attempted.
+ * @param {Array<{number?: number, title?: string, headRefName?: string}>} prs
+ * @param {Map<number, string[]>} changedPathsByPr
+ * @param {Set<string>} allowed
+ */
+export function validateReleasePullRequests(prs, changedPathsByPr, allowed) {
+  const errors = []
+  const generated = selectGeneratedReleasePrs(prs)
+  if (!generated.length) errors.push('Release Please reported a PR, but no generated release PR was found.')
+  for (const pr of generated) {
+    const number = Number(pr.number)
+    const paths = changedPathsByPr.get(number)
+    if (!Array.isArray(paths) || !paths.length) {
+      errors.push(`Generated release PR #${number} has no changed files or its diff is malformed.`)
+      continue
+    }
+    const unexpected = unexpectedReleasePaths(paths, allowed)
+    if (unexpected.length) errors.push(`Generated release PR #${number} contains unexpected paths: ${unexpected.join(', ')}`)
+  }
+  return { valid: errors.length === 0, generated, errors }
+}
+
 /**
  * Classify the relationship between main and staging. A fast-forward is safe
  * only when main is the ancestor of staging or staging is the ancestor of main

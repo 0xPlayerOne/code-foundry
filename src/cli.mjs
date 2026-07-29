@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { doctor } from './commands/doctor.mjs'
-import { dispatchPostReleaseHook, reconcileRelease } from './commands/release.mjs'
+import { dispatchPostReleaseHook, reconcileRelease, validateReleasePullRequestDiffs } from './commands/release.mjs'
 import { discoverRepositories, upgradeFleet } from './commands/fleet.mjs'
 import { syncRepository } from './commands/sync.mjs'
 
@@ -60,11 +60,11 @@ function parseArgs(argv) {
   const options = { target: process.cwd(), root: process.cwd(), dryRun: false, force: false, github: false, createPr: false, base: 'main', head: 'staging', tag: '', workflow: '', mode: 'auto', version: `v${readPackageVersion(packageRoot)}` }
 
   if (command === 'release') {
-    const subcommand = argv.shift()
-    if (subcommand !== 'reconcile' && subcommand !== 'hook') fail(`unknown release command: ${subcommand ?? '(missing)'}; use release reconcile or release hook`)
+    const subcommand = argv.shift() ?? ''
+    if (!['reconcile', 'hook', 'validate-prs'].includes(subcommand)) fail(`unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, or release validate-prs`)
     options.releaseSubcommand = subcommand
   } else if (command === 'fleet') {
-    const subcommand = argv.shift()
+    const subcommand = argv.shift() ?? ''
     if (subcommand !== 'status' && subcommand !== 'upgrade') fail(`unknown fleet command: ${subcommand ?? '(missing)'}; use fleet status or fleet upgrade`)
     options.fleetSubcommand = subcommand
   }
@@ -122,6 +122,7 @@ function main() {
   } else if (command === 'release') {
     try {
       if (options.releaseSubcommand === 'hook') dispatchPostReleaseHook(target, options)
+      else if (options.releaseSubcommand === 'validate-prs') validateReleasePullRequestDiffs(target)
       else reconcileRelease(target, options)
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
