@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.1...v0.31.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** treat identical branch trees as aligned ([32b739e](https://github.com/0xPlayerOne/code-foundry/commit/32b739e8e663dca05fd89005b26c6457ec265c1c))
+
 ## [0.31.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.0...v0.31.1) (2026-07-29)
 
 
