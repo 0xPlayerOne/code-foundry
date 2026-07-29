@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.2...v0.30.3) (2026-07-29)
+
+
+### Bug Fixes
+
+* **fleet:** branch upgrades from remote staging ([58d4389](https://github.com/0xPlayerOne/code-foundry/commit/58d43890436789ec5289e0aaeea71dea0375a140))
+
 ## [0.30.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.1...v0.30.2) (2026-07-29)
 
 
