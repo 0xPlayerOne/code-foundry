@@ -51,7 +51,7 @@ export function doctor(root) {
   }
   if (profile.languages.split(',').includes('python') && !commandExists('python') && !existsSync(join(target, '.venv/bin/python'))) error('Python is required for this repository')
 
-  for (const workflow of ['ci', 'codeql', 'security', 'test', 'draft-pr', 'release-pr', 'release']) {
+  for (const workflow of ['ci', 'codeql', 'security', 'test', 'draft-pr', 'release-pr', 'release', 'release-validation']) {
     if (includesValue(config.features ?? 'all', workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
   }
   console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.')

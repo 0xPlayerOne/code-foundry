@@ -157,6 +157,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 | -------------------------------- | ---------------------------------------- |
 | Push to `main` or `staging`      | CI, Test, Security, and CodeQL workflows |
 | Pull request targeting `staging` | CI, Test, Security, and CodeQL workflows |
+| Release Please PR targeting `main` | Release-only CI, Test, Security, and CodeQL validation |
 | Push to a working branch         | Draft PR workflow                        |
 | Push to `staging`                | Release PR workflow                      |
 | Version tag such as `v1.2.3`     | Release workflow                         |

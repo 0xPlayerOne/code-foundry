@@ -15,7 +15,7 @@ const standardFiles = [
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/workflows/ci.yml', '.github/workflows/codeql.yml', '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
-  '.github/workflows/security.yml', '.github/workflows/test.yml',
+  '.github/workflows/release-validation.yml', '.github/workflows/security.yml', '.github/workflows/test.yml',
 ]
 
 const protectedFiles = new Set([
