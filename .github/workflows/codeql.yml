@@ -98,7 +98,8 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - id: languages
         name: Detect languages
         env:
@@ -106,7 +107,7 @@ jobs:
           REPO_FOUNDRY_CODE_SECURITY: ${{ steps.security.outputs.status }}
           REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
           REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
-        run: node .github/.code-foundry/src/runtime.mjs codeql
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs codeql
 
   analyze-actions:
     name: Analyze (Actions)
@@ -144,7 +145,8 @@ jobs:
           needs.detect.outputs.actions_changed == 'true'
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Analyze
         if: >-
           needs.detect.outputs.enabled == 'true' &&
@@ -198,7 +200,8 @@ jobs:
           needs.detect.outputs.javascript_changed == 'true'
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Analyze
         if: >-
           needs.detect.outputs.enabled == 'true' &&
@@ -252,7 +255,8 @@ jobs:
           needs.detect.outputs.python_changed == 'true'
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Analyze
         if: >-
           needs.detect.outputs.enabled == 'true' &&
@@ -306,7 +310,8 @@ jobs:
           needs.detect.outputs.rust_changed == 'true'
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Analyze
         if: >-
           needs.detect.outputs.enabled == 'true' &&
