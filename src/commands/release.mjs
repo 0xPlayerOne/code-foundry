@@ -42,18 +42,12 @@ export function reconcileRelease(root, options) {
     if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for synchronization PRs.')
     const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
     if (!token) throw new Error('GH_TOKEN or GITHUB_TOKEN is required for synchronization PRs.')
-    const existing = ghJson(target, ['pr', 'list', '--repo', process.env.GITHUB_REPOSITORY, '--state', 'open', '--base', head, '--head', base, '--json', 'number,url'])
+    const existing = ghJson(target, ['pr', 'list', '--repo', process.env.GITHUB_REPOSITORY, '--state', 'open', '--base', head, '--search', `chore(release): synchronize ${base} -> ${head} in:title`, '--json', 'number,url,headRefName'])
     if (Array.isArray(existing) && existing.length) {
       return { ...plan, synchronizationPullRequest: existing[0].url ?? existing[0].number }
     }
-    const result = spawnSync('gh', [
-      'pr', 'create', '--repo', process.env.GITHUB_REPOSITORY,
-      '--base', head, '--head', base,
-      '--title', `chore(release): synchronize ${base} -> ${head}`,
-      '--body', `Synchronize ${head} with ${base} after Release Please publication.\n\nOnly approved release metadata differs between the branch tips; Code Foundry verified the content before opening this PR.`,
-    ], { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, GH_TOKEN: token } })
-    if (result.status !== 0) throw new Error(`Failed to create synchronization PR: ${result.stderr.trim()}`)
-    return { ...plan, synchronizationPullRequest: result.stdout.trim() }
+    const synchronizationPullRequest = createSynchronizationPullRequest(target, process.env.GITHUB_REPOSITORY, base, head, mainSha, stagingSha, mainChangedPaths, token)
+    return { ...plan, synchronizationPullRequest }
   }
   if (plan.action !== 'fast-forward' || !options.github || options.dryRun) return plan
   if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
@@ -65,6 +59,34 @@ export function reconcileRelease(root, options) {
   ], { cwd: target, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token } })
   if (result.status !== 0) throw new Error(`GitHub refused the protected fast-forward of ${head}.`)
   return plan
+}
+
+/** @param {string} root @param {string} repository @param {string} base @param {string} head @param {string} mainSha @param {string} stagingSha @param {string[]} changedPaths @param {string} token */
+function createSynchronizationPullRequest(root, repository, base, head, mainSha, stagingSha, changedPaths, token) {
+  const branch = `codex/release-sync-${head}-${mainSha.slice(0, 12)}`
+  const remote = spawnSync('git', ['ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`], { cwd: root, encoding: 'utf8' })
+  if (remote.status !== 0) {
+    const checkout = spawnSync('git', ['switch', '--create', branch, `origin/${head}`], { cwd: root, encoding: 'utf8' })
+    if (checkout.status !== 0) throw new Error(`Failed to create synchronization branch: ${checkout.stderr.trim()}`)
+    const patch = spawnSync('git', ['diff', '--binary', stagingSha, mainSha, '--', ...changedPaths], { cwd: root, encoding: 'utf8' })
+    if (patch.status !== 0) throw new Error(`Failed to prepare synchronization patch: ${patch.stderr.trim()}`)
+    const apply = spawnSync('git', ['apply', '--whitespace=nowarn'], { cwd: root, input: patch.stdout, encoding: 'utf8' })
+    if (apply.status !== 0) throw new Error(`Synchronization patch did not apply cleanly: ${apply.stderr.trim()}`)
+    const add = spawnSync('git', ['add', '--', ...changedPaths], { cwd: root, encoding: 'utf8' })
+    if (add.status !== 0) throw new Error(`Failed to stage synchronization metadata: ${add.stderr.trim()}`)
+    const commit = spawnSync('git', ['commit', '-m', `chore(release): synchronize ${base} -> ${head}`], { cwd: root, encoding: 'utf8' })
+    if (commit.status !== 0) throw new Error(`Failed to commit synchronization metadata: ${commit.stderr.trim()}`)
+    const push = spawnSync('git', ['push', '--set-upstream', 'origin', branch], { cwd: root, encoding: 'utf8', env: { ...process.env, GH_TOKEN: token } })
+    if (push.status !== 0) throw new Error(`Failed to publish synchronization branch: ${push.stderr.trim()}`)
+  }
+  const result = spawnSync('gh', [
+    'pr', 'create', '--repo', repository,
+    '--base', head, '--head', branch,
+    '--title', `chore(release): synchronize ${base} -> ${head}`,
+    '--body', `Synchronize ${head} with ${base} after Release Please publication.\n\nCode Foundry verified that only approved release metadata differs between the branch tips, then applied that metadata to an isolated synchronization branch.`,
+  ], { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, GH_TOKEN: token } })
+    if (result.status !== 0) throw new Error(`Failed to create synchronization PR: ${result.stderr.trim()}`)
+  return result.stdout.trim()
 }
 
 /**
