@@ -89,6 +89,9 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /legacyReleaseType = releaseType/)
     assert.match(workflow, /config-file: release-please-config\.json/)
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
+    assert.match(workflow, /Refusing to auto-merge release PR/)
+    assert.match(workflow, /--admin/)
+    assert.match(workflow, /--rebase/)
   })
 })
 

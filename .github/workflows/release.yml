@@ -79,6 +79,80 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Merge generated version pull requests
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+
+          allowed_paths="$(
+            node <<'NODE'
+          const fs = require('node:fs')
+          const config = JSON.parse(fs.readFileSync('release-please-config.json', 'utf8'))
+          const common = [
+            '.release-please-manifest.json',
+            'CHANGELOG.md',
+            'Cargo.lock',
+            'Cargo.toml',
+            'bun.lock',
+            'bun.lockb',
+            'package-lock.json',
+            'package.json',
+            'pnpm-lock.yaml',
+            'pyproject.toml',
+            'uv.lock',
+            'version.txt',
+            'yarn.lock',
+          ]
+          const allowed = new Set(common)
+          const addExtraFiles = (files = [], prefix = '') => {
+            for (const entry of files) {
+              const path = typeof entry === 'string' ? entry : entry.path
+              if (path) allowed.add(prefix ? `${prefix}/${path}` : path)
+            }
+          }
+          addExtraFiles(config['extra-files'])
+          for (const [directory, packageConfig] of Object.entries(config.packages || {})) {
+            const prefix = directory === '.' ? '' : directory.replace(/\/$/, '')
+            for (const path of common) allowed.add(prefix ? `${prefix}/${path}` : path)
+            addExtraFiles(packageConfig['extra-files'], prefix)
+          }
+          process.stdout.write(JSON.stringify([...allowed]))
+          NODE
+          )"
+
+          mapfile -t release_prs < <(
+            gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --base main \
+              --json number,title,headRefName \
+              --jq '.[] | select(.title | startswith("chore(main): release ")) | select(.headRefName | startswith("release-please--branches--main")) | .number'
+          )
+          [ "${#release_prs[@]}" -gt 0 ] || {
+            echo "Release Please reported a pull request, but no generated release PR was found." >&2
+            exit 1
+          }
+
+          for pr in "${release_prs[@]}"; do
+            mapfile -t changed_paths < <(gh pr diff "$pr" --repo "$GITHUB_REPOSITORY" --name-only)
+            [ "${#changed_paths[@]}" -gt 0 ] || {
+              echo "Generated release PR #$pr has no changed files." >&2
+              exit 1
+            }
+            for path in "${changed_paths[@]}"; do
+              jq -e --arg path "$path" 'index($path) != null' <<<"$allowed_paths" >/dev/null || {
+                echo "Refusing to auto-merge release PR #$pr with unexpected path: $path" >&2
+                exit 1
+              }
+            done
+            gh pr merge "$pr" \
+              --repo "$GITHUB_REPOSITORY" \
+              --admin \
+              --rebase \
+              --delete-branch
+          done
 
   npm:
     name: Release / Publish npm
