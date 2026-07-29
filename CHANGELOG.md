@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.18](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.17...v0.27.18) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** degrade gracefully without release token ([69ac43a](https://github.com/0xPlayerOne/code-foundry/commit/69ac43acfa2813495b8da0535942afbbedae3017))
+
 ## [0.27.17](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.16...v0.27.17) (2026-07-29)
 
 
