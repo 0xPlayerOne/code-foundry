@@ -198,6 +198,13 @@ describe('code-foundry CLI', () => {
     assert.equal(recommendRunners(browser).test_runner, 'ubuntu-latest')
   })
 
+  it('packages the Python formatter baseline for Python consumers', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-python-init-'))
+    writeFileSync(join(root, 'pyproject.toml'), '[project]\nname = "python-fixture"\nversion = "1.0.0"\n')
+    syncRepository({ target: root, source: process.cwd(), init: true })
+    assert.match(readFileSync(join(root, 'ruff.toml'), 'utf8'), /line-length = 100/)
+  })
+
   it('produces a non-destructive release recovery plan', () => {
     const plan = buildReleaseRecoveryPlan({
       tags: ['v1.0.0', 'v1.1.0'],
