@@ -79,6 +79,7 @@ describe('code-foundry CLI', () => {
       readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'),
       /code-foundry\/\.github\/workflows\/ci\.yml@v/
     )
+    assert.equal(exists(join(root, '.github/workflows/release-validation.yml')), true)
     doctor(root)
   })
 

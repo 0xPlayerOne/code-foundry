@@ -14,7 +14,7 @@ const standardFiles = [
   '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/workflows/ci.yml', '.github/workflows/codeql.yml', '.github/workflows/draft-pr.yml',
-  '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
+  '.github/workflows/release-pr.yml', '.github/workflows/release.yml', '.github/workflows/release-validation.yml',
   '.github/workflows/security.yml', '.github/workflows/test.yml',
 ]
 

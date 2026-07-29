@@ -1,0 +1,54 @@
+name: Code Foundry Release Validation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+jobs:
+  ci:
+    name: CI
+    if: startsWith(github.head_ref, 'release-please--branches--main')
+    uses: 0xPlayerOne/code-foundry/.github/workflows/ci.yml@v0.27.15
+    with:
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: v0.27.15
+      runner: ubuntu-latest
+    secrets: inherit
+
+  test:
+    name: Test
+    if: startsWith(github.head_ref, 'release-please--branches--main')
+    uses: 0xPlayerOne/code-foundry/.github/workflows/test.yml@v0.27.15
+    with:
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: v0.27.15
+      runner: ubuntu-latest
+      unit-runner: ubuntu-slim
+    secrets: inherit
+
+  security:
+    name: Security
+    if: startsWith(github.head_ref, 'release-please--branches--main')
+    uses: 0xPlayerOne/code-foundry/.github/workflows/security.yml@v0.27.15
+    with:
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: v0.27.15
+      runner: ubuntu-slim
+    secrets: inherit
+
+  codeql:
+    name: CodeQL
+    if: startsWith(github.head_ref, 'release-please--branches--main')
+    uses: 0xPlayerOne/code-foundry/.github/workflows/codeql.yml@v0.27.15
+    with:
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: v0.27.15
+      runner: ubuntu-latest
+    secrets: inherit
