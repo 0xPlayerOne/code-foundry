@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.3...v0.30.4) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ci:** isolate runtime from consumer tooling ([32fe3ee](https://github.com/0xPlayerOne/code-foundry/commit/32fe3eea20ddad6086c1cfcacff6e7cb90606da0))
+* **self-ci:** test the checked-out runtime revision ([93973ba](https://github.com/0xPlayerOne/code-foundry/commit/93973bac19da7d250e3ccda4d4c79b1b0033008b))
+
 ## [0.30.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.2...v0.30.3) (2026-07-29)
 
 
