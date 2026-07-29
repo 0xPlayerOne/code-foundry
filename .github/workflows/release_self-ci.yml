@@ -19,5 +19,5 @@ jobs:
     with:
       runner: ubuntu-slim
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: main
+      runtime-ref: ${{ github.sha }}
     secrets: inherit
