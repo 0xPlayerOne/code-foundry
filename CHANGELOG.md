@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.15](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.14...v0.27.15) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ci:** remove stale CodeQL change detection ([897d749](https://github.com/0xPlayerOne/code-foundry/commit/897d749d296c02751fda764b9fa069e32208182b))
+
 ## [0.27.14](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.13...v0.27.14) (2026-07-29)
 
 
