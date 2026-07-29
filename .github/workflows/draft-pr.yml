@@ -37,6 +37,7 @@ jobs:
         run: |
           BRANCH="${{ github.ref_name }}"
           gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
             --base staging \
             --head "$BRANCH" \
             --draft \
