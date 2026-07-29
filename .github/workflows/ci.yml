@@ -50,7 +50,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
             src/lib
@@ -58,10 +58,10 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .github/.code-foundry/.github/actions/. .github/actions/
       - name: Detect
         id: applicability
-        run: node .code-foundry/src/runtime.mjs ci should_run format >> "$GITHUB_OUTPUT"
+        run: node .github/.code-foundry/src/runtime.mjs ci should_run format >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -76,7 +76,7 @@ jobs:
           task: format
       - name: Format
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .code-foundry/src/runtime.mjs ci format
+        run: node .github/.code-foundry/src/runtime.mjs ci format
 
   lint:
     name: Lint
@@ -89,7 +89,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
             src/lib
@@ -97,10 +97,10 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .github/.code-foundry/.github/actions/. .github/actions/
       - name: Detect
         id: applicability
-        run: node .code-foundry/src/runtime.mjs ci should_run lint >> "$GITHUB_OUTPUT"
+        run: node .github/.code-foundry/src/runtime.mjs ci should_run lint >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -110,7 +110,7 @@ jobs:
           task: lint
       - name: Lint
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .code-foundry/src/runtime.mjs ci lint
+        run: node .github/.code-foundry/src/runtime.mjs ci lint
 
   type-check:
     name: Type-Check
@@ -123,7 +123,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
             src/lib
@@ -131,10 +131,10 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .github/.code-foundry/.github/actions/. .github/actions/
       - name: Detect
         id: applicability
-        run: node .code-foundry/src/runtime.mjs ci should_run type_check >> "$GITHUB_OUTPUT"
+        run: node .github/.code-foundry/src/runtime.mjs ci should_run type_check >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -144,7 +144,7 @@ jobs:
           task: type_check
       - name: Type-Check
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .code-foundry/src/runtime.mjs ci type_check
+        run: node .github/.code-foundry/src/runtime.mjs ci type_check
 
   build:
     name: Build
@@ -162,7 +162,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
             src/lib
@@ -170,10 +170,10 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .code-foundry/.github/actions/. .github/actions/
+          cp -R .github/.code-foundry/.github/actions/. .github/actions/
       - name: Detect
         id: applicability
-        run: node .code-foundry/src/runtime.mjs ci should_run build >> "$GITHUB_OUTPUT"
+        run: node .github/.code-foundry/src/runtime.mjs ci should_run build >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -183,4 +183,4 @@ jobs:
           task: build
       - name: Build
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .code-foundry/src/runtime.mjs ci build
+        run: node .github/.code-foundry/src/runtime.mjs ci build
