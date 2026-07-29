@@ -276,7 +276,9 @@ function codeql() {
   if (hasLanguage('python')) available.push('python')
   if (hasLanguage('rust')) available.push('rust')
   const changed = capture('git', ['diff', '--name-only', process.env.CODEQL_BASE_SHA || 'HEAD^', process.env.GITHUB_SHA || 'HEAD']).split('\n').filter(Boolean)
-  const languagesJson = available.map((language) => ({ language, name: language === 'javascript-typescript' ? 'TypeScript' : language[0].toUpperCase() + language.slice(1), 'build-mode': 'none', changed: changed.length === 0 || changed.some((file) => fileMatches(language, file)) }))
+  // Upload every configured language on every analysis run so GitHub can
+  // compare pull requests against the base branch's code-scanning config.
+  const languagesJson = available.map((language) => ({ language, name: language === 'javascript-typescript' ? 'TypeScript' : language[0].toUpperCase() + language.slice(1), 'build-mode': 'none', changed: true }))
   writeOutput('languages', languagesJson)
   for (const language of ['actions', 'javascript-typescript', 'python', 'rust']) {
     const entry = languagesJson.find((item) => item.language === language)
