@@ -773,7 +773,7 @@ runs:
         REPO_FOUNDRY_INSTALL_PYTHON: ${{ inputs.install-python }}
         REPO_FOUNDRY_INSTALL_RUST: ${{ inputs.install-rust }}
         REPO_FOUNDRY_TASK: ${{ inputs.task }}
-      run: node .github/.code-foundry/src/runtime.mjs ci install
+      run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci install
     - name: Measure Bun dependencies
       id: javascript-bun-cache
       if: >-
