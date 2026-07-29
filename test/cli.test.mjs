@@ -72,6 +72,8 @@ describe('code-foundry CLI', () => {
 
   it('initializes a language-neutral repository without formatter configs', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-init-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/workflows/slither.yml'), 'name: Slither\n')
     syncRepository({ target: root, source: process.cwd(), init: true })
 
     assert.equal(resolveProfile(root).languages, 'none')
@@ -83,6 +85,8 @@ describe('code-foundry CLI', () => {
       readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'),
       /code-foundry\/\.github\/workflows\/ci\.yml@v/
     )
+    assert.equal(exists(join(root, '.github/workflows/slither.yml')), true)
+    assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
     doctor(root)
   })
 
