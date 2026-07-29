@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.0...v0.30.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** retry generated PR discovery ([dba7233](https://github.com/0xPlayerOne/code-foundry/commit/dba72337a04e73a2436d417b9e6f68d67bf54f83))
+* **sync:** include Python formatter baseline ([c7ce208](https://github.com/0xPlayerOne/code-foundry/commit/c7ce2084dcc7a7a3372056b879f435276e31aaa0))
+
 ## [0.30.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.29.0...v0.30.0) (2026-07-29)
 
 
