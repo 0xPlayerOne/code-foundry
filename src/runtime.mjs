@@ -275,7 +275,6 @@ function codeql() {
   if (hasLanguage('typescript') || hasLanguage('javascript')) available.push('javascript-typescript')
   if (hasLanguage('python')) available.push('python')
   if (hasLanguage('rust')) available.push('rust')
-  const changed = capture('git', ['diff', '--name-only', process.env.CODEQL_BASE_SHA || 'HEAD^', process.env.GITHUB_SHA || 'HEAD']).split('\n').filter(Boolean)
   // Upload every configured language on every analysis run so GitHub can
   // compare pull requests against the base branch's code-scanning config.
   const languagesJson = available.map((language) => ({ language, name: language === 'javascript-typescript' ? 'TypeScript' : language[0].toUpperCase() + language.slice(1), 'build-mode': 'none', changed: true }))
@@ -287,14 +286,6 @@ function codeql() {
     writeOutput(`${prefix}_changed`, entry?.changed ? 'true' : 'false')
     writeOutput(`${prefix}_build_mode`, entry?.['build-mode'] ?? 'none')
   }
-}
-
-/** @param {string} language @param {string} file */
-function fileMatches(language, file) {
-  if (language === 'actions') return file.startsWith('.github/workflows/') || file.endsWith('action.yml')
-  if (language === 'javascript-typescript') return /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/.test(file) || /(^|\/)(package\.json|tsconfig[^/]*\.json|(?:bun|pnpm|yarn|package-lock)\.lock)$/.test(file)
-  if (language === 'python') return /\.py$|(^|\/)(pyproject\.toml|requirements[^/]*\.txt|setup\.py|Pipfile\.lock|poetry\.lock)$/.test(file)
-  return /\.rs$|(^|\/)Cargo\.(toml|lock)$/.test(file)
 }
 
 /** @param {string} command */
