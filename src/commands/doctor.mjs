@@ -5,9 +5,10 @@ import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { resolveProfile } from '../lib/profile.mjs'
+import { doctorGithub } from '../lib/github-doctor.mjs'
 
-/** @param {string} root */
-export function doctor(root) {
+/** @param {string} root @param {{ github?: boolean }} [options] */
+export function doctor(root, options = {}) {
   const target = resolve(root)
   const config = readConfig(join(target, '.github/code-foundry.yml'))
   const profile = resolveProfile(target)
@@ -55,6 +56,12 @@ export function doctor(root) {
     if (includesValue(config.features ?? 'all', workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
   }
   console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.')
+  if (options.github) {
+    const github = doctorGithub(target)
+    for (const message of github.warnings) warn(`GitHub: ${message}`)
+    for (const message of github.errors) error(`GitHub: ${message}`)
+    console.log(`GitHub doctor inspected ${github.details.repository}.`)
+  }
   if (errors) throw new Error(`Repository doctor found ${errors} error(s).`)
   console.log('Repository doctor passed.')
 }

@@ -100,7 +100,7 @@ function main() {
     }
   } else if (command === 'doctor') {
     try {
-      doctor(target)
+      doctor(target, { github: options.github })
     } catch (error) {
       console.error(`code-foundry: ${error instanceof Error ? error.message : String(error)}`)
       process.exitCode = 1
