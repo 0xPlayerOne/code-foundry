@@ -5,7 +5,7 @@ import { describe, it } from 'node:test'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
+import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
 import { selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
@@ -181,6 +181,16 @@ describe('code-foundry CLI', () => {
     assert.equal(validateReleasePullRequests(generated, new Map([[42, []]]), allowed).valid, false)
     assert.equal(validateReleasePullRequests([], new Map(), allowed).valid, false)
     assert.equal(validateReleasePullRequests([{ number: 7, title: 'chore(main): release 1.2.3' }], new Map([[7, ['CHANGELOG.md']]]), allowed).valid, false)
+  })
+
+  it('recommends full runners for native-toolchain repositories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-runner-'))
+    writeFileSync(join(root, 'Cargo.toml'), '[package]\nname = "runner-fixture"\n')
+    assert.equal(recommendRunners(root).unit_runner, 'ubuntu-latest')
+    assert.equal(recommendRunners(root).security_runner, 'ubuntu-slim')
+    const browser = mkdtempSync(join(tmpdir(), 'code-foundry-browser-'))
+    writeFileSync(join(browser, 'playwright.config.ts'), 'export default {}\n')
+    assert.equal(recommendRunners(browser).test_runner, 'ubuntu-latest')
   })
 })
 

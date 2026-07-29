@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
-import { resolveProfile } from '../lib/profile.mjs'
+import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
 
 /** @param {string} root @param {{ github?: boolean }} [options] */
@@ -12,6 +12,7 @@ export function doctor(root, options = {}) {
   const target = resolve(root)
   const config = readConfig(join(target, '.github/code-foundry.yml'))
   const profile = resolveProfile(target)
+  const recommendations = recommendRunners(target)
   let errors = 0
   /** @param {string} message */
   const error = (message) => { console.error(`ERROR: ${message}`); errors += 1 }
@@ -28,6 +29,9 @@ export function doctor(root, options = {}) {
   }
   const hooks = git(target, ['config', '--get', 'core.hooksPath'])
   if (hooks !== '.githooks') warn('Git hooks are not enabled; run `npx code-foundry init`')
+  if (['rust', 'python', 'solidity'].some((language) => profile.languages.split(',').includes(language)) && (config.unit_runner ?? recommendations.unit_runner) === 'ubuntu-slim') {
+    warn('unit_runner is ubuntu-slim for a native-toolchain repository; ubuntu-latest is recommended.')
+  }
 
   const packageFile = join(target, 'package.json')
   if (existsSync(packageFile)) {

@@ -102,6 +102,32 @@ export function resolveProfile(root) {
   }
 }
 
+/**
+ * Recommend runners from detected workload cost. Slim is reserved for short
+ * metadata/security/PR jobs; native toolchains and browser/contract tests use
+ * the full runner.
+ * @param {string} root
+ */
+export function recommendRunners(root) {
+  const languages = detectLanguages(root)
+  const heavy = languages.some((language) => ['rust', 'python', 'solidity'].includes(language)) || hasBrowserProject(root)
+  return {
+    runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
+    ci_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
+    test_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
+    unit_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
+    security_runner: 'ubuntu-slim',
+    codeql_runner: 'ubuntu-latest',
+    pr_runner: 'ubuntu-slim',
+    release_runner: 'ubuntu-slim',
+  }
+}
+
+/** @param {string} root */
+function hasBrowserProject(root) {
+  return ['playwright.config.ts', 'playwright.config.js', 'cypress.config.ts', 'cypress.config.js'].some((file) => existsSync(join(root, file)))
+}
+
 /** @param {string} root */
 function detectReleaseType(root) {
   if (existsSync(join(root, 'package.json'))) return 'node'

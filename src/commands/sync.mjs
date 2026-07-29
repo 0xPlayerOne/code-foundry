@@ -3,7 +3,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { detectLanguages, detectPackageManager, detectProfile } from '../lib/profile.mjs'
+import { detectLanguages, detectPackageManager, detectProfile, recommendRunners } from '../lib/profile.mjs'
 import { configured, includesValue, readConfig } from '../lib/config.mjs'
 import { buildReleaseConfig } from '../lib/release-manifest.mjs'
 
@@ -235,12 +235,12 @@ function buffersEqual(a, b) { return a.equals(b) }
 function createDefaultConfig(root, source) {
   const languages = detectLanguages(root).join(',')
   const packageManager = detectPackageManager(root)
+  const runners = recommendRunners(root)
   return {
     version: '1', profile: detectProfile(root), languages, features: 'all', codeql: 'auto', dependency_review: 'auto', package_manager: packageManager,
     runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
-    runner: 'ubuntu-latest', unit_runner: 'ubuntu-slim', ci_runner: 'ubuntu-latest', test_runner: 'ubuntu-latest',
+    ...runners,
     toolchain: 'auto',
-    security_runner: 'ubuntu-slim', codeql_runner: 'ubuntu-latest', pr_runner: 'ubuntu-slim', release_runner: 'ubuntu-slim',
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
