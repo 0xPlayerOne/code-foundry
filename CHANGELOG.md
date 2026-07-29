@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.31.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.4...v0.31.0) (2026-07-29)
+
+
+### Features
+
+* **release:** open safe staging sync PRs ([6adb1dc](https://github.com/0xPlayerOne/code-foundry/commit/6adb1dc63966e5bfe70deb3ccd3c3aa5e93ccfad))
+
+
+### Bug Fixes
+
+* **release:** compare promoted branch tips ([081666b](https://github.com/0xPlayerOne/code-foundry/commit/081666b774418ab333d34eb9a3ca2a8c3bd60c78))
+
 ## [0.30.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.3...v0.30.4) (2026-07-29)
 
 
