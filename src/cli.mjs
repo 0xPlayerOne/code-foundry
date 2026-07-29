@@ -11,7 +11,7 @@ import { syncRepository } from './commands/sync.mjs'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** @typedef {{ target: string, root: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, base: string, head: string, tag: string, workflow: string, mode: string, version: string, releaseSubcommand?: string, fleetSubcommand?: string }} Options */
+/** @typedef {{ target: string, root: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, releaseSubcommand?: string, fleetSubcommand?: string }} Options */
 /** @typedef {{ command: string, options: Options }} ParsedArgs */
 
 const usage = `code-foundry — initialize and maintain agent-ready repositories
@@ -42,6 +42,7 @@ Options:
   --root PATH     Fleet root containing repositories (default: current directory)
   --create-pr     Create isolated upgrade branches and pull requests
   --version TAG   Runtime tag to report in fleet upgrade branches
+  --exclude NAME  Skip a repository path or owner/name in fleet operations
   -h, --help      Show this help
 `
 
@@ -57,7 +58,7 @@ function parseArgs(argv) {
   const hasCommand = Boolean(first && !first.startsWith('-'))
   const command = hasCommand ? /** @type {string} */ (argv.shift()) : 'init'
   /** @type {Options} */
-  const options = { target: process.cwd(), root: process.cwd(), dryRun: false, force: false, github: false, createPr: false, base: 'main', head: 'staging', tag: '', workflow: '', mode: 'auto', version: `v${readPackageVersion(packageRoot)}` }
+  const options = { target: process.cwd(), root: process.cwd(), dryRun: false, force: false, github: false, createPr: false, exclude: [], base: 'main', head: 'staging', tag: '', workflow: '', mode: 'auto', version: `v${readPackageVersion(packageRoot)}` }
 
   if (command === 'release') {
     const subcommand = argv.shift() ?? ''
@@ -90,6 +91,7 @@ function parseArgs(argv) {
     else if (arg === '--root') options.root = argv.shift() ?? fail('--root requires a path')
     else if (arg === '--create-pr') options.createPr = true
     else if (arg === '--version') options.version = argv.shift() ?? fail('--version requires a tag')
+    else if (arg === '--exclude') options.exclude.push(argv.shift() ?? fail('--exclude requires a name'))
     else fail(`unknown option: ${arg}; run --help for the supported options`)
   }
 
@@ -132,7 +134,7 @@ function main() {
     try {
       const root = resolve(options.root)
       if (options.fleetSubcommand === 'status') console.log(JSON.stringify(discoverRepositories(root), null, 2))
-      else upgradeFleet(root, packageRoot, { createPr: options.createPr, dryRun: options.dryRun, force: options.force, version: options.version })
+      else upgradeFleet(root, packageRoot, { createPr: options.createPr, dryRun: options.dryRun, force: options.force, version: options.version, exclude: options.exclude })
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }

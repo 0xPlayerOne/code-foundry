@@ -29,11 +29,15 @@ export function discoverRepositories(root) {
   return result.sort((a, b) => a.path.localeCompare(b.path))
 }
 
-/** @param {string} root @param {string} source @param {{ createPr?: boolean, dryRun?: boolean, force?: boolean, version: string }} options */
+/** @param {string} root @param {string} source @param {{ createPr?: boolean, dryRun?: boolean, force?: boolean, version: string, exclude?: string[] }} options */
 export function upgradeFleet(root, source, options) {
   const repositories = discoverRepositories(root)
   const report = []
   for (const repository of repositories) {
+    if ((options.exclude ?? []).some((value) => repository.path === value || repository.repository === value || repository.path.endsWith(`/${value}`))) {
+      report.push({ path: repository.path, status: 'skipped', reason: 'excluded by fleet policy' })
+      continue
+    }
     if (!repository.configured) {
       report.push({ path: repository.path, status: 'skipped', reason: 'missing .github/code-foundry.yml' })
       continue
