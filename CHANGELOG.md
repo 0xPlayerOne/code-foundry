@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.30.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.29.0...v0.30.0) (2026-07-29)
+
+
+### Features
+
+* **ci:** recommend stack-aware runners ([83df327](https://github.com/0xPlayerOne/code-foundry/commit/83df32777344898651d71af28496202337ae6788))
+* **doctor:** validate GitHub release configuration ([877525c](https://github.com/0xPlayerOne/code-foundry/commit/877525c11f6713b235aa3945dd98d017bef5732e))
+* **fleet:** add isolated repository upgrades ([76d1765](https://github.com/0xPlayerOne/code-foundry/commit/76d176593ea025a2090bd62f21b275d261d3a9d5))
+* **release:** add exactly-once post-release hooks ([f4ffa13](https://github.com/0xPlayerOne/code-foundry/commit/f4ffa136ef972665fe269b6685f9c4b840fc95a9))
+* **release:** add non-destructive recovery planning ([6c45592](https://github.com/0xPlayerOne/code-foundry/commit/6c45592358d9ceb0335acc6584ac565971433737))
+* **security:** add opt-in OpenCode release scan ([34512c1](https://github.com/0xPlayerOne/code-foundry/commit/34512c1507519d2b37a9bd665243490fa888beb9))
+* **sync:** formalize custom workflow overlays ([ee540f9](https://github.com/0xPlayerOne/code-foundry/commit/ee540f9a80c0b128100e795471042fc12aefc226))
+
+
+### Bug Fixes
+
+* **release:** grant post-release dispatch permission ([c18a52d](https://github.com/0xPlayerOne/code-foundry/commit/c18a52dff2ac76e648eeb9fa1f92fab8a01dafec))
+
 ## [0.29.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.28.0...v0.29.0) (2026-07-29)
 
 
