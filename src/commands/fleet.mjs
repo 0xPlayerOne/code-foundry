@@ -66,7 +66,11 @@ function upgradeRepository(repository, source, version) {
   const branch = `codex/code-foundry-upgrade-${version.replace(/^v/, '')}`
   const temporary = mkdtempSync(join(tmpdir(), 'code-foundry-fleet-'))
   try {
-    const add = spawnSync('git', ['-C', repository.path, 'worktree', 'add', '-b', branch, temporary, 'HEAD'], { encoding: 'utf8' })
+    const fetch = spawnSync('git', ['-C', repository.path, 'fetch', 'origin', 'staging', '--quiet'], { encoding: 'utf8' })
+    if (fetch.status !== 0) return { path: repository.path, status: 'skipped', reason: fetch.stderr.trim() || 'unable to refresh staging baseline' }
+    const baseline = spawnSync('git', ['-C', repository.path, 'rev-parse', 'origin/staging'], { encoding: 'utf8' })
+    if (baseline.status !== 0) return { path: repository.path, status: 'skipped', reason: 'remote staging branch is unavailable' }
+    const add = spawnSync('git', ['-C', repository.path, 'worktree', 'add', '-b', branch, temporary, baseline.stdout.trim()], { encoding: 'utf8' })
     if (add.status !== 0) return { path: repository.path, status: 'skipped', reason: add.stderr.trim() || 'unable to create isolated worktree' }
     const result = syncRepository({ target: temporary, source, force: false })
     if (!result.changed.length) return { path: repository.path, status: 'unchanged', branch }
