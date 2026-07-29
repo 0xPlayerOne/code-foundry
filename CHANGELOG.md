@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.18...v0.28.0) (2026-07-29)
+
+
+### Features
+
+* **release:** reconcile staging after release metadata ([4de1ad6](https://github.com/0xPlayerOne/code-foundry/commit/4de1ad64bd9276344368934ab555e6cb31a90784))
+
 ## [0.27.18](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.17...v0.27.18) (2026-07-29)
 
 
