@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.11](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.10...v0.27.11) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ci:** isolate reusable workflow concurrency ([ddfc3a6](https://github.com/0xPlayerOne/code-foundry/commit/ddfc3a6b8860629a12494ffd8ef273dfb2c354b4))
+* **workflows:** clarify Code Foundry job hierarchy ([124327e](https://github.com/0xPlayerOne/code-foundry/commit/124327ec3f8f5907eca478580a62b7485e0cfd98))
+
 ## [0.27.10](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.9...v0.27.10) (2026-07-28)
 
 
