@@ -6,9 +6,11 @@ import { spawnSync } from 'node:child_process'
 import { detectLanguages, detectPackageManager, detectProfile, recommendRunners } from '../lib/profile.mjs'
 import { configured, includesValue, readConfig } from '../lib/config.mjs'
 import { buildReleaseConfig } from '../lib/release-manifest.mjs'
+import { customWorkflowFiles, overlayPolicy } from '../lib/overlay.mjs'
 
 const standardFiles = [
   '.editorconfig', '.gitattributes', '.gitignore', 'release-please-config.json',
+  'docs/EXTENSIONS.md',
   '.githooks/pre-commit', 'AGENTS.md', 'LICENSE', 'NOTICE', 'ruff.toml', '.prettierrc',
   '.github/CODEOWNERS', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
   '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', '.github/dependabot.yml',
@@ -64,6 +66,7 @@ export function syncRepository(options) {
   const runtimeRepository = configured(config.runtime_repository, '0xPlayerOne/code-foundry')
   const runtimeRef = configured(config.runtime_ref, `v${readPackageVersion(source)}`)
   const toolchain = configured(config.toolchain, 'auto')
+  const overlays = overlayPolicy(target, config)
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
     throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
   }
@@ -134,6 +137,10 @@ export function syncRepository(options) {
     git(target, ['config', 'core.hooksPath', '.githooks'])
   }
   console.log(`${changed.length} baseline file(s) differ.`)
+  if (overlays.custom_workflows === 'preserve') {
+    const custom = customWorkflowFiles(target, standardFiles)
+    if (custom.length) console.log(`Preserved ${custom.length} repository-owned workflow(s).`)
+  }
   return { changed, config }
 }
 
@@ -244,6 +251,7 @@ function createDefaultConfig(root, source) {
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
+    sync_mode: 'overlay', custom_workflows: 'preserve',
     license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase',
   }
 }
