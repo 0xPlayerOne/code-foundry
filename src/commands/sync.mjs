@@ -64,7 +64,8 @@ export function syncRepository(options) {
   const languages = configured(config.languages, detectLanguages(target).join(','))
   const features = configured(config.features, 'all')
   const runtimeRepository = configured(config.runtime_repository, '0xPlayerOne/code-foundry')
-  const runtimeRef = configured(config.runtime_ref, `v${readPackageVersion(source)}`)
+  const sourceRuntimeRef = `v${readPackageVersion(source)}`
+  let runtimeRef = configured(config.runtime_ref, sourceRuntimeRef)
   const toolchain = configured(config.toolchain, 'auto')
   const overlays = overlayPolicy(target, config)
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
@@ -72,6 +73,18 @@ export function syncRepository(options) {
   }
   const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
   const changed = []
+
+  // Keep normal semver pins current during sync while preserving intentional
+  // refs such as `main`, `staging`, or a custom immutable SHA.
+  if (existingConfig.runtime_ref && /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref) && existingConfig.runtime_ref !== sourceRuntimeRef) {
+    runtimeRef = sourceRuntimeRef
+    const current = readFileSync(configPath, 'utf8')
+    const updated = current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${sourceRuntimeRef}`)
+    if (updated !== current) {
+      changed.push('.github/code-foundry.yml')
+      writeOrReport(configPath, updated, dryRun)
+    }
+  }
 
   for (const file of standardFiles) {
     if (!shouldInclude(file, languages, features, config)) continue
