@@ -82,12 +82,13 @@ describe('code-foundry CLI', () => {
     doctor(root)
   })
 
-  it('lets the resolved Release Please config own the release strategy', () => {
+  it('lets a manifest Release Please config own the release strategy', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
-    assert.match(workflow, /releaseConfig\['release-type'\] = releaseType/)
-    assert.match(workflow, /config-file: \$\{\{ steps\.profile\.outputs\.release_config \}\}/)
-    assert.doesNotMatch(workflow, /^\s+release-type:\s+\$\{\{/m)
+    assert.match(workflow, /if \(!releaseConfig\.packages && !releaseConfig\['release-type'\]\)/)
+    assert.match(workflow, /legacyReleaseType = releaseType/)
+    assert.match(workflow, /config-file: release-please-config\.json/)
+    assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
   })
 })
 

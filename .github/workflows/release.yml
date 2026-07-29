@@ -57,20 +57,18 @@ jobs:
           }
           if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
-          let releaseConfigPath = ''
+          let legacyReleaseType = ''
           if (releaseType !== 'none') {
             const sourcePath = 'release-please-config.json'
             if (!fs.existsSync(sourcePath)) throw new Error(`Missing ${sourcePath}`)
             const releaseConfig = JSON.parse(fs.readFileSync(sourcePath, 'utf8'))
             if (!releaseConfig.packages && !releaseConfig['release-type']) {
-              releaseConfig['release-type'] = releaseType
+              legacyReleaseType = releaseType
             }
-            releaseConfigPath = '.release-please-config.resolved.json'
-            fs.writeFileSync(releaseConfigPath, `${JSON.stringify(releaseConfig, null, 2)}\n`)
           }
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `release_type=${releaseType}\nrelease_config=${releaseConfigPath}\nnpm_publish=${npmPublish}\n`,
+            `release_type=${releaseType}\nlegacy_release_type=${legacyReleaseType}\nnpm_publish=${npmPublish}\n`,
           )
           NODE
       - name: Release Please
@@ -79,7 +77,8 @@ jobs:
         uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
-          config-file: ${{ steps.profile.outputs.release_config }}
+          config-file: release-please-config.json
+          release-type: ${{ steps.profile.outputs.legacy_release_type }}
 
   npm:
     name: Release / Publish npm
