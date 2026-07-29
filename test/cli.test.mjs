@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
+import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
@@ -155,6 +156,16 @@ describe('code-foundry CLI', () => {
     assert.equal(config.packages['web']['release-type'], 'node')
     assert.deepEqual(config.packages['web']['extra-files'], ['src/version.ts'])
     assert.deepEqual(validateReleaseConfig(root, config), [])
+  })
+
+  it('selects one token-aware post-release delivery and prevents duplicate tags', () => {
+    assert.equal(selectHookDelivery({ mode: 'auto', tokenPresent: true }).delivery, 'workflow-dispatch')
+    assert.equal(selectHookDelivery({ mode: 'auto', tokenPresent: false }).delivery, 'release-event')
+    assert.equal(selectHookDelivery({ mode: 'disabled', tokenPresent: true }).delivery, 'disabled')
+    const key = releaseDeliveryKey('owner/repo', 'v1.2.3')
+    assert.match(key, /^[a-f0-9]{24}$/)
+    assert.equal(hasDeliveredHook([{ headBranch: 'v1.2.3', status: 'completed' }], 'v1.2.3'), true)
+    assert.equal(hasDeliveredHook([{ headBranch: 'v1.2.4', status: 'completed' }], 'v1.2.3'), false)
   })
 })
 

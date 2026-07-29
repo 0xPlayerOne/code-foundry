@@ -243,6 +243,7 @@ function createDefaultConfig(root, source) {
     security_runner: 'ubuntu-slim', codeql_runner: 'ubuntu-latest', pr_runner: 'ubuntu-slim', release_runner: 'ubuntu-slim',
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
+    post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
     license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase',
   }
 }
