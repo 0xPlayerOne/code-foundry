@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.31.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.3...v0.31.4) (2026-07-29)
+
+
+### Bug Fixes
+
+* harden fleet pins and github doctor ([c6efa7a](https://github.com/0xPlayerOne/code-foundry/commit/c6efa7a436308959950d958c5897574193cd763b))
+
+## [0.31.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.2...v0.31.3) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ci:** isolate runtime from consumer tooling ([9bb07da](https://github.com/0xPlayerOne/code-foundry/commit/9bb07daa383a3ec89a57c6279546f1d8d4483457))
+* **ci:** keep runtime out of project tooling ([0aec04a](https://github.com/0xPlayerOne/code-foundry/commit/0aec04a01f6378f165b83dbedde670ddee61657e))
+
 ## [0.31.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.1...v0.31.2) (2026-07-29)
 
 
