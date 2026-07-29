@@ -22,8 +22,12 @@ export function reconcileRelease(root, options) {
   const mainSha = git(target, ['rev-parse', `origin/${base}`]) || git(target, ['rev-parse', base])
   const stagingSha = git(target, ['rev-parse', `origin/${head}`]) || git(target, ['rev-parse', head])
   const mergeBaseSha = git(target, ['merge-base', mainSha, stagingSha])
-  const mainChangedPaths = diffNames(target, mergeBaseSha, mainSha)
-  const stagingChangedPaths = diffNames(target, mergeBaseSha, stagingSha)
+  // Compare the branch tips directly. Release Please may rebase or recreate
+  // commits during promotion, leaving equivalent code with different ancestry.
+  // Comparing both tips preserves the fail-closed behavior for real content
+  // differences without mistaking that normal history rewrite for a change.
+  const mainChangedPaths = diffNames(target, stagingSha, mainSha)
+  const stagingChangedPaths = diffNames(target, mainSha, stagingSha)
   const plan = classifyReconciliation({
     mainSha,
     stagingSha,
