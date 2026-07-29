@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.12](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.11...v0.27.12) (2026-07-29)
+
+
+### Bug Fixes
+
+* **security:** skip irrelevant dependency audits ([cc206d4](https://github.com/0xPlayerOne/code-foundry/commit/cc206d4dea5311684b79ef3a04669aa7ce74421a))
+
 ## [0.27.11](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.10...v0.27.11) (2026-07-29)
 
 
