@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
+import { selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
@@ -92,7 +93,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /legacyReleaseType = releaseType/)
     assert.match(workflow, /config-file: release-please-config\.json/)
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
-    assert.match(workflow, /Refusing to auto-merge release PR/)
+    assert.match(workflow, /release validate-prs/)
     assert.match(workflow, /--admin/)
     assert.match(workflow, /--rebase/)
   })
@@ -166,6 +167,20 @@ describe('code-foundry CLI', () => {
     assert.match(key, /^[a-f0-9]{24}$/)
     assert.equal(hasDeliveredHook([{ headBranch: 'v1.2.3', status: 'completed' }], 'v1.2.3'), true)
     assert.equal(hasDeliveredHook([{ headBranch: 'v1.2.4', status: 'completed' }], 'v1.2.3'), false)
+  })
+
+  it('keeps release policy decisions executable and deterministic', () => {
+    assert.equal(selectReleaseCredential({ releasePleaseToken: 'secret', githubToken: 'fallback' }).source, 'release-please-token')
+    assert.equal(selectReleaseCredential({ githubToken: 'fallback' }).autoMerge, false)
+    assert.equal(selectReleaseCredential({}).source, 'missing')
+    const allowed = new Set(['CHANGELOG.md', 'package.json'])
+    const generated = [{ number: 42, title: 'chore(main): release 1.2.3', headRefName: 'release-please--branches--main' }]
+    const valid = validateReleasePullRequests(generated, new Map([[42, ['CHANGELOG.md', 'package.json']]]), allowed)
+    assert.equal(valid.valid, true)
+    assert.equal(validateReleasePullRequests(generated, new Map([[42, ['src/index.ts']]]), allowed).valid, false)
+    assert.equal(validateReleasePullRequests(generated, new Map([[42, []]]), allowed).valid, false)
+    assert.equal(validateReleasePullRequests([], new Map(), allowed).valid, false)
+    assert.equal(validateReleasePullRequests([{ number: 7, title: 'chore(main): release 1.2.3' }], new Map([[7, ['CHANGELOG.md']]]), allowed).valid, false)
   })
 })
 

@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { approvedReleaseFiles, classifyReconciliation, readReleaseConfig } from '../lib/release-policy.mjs'
+import { approvedReleaseFiles, classifyReconciliation, readReleaseConfig, selectGeneratedReleasePrs, validateReleasePullRequests } from '../lib/release-policy.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib/release-hook.mjs'
 
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */
@@ -76,6 +76,25 @@ export function dispatchPostReleaseHook(root, options) {
   ], { cwd: resolve(root), stdio: 'inherit', env: { ...process.env, GH_TOKEN: process.env.RELEASE_PLEASE_TOKEN } })
   if (result.status !== 0) throw new Error(`Failed to dispatch post-release workflow ${options.workflow}.`)
   return { ...decision, deliveryKey: key, dispatched: true }
+}
+
+/** @param {string} root */
+export function validateReleasePullRequestDiffs(root) {
+  const repository = process.env.GITHUB_REPOSITORY
+  if (!repository) throw new Error('GITHUB_REPOSITORY is required for release PR validation.')
+  const prs = ghJson(root, ['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title,headRefName'])
+  const generated = selectGeneratedReleasePrs(Array.isArray(prs) ? prs : [])
+  /** @type {Map<number, string[]>} */
+  const paths = new Map()
+  for (const pr of generated) {
+    const number = Number(pr.number)
+    const result = spawnSync('gh', ['pr', 'diff', String(number), '--repo', repository, '--name-only'], { cwd: resolve(root), encoding: 'utf8' })
+    paths.set(number, result.status === 0 ? result.stdout.split(/\r?\n/).filter(Boolean) : [])
+  }
+  const validation = validateReleasePullRequests(Array.isArray(prs) ? prs : [], paths, approvedReleaseFiles(readReleaseConfig(root)))
+  console.log(JSON.stringify(validation, null, 2))
+  if (!validation.valid) throw new Error(validation.errors.join(' '))
+  return validation
 }
 
 /** @param {string} root @param {string[]} args @returns {string} */
