@@ -32,8 +32,7 @@
     "AGENTS.md",
     "LICENSE",
     "NOTICE",
-    "README.md",
-    "ruff.toml"
+    "README.md"
   ],
   "engines": {
     "node": ">=20"
