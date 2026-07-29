@@ -29,8 +29,8 @@ body. Existing `CHANGELOG.md` history remains repository-owned.
 Set these values in `.github/code-foundry.yml`:
 
 ```yaml
-release_type: auto   # auto, node, python, rust, simple, or none
-npm_publish: false   # true only for an npm package
+release_type: auto # auto, node, python, rust, simple, or none
+npm_publish: false # true only for an npm package
 ```
 
 `auto` selects a supported manifest. Use `simple` with `version.txt` for a
@@ -39,9 +39,16 @@ not release automatically.
 
 ## Pull request permissions
 
-If the default `GITHUB_TOKEN` cannot create pull requests, configure a narrowly
-scoped `RELEASE_PLEASE_TOKEN` repository or organization secret. The release
-workflow needs `contents`, `issues`, and `pull-requests` permissions.
+Release Please falls back to the repository's `GITHUB_TOKEN` when a
+`RELEASE_PLEASE_TOKEN` secret is unavailable. In that mode, Code Foundry opens
+or updates the version pull request, leaves it for manual merge, and completes
+the release job successfully.
+
+Configure a narrowly scoped `RELEASE_PLEASE_TOKEN` repository or organization
+secret to enable guarded automatic merging and downstream workflows triggered
+by the resulting release. The token needs `contents`, `issues`, and
+`pull-requests` write permissions. Code Foundry validates every changed path in
+the generated version pull request before using the token to merge it.
 
 ## Operational checklist
 

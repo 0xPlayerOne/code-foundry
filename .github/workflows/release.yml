@@ -71,6 +71,16 @@ jobs:
             `release_type=${releaseType}\nlegacy_release_type=${legacyReleaseType}\nnpm_publish=${npmPublish}\n`,
           )
           NODE
+      - name: Detect release credentials
+        id: credentials
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [ -n "$RELEASE_PLEASE_TOKEN" ]; then
+            echo "auto_merge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "auto_merge=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Release Please
         id: release
         if: steps.profile.outputs.release_type != 'none'
@@ -79,10 +89,14 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Leave release pull request for manual merge
+        if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge != 'true'
+        run: |
+          echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. RELEASE_PLEASE_TOKEN is not configured, so Code Foundry skipped guarded auto-merge. Configure the token before merging when downstream release workflows must run automatically."
       - name: Merge generated version pull requests
-        if: steps.release.outputs.prs_created == 'true'
+        if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge == 'true'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -euo pipefail
 
