@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
-import { selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
+import { buildReleaseRecoveryPlan, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
@@ -191,6 +191,19 @@ describe('code-foundry CLI', () => {
     const browser = mkdtempSync(join(tmpdir(), 'code-foundry-browser-'))
     writeFileSync(join(browser, 'playwright.config.ts'), 'export default {}\n')
     assert.equal(recommendRunners(browser).test_runner, 'ubuntu-latest')
+  })
+
+  it('produces a non-destructive release recovery plan', () => {
+    const plan = buildReleaseRecoveryPlan({
+      tags: ['v1.0.0', 'v1.1.0'],
+      releases: [{ tagName: 'v1.0.0' }],
+      releasePrs: [{ number: 9, title: 'chore(main): release 1.1.0' }],
+      packageVersions: ['1.1.0'],
+    })
+    assert.deepEqual(plan.missingGitHubReleases, ['v1.1.0'])
+    assert.deepEqual(plan.pendingReleasePullRequests, [{ number: 9, title: 'chore(main): release 1.1.0' }])
+    assert.equal(plan.packageVersionMismatch, false)
+    assert.match(plan.actions[0], /v1\.1\.0/)
   })
 })
 

@@ -1,9 +1,9 @@
 // @ts-check
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { approvedReleaseFiles, classifyReconciliation, readReleaseConfig, selectGeneratedReleasePrs, validateReleasePullRequests } from '../lib/release-policy.mjs'
+import { approvedReleaseFiles, buildReleaseRecoveryPlan, classifyReconciliation, readReleaseConfig, selectGeneratedReleasePrs, validateReleasePullRequests } from '../lib/release-policy.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib/release-hook.mjs'
 
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */
@@ -97,6 +97,24 @@ export function validateReleasePullRequestDiffs(root) {
   return validation
 }
 
+/** @param {string} root */
+export function releaseRecoveryPlan(root) {
+  const repository = process.env.GITHUB_REPOSITORY
+  if (!repository) throw new Error('GITHUB_REPOSITORY is required for release recovery planning.')
+  const tags = ghJson(root, ['api', `repos/${repository}/tags?per_page=100`])
+  const releases = ghJson(root, ['release', 'list', '--repo', repository, '--limit', '100', '--json', 'tagName,name,isDraft,isPrerelease'])
+  const releasePrs = ghJson(root, ['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title'])
+  const packageVersions = localPackageVersions(root)
+  const plan = buildReleaseRecoveryPlan({
+    tags: Array.isArray(tags) ? tags.map((tag) => tag.name).filter(Boolean) : [],
+    releases: Array.isArray(releases) ? releases : [],
+    releasePrs: Array.isArray(releasePrs) ? releasePrs.filter((pr) => /^chore\(main\): release /.test(pr.title ?? '')) : [],
+    packageVersions,
+  })
+  console.log(JSON.stringify(plan, null, 2))
+  return plan
+}
+
 /** @param {string} root @param {string[]} args @returns {string} */
 function git(root, args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
@@ -116,6 +134,24 @@ function ghJson(root, args) {
   if (result.status !== 0) return []
   try { return JSON.parse(result.stdout) }
   catch { return [] }
+}
+
+/** @param {string} root @returns {string[]} */
+function localPackageVersions(root) {
+  const versions = []
+  const packageJson = join(resolve(root), 'package.json')
+  if (existsSync(packageJson)) {
+    try { versions.push(JSON.parse(readFileSync(packageJson, 'utf8')).version) } catch { /* doctor handles malformed manifests */ }
+  }
+  /** @type {Array<[string, RegExp]>} */
+  const manifests = [['Cargo.toml', /^version\s*=\s*["']([^"']+)["']/m], ['pyproject.toml', /^(?:version|version\s*)\s*=\s*["']([^"']+)["']/m]]
+  for (const [file, pattern] of manifests) {
+    const path = join(resolve(root), file)
+    if (!existsSync(path)) continue
+    const match = readFileSync(path, 'utf8').match(pattern)
+    if (match?.[1]) versions.push(match[1])
+  }
+  return versions.filter(Boolean)
 }
 
 /** @param {string} root */
