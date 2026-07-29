@@ -723,7 +723,7 @@ runs:
         path: ~/.cargo/advisory-db
         # The advisory database is independent of project dependencies. Keep
         # it warm for Security without invalidating it on every lockfile edit.
-        key: ${{ runner.os }}-rust-advisory-${{ hashFiles('.github/.code-foundry/src/runtime.mjs') }}
+        key: ${{ runner.os }}-rust-advisory-code-foundry-v1
         restore-keys: |
           ${{ runner.os }}-rust-advisory-
     - name: Cache Rust builds
