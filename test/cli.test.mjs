@@ -86,6 +86,7 @@ describe('code-foundry CLI', () => {
       /code-foundry\/\.github\/workflows\/ci\.yml@v/
     )
     assert.equal(exists(join(root, '.github/workflows/slither.yml')), true)
+    assert.equal(exists(join(root, '.github/workflows/opencode-security.yml')), false)
     assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
     doctor(root)
   })

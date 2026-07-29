@@ -18,7 +18,7 @@ const standardFiles = [
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/workflows/ci.yml', '.github/workflows/codeql.yml', '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
-  '.github/workflows/security.yml', '.github/workflows/test.yml',
+  '.github/workflows/security.yml', '.github/workflows/test.yml', '.github/workflows/opencode-security.yml',
 ]
 
 const protectedFiles = new Set([
@@ -74,7 +74,7 @@ export function syncRepository(options) {
   const changed = []
 
   for (const file of standardFiles) {
-    if (!shouldInclude(file, languages, features)) continue
+    if (!shouldInclude(file, languages, features, config)) continue
     const sourceFile = sourcePath(source, file)
     if (!existsSync(sourceFile)) throw new Error(`Template file missing: ${file}`)
     const destination = join(target, file)
@@ -159,11 +159,12 @@ function renderReleaseConfig(target, sourceFile) {
   return `${JSON.stringify(buildReleaseConfig(target, merged), null, 2)}\n`
 }
 
-/** @param {string} file @param {string} languages @param {string} features */
-function shouldInclude(file, languages, features) {
+/** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */
+function shouldInclude(file, languages, features, config) {
   if (file === 'ruff.toml') return includesValue(languages, 'python')
   if (file === '.prettierrc') return includesValue(languages, 'typescript')
   if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
+  if (file === '.github/workflows/opencode-security.yml') return ['true', 'auto'].includes(config.opencode_security ?? 'false')
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
   return !workflow || includesValue(features, workflow)
 }
@@ -251,6 +252,7 @@ function createDefaultConfig(root, source) {
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
+    opencode_security: 'false',
     sync_mode: 'overlay', custom_workflows: 'preserve',
     license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase',
   }
