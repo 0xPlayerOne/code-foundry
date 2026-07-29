@@ -55,7 +55,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: src
       - name: Detect release profile
         id: profile
@@ -117,7 +117,7 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -euo pipefail
-          node .code-foundry/src/cli.mjs release validate-prs
+          node .github/.code-foundry/src/cli.mjs release validate-prs
           mapfile -t release_prs < <(
             gh pr list \
               --repo "$GITHUB_REPOSITORY" \
@@ -155,7 +155,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: |
             src
             release-please-config.json
@@ -170,7 +170,7 @@ jobs:
           fi
       - name: Reconcile release metadata
         if: steps.staging.outputs.exists == 'true'
-        run: node .code-foundry/src/cli.mjs release reconcile --github --base main --head staging
+        run: node .github/.code-foundry/src/cli.mjs release reconcile --github --base main --head staging
       - name: Skip without staging
         if: steps.staging.outputs.exists != 'true'
         run: echo 'No staging branch exists; release reconciliation is not applicable.'
@@ -200,7 +200,7 @@ jobs:
         with:
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
-          path: .code-foundry
+          path: .github/.code-foundry
           sparse-checkout: src
       - name: Detect post-release hook
         id: hook
@@ -221,7 +221,7 @@ jobs:
           NODE
       - name: Dispatch post-release hook once
         if: steps.hook.outputs.enabled == 'true' && steps.hook.outputs.workflow != ''
-        run: node .code-foundry/src/cli.mjs release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
+        run: node .github/.code-foundry/src/cli.mjs release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
       - name: Explain disabled post-release hook
         if: steps.hook.outputs.enabled != 'true' || steps.hook.outputs.workflow == ''
         run: echo 'No post-release workflow configured; artifact delivery is intentionally skipped.'
