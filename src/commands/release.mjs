@@ -136,7 +136,8 @@ function diffNames(root, from, to) {
 
 /** @param {string} root @param {string[]} args @returns {unknown} */
 function ghJson(root, args) {
-  const result = spawnSync('gh', args, { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, GH_TOKEN: process.env.RELEASE_PLEASE_TOKEN } })
+  const token = process.env.RELEASE_PLEASE_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+  const result = spawnSync('gh', args, { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, ...(token ? { GH_TOKEN: token } : {}) } })
   if (result.status !== 0) return []
   try { return JSON.parse(result.stdout) }
   catch { return [] }
