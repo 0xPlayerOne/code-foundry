@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.1...v0.30.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* **fleet:** support explicit repository exclusions ([2c3a641](https://github.com/0xPlayerOne/code-foundry/commit/2c3a641814de392457f94f3581f01e5b625056ee))
+
 ## [0.30.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.0...v0.30.1) (2026-07-29)
 
 
