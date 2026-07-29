@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.27.14](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.13...v0.27.14) (2026-07-29)
+
+
+### Bug Fixes
+
+* **codeql:** skip unavailable analyzers ([9ddf8e3](https://github.com/0xPlayerOne/code-foundry/commit/9ddf8e30dab4da2ba1f6bb20dd3503e56ab1b880))
+* **draft-pr:** pass repository explicitly ([6fbf289](https://github.com/0xPlayerOne/code-foundry/commit/6fbf289649ce2097e42b156cf2db0c39fb8ceee1))
+* **draft-pr:** use explicit repository for lookups ([e498d6e](https://github.com/0xPlayerOne/code-foundry/commit/e498d6e125099e2437041112e1b3442a7ebea389))
+
 ## [0.27.13](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.12...v0.27.13) (2026-07-29)
 
 
