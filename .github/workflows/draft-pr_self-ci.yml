@@ -1,4 +1,4 @@
-name: Draft PR
+name: Code Foundry
 
 on:
   push:
