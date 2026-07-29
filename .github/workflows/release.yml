@@ -68,6 +68,25 @@ jobs:
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.release_type }}
 
+      - name: Enable release auto-merge
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --base main \
+            --json number,title \
+            --jq '.[] | select(.title | startswith("chore(main): release")) | .number' \
+          | while read -r pr; do
+              [ -z "$pr" ] || gh pr merge "$pr" \
+                --repo "$GITHUB_REPOSITORY" \
+                --auto \
+                --merge
+            done
+
   npm:
     name: Release / Publish npm
     needs: release
