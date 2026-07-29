@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.0...v0.31.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** build clean staging sync branches ([03a7c19](https://github.com/0xPlayerOne/code-foundry/commit/03a7c191d7a5a6b95cce639e6ed9201b374f1010))
+
 ## [0.31.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.30.4...v0.31.0) (2026-07-29)
 
 
