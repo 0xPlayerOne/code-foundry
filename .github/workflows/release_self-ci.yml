@@ -17,4 +17,6 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       runner: ubuntu-slim
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: v0.27.18
     secrets: inherit
