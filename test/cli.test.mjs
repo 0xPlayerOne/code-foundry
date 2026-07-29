@@ -11,7 +11,9 @@ import { syncRepository } from '../src/commands/sync.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
-const testEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT'))
+const testEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT')
+)
 
 function run(...args) {
   return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
@@ -73,8 +75,19 @@ describe('code-foundry CLI', () => {
     assert.equal(exists(join(root, 'ruff.toml')), false)
     assert.equal(exists(join(root, '.prettierrc')), false)
     assert.match(readFileSync(join(root, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/)
-    assert.match(readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'), /code-foundry\/\.github\/workflows\/ci\.yml@v/)
+    assert.match(
+      readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'),
+      /code-foundry\/\.github\/workflows\/ci\.yml@v/
+    )
     doctor(root)
+  })
+
+  it('lets the resolved Release Please config own the release strategy', () => {
+    const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+
+    assert.match(workflow, /releaseConfig\['release-type'\] = releaseType/)
+    assert.match(workflow, /config-file: \$\{\{ steps\.profile\.outputs\.release_config \}\}/)
+    assert.doesNotMatch(workflow, /^\s+release-type:\s+\$\{\{/m)
   })
 })
 
