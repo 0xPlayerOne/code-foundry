@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.16](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.15...v0.27.16) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** honor manifest configuration ([2beb320](https://github.com/0xPlayerOne/code-foundry/commit/2beb32053e5b86319a3c44377e4cbe2f20592507))
+* **release:** pass committed manifest config ([39ef227](https://github.com/0xPlayerOne/code-foundry/commit/39ef227828d9c7903e9d08cfcd0dd755f41a7c78))
+
 ## [0.27.15](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.14...v0.27.15) (2026-07-29)
 
 
