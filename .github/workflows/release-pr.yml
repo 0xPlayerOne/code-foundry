@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow_ref }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check
