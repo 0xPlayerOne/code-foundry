@@ -13,17 +13,23 @@ export function doctor(root) {
   const profile = resolveProfile(target)
   let errors = 0
   /** @param {string} message */
-  const error = (message) => { console.error(`ERROR: ${message}`); errors += 1 }
+  const error = (message) => {
+    console.error(`ERROR: ${message}`)
+    errors += 1
+  }
   /** @param {string} message */
   const warn = (message) => console.warn(`WARN: ${message}`)
 
   const toolchain = config.toolchain ?? 'auto'
   if (!['auto', 'native', 'mise'].includes(toolchain)) error(`unsupported toolchain: ${toolchain}`)
-  if (toolchain === 'mise' && !existsSync(join(target, '.mise.toml'))) error('.mise.toml is required when toolchain: mise')
+  if (toolchain === 'mise' && !existsSync(join(target, '.mise.toml')))
+    error('.mise.toml is required when toolchain: mise')
   if (toolchain === 'auto') {
-    console.log(existsSync(join(target, '.mise.toml'))
-      ? 'Toolchain: mise (detected from existing .mise.toml).'
-      : 'Toolchain: native (mise not configured).')
+    console.log(
+      existsSync(join(target, '.mise.toml'))
+        ? 'Toolchain: mise (detected from existing .mise.toml).'
+        : 'Toolchain: native (mise not configured).'
+    )
   }
   const hooks = git(target, ['config', '--get', 'core.hooksPath'])
   if (hooks !== '.githooks') warn('Git hooks are not enabled; run `npx code-foundry init`')
@@ -31,30 +37,68 @@ export function doctor(root) {
   const packageFile = join(target, 'package.json')
   if (existsSync(packageFile)) {
     let packageJson
-    try { packageJson = JSON.parse(readFileSync(packageFile, 'utf8')) }
-    catch { error('package.json is not valid JSON'); packageJson = {} }
-    const lockfiles = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].filter((file) => existsSync(join(target, file)))
+    try {
+      packageJson = JSON.parse(readFileSync(packageFile, 'utf8'))
+    } catch {
+      error('package.json is not valid JSON')
+      packageJson = {}
+    }
+    const lockfiles = [
+      'bun.lock',
+      'bun.lockb',
+      'pnpm-lock.yaml',
+      'yarn.lock',
+      'package-lock.json',
+    ].filter((file) => existsSync(join(target, file)))
     const groups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
-    if (!lockfiles.length && groups.some((key) => Object.keys(packageJson[key] ?? {}).length)) error('package.json exists but no supported lockfile was found')
+    if (!lockfiles.length && groups.some((key) => Object.keys(packageJson[key] ?? {}).length))
+      error('package.json exists but no supported lockfile was found')
     if (lockfiles.length > 1) error('multiple JavaScript lockfiles found; keep one package manager')
     if (packageJson.packageManager && lockfiles.length) {
       const declared = String(packageJson.packageManager).split('@')[0]
-      const actual = lockfiles[0]?.startsWith('bun') ? 'bun' : lockfiles[0]?.split('-')[0].replace('.yaml', '')
-      if (actual && declared !== actual) error(`packageManager (${declared}) does not match ${actual} lockfile`)
+      const actual = lockfiles[0]?.startsWith('bun')
+        ? 'bun'
+        : lockfiles[0]?.split('-')[0].replace('.yaml', '')
+      if (actual && declared !== actual)
+        error(`packageManager (${declared}) does not match ${actual} lockfile`)
     }
   }
 
-  if (profile.languages.split(',').includes('rust') && !commandExists('cargo')) error('Cargo is required for this repository')
+  if (profile.languages.split(',').includes('rust') && !commandExists('cargo'))
+    error('Cargo is required for this repository')
   if (profile.languages.split(',').includes('rust')) {
-    const metadata = spawnSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], { cwd: target, stdio: 'ignore' })
+    const metadata = spawnSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], {
+      cwd: target,
+      stdio: 'ignore',
+    })
     if (metadata.status !== 0) error('cargo metadata failed')
   }
-  if (profile.languages.split(',').includes('python') && !commandExists('python') && !existsSync(join(target, '.venv/bin/python'))) error('Python is required for this repository')
+  if (
+    profile.languages.split(',').includes('python') &&
+    !commandExists('python') &&
+    !existsSync(join(target, '.venv/bin/python'))
+  )
+    error('Python is required for this repository')
 
-  for (const workflow of ['ci', 'codeql', 'security', 'test', 'draft-pr', 'release-pr', 'release', 'release-validation']) {
-    if (includesValue(config.features ?? 'all', workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
+  for (const workflow of [
+    'ci',
+    'codeql',
+    'security',
+    'test',
+    'draft-pr',
+    'release-pr',
+    'release',
+    'release-validation',
+  ]) {
+    if (
+      includesValue(config.features ?? 'all', workflow) &&
+      !existsSync(join(target, `.github/workflows/${workflow}.yml`))
+    )
+      error(`missing enabled workflow: ${workflow}.yml`)
   }
-  console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.')
+  console.log(
+    'Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.'
+  )
   if (errors) throw new Error(`Repository doctor found ${errors} error(s).`)
   console.log('Repository doctor passed.')
 }

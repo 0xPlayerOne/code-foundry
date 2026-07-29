@@ -7,31 +7,66 @@ import { detectLanguages, detectPackageManager, detectProfile } from '../lib/pro
 import { configured, includesValue, readConfig } from '../lib/config.mjs'
 
 const standardFiles = [
-  '.editorconfig', '.gitattributes', '.gitignore', 'release-please-config.json',
-  '.githooks/pre-commit', 'AGENTS.md', 'LICENSE', 'NOTICE', 'ruff.toml', '.prettierrc',
-  '.github/CODEOWNERS', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
-  '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', '.github/dependabot.yml',
-  '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml',
+  '.editorconfig',
+  '.gitattributes',
+  '.gitignore',
+  'release-please-config.json',
+  '.githooks/pre-commit',
+  'AGENTS.md',
+  'LICENSE',
+  'NOTICE',
+  'ruff.toml',
+  '.prettierrc',
+  '.github/CODEOWNERS',
+  '.github/CODE_OF_CONDUCT.md',
+  '.github/CONTRIBUTING.md',
+  '.github/PULL_REQUEST_TEMPLATE.md',
+  '.github/SECURITY.md',
+  '.github/dependabot.yml',
+  '.github/ISSUE_TEMPLATE/bug_report.yml',
+  '.github/ISSUE_TEMPLATE/config.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
-  '.github/workflows/ci.yml', '.github/workflows/codeql.yml', '.github/workflows/draft-pr.yml',
-  '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
-  '.github/workflows/release-validation.yml', '.github/workflows/security.yml', '.github/workflows/test.yml',
+  '.github/workflows/ci.yml',
+  '.github/workflows/codeql.yml',
+  '.github/workflows/draft-pr.yml',
+  '.github/workflows/release-pr.yml',
+  '.github/workflows/release.yml',
+  '.github/workflows/release-validation.yml',
+  '.github/workflows/security.yml',
+  '.github/workflows/test.yml',
 ]
 
 const protectedFiles = new Set([
-  'AGENTS.md', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
-  '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', 'NOTICE',
+  'AGENTS.md',
+  '.github/CODE_OF_CONDUCT.md',
+  '.github/CONTRIBUTING.md',
+  '.github/PULL_REQUEST_TEMPLATE.md',
+  '.github/SECURITY.md',
+  'NOTICE',
 ])
 
 const legacyFiles = [
-  '.github/code-foundry.yml.example', '.github/template.yml', '.github/template.yml.example',
-  '.github/scripts/bootstrap.sh', '.github/scripts/changed-files.sh', '.github/scripts/ci.sh',
-  '.github/scripts/codeql-languages.sh', '.github/scripts/doctor.sh', '.github/scripts/format-fast-path.sh',
-  '.github/scripts/init-repo.sh', '.github/scripts/pre-commit.sh', '.github/scripts/profile.sh',
-  '.github/scripts/security.sh', '.github/scripts/sitecustomize.py', '.github/scripts/sync-codeowners.sh',
-  '.github/scripts/sync-protection.sh', '.github/scripts/sync-template.sh', '.github/scripts/turbo-cache-probe.sh',
+  '.github/code-foundry.yml.example',
+  '.github/template.yml',
+  '.github/template.yml.example',
+  '.github/scripts/bootstrap.sh',
+  '.github/scripts/changed-files.sh',
+  '.github/scripts/ci.sh',
+  '.github/scripts/codeql-languages.sh',
+  '.github/scripts/doctor.sh',
+  '.github/scripts/format-fast-path.sh',
+  '.github/scripts/init-repo.sh',
+  '.github/scripts/pre-commit.sh',
+  '.github/scripts/profile.sh',
+  '.github/scripts/security.sh',
+  '.github/scripts/sitecustomize.py',
+  '.github/scripts/sync-codeowners.sh',
+  '.github/scripts/sync-protection.sh',
+  '.github/scripts/sync-template.sh',
+  '.github/scripts/turbo-cache-probe.sh',
   '.github/licenses/MIT.txt',
-  '.github/licenses/GPL-3.0-or-later.txt', '.github/licenses/AGPL-3.0-or-later.txt',
+  '.github/licenses/GPL-3.0-or-later.txt',
+  '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
 /** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean }} SyncOptions */
@@ -44,7 +79,8 @@ export function syncRepository(options) {
   const force = options.force ?? false
   const configPath = join(target, '.github/code-foundry.yml')
   const existingConfig = readConfig(configPath)
-  if (!Object.keys(existingConfig).length && !options.init) throw new Error('Missing .github/code-foundry.yml; run init first.')
+  if (!Object.keys(existingConfig).length && !options.init)
+    throw new Error('Missing .github/code-foundry.yml; run init first.')
   const defaults = createDefaultConfig(target, source)
   let config = { ...defaults, ...existingConfig }
   if (!Object.keys(existingConfig).length) {
@@ -66,7 +102,10 @@ export function syncRepository(options) {
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
     throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
   }
-  const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
+  const license = configured(
+    config.license,
+    existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later'
+  )
   const changed = []
 
   for (const file of standardFiles) {
@@ -78,15 +117,24 @@ export function syncRepository(options) {
       const existing = readFileSync(destination, 'utf8')
       if (!isLegacyManagedDoc(file, existing)) continue
     }
-    if ((file === 'LICENSE' || file === 'NOTICE') && license === 'preserve' && existsSync(destination)) continue
+    if (
+      (file === 'LICENSE' || file === 'NOTICE') &&
+      license === 'preserve' &&
+      existsSync(destination)
+    )
+      continue
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'none') continue
     if (file === '.github/CODEOWNERS' && existsSync(destination)) continue
     let content = readFileSync(sourceFile)
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
-      content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef))
+      content = Buffer.from(
+        renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef)
+      )
     }
     if (file === '.gitignore' && existsSync(destination)) {
-      content = Buffer.from(mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8')))
+      content = Buffer.from(
+        mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8'))
+      )
     }
     if (!existsSync(destination) || !buffersEqual(content, readFileSync(destination))) {
       changed.push(file)
@@ -95,11 +143,17 @@ export function syncRepository(options) {
   }
 
   if (license !== 'preserve' && license !== 'none') {
-    const licenseFile = license === 'mit' ? 'MIT.txt' : license === 'agpl-3.0-or-later' ? 'AGPL-3.0-or-later.txt' : 'GPL-3.0-or-later.txt'
+    const licenseFile =
+      license === 'mit'
+        ? 'MIT.txt'
+        : license === 'agpl-3.0-or-later'
+          ? 'AGPL-3.0-or-later.txt'
+          : 'GPL-3.0-or-later.txt'
     const sourceLicense = join(source, '.github/licenses', licenseFile)
     if (!existsSync(sourceLicense)) throw new Error(`License template missing: ${sourceLicense}`)
     writeOrReport(join(target, 'LICENSE'), readFileSync(sourceLicense), dryRun)
-    if (!existsSync(join(target, 'NOTICE'))) writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
+    if (!existsSync(join(target, 'NOTICE')))
+      writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
   }
 
   for (const file of legacyFiles) {
@@ -111,7 +165,10 @@ export function syncRepository(options) {
     }
   }
   for (const file of ['ruff.toml', '.prettierrc', '.prettierignore']) {
-    const relevant = file === 'ruff.toml' ? includesValue(languages, 'python') : includesValue(languages, 'typescript')
+    const relevant =
+      file === 'ruff.toml'
+        ? includesValue(languages, 'python')
+        : includesValue(languages, 'typescript')
     if (!relevant && existsSync(join(target, file))) {
       changed.push(file)
       if (dryRun) console.log(`Would remove irrelevant language configuration ${file}`)
@@ -121,7 +178,11 @@ export function syncRepository(options) {
   if (includesValue(languages, 'typescript') && existsSync(join(target, '.prettierignore'))) {
     const prettierIgnore = readFileSync(join(target, '.prettierignore'), 'utf8')
     if (!prettierIgnore.split(/\r?\n/).includes('.code-foundry')) {
-      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n.code-foundry\n`, dryRun)
+      writeOrReport(
+        join(target, '.prettierignore'),
+        `${prettierIgnore.trimEnd()}\n.code-foundry\n`,
+        dryRun
+      )
       changed.push('.prettierignore')
     }
   }
@@ -160,7 +221,10 @@ function renderWorkflow(content, config, repository, ref) {
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
-  rendered = rendered.replace(new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'), `$&@${ref}`)
+  rendered = rendered.replace(
+    new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
+    `$&@${ref}`
+  )
   rendered = rendered.replace(/^(\s+runtime-ref:)\s+.*$/m, `$1 ${ref}`)
   /** @type {Record<string, string|undefined>} */
   const runners = {
@@ -179,58 +243,102 @@ function renderWorkflow(content, config, repository, ref) {
 }
 
 /** @param {string} value */
-function escapeRegExp(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 /** @param {string} baseline @param {string} existing */
 function mergeGitignore(baseline, existing) {
   const marker = '# Repository-specific rules'
-  const custom = existing.includes(marker) ? existing.slice(existing.indexOf(marker) + marker.length).trim() : ''
+  const custom = existing.includes(marker)
+    ? existing.slice(existing.indexOf(marker) + marker.length).trim()
+    : ''
   return custom ? `${baseline.trimEnd()}\n\n${marker}\n${custom}\n` : baseline
 }
 
 /** @param {string} file @param {string} content */
 function isLegacyManagedDoc(file, content) {
   if (file === 'AGENTS.md') {
-    return content.includes('.github/scripts/bootstrap.sh') && content.includes('bash .github/scripts/ci.sh')
+    return (
+      content.includes('.github/scripts/bootstrap.sh') &&
+      content.includes('bash .github/scripts/ci.sh')
+    )
   }
   if (file === '.github/CONTRIBUTING.md') {
-    return content.includes('.github/scripts/bootstrap.sh') && content.includes('.github/template.yml')
+    return (
+      content.includes('.github/scripts/bootstrap.sh') && content.includes('.github/template.yml')
+    )
   }
   return false
 }
 
 /** @param {string} target @param {string[]} args */
-function git(target, args) { spawnSync('git', args, { cwd: target, stdio: 'ignore' }) }
+function git(target, args) {
+  spawnSync('git', args, { cwd: target, stdio: 'ignore' })
+}
 
 /** @param {string} file @param {Buffer|string} content @param {boolean} dryRun */
 function writeOrReport(file, content, dryRun) {
-  if (dryRun) { console.log(`Would sync ${file}`); return }
+  if (dryRun) {
+    console.log(`Would sync ${file}`)
+    return
+  }
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, content)
 }
 
 /** @param {Buffer} a @param {Buffer} b */
-function buffersEqual(a, b) { return a.equals(b) }
+function buffersEqual(a, b) {
+  return a.equals(b)
+}
 
 /** @param {string} root @param {string} source @returns {Record<string,string>} */
 function createDefaultConfig(root, source) {
   const languages = detectLanguages(root).join(',')
   const packageManager = detectPackageManager(root)
   return {
-    version: '1', profile: detectProfile(root), languages, features: 'all', codeql: 'auto', dependency_review: 'auto', package_manager: packageManager,
-    runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
-    runner: 'ubuntu-latest', unit_runner: 'ubuntu-slim', ci_runner: 'ubuntu-latest', test_runner: 'ubuntu-latest',
+    version: '1',
+    profile: detectProfile(root),
+    languages,
+    features: 'all',
+    codeql: 'auto',
+    dependency_review: 'auto',
+    package_manager: packageManager,
+    runtime_repository: '0xPlayerOne/code-foundry',
+    runtime_ref: `v${readPackageVersion(source)}`,
+    runner: 'ubuntu-latest',
+    unit_runner: 'ubuntu-slim',
+    ci_runner: 'ubuntu-latest',
+    test_runner: 'ubuntu-latest',
     toolchain: 'auto',
-    security_runner: 'ubuntu-slim', codeql_runner: 'ubuntu-latest', pr_runner: 'ubuntu-slim', release_runner: 'ubuntu-slim',
-    prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
-    release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
-    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase',
+    security_runner: 'ubuntu-slim',
+    codeql_runner: 'ubuntu-latest',
+    pr_runner: 'ubuntu-slim',
+    release_runner: 'ubuntu-slim',
+    prune_standard: 'false',
+    cache_packages: 'auto',
+    cache_build: 'auto',
+    coverage_minimum: '80',
+    turbo_remote: 'auto',
+    release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node',
+    npm_publish: 'false',
+    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later',
+    git_workflow: 'staging-release',
+    merge_strategy: 'rebase',
   }
 }
 
 /** @param {Record<string,string>} config */
-function renderConfig(config) { return `${Object.entries(config).map(([key, value]) => `${key}: ${value}`).join('\n')}\n` }
+function renderConfig(config) {
+  return `${Object.entries(config)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n')}\n`
+}
 /** @param {string} root */
 function readPackageVersion(root) {
-  try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0' } catch { return '0.0.0' }
+  try {
+    return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
 }

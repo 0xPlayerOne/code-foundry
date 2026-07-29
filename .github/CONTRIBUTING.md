@@ -153,14 +153,14 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 ## Workflow and check behavior
 
-| Event                            | Expected automation                      |
-| -------------------------------- | ---------------------------------------- |
-| Push to `main` or `staging`      | CI, Test, Security, and CodeQL workflows |
-| Pull request targeting `staging` | CI, Test, Security, and CodeQL workflows |
+| Event                              | Expected automation                                    |
+| ---------------------------------- | ------------------------------------------------------ |
+| Push to `main` or `staging`        | CI, Test, Security, and CodeQL workflows               |
+| Pull request targeting `staging`   | CI, Test, Security, and CodeQL workflows               |
 | Release Please PR targeting `main` | Release-only CI, Test, Security, and CodeQL validation |
-| Push to a working branch         | Draft PR workflow                        |
-| Push to `staging`                | Release PR workflow                      |
-| Version tag such as `v1.2.3`     | Release workflow                         |
+| Push to a working branch           | Draft PR workflow                                      |
+| Push to `staging`                  | Release PR workflow                                    |
+| Version tag such as `v1.2.3`       | Release workflow                                       |
 
 The workflows use separate concurrency groups keyed by the commit under test. A newer run for the same commit cancels a duplicate event-triggered run, while newer commits cancel older runs and independent CI, Test, Security, and CodeQL workflows continue in parallel.
 
