@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.17](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.16...v0.27.17) (2026-07-29)
+
+
+### Bug Fixes
+
+* **release:** auto-merge generated version PRs ([3032cfc](https://github.com/0xPlayerOne/code-foundry/commit/3032cfc458e4508ad637354ee98447c544a5a1d4))
+
 ## [0.27.16](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.15...v0.27.16) (2026-07-29)
 
 ### Bug Fixes
