@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
+import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
@@ -132,6 +133,28 @@ describe('code-foundry CLI', () => {
       }).action,
       'fail',
     )
+  })
+
+  it('generates a mixed-language Release Please manifest without losing custom fields', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-manifest-'))
+    mkdirSync(join(root, 'web/src'), { recursive: true })
+    mkdirSync(join(root, 'service'), { recursive: true })
+    writeFileSync(join(root, 'web/package.json'), '{"name":"fixture-web","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'web/src/version.ts'), 'export const version = "1.0.0"\n')
+    writeFileSync(join(root, 'service/Cargo.toml'), '[package]\nname = "fixture-service"\nversion = "1.0.0"\n')
+    writeFileSync(join(root, 'pyproject.toml'), '[project]\nname = "fixture-python"\nversion = "1.0.0"\n')
+
+    const packages = detectReleasePackages(root)
+    assert.deepEqual(packages.map(({ directory, releaseType }) => [directory, releaseType]), [
+      ['.', 'python'],
+      ['service', 'rust'],
+      ['web', 'node'],
+    ])
+    const config = buildReleaseConfig(root, { 'changelog-sections': [{ type: 'feat', section: 'Features' }] })
+    assert.deepEqual(config['changelog-sections'], [{ type: 'feat', section: 'Features' }])
+    assert.equal(config.packages['web']['release-type'], 'node')
+    assert.deepEqual(config.packages['web']['extra-files'], ['src/version.ts'])
+    assert.deepEqual(validateReleaseConfig(root, config), [])
   })
 })
 

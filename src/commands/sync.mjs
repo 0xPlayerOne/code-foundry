@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectLanguages, detectPackageManager, detectProfile } from '../lib/profile.mjs'
 import { configured, includesValue, readConfig } from '../lib/config.mjs'
+import { buildReleaseConfig } from '../lib/release-manifest.mjs'
 
 const standardFiles = [
   '.editorconfig', '.gitattributes', '.gitignore', 'release-please-config.json',
@@ -82,6 +83,9 @@ export function syncRepository(options) {
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'none') continue
     if (file === '.github/CODEOWNERS' && existsSync(destination)) continue
     let content = readFileSync(sourceFile)
+    if (file === 'release-please-config.json') {
+      content = Buffer.from(renderReleaseConfig(target, sourceFile))
+    }
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
       content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef))
     }
@@ -131,6 +135,21 @@ export function syncRepository(options) {
   }
   console.log(`${changed.length} baseline file(s) differ.`)
   return { changed, config }
+}
+
+/** @param {string} target @param {string} sourceFile @returns {string} */
+function renderReleaseConfig(target, sourceFile) {
+  let baseline = {}
+  try { baseline = JSON.parse(readFileSync(sourceFile, 'utf8')) }
+  catch { baseline = {} }
+  const destination = join(target, 'release-please-config.json')
+  let existing = baseline
+  if (existsSync(destination)) {
+    try { existing = JSON.parse(readFileSync(destination, 'utf8')) }
+    catch { existing = baseline }
+  }
+  const merged = { ...baseline, ...existing }
+  return `${JSON.stringify(buildReleaseConfig(target, merged), null, 2)}\n`
 }
 
 /** @param {string} file @param {string} languages @param {string} features */
