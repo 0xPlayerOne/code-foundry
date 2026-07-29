@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.28.0...v0.29.0) (2026-07-29)
+
+
+### Features
+
+* **release:** detect mixed-language release manifests ([f2daa61](https://github.com/0xPlayerOne/code-foundry/commit/f2daa616f2d8cfd2883f960823e862768454fbd6))
+
 ## [0.28.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.27.18...v0.28.0) (2026-07-29)
 
 
