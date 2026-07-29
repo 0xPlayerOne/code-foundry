@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, resolveProfile } from '../src/lib/profile.mjs'
+import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
@@ -103,6 +104,34 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge != 'true'/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge == 'true'/)
     assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+  })
+
+  it('allows only release metadata during post-release reconciliation', () => {
+    const allowed = approvedReleaseFiles({
+      'extra-files': ['version.txt'],
+      packages: { web: { 'extra-files': ['src/version.ts'] } },
+    })
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mergeBaseSha: 'staging',
+        mainChangedPaths: ['CHANGELOG.md', 'package.json'],
+        stagingChangedPaths: [],
+        allowed,
+      }),
+      { action: 'fast-forward', targetSha: 'main', reason: 'main only added approved release metadata.' },
+    )
+    assert.equal(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mergeBaseSha: 'staging',
+        mainChangedPaths: ['src/index.ts'],
+        allowed,
+      }).action,
+      'fail',
+    )
   })
 })
 

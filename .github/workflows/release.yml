@@ -8,6 +8,16 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: false
+        type: string
+        default: 0xPlayerOne/code-foundry
+      runtime-ref:
+        description: Code Foundry runtime tag or ref.
+        required: false
+        type: string
+        default: v0.27.18
 
 permissions:
   contents: write
@@ -167,6 +177,47 @@ jobs:
               --rebase \
               --delete-branch
           done
+
+  reconcile:
+    name: Release / Reconcile
+    needs: release
+    if: needs.release.outputs.release_created == 'true'
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Checkout runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .code-foundry
+          sparse-checkout: |
+            src
+            release-please-config.json
+      - name: Check staging branch
+        id: staging
+        run: |
+          if git ls-remote --exit-code origin refs/heads/staging >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            git fetch --no-tags origin main staging
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Reconcile release metadata
+        if: steps.staging.outputs.exists == 'true'
+        run: node .code-foundry/src/cli.mjs release reconcile --github --base main --head staging
+      - name: Skip without staging
+        if: steps.staging.outputs.exists != 'true'
+        run: echo 'No staging branch exists; release reconciliation is not applicable.'
 
   npm:
     name: Release / Publish npm
