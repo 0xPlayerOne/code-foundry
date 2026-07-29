@@ -1,6 +1,6 @@
 // @ts-check
 
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -73,6 +73,17 @@ function upgradeRepository(repository, source, version) {
     const add = spawnSync('git', ['-C', repository.path, 'worktree', 'add', '-b', branch, temporary, baseline.stdout.trim()], { encoding: 'utf8' })
     if (add.status !== 0) return { path: repository.path, status: 'skipped', reason: add.stderr.trim() || 'unable to create isolated worktree' }
     const result = syncRepository({ target: temporary, source, force: false })
+    const configFile = join(temporary, '.github/code-foundry.yml')
+    if (existsSync(configFile)) {
+      const current = readFileSync(configFile, 'utf8')
+      const updated = current.match(/^runtime_ref:\s*.*$/m)
+        ? current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${version}`)
+        : `${current.trimEnd()}\nruntime_ref: ${version}\n`
+      if (updated !== current) {
+        writeFileSync(configFile, updated)
+        if (!result.changed.includes('.github/code-foundry.yml')) result.changed.push('.github/code-foundry.yml')
+      }
+    }
     if (!result.changed.length) return { path: repository.path, status: 'unchanged', branch }
     spawnSync('git', ['-C', temporary, 'add', '-A'], { stdio: 'ignore' })
     const commit = spawnSync('git', ['-C', temporary, 'commit', '-m', `chore(code-foundry): upgrade runtime to ${version}`], { encoding: 'utf8' })

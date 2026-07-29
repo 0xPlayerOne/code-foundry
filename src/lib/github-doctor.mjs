@@ -55,6 +55,16 @@ export function doctorGithub(root) {
   if (['workflow-dispatch', 'dispatch'].includes(config.post_release_mode) && config.post_release !== 'false' && !details.secrets.releasePleaseTokenPresent) {
     errors.push('post-release workflow-dispatch mode requires RELEASE_PLEASE_TOKEN to be present.')
   }
+  const credentialChecks = {
+    npmTokenPresent: secretNames.includes('NPM_TOKEN'),
+    turboTokenPresent: secretNames.includes('TURBO_TOKEN'),
+    turboTeamPresent: Boolean(ghJson(['variable', 'list', '--repo', repository, '--json', 'name'])?.some(/** @param {{ name?: string }} variable */ (variable) => variable.name === 'TURBO_TEAM')),
+    opencodeApiKeyPresent: secretNames.includes('OPENCODE_API_KEY'),
+  }
+  details.credentials = credentialChecks
+  if (config.npm_publish === 'true' && !credentialChecks.npmTokenPresent) warnings.push('npm_publish is enabled but NPM_TOKEN is not configured; npm trusted publishing must be configured for tokenless publication.')
+  if (['true', 'auto'].includes(config.turbo_remote ?? 'false') && (!credentialChecks.turboTokenPresent || !credentialChecks.turboTeamPresent)) warnings.push('turbo_remote is enabled but TURBO_TOKEN and/or TURBO_TEAM is not configured; remote caching will be skipped.')
+  if (['true', 'auto'].includes(config.opencode_security ?? 'false') && !credentialChecks.opencodeApiKeyPresent) warnings.push('opencode_security is enabled but OPENCODE_API_KEY is not configured; the optional scan will be skipped.')
 
   const prs = ghJson(['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title,headRefName'])
   const openPrs = Array.isArray(prs) ? prs : []
