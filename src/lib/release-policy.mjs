@@ -165,6 +165,9 @@ export function classifyReconciliation(input) {
   if (mainSha === mergeBaseSha) {
     return { action: 'none', reason: 'staging contains commits that are not on main; no release-only reconciliation is needed.' }
   }
+  if (!mainChangedPaths.length && !stagingChangedPaths.length) {
+    return { action: 'aligned', reason: 'Branches have different history but identical content.' }
+  }
   const unexpectedMain = unexpectedReleasePaths(mainChangedPaths, allowed)
   const unexpectedStaging = unexpectedReleasePaths(stagingChangedPaths, allowed)
   if (unexpectedMain.length || unexpectedStaging.length) {

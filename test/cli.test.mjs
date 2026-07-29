@@ -141,6 +141,17 @@ describe('code-foundry CLI', () => {
       }).action,
       'fail',
     )
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mergeBaseSha: 'older',
+        mainChangedPaths: [],
+        stagingChangedPaths: [],
+        allowed,
+      }),
+      { action: 'aligned', reason: 'Branches have different history but identical content.' },
+    )
   })
 
   it('generates a mixed-language Release Please manifest without losing custom fields', () => {
