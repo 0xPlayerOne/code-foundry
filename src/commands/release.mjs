@@ -38,6 +38,23 @@ export function reconcileRelease(root, options) {
   })
   console.log(JSON.stringify({ base, head, ...plan }, null, 2))
   if (plan.action === 'fail') throw new Error(plan.reason + (plan.unexpected?.length ? ` Unexpected paths: ${plan.unexpected.join(', ')}` : ''))
+  if (plan.action === 'pull-request' && options.github && !options.dryRun) {
+    if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for synchronization PRs.')
+    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+    if (!token) throw new Error('GH_TOKEN or GITHUB_TOKEN is required for synchronization PRs.')
+    const existing = ghJson(target, ['pr', 'list', '--repo', process.env.GITHUB_REPOSITORY, '--state', 'open', '--base', head, '--head', base, '--json', 'number,url'])
+    if (Array.isArray(existing) && existing.length) {
+      return { ...plan, synchronizationPullRequest: existing[0].url ?? existing[0].number }
+    }
+    const result = spawnSync('gh', [
+      'pr', 'create', '--repo', process.env.GITHUB_REPOSITORY,
+      '--base', head, '--head', base,
+      '--title', `chore(release): synchronize ${base} -> ${head}`,
+      '--body', `Synchronize ${head} with ${base} after Release Please publication.\n\nOnly approved release metadata differs between the branch tips; Code Foundry verified the content before opening this PR.`,
+    ], { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, GH_TOKEN: token } })
+    if (result.status !== 0) throw new Error(`Failed to create synchronization PR: ${result.stderr.trim()}`)
+    return { ...plan, synchronizationPullRequest: result.stdout.trim() }
+  }
   if (plan.action !== 'fast-forward' || !options.github || options.dryRun) return plan
   if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
