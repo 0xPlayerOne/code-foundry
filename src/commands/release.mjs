@@ -82,7 +82,13 @@ export function dispatchPostReleaseHook(root, options) {
 export function validateReleasePullRequestDiffs(root) {
   const repository = process.env.GITHUB_REPOSITORY
   if (!repository) throw new Error('GITHUB_REPOSITORY is required for release PR validation.')
-  const prs = ghJson(root, ['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title,headRefName'])
+  let prs = []
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const result = ghJson(root, ['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title,headRefName'])
+    prs = Array.isArray(result) ? result : []
+    if (selectGeneratedReleasePrs(prs).length) break
+    if (attempt < 4) spawnSync('sleep', ['2'])
+  }
   const generated = selectGeneratedReleasePrs(Array.isArray(prs) ? prs : [])
   /** @type {Map<number, string[]>} */
   const paths = new Map()
