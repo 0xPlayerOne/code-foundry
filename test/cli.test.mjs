@@ -78,6 +78,7 @@ describe('code-foundry CLI', () => {
 
     assert.equal(resolveProfile(root).languages, 'none')
     assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /toolchain: auto/)
+    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /post_release_workflow:\n/)
     assert.equal(exists(join(root, 'ruff.toml')), false)
     assert.equal(exists(join(root, '.prettierrc')), false)
     assert.match(readFileSync(join(root, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/)
