@@ -157,6 +157,7 @@ function renderWorkflow(content, config, repository, ref) {
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
   rendered = rendered.replace(new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'), `$&@${ref}`)
+  rendered = rendered.replace(/^(\s+runtime-ref:)\s+.*$/m, `$1 ${ref}`)
   /** @type {Record<string, string|undefined>} */
   const runners = {
     ci: config.ci_runner ?? config.runner,
