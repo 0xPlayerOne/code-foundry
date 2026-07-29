@@ -11,7 +11,7 @@ import { customWorkflowFiles, overlayPolicy } from '../lib/overlay.mjs'
 const standardFiles = [
   '.editorconfig', '.gitattributes', '.gitignore', 'release-please-config.json',
   'docs/EXTENSIONS.md',
-  '.githooks/pre-commit', 'AGENTS.md', 'LICENSE', 'NOTICE', 'ruff.toml', '.prettierrc',
+  '.githooks/pre-commit', 'AGENTS.md', 'LICENSE', 'NOTICE', 'ruff.toml', '.prettierrc', '.prettierignore',
   '.github/CODEOWNERS', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
   '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', '.github/dependabot.yml',
   '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml',
@@ -108,6 +108,9 @@ export function syncRepository(options) {
     if (file === '.gitignore' && existsSync(destination)) {
       content = Buffer.from(mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8')))
     }
+    if (file === '.prettierignore' && existsSync(destination)) {
+      content = Buffer.from(mergeIgnoreFile(content.toString('utf8'), readFileSync(destination, 'utf8')))
+    }
     if (!existsSync(destination) || !buffersEqual(content, readFileSync(destination))) {
       changed.push(file)
       writeOrReport(destination, content, dryRun)
@@ -140,8 +143,8 @@ export function syncRepository(options) {
   }
   if (includesValue(languages, 'typescript') && existsSync(join(target, '.prettierignore'))) {
     const prettierIgnore = readFileSync(join(target, '.prettierignore'), 'utf8')
-    if (!prettierIgnore.split(/\r?\n/).includes('.code-foundry')) {
-      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n.code-foundry\n`, dryRun)
+    if (!prettierIgnore.split(/\r?\n/).includes('.github/.code-foundry')) {
+      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n.github/.code-foundry\n`, dryRun)
       changed.push('.prettierignore')
     }
   }
@@ -175,7 +178,7 @@ function renderReleaseConfig(target, sourceFile) {
 /** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */
 function shouldInclude(file, languages, features, config) {
   if (file === 'ruff.toml') return includesValue(languages, 'python')
-  if (file === '.prettierrc') return includesValue(languages, 'typescript')
+  if (file === '.prettierrc' || file === '.prettierignore') return includesValue(languages, 'typescript')
   if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
   if (file === '.github/workflows/opencode-security.yml') return ['true', 'auto'].includes(config.opencode_security ?? 'false')
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
@@ -226,6 +229,13 @@ function mergeGitignore(baseline, existing) {
   const marker = '# Repository-specific rules'
   const custom = existing.includes(marker) ? existing.slice(existing.indexOf(marker) + marker.length).trim() : ''
   return custom ? `${baseline.trimEnd()}\n\n${marker}\n${custom}\n` : baseline
+}
+
+/** @param {string} baseline @param {string} existing */
+function mergeIgnoreFile(baseline, existing) {
+  const baselineLines = new Set(baseline.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))
+  const custom = existing.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() && !baselineLines.has(line.trim()))
+  return custom.length ? `${baseline.trimEnd()}\n\n# Repository-specific rules\n${custom.join('\n')}\n` : baseline
 }
 
 /** @param {string} file @param {string} content */
