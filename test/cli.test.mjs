@@ -93,6 +93,17 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /--admin/)
     assert.match(workflow, /--rebase/)
   })
+
+  it('leaves release pull requests open when auto-merge credentials are unavailable', () => {
+    const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+
+    assert.match(workflow, /name: Detect release credentials/)
+    assert.match(workflow, /echo "auto_merge=false"/)
+    assert.match(workflow, /name: Leave release pull request for manual merge/)
+    assert.match(workflow, /steps\.credentials\.outputs\.auto_merge != 'true'/)
+    assert.match(workflow, /steps\.credentials\.outputs\.auto_merge == 'true'/)
+    assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+  })
 })
 
 function exists(file) {
