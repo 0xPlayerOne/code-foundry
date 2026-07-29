@@ -66,10 +66,11 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node .github/.code-foundry/src/runtime.mjs ci task_profile unit >> "$GITHUB_OUTPUT"
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci task_profile unit >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -87,7 +88,7 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Unit
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .github/.code-foundry/src/runtime.mjs ci unit
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci unit
       - name: Upload coverage
         if: >-
           always() &&
@@ -127,10 +128,11 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node .github/.code-foundry/src/runtime.mjs ci task_profile integration >> "$GITHUB_OUTPUT"
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci task_profile integration >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -148,7 +150,7 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Integration
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .github/.code-foundry/src/runtime.mjs ci integration
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci integration
 
   e2e:
     name: E2E
@@ -172,10 +174,11 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node .github/.code-foundry/src/runtime.mjs ci task_profile e2e >> "$GITHUB_OUTPUT"
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci task_profile e2e >> "$GITHUB_OUTPUT"
       - name: Cache browser binaries
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.browser == 'true'
         uses: ./.github/actions/cache
@@ -205,7 +208,7 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: E2E
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .github/.code-foundry/src/runtime.mjs ci e2e
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci e2e
 
   smoke:
     name: Smoke
@@ -229,10 +232,11 @@ jobs:
       - name: Install runtime
         run: |
           mkdir -p .github/actions
-          cp -R .github/.code-foundry/.github/actions/. .github/actions/
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node .github/.code-foundry/src/runtime.mjs ci task_profile smoke >> "$GITHUB_OUTPUT"
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci task_profile smoke >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -250,4 +254,4 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Smoke
         if: steps.applicability.outputs.applicable == 'true'
-        run: node .github/.code-foundry/src/runtime.mjs ci smoke
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci smoke
