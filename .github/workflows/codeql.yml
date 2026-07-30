@@ -344,7 +344,7 @@ jobs:
           set -euo pipefail
           scope="$RUST_SCOPE"
           scope_id="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex").slice(0, 12))' "$scope")"
-          config_file="$RUNNER_TEMP/codeql-rust-$scope_id.yml"
+          config_file="$GITHUB_WORKSPACE/.github/codeql-rust-$scope_id.yml"
           cat > "$config_file" <<'EOF'
           name: code-foundry-rust
           EOF
