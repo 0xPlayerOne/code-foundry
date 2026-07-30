@@ -98,6 +98,9 @@ describe('code-foundry CLI', () => {
 
     assert.equal(resolveProfile(root).languages, 'none')
     assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /toolchain: auto/)
+    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /codeql_rust_shards: \["all"\]/)
+    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /codeql_rust_threads: 1/)
+    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /codeql_rust_max_parallel: 1/)
     assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /post_release_workflow:\n/)
     assert.equal(exists(join(root, 'ruff.toml')), false)
     assert.equal(exists(join(root, '.prettierrc')), false)
@@ -108,8 +111,48 @@ describe('code-foundry CLI', () => {
     )
     assert.equal(exists(join(root, '.github/workflows/slither.yml')), true)
     assert.equal(exists(join(root, '.github/workflows/opencode-security.yml')), false)
+    const codeqlWorkflow = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8')
+    assert.match(codeqlWorkflow, /rust-shards: '\["all"\]'/)
+    assert.match(codeqlWorkflow, /rust-threads: '1'/)
+    assert.match(codeqlWorkflow, /rust-max-parallel: 1/)
     assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
     doctor(root)
+  })
+
+  it('rejects unsafe Rust CodeQL parallelism configuration', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-codeql-config-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      "languages: rust\npackage_manager: none\ncodeql_rust_shards: '[\"../outside\"]'\n"
+    )
+
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Invalid Rust CodeQL shard path/
+    )
+  })
+
+  it('renders bounded Rust CodeQL parallelism from canonical configuration', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-codeql-parallel-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: rust',
+        'package_manager: none',
+        "codeql_rust_shards: '[\"crates/api\",\"crates/worker\"]'",
+        'codeql_rust_threads: 4',
+        'codeql_rust_max_parallel: 2',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const workflow = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8')
+    assert.match(workflow, /rust-shards: '\["crates\/api","crates\/worker"\]'/)
+    assert.match(workflow, /rust-threads: '4'/)
+    assert.match(workflow, /rust-max-parallel: 2/)
   })
 
   it('lets a manifest Release Please config own the release strategy', () => {

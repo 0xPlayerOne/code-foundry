@@ -37,6 +37,9 @@ repository manifests and source
 | `toolchain` | `auto`, `native`, `mise` | Environment setup policy; defaults to `auto` |
 | `features` | `all` or a list | Standard workflow callers |
 | `codeql` | `auto`, `true`, `false` | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled |
+| `codeql_rust_shards` | JSON array of paths | Rust scan scopes; `["all"]` keeps the safe single full scan |
+| `codeql_rust_threads` | integer, 1-64 | Threads per Rust CodeQL job; values above 1 opt into local parallelism |
+| `codeql_rust_max_parallel` | integer, 1-8 | Maximum Rust shard jobs allowed to run concurrently |
 | `dependency_review` | `auto`, `true`, `false` | Dependency Review policy; public repositories default to enabled, non-public repositories default to disabled |
 | `prune_standard` | `true` or `false` | Remove disabled standard callers |
 | `runtime_repository` | `OWNER/REPO` | Reusable workflow source |
@@ -59,3 +62,17 @@ short and replaceable; custom workflows and project documentation are kept.
 
 The generated configuration includes all defaults so humans and agents can
 understand the repository without memorizing flags or environment variables.
+
+Rust CodeQL defaults to one full scan with one worker. Large multi-crate
+repositories can opt into bounded parallelism, for example:
+
+```yaml
+codeql_rust_shards: '["crates/api","crates/worker"]'
+codeql_rust_threads: 2
+codeql_rust_max_parallel: 2
+```
+
+Each scoped shard must contain tracked Rust source. Code Foundry rejects
+absolute paths, parent traversal, duplicates, empty scopes, and more than eight
+shards. Do not split a single crate by arbitrary non-Rust directories: use
+`["all"]` when complete, non-overlapping source scopes are not available.
