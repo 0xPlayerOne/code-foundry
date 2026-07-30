@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.31.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.4...v0.31.5) (2026-07-30)
+
+
+### Bug Fixes
+
+* **ci:** isolate reusable workflow concurrency ([330a939](https://github.com/0xPlayerOne/code-foundry/commit/330a9396390aef11a482bf370dbbbee22151759e))
+* **ci:** use stable workflow concurrency keys ([a7eca35](https://github.com/0xPlayerOne/code-foundry/commit/a7eca35836f24f9fb240234b999462f95fa4e7da))
+* **ci:** validate main promotion pull requests ([00377bb](https://github.com/0xPlayerOne/code-foundry/commit/00377bb6e54288e296245efa1466e8e61477f25a))
+* **release:** allow manual promotion validation ([aaa453f](https://github.com/0xPlayerOne/code-foundry/commit/aaa453f3bc63c4e256352f094468f983dad236a9))
+* **release:** promote staging runtime safeguards ([e53df8c](https://github.com/0xPlayerOne/code-foundry/commit/e53df8cca59e59a8ffd7aad3f05effc915ba2196))
+
 ## [0.31.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.3...v0.31.4) (2026-07-29)
 
 
