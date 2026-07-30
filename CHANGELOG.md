@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.31.16](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.15...v0.31.16) (2026-07-30)
+
+
+### Bug Fixes
+
+* **release:** avoid duplicate release PR checks ([42d7354](https://github.com/0xPlayerOne/code-foundry/commit/42d735404cd7b77d5a30a03a4fb8856096e931b0))
+* **workflows:** validate main promotion PRs ([4f41f90](https://github.com/0xPlayerOne/code-foundry/commit/4f41f90a3e4a5eec8e80d46c21083c1380655341))
+
 ## [0.31.15](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.14...v0.31.15) (2026-07-30)
 
 
