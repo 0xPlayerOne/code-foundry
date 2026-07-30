@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.14](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.13...v0.31.14) (2026-07-30)
+
+
+### Bug Fixes
+
+* **codeql:** make Rust parallelism safe and configurable ([545454f](https://github.com/0xPlayerOne/code-foundry/commit/545454fa42a8bb4e6970ff858af186f1cba09900))
+
 ## [0.31.13](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.12...v0.31.13) (2026-07-30)
 
 
