@@ -70,6 +70,26 @@ describe('code-foundry CLI', () => {
     assert.equal(resolveProfile(root).package_manager, 'none')
   })
 
+  it('skips root tooling when detected languages only exist in nested source trees', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-nested-source-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    mkdirSync(join(root, 'sdk/typescript'), { recursive: true })
+    mkdirSync(join(root, 'scripts'), { recursive: true })
+    writeFileSync(join(root, 'sdk/typescript/index.ts'), 'export const value = 1\n')
+    writeFileSync(join(root, 'scripts/tool.py'), 'print("tool")\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript,python\npackage_manager: none\n')
+
+    for (const task of ['format', 'lint', 'type_check', 'build', 'unit', 'integration', 'e2e', 'smoke']) {
+      const result = spawnSync(process.execPath, [runtime, 'ci', 'should_run', task], {
+        cwd: root,
+        encoding: 'utf8',
+        env: testEnv,
+      })
+      assert.equal(result.status, 0, `${task}: ${result.stderr}`)
+      assert.match(result.stdout, /applicable=false/)
+    }
+  })
+
   it('initializes a language-neutral repository without formatter configs', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-init-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
