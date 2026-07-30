@@ -130,6 +130,24 @@ jobs:
           )
           for pr in "${release_prs[@]}"; do
             echo "Waiting for required checks on release PR #$pr"
+            checks_seen=false
+            for attempt in $(seq 1 60); do
+              if required_count=$(gh pr checks "$pr" \
+                --repo "$GITHUB_REPOSITORY" \
+                --required \
+                --json name \
+                --jq 'length' 2>/dev/null); then
+                if [ "$required_count" -gt 0 ]; then
+                  checks_seen=true
+                  break
+                fi
+              fi
+              sleep 5
+            done
+            if [ "$checks_seen" != true ]; then
+              echo "Required checks were not registered for release PR #$pr within the readiness window." >&2
+              exit 1
+            fi
             gh pr checks "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --required \
