@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.10](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.9...v0.31.10) (2026-07-30)
+
+
+### Bug Fixes
+
+* **opencode:** avoid duplicate self checks ([71b1201](https://github.com/0xPlayerOne/code-foundry/commit/71b1201baf58624401676b99fa257780b1eb1abc))
+
 ## [0.31.9](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.8...v0.31.9) (2026-07-30)
 
 
