@@ -8,7 +8,7 @@ The default standard callers use:
 push:
   branches: [main, staging]
 pull_request:
-  branches: [staging]
+  branches: [main, staging]
 ```
 
 Draft PR automation may additionally listen to supported topic branches.
