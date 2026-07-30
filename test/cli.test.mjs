@@ -258,6 +258,13 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
   })
 
+  it('attaches required checks to staging and main pull requests', () => {
+    for (const workflow of ['ci', 'codeql', 'security', 'test', 'opencode-security']) {
+      const caller = readFileSync(`.github/workflows/${workflow}_self-ci.yml`, 'utf8')
+      assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
+    }
+  })
+
   it('generates a mixed-language Release Please manifest without losing custom fields', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-manifest-'))
     mkdirSync(join(root, 'web/src'), { recursive: true })
