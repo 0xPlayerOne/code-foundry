@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.17](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.16...v0.31.17) (2026-07-30)
+
+
+### Bug Fixes
+
+* **sync:** preserve repository release policy ([8a8291b](https://github.com/0xPlayerOne/code-foundry/commit/8a8291b940bcc777e4aa9a426e56235b031fd002))
+
 ## [0.31.16](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.15...v0.31.16) (2026-07-30)
 
 
