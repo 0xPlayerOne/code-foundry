@@ -265,6 +265,15 @@ describe('code-foundry CLI', () => {
     }
   })
 
+  it('does not duplicate canonical checks in the release PR caller', () => {
+    const caller = readFileSync('.github/workflows/release-pr_self-ci.yml', 'utf8')
+
+    assert.match(caller, /^\s{2}release-pr:/m)
+    for (const duplicate of ['ci', 'test', 'security', 'codeql']) {
+      assert.doesNotMatch(caller, new RegExp(`^  ${duplicate}:`, 'm'))
+    }
+  })
+
   it('generates a mixed-language Release Please manifest without losing custom fields', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-manifest-'))
     mkdirSync(join(root, 'web/src'), { recursive: true })
