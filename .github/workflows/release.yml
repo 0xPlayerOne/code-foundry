@@ -17,7 +17,7 @@ on:
         description: Code Foundry runtime tag or ref.
         required: false
         type: string
-        default: v0.27.18
+        default: v0.31.6
 
 permissions:
   actions: write
@@ -129,6 +129,13 @@ jobs:
               --jq '.[] | select(.title | startswith("chore(main): release ")) | select(.headRefName | startswith("release-please--branches--main")) | .number'
           )
           for pr in "${release_prs[@]}"; do
+            echo "Waiting for required checks on release PR #$pr"
+            gh pr checks "$pr" \
+              --repo "$GITHUB_REPOSITORY" \
+              --required \
+              --watch \
+              --fail-fast \
+              --interval 10
             gh pr merge "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --admin \
