@@ -285,6 +285,13 @@ describe('code-foundry CLI', () => {
     }
   })
 
+  it('keeps generated Rust CodeQL configuration inside the workspace', () => {
+    const workflow = readFileSync('.github/workflows/codeql.yml', 'utf8')
+
+    assert.match(workflow, /config_file="\$GITHUB_WORKSPACE\/\.github\/codeql-rust-\$scope_id\.yml"/)
+    assert.doesNotMatch(workflow, /config_file="\$RUNNER_TEMP\/codeql-rust-/)
+  })
+
   it('does not duplicate canonical checks in the release PR caller', () => {
     const caller = readFileSync('.github/workflows/release-pr_self-ci.yml', 'utf8')
 
