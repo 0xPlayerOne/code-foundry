@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.6](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.5...v0.31.6) (2026-07-30)
+
+
+### Bug Fixes
+
+* **release:** skip identical promotion trees ([d8242b9](https://github.com/0xPlayerOne/code-foundry/commit/d8242b9897c9210a2534712fedb12d2258573686))
+
 ## [0.31.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.4...v0.31.5) (2026-07-30)
 
 
