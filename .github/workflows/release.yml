@@ -17,7 +17,7 @@ on:
         description: Code Foundry runtime tag or ref.
         required: false
         type: string
-        default: v0.31.6
+        default: v0.31.7
 
 permissions:
   actions: write
