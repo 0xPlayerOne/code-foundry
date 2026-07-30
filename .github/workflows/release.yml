@@ -129,6 +129,13 @@ jobs:
               --jq '.[] | select(.title | startswith("chore(main): release ")) | select(.headRefName | startswith("release-please--branches--main")) | .number'
           )
           for pr in "${release_prs[@]}"; do
+            echo "Waiting for required checks on release PR #$pr"
+            gh pr checks "$pr" \
+              --repo "$GITHUB_REPOSITORY" \
+              --required \
+              --watch \
+              --fail-fast \
+              --interval 10
             gh pr merge "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --admin \
