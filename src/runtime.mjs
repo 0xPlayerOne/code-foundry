@@ -20,6 +20,20 @@ function hasLanguage(language) {
   return languages.includes(language) || languages.includes('all')
 }
 
+function hasRootJavascriptProject() {
+  return Boolean(readPackage()) && packageManager !== 'none'
+}
+
+function hasRootPythonProject() {
+  return existsSync(resolve(root, 'pyproject.toml')) ||
+    existsSync(resolve(root, 'uv.lock')) ||
+    capture('git', ['ls-files', '*requirements*.txt']) !== ''
+}
+
+function hasRootRustProject() {
+  return existsSync(resolve(root, 'Cargo.toml'))
+}
+
 /** @param {string} name */
 function hasScript(name) {
   return readPackage()?.scripts?.[name] !== undefined
@@ -130,8 +144,24 @@ function relevant(task) {
   const js = hasLanguage('typescript') || hasLanguage('javascript')
   const python = hasLanguage('python')
   const rust = hasLanguage('rust')
-  if (task === 'format' || task === 'lint' || task === 'type_check' || task === 'build') return js || python || rust
-  if (['unit', 'integration', 'e2e', 'smoke'].includes(task)) return js || python || rust || hasLanguage('solidity')
+  const scripted = {
+    format: ['format:check', 'format', 'fmt'],
+    lint: ['lint'],
+    type_check: ['type-check', 'typecheck', 'type:check'],
+    build: ['build'],
+    unit: ['test:unit', 'test:coverage', 'test'],
+    integration: ['test:integration'],
+    e2e: ['test:e2e', 'e2e'],
+    smoke: ['test:smoke', 'smoke'],
+  }[task]
+  if (scripted && scripted.some((candidate) => hasScript(candidate))) return packageManager !== 'none'
+  if (task === 'format' || task === 'lint' || task === 'type_check' || task === 'build') {
+    return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) || (rust && hasRootRustProject())
+  }
+  if (['unit', 'integration', 'e2e', 'smoke'].includes(task)) {
+    return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) ||
+      (rust && hasRootRustProject()) || (hasLanguage('solidity') && hasRootJavascriptProject())
+  }
   return true
 }
 
@@ -151,7 +181,7 @@ function hasDependencyManifest(ecosystem) {
 function ci(task) {
   if (task === 'install') return install()
   if (task === 'should_run' || task === 'task_profile') {
-    const selected = process.argv[3]
+    const selected = process.argv[4]
     writeOutput('applicable', relevant(selected) ? 'true' : 'false')
     writeOutput('javascript', (hasLanguage('typescript') || hasLanguage('javascript')) ? 'true' : 'false')
     writeOutput('python', hasLanguage('python') ? 'true' : 'false')
@@ -160,27 +190,27 @@ function ci(task) {
   }
   if (task === 'format') {
     const scripted = runScript(['format:check', 'format', 'fmt'])
-    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript'))) runTool('prettier', ['--check', '.'])
-    if (hasLanguage('python')) runTool('ruff', ['format', '--check', '.'])
-    if (hasLanguage('rust')) run('cargo', ['fmt', '--check'])
+    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject()) runTool('prettier', ['--check', '.'])
+    if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['format', '--check', '.'])
+    if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['fmt', '--check'])
     return
   }
   if (task === 'lint') {
     const scripted = runScript(['lint'])
-    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript'))) runTool('eslint', ['.'])
-    if (hasLanguage('python')) runTool('ruff', ['check', '.'])
-    if (hasLanguage('rust')) run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
+    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject()) runTool('eslint', ['.'])
+    if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['check', '.'])
+    if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
     return
   }
   if (task === 'type_check') {
     const scripted = runScript(['type-check', 'typecheck', 'type:check'])
     if (!scripted && existsSync(resolve(root, 'tsconfig.json'))) runTool('tsc', ['--noEmit'])
-    if (hasLanguage('rust')) run('cargo', ['check', '--all-targets'])
+    if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['check', '--all-targets'])
     return
   }
   if (task === 'build') {
     const scripted = runScript(['build'])
-    if (!scripted && hasLanguage('rust')) run('cargo', ['build', '--all-targets'])
+    if (!scripted && hasLanguage('rust') && hasRootRustProject()) run('cargo', ['build', '--all-targets'])
     return
   }
   /** @type {Record<string, string[]>} */
@@ -192,8 +222,8 @@ function ci(task) {
   }
   const scripts = scriptsByTask[task]
   if (scripts) runScript(scripts)
-  if (hasLanguage('rust')) run('cargo', ['test'])
-  if (hasLanguage('python')) {
+  if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['test'])
+  if (hasLanguage('python') && hasRootPythonProject()) {
     const python = existsSync(resolve(root, '.venv/bin/python')) ? resolve(root, '.venv/bin/python') : 'python'
     const integrationTests = resolve(root, 'tests/integration')
     if (task !== 'integration' || existsSync(integrationTests)) {
@@ -291,7 +321,7 @@ function codeql() {
 /** @param {string} command */
 function printProfile(command) {
   if (command === 'get') {
-    const key = process.argv[3]
+    const key = process.argv[4]
     console.log(config[key] ?? (key === 'languages' ? languages.join(',') : key === 'package_manager' ? packageManager : ''))
     return
   }
