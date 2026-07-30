@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.7](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.6...v0.31.7) (2026-07-30)
+
+
+### Bug Fixes
+
+* **ci:** remove duplicate promotion checks ([b210b7f](https://github.com/0xPlayerOne/code-foundry/commit/b210b7f0aa5bdb6cb7e121cc751b6f618512ebf3))
+
 ## [0.31.6](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.5...v0.31.6) (2026-07-30)
 
 
