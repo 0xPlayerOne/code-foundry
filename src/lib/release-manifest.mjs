@@ -36,6 +36,9 @@ export function buildReleaseConfig(root, existing = {}) {
   const packages = detectReleasePackages(root)
   const result = { ...existing }
   if (!packages.length) return result
+  // An explicit packages map is repository policy. Do not silently turn
+  // version-synchronized subprojects or vendored manifests into releases.
+  if (Object.prototype.hasOwnProperty.call(existing, 'packages')) return result
   if (packages.length === 1 && packages[0].directory === '.') {
     result['release-type'] ??= packages[0].releaseType
     /** @type {any[]} */
