@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.15](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.14...v0.31.15) (2026-07-30)
+
+
+### Bug Fixes
+
+* **release:** suppress release-only promotion loops ([fb35a6f](https://github.com/0xPlayerOne/code-foundry/commit/fb35a6f6e03a8ab4da65eeaeeeec579389b508b3))
+
 ## [0.31.14](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.13...v0.31.14) (2026-07-30)
 
 
