@@ -28,6 +28,7 @@
     "release-please-config.json",
     ".mise.toml",
     ".prettierrc",
+    ".prettierignore",
     ".env.example",
     "AGENTS.md",
     "LICENSE",
