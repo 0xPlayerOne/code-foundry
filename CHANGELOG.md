@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.18](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.17...v0.31.18) (2026-07-30)
+
+
+### Bug Fixes
+
+* **codeql:** keep generated config in workspace ([9ca8f3b](https://github.com/0xPlayerOne/code-foundry/commit/9ca8f3b958e40209727f305bd0c0856f4820e1b6))
+
 ## [0.31.17](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.16...v0.31.17) (2026-07-30)
 
 
