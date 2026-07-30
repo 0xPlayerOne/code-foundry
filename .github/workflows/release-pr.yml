@@ -91,9 +91,23 @@ jobs:
           - After merge, Release Please opens a separate versioned release PR with the changelog.
           EOF
 
-          gh pr create \
+          if ! gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base main \
             --head staging \
             --title "Promote staging -> main ($DATE)" \
-            --body-file "$BODY_FILE"
+            --body-file "$BODY_FILE"; then
+            EXISTING_NUMBER=$(gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 1 \
+              --base main \
+              --head staging \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty')
+            if [ -z "$EXISTING_NUMBER" ]; then
+              echo 'Pull request creation failed and no existing promotion PR was found.' >&2
+              exit 1
+            fi
+            echo "Promotion PR #$EXISTING_NUMBER already exists; treating the create race as success."
+          fi
