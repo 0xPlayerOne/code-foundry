@@ -36,17 +36,24 @@ jobs:
             --head staging \
             --state open \
             --json number | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
+          MAIN_TREE=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.commit.tree.sha')
+          STAGING_TREE=$(gh api "repos/${GITHUB_REPOSITORY}/commits/staging" --jq '.commit.tree.sha')
+          TREE_EQUAL=false
+          if [ "$MAIN_TREE" = "$STAGING_TREE" ]; then
+            TREE_EQUAL=true
+          fi
           COMPARE_URL="repos/${GITHUB_REPOSITORY}/compare/main...staging"
           TOTAL_COMMITS=$(gh api "$COMPARE_URL?per_page=1" --jq '.total_commits // 0')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
           echo "commits=$TOTAL_COMMITS" >> "$GITHUB_OUTPUT"
+          echo "tree_equal=$TREE_EQUAL" >> "$GITHUB_OUTPUT"
 
       - name: No changes
-        if: steps.check-pr.outputs.existing == '0' && steps.check-pr.outputs.commits == '0'
+        if: steps.check-pr.outputs.existing == '0' && (steps.check-pr.outputs.commits == '0' || steps.check-pr.outputs.tree_equal == 'true')
         run: echo 'staging is already aligned with main; no promotion PR is needed.'
 
       - name: Create
-        if: steps.check-pr.outputs.existing == '0' && steps.check-pr.outputs.commits != '0'
+        if: steps.check-pr.outputs.existing == '0' && steps.check-pr.outputs.commits != '0' && steps.check-pr.outputs.tree_equal != 'true'
         run: |
           DATE=$(date +%Y-%m-%d)
           BODY_FILE="$RUNNER_TEMP/release-pr.md"
