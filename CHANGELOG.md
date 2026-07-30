@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.12](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.11...v0.31.12) (2026-07-30)
+
+
+### Bug Fixes
+
+* **package:** include ruff baseline ([645f63e](https://github.com/0xPlayerOne/code-foundry/commit/645f63e9e66d67338345bb3eb14949543f97f89b))
+
 ## [0.31.11](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.10...v0.31.11) (2026-07-30)
 
 
