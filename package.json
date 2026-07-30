@@ -26,6 +26,7 @@
     ".gitignore",
     "CHANGELOG.md",
     "release-please-config.json",
+    "ruff.toml",
     ".mise.toml",
     ".prettierrc",
     ".prettierignore",
