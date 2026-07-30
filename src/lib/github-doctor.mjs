@@ -18,10 +18,7 @@ export function doctorGithub(root) {
   const protection = ghJson(['api', `repos/${repository}/branches/main/protection`])
   if (!protection) warnings.push('main branch protection is not readable or is not configured.')
   else {
-    const required = [
-      ...(protection.required_status_checks?.contexts ?? []),
-      ...(protection.required_status_checks?.checks ?? []).map(/** @param {any} check */ (check) => check.context),
-    ].filter(Boolean)
+    const required = requiredContexts(protection)
     details.requiredChecks = required
     const duplicateNames = required.filter((name) => /\b([^/]+) \/ \1\b/i.test(name))
     if (duplicateNames.length) errors.push(`required checks contain duplicate workflow prefixes: ${duplicateNames.join(', ')}`)
@@ -34,10 +31,7 @@ export function doctorGithub(root) {
   details.observedChecks = observed
   if (!observed.length) warnings.push('no check runs were observed on the current main commit; exact check validation is deferred until CI runs.')
   if (protection?.required_status_checks) {
-    const required = [
-      ...(protection.required_status_checks.contexts ?? []),
-      ...(protection.required_status_checks.checks ?? []).map(/** @param {any} check */ (check) => check.context),
-    ].filter(Boolean)
+    const required = requiredContexts(protection)
     const missing = required.filter((name) => observed.length && !observed.includes(name))
     if (missing.length) warnings.push(`required checks not observed on current main: ${missing.join(', ')}`)
   }
@@ -73,6 +67,14 @@ export function doctorGithub(root) {
   if (details.openPromotionPrs.length > 1) errors.push('multiple staging promotion PRs are open.')
   if (details.openReleasePrs.length > 1) errors.push('multiple Release Please PRs are open.')
   return { errors, warnings, details }
+}
+
+/** @param {any} protection @returns {string[]} */
+function requiredContexts(protection) {
+  return [...new Set([
+    ...(protection.required_status_checks?.contexts ?? []),
+    ...(protection.required_status_checks?.checks ?? []).map(/** @param {any} check */ (check) => check.context),
+  ].filter(Boolean))]
 }
 
 /** @param {string} root @returns {{ errors: string[], warnings: string[] }} */
