@@ -39,7 +39,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     concurrency:
-      group: ${{ github.workflow_ref }}-${{ github.job }}-${{ github.ref }}
+      group: code-foundry-release-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
     outputs:
       release_created: ${{ steps.release.outputs.release_created || 'false' }}
