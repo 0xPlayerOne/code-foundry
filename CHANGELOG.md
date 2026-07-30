@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.13](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.12...v0.31.13) (2026-07-30)
+
+
+### Bug Fixes
+
+* **runtime:** pin template defaults to v0.31.12 ([f84b62d](https://github.com/0xPlayerOne/code-foundry/commit/f84b62d50955c623b9bc67e981645d9c0fcb2bcd))
+
 ## [0.31.12](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.11...v0.31.12) (2026-07-30)
 
 
