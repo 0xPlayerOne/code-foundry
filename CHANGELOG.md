@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.8](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.7...v0.31.8) (2026-07-30)
+
+
+### Bug Fixes
+
+* **runtime:** pin self workflows to v0.31.7 ([565b5bc](https://github.com/0xPlayerOne/code-foundry/commit/565b5bcc2b8f4ade8b3addc02f72c96a42308325))
+
 ## [0.31.7](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.6...v0.31.7) (2026-07-30)
 
 
