@@ -225,6 +225,9 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   const workflow = content.match(/\.github\/workflows\/([^/]+)\.yml/)?.[1]
   const runner = workflow ? runners[workflow] : undefined
   if (runner) rendered = rendered.replace(/^(\s+runner:)\s+.*$/m, `$1 ${runner}`)
+  if (workflow === 'test' && config.unit_runner) {
+    rendered = rendered.replace(/^(\s+unit-runner:)\s+.*$/m, `$1 ${config.unit_runner}`)
+  }
   if (workflow === 'codeql') {
     rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/m, `$1 '${rustCodeql.shards}'`)
     rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/m, `$1 '${rustCodeql.threads}'`)

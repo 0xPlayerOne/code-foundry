@@ -155,6 +155,26 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /rust-max-parallel: 2/)
   })
 
+  it('renders the configured unit runner independently from the test runner', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-unit-runner-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: rust',
+        'package_manager: none',
+        'test_runner: ubuntu-latest',
+        'unit_runner: ubuntu-latest',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const workflow = readFileSync(join(root, '.github/workflows/test.yml'), 'utf8')
+    assert.match(workflow, /runner: ubuntu-latest/)
+    assert.match(workflow, /unit-runner: ubuntu-latest/)
+  })
+
   it('lets a manifest Release Please config own the release strategy', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
@@ -294,6 +314,21 @@ describe('code-foundry CLI', () => {
     assert.equal(config.packages['web']['release-type'], 'node')
     assert.deepEqual(config.packages['web']['extra-files'], ['src/version.ts'])
     assert.deepEqual(validateReleaseConfig(root, config), [])
+  })
+
+  it('preserves an explicit Release Please packages policy', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-policy-'))
+    mkdirSync(join(root, 'apps/web'), { recursive: true })
+    mkdirSync(join(root, 'third_party/vendor'), { recursive: true })
+    writeFileSync(join(root, 'Cargo.toml'), '[package]\nname = "fixture"\nversion = "1.0.0"\n')
+    writeFileSync(join(root, 'apps/web/package.json'), '{"name":"fixture-web","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'third_party/vendor/Cargo.toml'), '[package]\nname = "vendor"\nversion = "1.0.0"\n')
+
+    const explicit = {
+      packages: { '.': { 'release-type': 'rust', 'package-name': 'fixture' } },
+      'extra-files': ['apps/web/package.json'],
+    }
+    assert.deepEqual(buildReleaseConfig(root, explicit), explicit)
   })
 
   it('selects one token-aware post-release delivery and prevents duplicate tags', () => {
