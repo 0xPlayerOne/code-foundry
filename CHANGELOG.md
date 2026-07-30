@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.11](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.10...v0.31.11) (2026-07-30)
+
+
+### Bug Fixes
+
+* **package:** include prettier ignore baseline ([4cf91e1](https://github.com/0xPlayerOne/code-foundry/commit/4cf91e1d0ec6b53e3751469937b44f903ef09466))
+
 ## [0.31.10](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.9...v0.31.10) (2026-07-30)
 
 
