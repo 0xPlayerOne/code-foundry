@@ -114,12 +114,11 @@ jobs:
         run: |
           echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. RELEASE_PLEASE_TOKEN is not configured, so Code Foundry skipped guarded auto-merge. Configure the token before merging when downstream release workflows must run automatically."
       - name: Merge generated version pull requests
-        if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge == 'true'
+        if: steps.credentials.outputs.auto_merge == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
           set -euo pipefail
-          node $RUNNER_TEMP/code-foundry/src/cli.mjs release validate-prs
           mapfile -t release_prs < <(
             gh pr list \
               --repo "$GITHUB_REPOSITORY" \
@@ -128,6 +127,11 @@ jobs:
               --json number,title,headRefName \
               --jq '.[] | select(.title | startswith("chore(main): release ")) | select(.headRefName | startswith("release-please--branches--main")) | .number'
           )
+          if [ "${#release_prs[@]}" -eq 0 ]; then
+            echo 'No generated release pull request is open; nothing to merge.'
+            exit 0
+          fi
+          node $RUNNER_TEMP/code-foundry/src/cli.mjs release validate-prs
           for pr in "${release_prs[@]}"; do
             echo "Waiting for required checks on release PR #$pr"
             checks_seen=false
