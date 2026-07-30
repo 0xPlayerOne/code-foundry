@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.9](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.8...v0.31.9) (2026-07-30)
+
+
+### Bug Fixes
+
+* **doctor:** deduplicate required check contexts ([f244494](https://github.com/0xPlayerOne/code-foundry/commit/f24449448f177c99978fe216b92385909f275d89))
+
 ## [0.31.8](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.7...v0.31.8) (2026-07-30)
 
 
