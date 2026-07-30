@@ -32,7 +32,7 @@ env:
   REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
 
 concurrency:
-  group: ${{ github.workflow_ref }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: code-foundry-codeql-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
