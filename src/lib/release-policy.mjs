@@ -70,6 +70,26 @@ export function unexpectedReleasePaths(paths, allowed) {
     .filter((path) => !allowed.has(path))
 }
 
+/**
+ * Detect release-only divergence after a rebased staging promotion. A normal
+ * main-ancestor relationship must always remain promotable, even when the new
+ * staging commit happens to touch only release metadata.
+ * @param {{ mainIsAncestor: boolean, directChangedPaths?: string[], allowed?: Set<string> }} input
+ */
+export function classifyPromotion(input) {
+  const {
+    mainIsAncestor,
+    directChangedPaths = [],
+    allowed = approvedReleaseFiles(),
+  } = input
+  const paths = [...new Set(directChangedPaths.map((path) => path.trim()).filter(Boolean))]
+  const unexpected = unexpectedReleasePaths(paths, allowed)
+  return {
+    releaseOnly: !mainIsAncestor && paths.length > 0 && unexpected.length === 0,
+    unexpected,
+  }
+}
+
 /** @param {{ releasePleaseToken?: string, githubToken?: string }} input */
 export function selectReleaseCredential(input) {
   if (input.releasePleaseToken) return { token: input.releasePleaseToken, source: 'release-please-token', autoMerge: true }
