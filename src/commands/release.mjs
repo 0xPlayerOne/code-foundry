@@ -74,8 +74,8 @@ function createSynchronizationPullRequest(root, repository, base, head, mainSha,
     if (apply.status !== 0) throw new Error(`Synchronization patch did not apply cleanly: ${apply.stderr.trim()}`)
     const add = spawnSync('git', ['add', '--', ...changedPaths], { cwd: root, encoding: 'utf8' })
     if (add.status !== 0) throw new Error(`Failed to stage synchronization metadata: ${add.stderr.trim()}`)
-    const commit = spawnSync('git', ['commit', '-m', `chore(release): synchronize ${base} -> ${head}`], { cwd: root, encoding: 'utf8' })
-    if (commit.status !== 0) throw new Error(`Failed to commit synchronization metadata: ${commit.stderr.trim()}`)
+    const identity = spawnSync('git', ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', `chore(release): synchronize ${base} -> ${head}`], { cwd: root, encoding: 'utf8' })
+    if (identity.status !== 0) throw new Error(`Failed to commit synchronization metadata: ${identity.stderr.trim()}`)
     const push = spawnSync('git', ['push', '--set-upstream', 'origin', branch], { cwd: root, encoding: 'utf8', env: { ...process.env, GH_TOKEN: token } })
     if (push.status !== 0) throw new Error(`Failed to publish synchronization branch: ${push.stderr.trim()}`)
   }
