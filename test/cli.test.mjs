@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
-import { approvedReleaseFiles, classifyReconciliation } from '../src/lib/release-policy.mjs'
+import { approvedReleaseFiles, classifyPromotion, classifyReconciliation } from '../src/lib/release-policy.mjs'
 import { buildReleaseRecoveryPlan, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
@@ -215,6 +215,47 @@ describe('code-foundry CLI', () => {
       }),
       { action: 'aligned', reason: 'Branches have different history but identical content.' },
     )
+  })
+
+  it('suppresses only release-only divergence from a rebased promotion', () => {
+    const allowed = approvedReleaseFiles({
+      packages: { web: { 'extra-files': ['src/version.ts'] } },
+    })
+    assert.deepEqual(
+      classifyPromotion({
+        mainIsAncestor: false,
+        directChangedPaths: ['CHANGELOG.md', 'package.json', 'web/src/version.ts'],
+        allowed,
+      }),
+      { releaseOnly: true, unexpected: [] },
+    )
+    assert.equal(
+      classifyPromotion({
+        mainIsAncestor: true,
+        directChangedPaths: ['CHANGELOG.md'],
+        allowed,
+      }).releaseOnly,
+      false,
+    )
+    assert.deepEqual(
+      classifyPromotion({
+        mainIsAncestor: false,
+        directChangedPaths: ['CHANGELOG.md', 'src/index.ts'],
+        allowed,
+      }),
+      { releaseOnly: false, unexpected: ['src/index.ts'] },
+    )
+  })
+
+  it('guards the promotion workflow against release-only divergence', () => {
+    const workflow = readFileSync('.github/workflows/release-pr.yml', 'utf8')
+
+    assert.match(workflow, /fetch-depth: 0/)
+    assert.match(workflow, /git merge-base --is-ancestor origin\/main origin\/staging/)
+    assert.match(workflow, /git diff --name-only origin\/staging origin\/main/)
+    assert.match(workflow, /release_only=\$RELEASE_ONLY/)
+    assert.match(workflow, /steps\.check-pr\.outputs\.release_only == 'true'/)
+    assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
   })
 
   it('generates a mixed-language Release Please manifest without losing custom fields', () => {
