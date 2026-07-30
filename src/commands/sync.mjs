@@ -68,6 +68,7 @@ export function syncRepository(options) {
   let runtimeRef = configured(config.runtime_ref, sourceRuntimeRef)
   const toolchain = configured(config.toolchain, 'auto')
   const overlays = overlayPolicy(target, config)
+  const rustCodeql = validateRustCodeqlConfig(config)
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
     throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
   }
@@ -103,7 +104,7 @@ export function syncRepository(options) {
       content = Buffer.from(renderReleaseConfig(target, sourceFile))
     }
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
-      content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef))
+      content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef, rustCodeql))
     }
     if (file === '.gitignore' && existsSync(destination)) {
       content = Buffer.from(mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8')))
@@ -198,8 +199,14 @@ function sourcePath(source, file) {
   return join(source, file)
 }
 
-/** @param {string} content @param {Record<string,string>} config @param {string} repository @param {string} ref */
-function renderWorkflow(content, config, repository, ref) {
+/**
+ * @param {string} content
+ * @param {Record<string,string>} config
+ * @param {string} repository
+ * @param {string} ref
+ * @param {{ shards: string, threads: string, maxParallel: string }} rustCodeql
+ */
+function renderWorkflow(content, config, repository, ref, rustCodeql) {
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
@@ -218,7 +225,58 @@ function renderWorkflow(content, config, repository, ref) {
   const workflow = content.match(/\.github\/workflows\/([^/]+)\.yml/)?.[1]
   const runner = workflow ? runners[workflow] : undefined
   if (runner) rendered = rendered.replace(/^(\s+runner:)\s+.*$/m, `$1 ${runner}`)
+  if (workflow === 'codeql') {
+    rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/m, `$1 '${rustCodeql.shards}'`)
+    rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/m, `$1 '${rustCodeql.threads}'`)
+    rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/m, `$1 ${rustCodeql.maxParallel}`)
+  }
   return rendered
+}
+
+/** @param {Record<string,string>} config */
+function validateRustCodeqlConfig(config) {
+  const threads = configured(config.codeql_rust_threads, '1')
+  const maxParallel = configured(config.codeql_rust_max_parallel, '1')
+  if (!/^(?:[1-9]|[1-5][0-9]|6[0-4])$/.test(threads)) {
+    throw new Error('Unsupported codeql_rust_threads; use an integer from 1 to 64.')
+  }
+  if (!/^(?:[1-8])$/.test(maxParallel)) {
+    throw new Error('Unsupported codeql_rust_max_parallel; use an integer from 1 to 8.')
+  }
+
+  const rawShards = configured(config.codeql_rust_shards, '["all"]')
+  let shards
+  try {
+    shards = JSON.parse(rawShards)
+  } catch {
+    throw new Error('Invalid codeql_rust_shards; use a JSON array of relative Rust source paths.')
+  }
+  if (!Array.isArray(shards) || shards.length === 0 || shards.length > 8) {
+    throw new Error('Invalid codeql_rust_shards; configure between 1 and 8 shards.')
+  }
+  const seen = new Set()
+  for (const shard of shards) {
+    if (typeof shard !== 'string' || shard.length === 0 || shard.length > 512 || seen.has(shard)) {
+      throw new Error('Invalid codeql_rust_shards; shards must be unique non-empty strings.')
+    }
+    seen.add(shard)
+    if (shard === 'all') continue
+    for (const candidate of shard.split(',')) {
+      const path = candidate.trim()
+      if (
+        !path ||
+        path.startsWith('/') ||
+        path.split('/').includes('..') ||
+        !/^[A-Za-z0-9._/@+ -]+$/.test(path)
+      ) {
+        throw new Error(`Invalid Rust CodeQL shard path: ${path || '(empty)'}`)
+      }
+    }
+  }
+  if (seen.has('all') && shards.length !== 1) {
+    throw new Error('Invalid codeql_rust_shards; "all" cannot be combined with scoped shards.')
+  }
+  return { shards: JSON.stringify(shards), threads, maxParallel }
 }
 
 /** @param {string} value */
@@ -269,6 +327,7 @@ function createDefaultConfig(root, source) {
   const runners = recommendRunners(root)
   return {
     version: '1', profile: detectProfile(root), languages, features: 'all', codeql: 'auto', dependency_review: 'auto', package_manager: packageManager,
+    codeql_rust_shards: '["all"]', codeql_rust_threads: '1', codeql_rust_max_parallel: '1',
     runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
     ...runners,
     toolchain: 'auto',

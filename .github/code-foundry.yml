@@ -4,6 +4,9 @@ profile: auto
 languages: typescript
 features: all
 codeql: auto
+codeql_rust_shards: '["all"]'
+codeql_rust_threads: 1
+codeql_rust_max_parallel: 1
 dependency_review: auto
 package_manager: bun
 toolchain: auto

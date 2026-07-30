@@ -23,4 +23,7 @@ jobs:
       runtime-repository: 0xPlayerOne/code-foundry
       runtime-ref: ${{ github.sha }}
       runner: ubuntu-latest
+      rust-shards: '["all"]'
+      rust-threads: '1'
+      rust-max-parallel: 1
     secrets: inherit
