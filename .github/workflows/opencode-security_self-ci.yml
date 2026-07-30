@@ -39,7 +39,7 @@ jobs:
     if: needs.detect.outputs.enabled == 'true' && needs.detect.outputs.token == 'true'
     uses: 0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@main
     with:
-      source_ref: main
+      source_ref: ${{ github.event.pull_request.head.ref || 'main' }}
       runner: ubuntu-latest
       mode: standard
       fail_on_severity: high
