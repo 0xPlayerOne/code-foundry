@@ -41,7 +41,7 @@ jobs:
             --base staging \
             --head "$BRANCH" \
             --draft \
-            --title "[WIP] $BRANCH" \
+            --title "$BRANCH" \
             --body "Draft PR created automatically by CI.
 
             This PR is a draft and should not be merged until CI passes and a reviewer (or the Daily Review agent) marks it ready.
