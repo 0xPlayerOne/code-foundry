@@ -30,11 +30,29 @@ Set these values in `.github/code-foundry.yml`:
 ```yaml
 release_type: auto # auto, node, python, rust, simple, or none
 npm_publish: false # true only for an npm package
+merge_strategy: merge # merge, squash, or rebase; used for promotion PRs
+release_merge_strategy: squash # merge, squash, or rebase; used for Release Please PRs
 ```
+
+`merge_strategy` applies to promotion PRs (`staging` into `main`); merging
+those with a merge commit keeps `staging` an ancestor of `main`.
+`release_merge_strategy` applies to Release Please version PRs; squash-merging
+them keeps `main`'s tip linear so the post-release reconciliation can
+fast-forward `staging` to `main` without violating `staging`'s required-linear-
+history rule. Defaults to `merge` when unset.
 
 `auto` selects a supported manifest. Use `simple` with `version.txt` for a
 repository without a package manifest and `none` for a repository that should
 not release automatically.
+
+Release Please runs in manifest mode whenever the release config declares
+`packages` or a top-level `release-type`; `code-foundry sync` bootstraps
+`.release-please-manifest.json` from the current package versions the first
+time it is needed. Release Please owns the manifest after the first release
+and sync never overwrites existing manifest versions. Legacy configs without
+`packages` or `release-type` continue to run in simple mode and need no
+manifest; `code-foundry doctor` fails when a manifest-mode config is missing
+its manifest.
 
 ## Pull request permissions
 
@@ -53,6 +71,6 @@ the generated version pull request before using the token to merge it.
 
 1. Merge tested changes from `staging` into `main`.
 2. Review the generated Release Please PR and changelog.
-3. Merge the release PR with the repository's configured `merge_strategy` (default `merge`).
+3. Merge the release PR with the repository.s configured `release_merge_strategy` (default `merge`, recommended `squash`).
 4. Confirm the GitHub Release and any package publication.
 5. Synchronize `staging` with the new `main` release commit.

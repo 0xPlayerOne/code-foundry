@@ -72,7 +72,7 @@ jobs:
             : {}
           let releaseType = config.release_type || 'auto'
           let npmPublish = config.npm_publish || 'false'
-          let releaseMergeStrategy = String(config.merge_strategy || 'merge').trim().toLowerCase()
+          let releaseMergeStrategy = String(config.release_merge_strategy || config.merge_strategy || 'merge').trim().toLowerCase()
           if (releaseType === 'auto') {
             releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
           }
@@ -86,6 +86,8 @@ jobs:
             const releaseConfig = JSON.parse(fs.readFileSync(sourcePath, 'utf8'))
             if (!releaseConfig.packages && !releaseConfig['release-type']) {
               legacyReleaseType = releaseType
+            } else if (!fs.existsSync('.release-please-manifest.json')) {
+              throw new Error('Missing .release-please-manifest.json: run code-foundry sync to bootstrap the release manifest.')
             }
           }
           fs.appendFileSync(
@@ -170,7 +172,7 @@ jobs:
   reconcile:
     name: Release / Reconcile
     needs: release
-    if: needs.release.outputs.release_created == 'true'
+    if: needs.release.result == 'success'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     permissions:

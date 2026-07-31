@@ -56,6 +56,18 @@ export function doctor(root, options = {}) {
   }
   if (profile.languages.split(',').includes('python') && !commandExists('python') && !existsSync(join(target, '.venv/bin/python'))) error('Python is required for this repository')
 
+  const releaseConfigPath = join(target, 'release-please-config.json')
+  if (existsSync(releaseConfigPath)) {
+    /** @type {Record<string, any>} */
+    let releaseConfig = {}
+    try { releaseConfig = JSON.parse(readFileSync(releaseConfigPath, 'utf8')) }
+    catch { error('release-please-config.json is not valid JSON') }
+    const manifestMode = Boolean(releaseConfig.packages || releaseConfig['release-type'])
+    if (manifestMode && !existsSync(join(target, '.release-please-manifest.json'))) {
+      error('release-please-config.json requires .release-please-manifest.json; run code-foundry sync to bootstrap it')
+    }
+  }
+
   for (const workflow of ['ci', 'codeql', 'security', 'test', 'draft-pr', 'release-pr', 'release']) {
     if (includesValue(config.features ?? 'all', workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
   }

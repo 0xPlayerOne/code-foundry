@@ -66,6 +66,45 @@ export function buildReleaseConfig(root, existing = {}) {
   return result
 }
 
+/**
+ * Build the initial Release Please manifest from current package versions.
+ * Returns null when the config does not enable manifest mode (legacy configs
+ * without `packages`/`release-type` run in simple mode and need no manifest).
+ * @param {string} root
+ * @param {Record<string, any>} config
+ * @returns {Record<string, string>|null}
+ */
+export function buildReleaseManifest(root, config = {}) {
+  const packages = config.packages && typeof config.packages === 'object' && !Array.isArray(config.packages)
+    ? config.packages
+    : config['release-type'] ? { '.': {} } : null
+  if (!packages || !Object.keys(packages).length) return null
+  /** @type {Record<string, string>} */
+  const manifest = {}
+  for (const directory of Object.keys(packages)) {
+    manifest[directory] = readDirectoryVersion(join(root, directory === '.' ? '' : directory))
+  }
+  return manifest
+}
+
+/** @param {string} directory @returns {string} */
+function readDirectoryVersion(directory) {
+  const packagePath = join(directory, 'package.json')
+  if (existsSync(packagePath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(packagePath, 'utf8'))
+      if (typeof parsed?.version === 'string' && parsed.version) return parsed.version
+    } catch { /* fall through to other manifests */ }
+  }
+  for (const file of ['pyproject.toml', 'Cargo.toml']) {
+    const path = join(directory, file)
+    if (!existsSync(path)) continue
+    const match = readFileSync(path, 'utf8').match(/^version\s*=\s*["']([^"']+)["']/m)
+    if (match?.[1]) return match[1]
+  }
+  return '0.0.0'
+}
+
 /** @param {string} root @param {Record<string, any>} config @returns {string[]} */
 export function validateReleaseConfig(root, config) {
   const detected = detectReleasePackages(root)
