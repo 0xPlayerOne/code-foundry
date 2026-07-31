@@ -16,8 +16,8 @@ release_type: node
 npm_publish: true
 license: agpl-3.0-or-later
 git_workflow: staging-release
-merge_strategy: merge
-release_merge_strategy: squash
+merge_strategy: rebase
+release_merge_strategy: rebase
 runner: ubuntu-latest
 unit_runner: ubuntu-slim
 cache_packages: auto
