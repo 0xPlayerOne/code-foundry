@@ -11,7 +11,7 @@ import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib
 /**
  * Reconcile staging after Release Please updates main. The local mode is
  * deterministic and suitable for CI; --github applies only a verified
- * fast-forward through the GitHub API and otherwise fails closed.
+ * linear synchronization through git and otherwise fails closed.
  * @param {string} root
  * @param {ReleaseOptions} options
  */
@@ -53,12 +53,10 @@ export function reconcileRelease(root, options) {
   if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   if (!token) throw new Error('GH_TOKEN or GITHUB_TOKEN is required for --github reconciliation.')
-  const result = spawnSync('gh', [
-    'api', '--method', 'PATCH', `repos/${process.env.GITHUB_REPOSITORY}/git/refs/heads/${head}`,
-    '-f', `sha=${plan.targetSha}`, '-F', 'force=false',
-  ], { cwd: target, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token } })
-  if (result.status !== 0) throw new Error(`GitHub refused the protected fast-forward of ${head}.`)
-  return plan
+  const syncSha = createLinearSyncCommit(target, stagingSha, /** @type {string} */ (plan.targetSha))
+  const result = spawnSync('git', ['push', 'origin', `${syncSha}:refs/heads/${head}`], { cwd: target, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token } })
+  if (result.status !== 0) throw new Error(`GitHub refused the linear synchronization of ${head}.`)
+  return { ...plan, syncSha }
 }
 
 /** @param {string} root @param {string} repository @param {string} base @param {string} head @param {string} mainSha @param {string} stagingSha @param {string[]} changedPaths @param {string} token */
@@ -168,6 +166,24 @@ export function releaseRecoveryPlan(root) {
 function git(root, args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
   return result.status === 0 ? result.stdout.trim() : ''
+}
+
+/**
+ * Build a linear commit whose tree equals main's tip and whose parent is the
+ * current staging tip. Staging requires linear history and main's tip almost
+ * always sits behind promotion merge commits, so a direct fast-forward to
+ * main's tip is rejected by the branch ruleset ("must not contain merge
+ * commits"). A single-parent commit is always pushable and keeps staging
+ * content-identical to main.
+ * @param {string} root @param {string} parentSha @param {string} mainSha @returns {string}
+ */
+function createLinearSyncCommit(root, parentSha, mainSha) {
+  const tree = git(root, ['rev-parse', `${mainSha}^{tree}`])
+  if (!tree) throw new Error('Failed to resolve the target tree.')
+  const identity = ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com']
+  const result = spawnSync('git', [...identity, 'commit-tree', tree, '-p', parentSha, '-m', 'chore(release): synchronize staging with main'], { cwd: resolve(root), encoding: 'utf8' })
+  if (result.status !== 0) throw new Error(`Failed to create the synchronization commit: ${result.stderr.trim()}`)
+  return result.stdout.trim()
 }
 
 /** @param {string} root @param {string} from @param {string} to @returns {string[]} */
