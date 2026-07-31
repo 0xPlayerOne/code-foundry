@@ -281,6 +281,13 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
   })
 
+  it('keys runtime concurrency by event so promotion PRs do not cancel push checks', () => {
+    for (const workflow of ['ci', 'codeql', 'security', 'test']) {
+      const runtime = readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')
+      assert.match(runtime, /code-foundry-\w+-\$\{\{ github\.event_name \}\}-\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \|\| github\.repository \}\}/)
+    }
+  })
+
   it('attaches required checks to staging and main pull requests', () => {
     for (const workflow of ['ci', 'codeql', 'security', 'test', 'opencode-security']) {
       const caller = readFileSync(`.github/workflows/${workflow}_self-ci.yml`, 'utf8')
