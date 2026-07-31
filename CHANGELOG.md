@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.2...v0.32.3) (2026-07-31)
+
+
+### Bug Fixes
+
+* **release:** no-op when staging already points at main's commit ([a47180a](https://github.com/0xPlayerOne/code-foundry/commit/a47180a16ae8b9fd66548aba284939b3cdfaeba8))
+* **release:** squash Release Please PRs for release-please compatibility ([41c808b](https://github.com/0xPlayerOne/code-foundry/commit/41c808b8c2502ca78e271cb6702334daf90169da))
+
 ## [0.32.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.1...v0.32.2) (2026-07-31)
 
 
