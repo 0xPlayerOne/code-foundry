@@ -191,6 +191,7 @@ const RELEASE_BASELINE_KEYS = ['$schema', 'bump-minor-pre-major', 'changelog-sec
 
 /** @param {string} target @param {string} sourceFile @returns {Record<string, any>} */
 function mergeReleaseConfig(target, sourceFile) {
+  /** @type {Record<string, any>} */
   let baseline = {}
   try { baseline = JSON.parse(readFileSync(sourceFile, 'utf8')) }
   catch { baseline = {} }
