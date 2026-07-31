@@ -238,7 +238,7 @@ describe('code-foundry CLI', () => {
         stagingChangedPaths: [],
         allowed,
       }),
-      { action: 'aligned', reason: 'Branches have different history but identical content.' },
+      { action: 'aligned', targetSha: 'main', reason: 'Branches have different history but identical content.' },
     )
   })
 
