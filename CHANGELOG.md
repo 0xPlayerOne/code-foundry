@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.18...v0.32.0) (2026-07-31)
+
+
+### Features
+
+* improve draft PR titles from branch conventions ([#290](https://github.com/0xPlayerOne/code-foundry/issues/290)) ([7b215db](https://github.com/0xPlayerOne/code-foundry/commit/7b215db961347dfdb74241fc2c3489d390b34533))
+
 ## [0.31.18](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.17...v0.31.18) (2026-07-30)
 
 
