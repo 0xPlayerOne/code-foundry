@@ -15,23 +15,22 @@ export function doctorGithub(root) {
   const warnings = []
   /** @type {Record<string, any>} */
   const details = { repository }
+  const rulesets = hydrateRulesets(repository, ghJson(['api', `repos/${repository}/rulesets`]))
+  const mainRulesets = rulesetsForBranch(rulesets, 'main')
   const protection = ghJson(['api', `repos/${repository}/branches/main/protection`])
-  if (!protection) warnings.push('main branch protection is not readable or is not configured.')
-  else {
-    const required = requiredContexts(protection)
-    details.requiredChecks = required
-    const duplicateNames = required.filter((name) => /\b([^/]+) \/ \1\b/i.test(name))
-    if (duplicateNames.length) errors.push(`required checks contain duplicate workflow prefixes: ${duplicateNames.join(', ')}`)
-    if (!protection.required_status_checks) warnings.push('main protection has no required status checks.')
-  }
+  const required = mainRulesets.length ? requiredContextsFromRulesets(mainRulesets) : requiredContextsFromProtection(protection)
+  details.requiredChecks = required
+  if (!protection && !mainRulesets.length) warnings.push('main branch protection or repository rulesets are not readable or are not configured.')
+  else if (!required.length) warnings.push(mainRulesets.length ? 'main ruleset has no required status checks.' : 'main protection has no required status checks.')
+  const duplicateNames = required.filter((name) => /\b([^/]+) \/ \1\b/i.test(name))
+  if (duplicateNames.length) errors.push(`required checks contain duplicate workflow prefixes: ${duplicateNames.join(', ')}`)
 
   const sha = String(ghJson(['api', `repos/${repository}/git/ref/heads/main`])?.object?.sha ?? '')
   const checks = sha ? ghJson(['api', `repos/${repository}/commits/${sha}/check-runs?per_page=100`])?.check_runs ?? [] : []
   const observed = checks.map(/** @param {any} check */ (check) => check.name).filter(Boolean)
   details.observedChecks = observed
   if (!observed.length) warnings.push('no check runs were observed on the current main commit; exact check validation is deferred until CI runs.')
-  if (protection?.required_status_checks) {
-    const required = requiredContexts(protection)
+  if (required.length) {
     const missing = required.filter((name) => observed.length && !observed.includes(name))
     if (missing.length) warnings.push(`required checks not observed on current main: ${missing.join(', ')}`)
   }
@@ -70,11 +69,60 @@ export function doctorGithub(root) {
 }
 
 /** @param {any} protection @returns {string[]} */
-function requiredContexts(protection) {
+function requiredContextsFromProtection(protection) {
   return [...new Set([
-    ...(protection.required_status_checks?.contexts ?? []),
-    ...(protection.required_status_checks?.checks ?? []).map(/** @param {any} check */ (check) => check.context),
+    ...(protection?.required_status_checks?.contexts ?? []),
+    ...(protection?.required_status_checks?.checks ?? []).map(/** @param {any} check */ (check) => check.context),
   ].filter(Boolean))]
+}
+
+/** @param {any[]} rulesets @returns {string[]} */
+function requiredContextsFromRulesets(rulesets) {
+  return [...new Set(
+    (Array.isArray(rulesets) ? rulesets : []).flatMap((/** @type {any} */ ruleset) =>
+      (ruleset.rules ?? []).flatMap((/** @type {any} */ rule) =>
+        rule?.type === 'required_status_checks' ?
+          (rule.parameters?.required_status_checks ?? []).map((/** @type {any} */ check) => check?.context).filter(Boolean) :
+          []
+      ),
+    ),
+  )]
+}
+
+/** @param {string} repository @param {any[] | null} rulesets @returns {any[]} */
+function hydrateRulesets(repository, rulesets) {
+  if (!Array.isArray(rulesets)) return []
+  return rulesets.map((ruleset) => {
+    if (!ruleset?.id) return ruleset
+    const details = ghJson(['api', `repos/${repository}/rulesets/${ruleset.id}`])
+    return details && typeof details === 'object' ? details : ruleset
+  })
+}
+
+/** @param {any[] | null} rulesets @param {string} branch @returns {any[]} */
+function rulesetsForBranch(rulesets, branch) {
+  if (!Array.isArray(rulesets)) return []
+  return rulesets.filter((ruleset) => (
+    ruleset?.target === 'branch' &&
+    Array.isArray(ruleset?.conditions?.ref_name?.include) &&
+    Array.isArray(ruleset?.conditions?.ref_name?.exclude) &&
+    includesBranch(ruleset.conditions.ref_name.include, branch) &&
+    !includesBranch(ruleset.conditions.ref_name.exclude, branch)
+  ))
+}
+
+/** @param {(string | null | undefined)[]} patterns @param {string} branch @returns {boolean} */
+function includesBranch(patterns, branch) {
+  const target = `refs/heads/${branch}`
+  return patterns.some((pattern) => {
+    if (!pattern) return false
+    if (pattern === '~ALL') return true
+    if (pattern === target || pattern === branch) return true
+    if (!/[\*?]/.test(pattern)) return false
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*').replace(/\\\?/g, '.')
+    const regex = new RegExp(`^${escaped}$`)
+    return regex.test(target) || regex.test(branch)
+  })
 }
 
 /** @param {string} root @returns {{ errors: string[], warnings: string[] }} */

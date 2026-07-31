@@ -61,13 +61,14 @@ checks disabled.
 
 ## Branch protection
 
-Use the repository's GitHub settings or the maintainer's branch-protection
-automation after reviewing the repository's enabled features:
+Use repository rulesets (or legacy branch protection settings) to mirror the
+required checks for each protected branch. Review the repository's enabled
+features and enforce only checks that actually run:
 
 ```bash
 Apply only checks for enabled workflows.
 ```
 
-Keep strict status checks, linear history, and conversation resolution enabled.
-For a repository with optional features disabled, do not require checks that
-will never run.
+Keep strict status checks, linear history, and conversation resolution enabled
+where required. For a repository with optional features disabled, do not require
+checks that will never run.

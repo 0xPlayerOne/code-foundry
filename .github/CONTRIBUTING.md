@@ -163,7 +163,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 The workflows use separate concurrency groups keyed by the commit under test. A newer run for the same commit cancels a duplicate event-triggered run, while newer commits cancel older runs and independent CI, Test, Security, and CodeQL workflows continue in parallel.
 
-Required checks are enforced by branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
+Required checks are enforced by branch protection rulesets/branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 
 ### Release conventions
 
