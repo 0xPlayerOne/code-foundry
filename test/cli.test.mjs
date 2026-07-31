@@ -184,7 +184,8 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
     assert.match(workflow, /--admin/)
-    assert.match(workflow, /--rebase/)
+    assert.match(workflow, /release_merge_strategy=/)
+    assert.match(workflow, /\$\{\{\s*steps\.profile\.outputs\.release_merge_strategy\s*\}\}/)
   })
 
   it('leaves release pull requests open when auto-merge credentials are unavailable', () => {

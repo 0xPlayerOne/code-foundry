@@ -12,9 +12,8 @@ Keep commits Conventional Commit-shaped (`feat:`, `fix:`, `docs:`, `ci:`,
 `chore:`, and so on). Release Please uses them to select patch/minor/major
 versions and generate grouped changelog notes.
 
-The default `merge_strategy` is `rebase`, matching the repository's linear
-history policy. Set it to `squash` or `merge` in `.github/code-foundry.yml` when
-that repository intentionally uses a different merge convention. The current
+The default `merge_strategy` is `merge`, matching promotion PRs from `staging` into `main`.
+Configure it to `squash` or `rebase` in `.github/code-foundry.yml` if a repository intentionally differs. The current
 supported `git_workflow` is `staging-release`.
 
 The release workflow opens or updates a versioned PR after changes reach
@@ -54,6 +53,6 @@ the generated version pull request before using the token to merge it.
 
 1. Merge tested changes from `staging` into `main`.
 2. Review the generated Release Please PR and changelog.
-3. Merge the release PR with the repository's normal linear-history policy.
+3. Merge the release PR with the repository's configured `merge_strategy` (default `merge`).
 4. Confirm the GitHub Release and any package publication.
 5. Synchronize `staging` with the new `main` release commit.
