@@ -121,11 +121,13 @@ export function syncRepository(options) {
   const releaseManifest = buildReleaseManifest(target, mergeReleaseConfig(target, sourcePath(source, 'release-please-config.json')))
   if (releaseManifest) {
     const manifestPath = join(target, '.release-please-manifest.json')
+    /** @type {Record<string, string>} */
     let existingManifest = {}
     if (existsSync(manifestPath)) {
       try { existingManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) }
       catch { existingManifest = {} }
     }
+    /** @type {Record<string, string>} */
     const mergedManifest = {}
     for (const directory of [...new Set([...Object.keys(releaseManifest), ...Object.keys(existingManifest)])].sort()) {
       mergedManifest[directory] = existingManifest[directory] ?? releaseManifest[directory]

@@ -58,6 +58,7 @@ export function doctor(root, options = {}) {
 
   const releaseConfigPath = join(target, 'release-please-config.json')
   if (existsSync(releaseConfigPath)) {
+    /** @type {Record<string, any>} */
     let releaseConfig = {}
     try { releaseConfig = JSON.parse(readFileSync(releaseConfigPath, 'utf8')) }
     catch { error('release-please-config.json is not valid JSON') }

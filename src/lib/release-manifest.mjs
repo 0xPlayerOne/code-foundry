@@ -79,6 +79,7 @@ export function buildReleaseManifest(root, config = {}) {
     ? config.packages
     : config['release-type'] ? { '.': {} } : null
   if (!packages || !Object.keys(packages).length) return null
+  /** @type {Record<string, string>} */
   const manifest = {}
   for (const directory of Object.keys(packages)) {
     manifest[directory] = readDirectoryVersion(join(root, directory === '.' ? '' : directory))
