@@ -40,6 +40,7 @@ export function reconcileRelease(root, options) {
   console.log(JSON.stringify({ base, head, ...plan }, null, 2))
   if (plan.action === 'fail') throw new Error(plan.reason + (plan.unexpected?.length ? ` Unexpected paths: ${plan.unexpected.join(', ')}` : ''))
   if (!['fast-forward', 'pull-request', 'aligned'].includes(plan.action) || !options.github || options.dryRun) return plan
+  if (!plan.targetSha) return plan
   if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   if (!token) throw new Error('GH_TOKEN or GITHUB_TOKEN is required for --github reconciliation.')
