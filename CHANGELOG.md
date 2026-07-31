@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.1...v0.32.2) (2026-07-31)
+
+
+### Bug Fixes
+
+* **release:** mirror staging onto main and require rebase merges on main ([31ab9b1](https://github.com/0xPlayerOne/code-foundry/commit/31ab9b125e66ae35f7d2a2c6893d0a3aec5d4560))
+* **release:** synchronize staging with a linear commit instead of a blocked fast-forward ([b808dff](https://github.com/0xPlayerOne/code-foundry/commit/b808dffeae38ec8211f8f0dee79e19d60f70b708))
+
 ## [0.32.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.0...v0.32.1) (2026-07-31)
 
 
