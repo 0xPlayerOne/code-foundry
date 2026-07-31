@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.32.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.0...v0.32.1) (2026-07-31)
+
+
+### Bug Fixes
+
+* **ci:** key runtime concurrency by event so promotion PRs do not cancel push checks ([5a8d8fd](https://github.com/0xPlayerOne/code-foundry/commit/5a8d8fd80e62feabc887869e07219a77f2c46c1a))
+* **release:** bootstrap release-please manifest during sync ([98c7e5d](https://github.com/0xPlayerOne/code-foundry/commit/98c7e5d9341eedf22d49611f19825a5ef8d6d596))
+* **release:** satisfy JSDoc type-check for manifest bootstrap ([02ddb45](https://github.com/0xPlayerOne/code-foundry/commit/02ddb459405ee9d54c91afdc3cf5602790a4c2b4))
+* **release:** squash release PRs so staging can fast-forward after releases ([5d9a788](https://github.com/0xPlayerOne/code-foundry/commit/5d9a78843fde4ce764237eacfde9b1720d15696e))
+
 ## [0.32.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.31.18...v0.32.0) (2026-07-31)
 
 
