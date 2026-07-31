@@ -339,7 +339,7 @@ function createDefaultConfig(root, source) {
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
     opencode_security: 'false',
     sync_mode: 'overlay', custom_workflows: 'preserve',
-    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase',
+    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'merge',
   }
 }
 
