@@ -182,18 +182,26 @@ export function syncRepository(options) {
   return { changed, config }
 }
 
+/**
+ * Baseline keys that are safe to merge into a repository's release config.
+ * Package and release-type policy is detected from the repository itself and
+ * must never leak from the runtime template.
+ */
+const RELEASE_BASELINE_KEYS = ['$schema', 'bump-minor-pre-major', 'changelog-sections', 'include-component-in-tag']
+
 /** @param {string} target @param {string} sourceFile @returns {Record<string, any>} */
 function mergeReleaseConfig(target, sourceFile) {
   let baseline = {}
   try { baseline = JSON.parse(readFileSync(sourceFile, 'utf8')) }
   catch { baseline = {} }
+  const safeBaseline = Object.fromEntries(RELEASE_BASELINE_KEYS.filter((key) => key in baseline).map((key) => [key, baseline[key]]))
   const destination = join(target, 'release-please-config.json')
   let existing = baseline
   if (existsSync(destination)) {
     try { existing = JSON.parse(readFileSync(destination, 'utf8')) }
     catch { existing = baseline }
   }
-  return buildReleaseConfig(target, { ...baseline, ...existing })
+  return buildReleaseConfig(target, { ...safeBaseline, ...existing })
 }
 
 /** @param {string} target @param {string} sourceFile @returns {string} */
