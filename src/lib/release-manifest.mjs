@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-const ignored = new Set(['.git', '.code-foundry', '.venv', 'node_modules', 'target', 'vendor', 'dist', 'build'])
+const ignored = new Set(['.git', '.code-foundry', '.venv', 'node_modules', 'target', 'vendor', 'dist', 'build', '.next', '.kilo', '.turbo', '.cache', '.vercel', '.output', '.nuxt', '.svelte-kit', '.parcel-cache', 'out', 'coverage'])
 
 /** @typedef {{ directory: string, manifest: string, releaseType: 'node'|'python'|'rust', packageName?: string, extraFiles: string[] }} ReleasePackage */
 
