@@ -36,12 +36,36 @@ jobs:
         if: steps.check-pr.outputs.existing == '0'
         run: |
           BRANCH="${{ github.ref_name }}"
+          PREFIX="${BRANCH%%/*}"
+          SUFFIX="${BRANCH#*/}"
+          PR_TITLE=""
+
+          case "$PREFIX" in
+            feat|fix|chore|refactor|docs|test|style|ci|build)
+              if [ "$SUFFIX" != "$BRANCH" ] && [ -n "$SUFFIX" ]; then
+                PR_TITLE="${PREFIX}: ${SUFFIX}"
+              fi
+              ;;
+            *)
+              ;;
+          esac
+
+          PR_TITLE="${PR_TITLE//[\/_]/ }"
+          PR_TITLE="$(printf '%s' "$PR_TITLE" | tr -s ' ' | sed 's/^ *//; s/ *$//')"
+
+          if [ -z "$PR_TITLE" ]; then
+            PR_TITLE=$(git log -1 --pretty=%s 2>/dev/null || true)
+          fi
+          if [ -z "$PR_TITLE" ]; then
+            PR_TITLE="$BRANCH"
+          fi
+
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base staging \
             --head "$BRANCH" \
             --draft \
-            --title "[WIP] $BRANCH" \
+            --title "$PR_TITLE" \
             --body "Draft PR created automatically by CI.
 
             This PR is a draft and should not be merged until CI passes and a reviewer (or the Daily Review agent) marks it ready.

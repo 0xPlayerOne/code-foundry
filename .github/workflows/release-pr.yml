@@ -157,7 +157,7 @@ jobs:
           ### Validation
 
           - Required CI, test, security, and CodeQL checks must pass before merge.
-          - Merge using the repository's configured \`merge_strategy\` (default: **rebase**).
+          - Merge using the repository's configured \`merge_strategy\` (default: **merge**).
           - After merge, Release Please opens a separate versioned release PR with the changelog.
           EOF
 

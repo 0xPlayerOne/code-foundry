@@ -48,7 +48,7 @@ docs/*  test/*  refactor/*         │              │
 | `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |
 | `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |
 
-The default Git workflow is `staging-release`: topic branches merge into `staging`, then a promotion PR moves validated changes into `main`, followed by the versioned release PR. The default merge strategy is `rebase`, which preserves the linear Conventional Commit history. Configure `merge_strategy` as `squash` or `merge` in `.github/code-foundry.yml` when the repository intentionally uses another policy. Re-align `staging` with `main` after a release when needed.
+The default Git workflow is `staging-release`: topic branches merge into `staging` (typically after rebasing), then a promotion PR moves validated changes into `main`, followed by the versioned release PR. The default release merge strategy is `merge`, matching your preference for merge-commit promotions from staging to main. Configure `merge_strategy` as `rebase` or `squash` in `.github/code-foundry.yml` if a repository intentionally differs. Re-align `staging` with `main` after a release when needed.
 
 ## Before you start
 
@@ -163,7 +163,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 The workflows use separate concurrency groups keyed by the commit under test. A newer run for the same commit cancels a duplicate event-triggered run, while newer commits cancel older runs and independent CI, Test, Security, and CodeQL workflows continue in parallel.
 
-Required checks are enforced by branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
+Required checks are enforced by branch protection rulesets/branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 
 ### Release conventions
 

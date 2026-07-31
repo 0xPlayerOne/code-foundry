@@ -72,10 +72,12 @@ jobs:
             : {}
           let releaseType = config.release_type || 'auto'
           let npmPublish = config.npm_publish || 'false'
+          let releaseMergeStrategy = String(config.merge_strategy || 'merge').trim().toLowerCase()
           if (releaseType === 'auto') {
             releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
           }
           if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
+          if (!['rebase', 'squash', 'merge'].includes(releaseMergeStrategy)) throw new Error(`Unsupported merge_strategy: ${releaseMergeStrategy}`)
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
           let legacyReleaseType = ''
           if (releaseType !== 'none') {
@@ -88,7 +90,7 @@ jobs:
           }
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `release_type=${releaseType}\nlegacy_release_type=${legacyReleaseType}\nnpm_publish=${npmPublish}\n`,
+            `release_type=${releaseType}\nlegacy_release_type=${legacyReleaseType}\nnpm_publish=${npmPublish}\nrelease_merge_strategy=${releaseMergeStrategy}\n`,
           )
           NODE
       - name: Detect release credentials
@@ -161,7 +163,7 @@ jobs:
             gh pr merge "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --admin \
-              --rebase \
+              --${{ steps.profile.outputs.release_merge_strategy }} \
               --delete-branch
           done
 
