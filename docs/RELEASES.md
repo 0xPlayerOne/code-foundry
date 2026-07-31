@@ -36,6 +36,15 @@ npm_publish: false # true only for an npm package
 repository without a package manifest and `none` for a repository that should
 not release automatically.
 
+Release Please runs in manifest mode whenever the release config declares
+`packages` or a top-level `release-type`; `code-foundry sync` bootstraps
+`.release-please-manifest.json` from the current package versions the first
+time it is needed. Release Please owns the manifest after the first release
+and sync never overwrites existing manifest versions. Legacy configs without
+`packages` or `release-type` continue to run in simple mode and need no
+manifest; `code-foundry doctor` fails when a manifest-mode config is missing
+its manifest.
+
 ## Pull request permissions
 
 Release Please falls back to the repository's `GITHUB_TOKEN` when a

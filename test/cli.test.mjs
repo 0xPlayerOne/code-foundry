@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyPromotion, classifyReconciliation } from '../src/lib/release-policy.mjs'
 import { buildReleaseRecoveryPlan, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
-import { buildReleaseConfig, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
+import { buildReleaseConfig, buildReleaseManifest, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
@@ -180,6 +180,8 @@ describe('code-foundry CLI', () => {
 
     assert.match(workflow, /if \(!releaseConfig\.packages && !releaseConfig\['release-type'\]\)/)
     assert.match(workflow, /legacyReleaseType = releaseType/)
+    assert.match(workflow, /else if \(!fs\.existsSync\('\.release-please-manifest\.json'\)\)/)
+    assert.match(workflow, /run code-foundry sync to bootstrap the release manifest/)
     assert.match(workflow, /config-file: release-please-config\.json/)
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
@@ -300,6 +302,51 @@ describe('code-foundry CLI', () => {
     for (const duplicate of ['ci', 'test', 'security', 'codeql']) {
       assert.doesNotMatch(caller, new RegExp(`^  ${duplicate}:`, 'm'))
     }
+  })
+
+  it('bootstraps a Release Please manifest from current package versions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-manifest-seed-'))
+    mkdirSync(join(root, 'web/src'), { recursive: true })
+    mkdirSync(join(root, 'service'), { recursive: true })
+    writeFileSync(join(root, 'web/package.json'), '{"name":"fixture-web","version":"1.2.3"}\n')
+    writeFileSync(join(root, 'web/src/version.ts'), 'export const version = "1.2.3"\n')
+    writeFileSync(join(root, 'service/Cargo.toml'), '[package]\nname = "fixture-service"\nversion = "0.4.0"\n')
+
+    assert.deepEqual(buildReleaseManifest(root, { packages: { '.': {}, web: {}, service: {} } }), {
+      '.': '0.0.0',
+      web: '1.2.3',
+      service: '0.4.0',
+    })
+    assert.deepEqual(buildReleaseManifest(root, { 'release-type': 'node' }), { '.': '0.0.0' })
+    assert.equal(buildReleaseManifest(root, {}), null)
+    assert.equal(buildReleaseManifest(root, { packages: {} }), null)
+  })
+
+  it('bootstraps the release manifest during sync without regressing owned versions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-sync-manifest-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"2.1.0"}\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nrelease_type: node\n')
+
+    syncRepository({ target: root, source: process.cwd(), init: true })
+    assert.deepEqual(JSON.parse(readFileSync(join(root, '.release-please-manifest.json'), 'utf8')), { '.': '2.1.0' })
+
+    // A later sync must not regress a manifest that release-please owns.
+    writeFileSync(join(root, '.release-please-manifest.json'), '{\n  ".": "3.0.0"\n}\n')
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"2.1.0"}\n')
+    syncRepository({ target: root, source: process.cwd() })
+    assert.deepEqual(JSON.parse(readFileSync(join(root, '.release-please-manifest.json'), 'utf8')), { '.': '3.0.0' })
+  })
+
+  it('reports a missing release manifest during doctor', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-doctor-manifest-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'release-please-config.json'), '{"release-type": "node"}\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nrelease_type: node\n')
+
+    const result = run('doctor', '--target', root)
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /\.release-please-manifest\.json.*code-foundry sync/)
   })
 
   it('generates a mixed-language Release Please manifest without losing custom fields', () => {

@@ -86,6 +86,8 @@ jobs:
             const releaseConfig = JSON.parse(fs.readFileSync(sourcePath, 'utf8'))
             if (!releaseConfig.packages && !releaseConfig['release-type']) {
               legacyReleaseType = releaseType
+            } else if (!fs.existsSync('.release-please-manifest.json')) {
+              throw new Error('Missing .release-please-manifest.json: run code-foundry sync to bootstrap the release manifest.')
             }
           }
           fs.appendFileSync(

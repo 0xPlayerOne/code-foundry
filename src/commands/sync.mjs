@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectLanguages, detectPackageManager, detectProfile, recommendRunners } from '../lib/profile.mjs'
 import { configured, includesValue, readConfig } from '../lib/config.mjs'
-import { buildReleaseConfig } from '../lib/release-manifest.mjs'
+import { buildReleaseConfig, buildReleaseManifest } from '../lib/release-manifest.mjs'
 import { customWorkflowFiles, overlayPolicy } from '../lib/overlay.mjs'
 
 const standardFiles = [
@@ -118,6 +118,25 @@ export function syncRepository(options) {
     }
   }
 
+  const releaseManifest = buildReleaseManifest(target, mergeReleaseConfig(target, sourcePath(source, 'release-please-config.json')))
+  if (releaseManifest) {
+    const manifestPath = join(target, '.release-please-manifest.json')
+    let existingManifest = {}
+    if (existsSync(manifestPath)) {
+      try { existingManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) }
+      catch { existingManifest = {} }
+    }
+    const mergedManifest = {}
+    for (const directory of [...new Set([...Object.keys(releaseManifest), ...Object.keys(existingManifest)])].sort()) {
+      mergedManifest[directory] = existingManifest[directory] ?? releaseManifest[directory]
+    }
+    const content = `${JSON.stringify(mergedManifest, null, 2)}\n`
+    if (!existsSync(manifestPath) || readFileSync(manifestPath, 'utf8') !== content) {
+      changed.push('.release-please-manifest.json')
+      writeOrReport(manifestPath, content, dryRun)
+    }
+  }
+
   if (license !== 'preserve' && license !== 'none') {
     const licenseFile = license === 'mit' ? 'MIT.txt' : license === 'agpl-3.0-or-later' ? 'AGPL-3.0-or-later.txt' : 'GPL-3.0-or-later.txt'
     const sourceLicense = join(source, '.github/licenses', licenseFile)
@@ -161,8 +180,8 @@ export function syncRepository(options) {
   return { changed, config }
 }
 
-/** @param {string} target @param {string} sourceFile @returns {string} */
-function renderReleaseConfig(target, sourceFile) {
+/** @param {string} target @param {string} sourceFile @returns {Record<string, any>} */
+function mergeReleaseConfig(target, sourceFile) {
   let baseline = {}
   try { baseline = JSON.parse(readFileSync(sourceFile, 'utf8')) }
   catch { baseline = {} }
@@ -172,8 +191,12 @@ function renderReleaseConfig(target, sourceFile) {
     try { existing = JSON.parse(readFileSync(destination, 'utf8')) }
     catch { existing = baseline }
   }
-  const merged = { ...baseline, ...existing }
-  return `${JSON.stringify(buildReleaseConfig(target, merged), null, 2)}\n`
+  return buildReleaseConfig(target, { ...baseline, ...existing })
+}
+
+/** @param {string} target @param {string} sourceFile @returns {string} */
+function renderReleaseConfig(target, sourceFile) {
+  return `${JSON.stringify(mergeReleaseConfig(target, sourceFile), null, 2)}\n`
 }
 
 /** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */
