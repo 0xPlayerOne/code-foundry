@@ -177,6 +177,35 @@ function createReconcileWorkspace() {
   return { root, remote, run }
 }
 
+/**
+ * @param {(git: string) => void} fn
+ * @param {string} message
+ */
+function withFakeGitPushFailure(fn, message) {
+  const oldPath = process.env.PATH
+  const toolDir = mkdtempSync(join(tmpdir(), 'code-foundry-git-failure-'))
+  const script = join(toolDir, 'git')
+  const originalGit = spawnSync('sh', ['-lc', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+  writeFileSync(
+    script,
+    `#!/bin/sh
+if [ "$1" = "push" ] && [ "$2" = "origin" ]; then
+  echo "${message}"
+  exit 1
+fi
+exec ${originalGit} "$@"
+`,
+  )
+  chmodSync(script, 0o755)
+  process.env.PATH = `${toolDir}:${oldPath}`
+  try {
+    return fn()
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(toolDir, { recursive: true, force: true })
+  }
+}
+
 function run(...args) {
   return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
 }
@@ -934,6 +963,153 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
     rmSync(toolDir, { recursive: true, force: true })
+  })
+
+  it('classifies push authentication failures from raw diagnostic output', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
+    run(['add', 'package.json', 'src/index.ts'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+    run(['add', 'package.json'])
+    commit('chore(main): release 1.0.1')
+
+    run(['push', '-u', 'origin', 'main'])
+    run(['checkout', '-q', 'staging'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const failure = 'fatal: Authentication failed for https://abc123:secrets@github.com/owner/repo.git/'
+    const runReconcile = () => withFakeGitPushFailure(
+      () => withGitHubEnv(
+        {
+          GITHUB_REPOSITORY: 'owner/repo',
+          GH_TOKEN: 'token',
+        },
+        () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }),
+      ),
+      failure,
+    )
+
+    let caught
+    try {
+      runReconcile()
+    } catch (error) {
+      caught = error
+    }
+    assert.ok(caught instanceof Error)
+    assert.match(caught.message, /authentication failed/i)
+    assert.equal(caught.message.includes('https://abc123:secrets@github.com'), false)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('classifies branch policy rejections without retrying blindly', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    run(['add', 'package.json'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+    run(['add', 'package.json'])
+    commit('chore(main): release 1.0.1')
+
+    run(['push', '-u', 'origin', 'main'])
+    run(['checkout', '-q', 'staging'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const failure = 'remote: error: GH007: Your push was rejected by a repository rule.\nremote: error: protected branch hook declined.\nTo github.com/owner/repo.git\n ! [remote rejected] staging -> staging (push declined by rule)'
+    assert.throws(() => withFakeGitPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      failure,
+    ), /branch policy|GH007|ruleset|protected branch/)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('keeps exact-lease stale failure detail in diagnostics', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    run(['add', 'package.json'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
+    run(['add', 'CHANGELOG.md'])
+    commit('feat: unreleased docs')
+
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+    run(['add', 'package.json'])
+    commit('chore(main): release 1.0.1')
+
+    run(['push', '-u', 'origin', 'main'])
+    run(['checkout', '-q', 'staging'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const failure = '! [remote rejected] staging -> staging (non-fast-forward)'
+    let caught
+    try {
+      withFakeGitPushFailure(
+        () => withGitHubEnv({
+          GITHUB_REPOSITORY: 'owner/repo',
+          GH_TOKEN: 'token',
+        }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+        failure,
+      )
+    } catch (error) {
+      caught = error
+    }
+    assert.ok(caught instanceof Error)
+    assert.match(caught.message, /rejected by an exact lease/i)
+    assert.match(caught.message, /Last failure detail/i)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
   })
 
   it('is idempotent when patch-equivalent branches are already synchronized', () => {
