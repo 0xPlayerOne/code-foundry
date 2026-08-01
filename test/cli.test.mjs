@@ -563,6 +563,11 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /Waiting for release PR #\$pr to become mergeable under branch policy/)
     assert.match(workflow, /--json mergeStateStatus,mergeable/)
     assert.match(workflow, /'\[\.mergeStateStatus, \.mergeable\] \| @tsv'/)
+    assert.doesNotMatch(
+      workflow,
+      /--jq -r '\[\.mergeStateStatus, \.mergeable\] \| @tsv'/,
+      'gh pr view owns raw jq output; passing -r as a second argument makes the poll fail'
+    )
     assert.match(workflow, /case "\$merge_state" in/)
     assert.match(workflow, /CLEAN\|UNSTABLE\)\n\s+if \[ "\$mergeable" = MERGEABLE \]; then\n\s+break/)
     assert.match(workflow, /DIRTY\)\n\s+echo "Release PR #\$pr is not mergeable \(mergeStateStatus=\$merge_state\)/)
