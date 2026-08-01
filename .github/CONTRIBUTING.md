@@ -48,7 +48,7 @@ docs/*  test/*  refactor/*         │              │
 | `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |
 | `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |
 
-The default Git workflow is `staging-release`: topic branches merge into `staging` (typically after rebasing), then a promotion PR moves validated changes into `main`, followed by the versioned release PR. The default release merge strategy is `merge`, matching your preference for merge-commit promotions from staging to main. Configure `merge_strategy` as `rebase` or `squash` in `.github/code-foundry.yml` if a repository intentionally differs. Re-align `staging` with `main` after a release when needed.
+The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.
 
 ## Before you start
 
@@ -107,7 +107,7 @@ For maintainers, trusted contributors, and automation agents:
 
 8. Push the branch and open a pull request into `staging`.
 9. Address review feedback and failed checks on the same branch.
-10. Merge using the repository's configured `merge_strategy` after required checks pass and the change is ready.
+10. Merge with a squash after required checks pass and the change is ready; feature PRs land on `staging` with squash merges.
 
 ### Internal agent handoff
 
@@ -173,10 +173,11 @@ Security checks can be skipped when repository visibility or the GitHub plan doe
 
 ## Review and merge protocol
 
-| Change            | Target    | Merge gate                                                |
-| ----------------- | --------- | --------------------------------------------------------- |
-| Working branch    | `staging` | All applicable required checks pass                       |
-| `staging` release | `main`    | Current staging checks, release review, and rollout notes |
+| Change | Target | Merge method | Merge gate |
+| ----------------- | --------- | ------------------------------------------------------- | --------------------------------------------------------- |
+| Working branch    | `staging` | Squash                                                  | All applicable required checks pass                       |
+| `staging` → `main` promotion | `main` | Rebase (`merge_strategy`)                   | Current staging checks, release review, and rollout notes |
+| Release Please version PR | `main` | Squash (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                  |
 
 Reviewers focus on correctness, security, maintainability, test coverage, operational impact, and compatibility. Authors remain responsible for responding to feedback and verifying the final commit.
 

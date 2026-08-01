@@ -79,12 +79,18 @@ jobs:
             : {}
           let releaseType = config.release_type || 'auto'
           let npmPublish = config.npm_publish || 'false'
-          let releaseMergeStrategy = String(config.release_merge_strategy || config.merge_strategy || 'merge').trim().toLowerCase()
+          // The merge audit topology requires squash for Release Please version
+          // pull requests into main. Release automation never defaults to a
+          // merge method: an unset or non-squash release_merge_strategy fails
+          // the release job before any pull request is created or merged.
+          const releaseMergeStrategy = String(config.release_merge_strategy || '').trim().toLowerCase()
           if (releaseType === 'auto') {
             releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
           }
           if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
-          if (!['rebase', 'squash', 'merge'].includes(releaseMergeStrategy)) throw new Error(`Unsupported merge_strategy: ${releaseMergeStrategy}`)
+          if (releaseMergeStrategy !== 'squash') {
+            throw new Error(`release_merge_strategy must be "squash" for automated release merges; got ${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}`)
+          }
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
           let legacyReleaseType = ''
           if (releaseType !== 'none') {
@@ -208,10 +214,18 @@ jobs:
               --watch \
               --fail-fast \
               --interval 10
+            release_head=$(gh pr view "$pr" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json headRefOid \
+              --jq '.headRefOid')
+            if [ -z "$release_head" ]; then
+              echo "Could not resolve head commit SHA for release PR #$pr" >&2
+              exit 1
+            fi
             gh pr merge "$pr" \
               --repo "$GITHUB_REPOSITORY" \
-              --admin \
               --${{ steps.profile.outputs.release_merge_strategy }} \
+              --match-head-commit "$release_head" \
               --delete-branch
           done
 

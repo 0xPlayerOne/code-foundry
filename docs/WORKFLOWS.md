@@ -31,6 +31,30 @@ Use concise job names such as `CI / Format`, `Test / Unit`, and
 `CodeQL / Analyze (Python)`. Required checks should match the jobs actually
 enabled for the repository profile.
 
+## Merge methods
+
+The merge audit pins one merge method per transition. `code-foundry doctor`
+and `code-foundry sync` fail closed on any other strategy, and the release
+workflow refuses to run unless its strategy is exactly `squash`.
+
+| Transition | Merge method | Enforcement |
+| --- | --- | --- |
+| Feature/fix PR into `staging` | Squash | Contribution policy; see `CONTRIBUTING.md` |
+| `staging` → `main` promotion PR | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase`; merge commits are rejected |
+| Release Please version PR into `main` | Squash (`release_merge_strategy: squash`) | Release automation fails closed unless `squash`; never defaults to `merge`, never uses `--admin` |
+
+Keeping `main` linear — rebase promotions and squash release PRs — is what
+lets the post-release reconciliation fast-forward or replay `staging` safely.
+
+## GitHub Stacks
+
+GitHub Stacks (stacked pull requests) is not part of this topology and does
+not reduce required workflow runs. Every pull request in a stack still
+triggers its own validation run, and each branch keeps its own required
+checks; stacking never collapses or skips a required check in the tiered
+validation gate. Land changes through the standard `staging-release` flow
+instead.
+
 ## Language defaults
 
 - TypeScript/JavaScript: ESLint, Prettier, and Bun's native `bun test`.

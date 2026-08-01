@@ -485,7 +485,7 @@ describe('code-foundry CLI', () => {
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
     assert.match(validationCaller, /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/)
   })
-  it('lets a manifest Release Please config own the release strategy', () => {
+  it('fails closed on a non-squash release merge strategy and never uses --admin', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
     assert.match(workflow, /if \(!releaseConfig\.packages && !releaseConfig\['release-type'\]\)/)
@@ -495,11 +495,58 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /config-file: release-please-config\.json/)
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
-    assert.match(workflow, /--admin/)
-    assert.match(workflow, /release_merge_strategy=/)
-    assert.match(workflow, /release_merge_strategy \|\| config\.merge_strategy/)
+    assert.doesNotMatch(workflow, /--admin/)
+    assert.match(workflow, /release_merge_strategy must be "squash"/)
+    assert.match(workflow, /release automation never defaults to merge/)
+    assert.doesNotMatch(workflow, /release_merge_strategy \|\| config\.merge_strategy/)
+    assert.doesNotMatch(workflow, /\|\| 'merge'/)
+    assert.match(workflow, /release_merge_strategy=\$\{releaseMergeStrategy\}/)
     assert.match(workflow, /\$\{\{\s*steps\.profile\.outputs\.release_merge_strategy\s*\}\}/)
+    assert.match(workflow, /release_head=\$\(gh pr view \"\$pr\"[\s\S]*--json headRefOid[\s\S]*--jq '\.headRefOid'\)/)
+    assert.match(workflow, /--match-head-commit \"\$release_head\"/)
+    assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
     assert.match(workflow, /name: Release \/ Reconcile\n\s+needs: release\n\s+if: needs\.release\.result == 'success'/)
+  })
+
+  it('doctor and sync reject merge strategies outside the audit topology', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-merge-policy-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    const captureErrors = (fn) => {
+      /** @type {string[]} */
+      const errors = []
+      const original = console.error
+      console.error = (message) => errors.push(String(message))
+      try { fn() } catch { /* doctor throws only a summary; details are in errors */ } finally { console.error = original }
+      return errors
+    }
+
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n')
+    syncRepository({ target: root, source: process.cwd() })
+    assert.doesNotThrow(() => doctor(root))
+
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\nrelease_merge_strategy: merge\n')
+    const promotion = captureErrors(() => doctor(root))
+    assert.ok(promotion.some((message) => /merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
+    assert.ok(promotion.some((message) => /release_merge_strategy must be "squash"/.test(message)), promotion.join('\n'))
+    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported merge_strategy: merge/)
+
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n')
+    const release = captureErrors(() => doctor(root))
+    assert.ok(release.some((message) => /release_merge_strategy must be "squash"/.test(message)), release.join('\n'))
+    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported release_merge_strategy: rebase/)
+
+    // Release automation is the only consumer of release_merge_strategy;
+    // a profile without the release feature never needs the key.
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nfeatures: ci,test\nmerge_strategy: rebase\n')
+    assert.doesNotThrow(() => syncRepository({ target: root, source: process.cwd() }))
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('documents that GitHub Stacks is outside the merge topology', () => {
+    const workflows = readFileSync('docs/WORKFLOWS.md', 'utf8')
+    assert.match(workflows, /GitHub Stacks/)
+    assert.match(workflows, /does\s+not reduce required workflow runs/)
+    assert.match(workflows, /not part of this topology/)
   })
 
   it('normalizes generated release PR state when draft permissions are unavailable', () => {
@@ -961,6 +1008,8 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release_only=\$RELEASE_ONLY/)
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only == 'true'/)
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
+    assert.match(workflow, /merge_strategy.*rebase/)
+    assert.match(workflow, /never merge a promotion PR with a merge commit/)
   })
 
   it('keys runtime concurrency by event so promotion PRs do not cancel push checks', () => {

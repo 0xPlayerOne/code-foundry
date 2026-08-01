@@ -70,6 +70,14 @@ export function doctor(root, options = {}) {
   }
 
   const features = config.features ?? 'all'
+  const mergeStrategy = config.merge_strategy ?? 'rebase'
+  if (mergeStrategy !== 'rebase') {
+    error(`merge_strategy must be "rebase" for the staging-release promotion topology; got "${mergeStrategy}".`)
+  }
+  const releaseMergeStrategy = config.release_merge_strategy ?? ''
+  if (includesValue(features, 'release') && releaseMergeStrategy !== 'squash') {
+    error(`release_merge_strategy must be "squash" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`)
+  }
   for (const workflow of ['validation', 'draft-pr', 'release-pr', 'release']) {
     if (includesValue(features, workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
   }
