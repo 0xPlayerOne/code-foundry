@@ -300,7 +300,7 @@ jobs:
           if (!lines) process.exit(1)
           process.stdout.write(`${lines}\n`)
           NODE
-          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          git remote set-url --push origin "git@github.com:${GITHUB_REPOSITORY}.git"
           echo "ssh_command=-F /dev/null -i $STAGING_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$STAGING_HOSTS -o StrictHostKeyChecking=yes" >> "$GITHUB_OUTPUT"
       - name: Configure git for trusted reconcile
         if: steps.staging.outputs.exists == 'true' && env.STAGING_DEPLOY_KEY_PRESENT != 'true'
