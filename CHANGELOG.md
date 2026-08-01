@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.1...v0.34.2) (2026-08-01)
+
+
+### Bug Fixes
+
+* **release:** make mergeability poll executable ([#314](https://github.com/0xPlayerOne/code-foundry/issues/314)) ([66161ab](https://github.com/0xPlayerOne/code-foundry/commit/66161abe151f6fa7ec09844aa6fa5dab83b37de6))
+
 ## [0.34.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.0...v0.34.1) (2026-08-01)
 
 
