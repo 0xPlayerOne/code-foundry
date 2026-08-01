@@ -380,7 +380,13 @@ function createDefaultConfig(root, source) {
 /** @param {Record<string,string>} config */
 function renderConfig(config) { return `${Object.entries(config).map(([key, value]) => renderConfigLine(key, value)).join('\n')}\n` }
 /** @param {string} key @param {string} value */
-function renderConfigLine(key, value) { return value === '' ? `${key}:` : `${key}: ${value}` }
+function renderConfigLine(key, value) {
+  if (value === '') return `${key}:`
+  // Quote values that YAML would parse as collections or that would trip
+  // prettier's formatter (e.g. codeql_rust_shards: '["all"]').
+  const needsQuotes = /^[\[\]{]|[:,#]\s|\s#/.test(value)
+  return needsQuotes ? `${key}: '${value.replace(/'/g, "''")}'` : `${key}: ${value}`
+}
 /** @param {string} root */
 function readPackageVersion(root) {
   try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0' } catch { return '0.0.0' }
