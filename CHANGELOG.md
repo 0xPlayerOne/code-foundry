@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.32.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.3...v0.32.4) (2026-08-01)
+
+
+### Bug Fixes
+
+* **sync:** never leak runtime release-type into consumer configs ([b7c51f3](https://github.com/0xPlayerOne/code-foundry/commit/b7c51f3e465e048be933292e0db9ca08d5420c9a))
+* **sync:** quote collection-like config values so prettier accepts them ([b0d4fea](https://github.com/0xPlayerOne/code-foundry/commit/b0d4fea815b6417de23cf577cba525e2017004dc))
+* **sync:** satisfy JSDoc type-check for baseline merge ([ce54339](https://github.com/0xPlayerOne/code-foundry/commit/ce54339b2092722e4d0d4e43afdb7ab5bacd2bc1))
+
 ## [0.32.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.2...v0.32.3) (2026-07-31)
 
 
