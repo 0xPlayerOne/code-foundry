@@ -23,6 +23,7 @@ import {
 } from '../src/lib/validation-policy.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
+import { doctorGithub } from '../src/lib/github-doctor.mjs'
 import { reconcileRelease } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
@@ -94,6 +95,73 @@ function withGitHubEnv(env, fn) {
     } else {
       process.env.GITHUB_TOKEN = previous.GITHUB_TOKEN
     }
+  }
+}
+
+/**
+ * @param {string[]} secretNames
+ * @param {Function} fn
+ */
+function withFakeGh(secretNames, fn) {
+  const oldPath = process.env.PATH
+  const dir = mkdtempSync(join(tmpdir(), 'code-foundry-gh-'))
+  const script = join(dir, 'gh')
+  const payload = secretNames.map((name) => ({ name })).map((entry) => JSON.stringify(entry)).join(',\n')
+  writeFileSync(
+    script,
+    `#!/usr/bin/env bash
+set -euo pipefail
+if [ \"$1\" = \"--version\" ]; then
+  echo 'gh version 2.55.0'
+  exit 0
+fi
+if [ \"$1\" = \"secret\" ] && [ \"$2\" = \"list\" ]; then
+  cat <<'JSON'
+[${payload}]
+JSON
+  exit 0
+fi
+if [ \"$1\" = \"api\" ]; then
+  case \"$2\" in
+    repos/*/rulesets)
+      echo '[]'
+      ;;
+    repos/*/rulesets/*)
+      echo '{}'
+      ;;
+    repos/*/branches/main/protection)
+      echo '{}'
+      ;;
+    repos/*/git/ref/heads/main)
+      echo '{"object":{"sha":"abc"}}'
+      ;;
+    repos/*/commits/main/check-runs*)
+      echo '{"check_runs":[]}'
+      ;;
+    *)
+      echo '{}'
+      ;;
+  esac
+  exit 0
+fi
+if [ \"$1\" = \"variable\" ] && [ \"$2\" = \"list\" ]; then
+  echo '[]'
+  exit 0
+fi
+if [ \"$1\" = \"pr\" ] && [ \"$2\" = \"list\" ]; then
+  echo '[]'
+  exit 0
+fi
+echo '{}'
+`,
+  )
+  chmodSync(script, 0o755)
+  process.env.PATH = `${dir}:${oldPath}`
+  try {
+    return fn()
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(dir, { recursive: true, force: true })
   }
 }
 
@@ -369,6 +437,54 @@ describe('code-foundry CLI', () => {
     assert.ok(warning.some((message) => /not a released tag/.test(message)), warning.join('\n'))
   })
 
+  it('reports both CODE_FOUNDRY_TOKEN and RELEASE_PLEASE_TOKEN states in the github doctor', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-doctor-tokens-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+
+    const both = withFakeGh(['CODE_FOUNDRY_TOKEN', 'RELEASE_PLEASE_TOKEN'], () =>
+      withGitHubEnv({ GITHUB_REPOSITORY: 'owner/repo' }, () => doctorGithub(root))
+    )
+    assert.equal(both.details.secrets.codeFoundryTokenPresent, true)
+    assert.equal(both.details.secrets.releasePleaseTokenPresent, true)
+
+    for (const token of ['CODE_FOUNDRY_TOKEN', 'RELEASE_PLEASE_TOKEN']) {
+      const one = withFakeGh([token], () =>
+        withGitHubEnv({ GITHUB_REPOSITORY: 'owner/repo' }, () => doctorGithub(root))
+      )
+      assert.doesNotMatch(one.warnings.join(' '), /are both absent/i)
+    }
+
+    const neither = withFakeGh([], () =>
+      withGitHubEnv({ GITHUB_REPOSITORY: 'owner/repo' }, () => doctorGithub(root))
+    )
+    const messages = neither.warnings.join(' ')
+    assert.equal(neither.details.secrets.codeFoundryTokenPresent, false)
+    assert.equal(neither.details.secrets.releasePleaseTokenPresent, false)
+    assert.match(messages, /are both absent/i)
+    assert.match(messages, /CODE_FOUNDRY_TOKEN.*RELEASE_PLEASE_TOKEN/)
+    rmSync(root, { recursive: true, force: true })
+  })
+  it('passes dedicated token secrets to PR creation reusable workflows', () => {
+    const draftCallee = readFileSync('.github/workflows/draft-pr.yml', 'utf8')
+    assert.match(draftCallee, /CODE_FOUNDRY_TOKEN:\n\s+required: false/)
+    assert.match(draftCallee, /RELEASE_PLEASE_TOKEN:\n\s+required: false/)
+    assert.match(draftCallee, /HAS_AUTOMATION_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN != '' \|\| secrets\.RELEASE_PLEASE_TOKEN != '' \}\}/)
+    assert.match(draftCallee, /if \[ "\$HAS_AUTOMATION_TOKEN" = true \]; then/)
+    assert.match(draftCallee, /DRAFT_ARGS=\(\)/)
+    assert.match(draftCallee, /\$\{DRAFT_ARGS\[\@\]\}/)
+
+    const draftCaller = readFileSync('.github/workflows/draft-pr_self-ci.yml', 'utf8')
+    assert.match(draftCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
+    assert.match(draftCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}\n\s+RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+
+    const releaseCaller = readFileSync('.github/workflows/release-pr_self-ci.yml', 'utf8')
+    assert.match(releaseCaller, /on:\n\s+push:\n\s+branches: \[staging\]/)
+    assert.match(releaseCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
+    assert.match(releaseCaller, /RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+
+    const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    assert.match(validationCaller, /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/)
+  })
   it('lets a manifest Release Please config own the release strategy', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
@@ -386,17 +502,22 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /name: Release \/ Reconcile\n\s+needs: release\n\s+if: needs\.release\.result == 'success'/)
   })
 
-  it('leaves release pull requests open when auto-merge credentials are unavailable', () => {
+  it('normalizes generated release PR state when draft permissions are unavailable', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
     assert.match(workflow, /name: Detect release credentials/)
-    assert.match(workflow, /echo "auto_merge=false"/)
+    assert.match(workflow, /auto_merge=false/)
+    assert.match(workflow, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+    assert.match(workflow, /name: Normalize generated release PR draft state/)
+    assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+    assert.match(workflow, /gh pr ready --undo/)
+    assert.match(workflow, /No CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN is configured/)
     assert.match(workflow, /name: Leave release pull request for manual merge/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge != 'true'/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge == 'true'/)
-    assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(workflow, /RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
   })
-
   it('allows only release metadata during post-release reconciliation', () => {
     const allowed = approvedReleaseFiles({
       'extra-files': ['version.txt'],

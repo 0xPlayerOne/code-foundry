@@ -107,9 +107,17 @@ export function doctor(root, options = {}) {
   console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by the tiered validation orchestrator.')
   if (options.github) {
     const github = doctorGithub(target)
+    /** @type {{ codeFoundryTokenPresent?: boolean, releasePleaseTokenPresent?: boolean }} */
+    const secrets = github.details.secrets ?? {}
     for (const message of github.warnings) warn(`GitHub: ${message}`)
     for (const message of github.errors) error(`GitHub: ${message}`)
     console.log(`GitHub doctor inspected ${github.details.repository}.`)
+    const codeFoundryToken = secrets.codeFoundryTokenPresent ? 'present' : 'absent'
+    const releasePleaseToken = secrets.releasePleaseTokenPresent ? 'present' : 'absent'
+    console.log(`GitHub tokens: CODE_FOUNDRY_TOKEN=${codeFoundryToken}, RELEASE_PLEASE_TOKEN=${releasePleaseToken}`)
+    if (!secrets.codeFoundryTokenPresent && !secrets.releasePleaseTokenPresent) {
+      warn('GitHub token routing fallback: PR creation will remain draft and requires manual ready-for-review to trigger validation.')
+    }
   }
   if (errors) throw new Error(`Repository doctor found ${errors} error(s).`)
   console.log('Repository doctor passed.')

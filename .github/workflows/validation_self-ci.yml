@@ -3,6 +3,11 @@ name: Code Foundry
 on:
   pull_request:
     branches: [main, staging]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   schedule:
     - cron: '31 6 * * 1'
   workflow_dispatch:

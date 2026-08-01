@@ -18,6 +18,13 @@ on:
         required: false
         type: string
         default: v0.31.12
+    secrets:
+      CODE_FOUNDRY_TOKEN:
+        required: false
+      RELEASE_PLEASE_TOKEN:
+        required: false
+      NPM_TOKEN:
+        required: false
 
 permissions:
   actions: write
@@ -98,9 +105,9 @@ jobs:
       - name: Detect release credentials
         id: credentials
         env:
-          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
         run: |
-          if [ -n "$RELEASE_PLEASE_TOKEN" ]; then
+          if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
             echo "auto_merge=true" >> "$GITHUB_OUTPUT"
           else
             echo "auto_merge=false" >> "$GITHUB_OUTPUT"
@@ -110,17 +117,55 @@ jobs:
         if: steps.profile.outputs.release_type != 'none'
         uses: googleapis/release-please-action@v5
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Normalize generated release PR draft state
+        if: steps.release.outcome == 'success'
+        env:
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t release_prs < <(
+            gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --base main \
+              --json number,headRefName \
+              --jq '.[] | select(.headRefName | startswith("release-please--branches--main")) | .number'
+          )
+
+          if [ ${#release_prs[@]} -eq 0 ]; then
+            exit 0
+          fi
+
+          for pr in "${release_prs[@]}"; do
+            PR_DRAFT=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+              if [ "$PR_DRAFT" = true ]; then
+                gh pr ready "$pr" --repo "$GITHUB_REPOSITORY"
+              fi
+            else
+              if [ "$PR_DRAFT" = false ]; then
+                gh pr ready --undo "$pr" --repo "$GITHUB_REPOSITORY"
+              fi
+              echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. No CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN is configured, so release PRs are left in draft and need manual readiness before validation and merge workflows trigger."
+            fi
+          done
       - name: Leave release pull request for manual merge
         if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge != 'true'
+        env:
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
         run: |
-          echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. RELEASE_PLEASE_TOKEN is not configured, so Code Foundry skipped guarded auto-merge. Configure the token before merging when downstream release workflows must run automatically."
+          if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
+            echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN to enable guarded auto-merge when downstream release workflows require it."
+          fi
+
       - name: Merge generated version pull requests
         if: steps.credentials.outputs.auto_merge == 'true'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           mapfile -t release_prs < <(
@@ -135,11 +180,12 @@ jobs:
             echo 'No generated release pull request is open; nothing to merge.'
             exit 0
           fi
-          node $RUNNER_TEMP/code-foundry/src/cli.mjs release validate-prs
+          node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release validate-prs
           for pr in "${release_prs[@]}"; do
             echo "Waiting for required checks on release PR #$pr"
             checks_seen=false
             for attempt in $(seq 1 60); do
+              : "$attempt"
               if required_count=$(gh pr checks "$pr" \
                 --repo "$GITHUB_REPOSITORY" \
                 --required \
@@ -179,7 +225,7 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -207,7 +253,7 @@ jobs:
           fi
       - name: Reconcile release metadata
         if: steps.staging.outputs.exists == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/cli.mjs release reconcile --github --base main --head staging
+        run: node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release reconcile --github --base main --head staging
       - name: Skip without staging
         if: steps.staging.outputs.exists != 'true'
         run: echo 'No staging branch exists; release reconciliation is not applicable.'
@@ -225,7 +271,8 @@ jobs:
       actions: write
       contents: read
     env:
-      RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+      RELEASE_PLEASE_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+      GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -260,7 +307,7 @@ jobs:
           NODE
       - name: Dispatch post-release hook once
         if: steps.hook.outputs.enabled == 'true' && steps.hook.outputs.workflow != ''
-        run: node $RUNNER_TEMP/code-foundry/src/cli.mjs release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
+        run: node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
       - name: Explain disabled post-release hook
         if: steps.hook.outputs.enabled != 'true' || steps.hook.outputs.workflow == ''
         run: echo 'No post-release workflow configured; artifact delivery is intentionally skipped.'
