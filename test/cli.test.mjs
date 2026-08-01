@@ -1423,7 +1423,7 @@ describe('code-foundry CLI', () => {
     assert.match(segment, /env:\n\s+STAGING_DEPLOY_KEY:\s+\$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
     assert.match(segment, /gh api \/meta/)
     assert.match(segment, /printf '%s\\n' "\$STAGING_DEPLOY_KEY" >/)
-    assert.match(segment, /git remote set-url origin "git@github.com:\$\{GITHUB_REPOSITORY\}\.git"/)
+    assert.match(segment, /git remote set-url --push origin "git@github.com:\$\{GITHUB_REPOSITORY\}\.git"/)
     assert.match(segment, /name: Configure git for trusted reconcile[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT != 'true'/)
     assert.match(segment, /run: gh auth setup-git/)
 
