@@ -46,6 +46,13 @@ workflow refuses to run unless its strategy is exactly `squash`.
 Keeping `main` linear — rebase promotions and squash release PRs — is what
 lets the post-release reconciliation fast-forward or replay `staging` safely.
 
+Protect `staging` with the aggregate `Validation / Gate`, squash-only pull
+requests, and a single GitHub Actions integration bypass. That bypass exists
+only so the trusted post-release reconciliation job can replay pending work
+with an exact `--force-with-lease`; maintainer PATs and administrator roles do
+not bypass the ruleset. The reconciliation job deliberately authenticates with
+`github.token`, not `CODE_FOUNDRY_TOKEN` or `RELEASE_PLEASE_TOKEN`.
+
 ## GitHub Stacks
 
 GitHub Stacks (stacked pull requests) is not part of this topology and does

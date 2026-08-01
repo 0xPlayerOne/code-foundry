@@ -506,6 +506,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /--match-head-commit \"\$release_head\"/)
     assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
     assert.match(workflow, /name: Release \/ Reconcile\n\s+needs: release\n\s+if: needs\.release\.result == 'success'/)
+    assert.match(workflow, /name: Release \/ Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
   it('doctor and sync reject merge strategies outside the audit topology', () => {
