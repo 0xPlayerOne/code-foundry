@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.34.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.33.0...v0.34.0) (2026-08-01)
+
+
+### Features
+
+* **release:** classify reconcile push failures and log sanitized details ([#307](https://github.com/0xPlayerOne/code-foundry/issues/307)) ([0651fca](https://github.com/0xPlayerOne/code-foundry/commit/0651fca3eb4f11eeb21b91462397eef865eee7cc))
+
+
+### Bug Fixes
+
+* **release:** include ssh executable in reconcile transport ([#308](https://github.com/0xPlayerOne/code-foundry/issues/308)) ([49713ed](https://github.com/0xPlayerOne/code-foundry/commit/49713edeaf5262a0ed872aa6d3fdf55927b6e1c5))
+* **release:** keep reconcile fetch over HTTPS ([#305](https://github.com/0xPlayerOne/code-foundry/issues/305)) ([022afad](https://github.com/0xPlayerOne/code-foundry/commit/022afade430a00b9656dcfa50af3056bb27a54e3))
+
 ## [0.33.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.4...v0.33.0) (2026-08-01)
 
 
