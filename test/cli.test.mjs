@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
@@ -23,6 +23,7 @@ import {
 } from '../src/lib/validation-policy.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
+import { reconcileRelease } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
@@ -30,6 +31,83 @@ const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
 const testEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT')
 )
+
+function git(root, args) {
+  return spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+}
+
+function remoteHeadSha(root, branch) {
+  const result = git(root, ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`])
+  if (result.status !== 0) return ''
+  const [sha] = result.stdout.trim().split(/\t/, 1)
+  return sha || ''
+}
+
+/**
+ * Assert main is an ancestor of head in the remote-tracked branch refs.
+ * @param {Object} context
+ * @param {Function} context.run
+ * @param {string} context.base
+ * @param {string} context.head
+ */
+function assertRemoteMainAncestor(context) {
+  const { run, base, head } = context
+  const fetched = run(['fetch', 'origin', base, head])
+  assert.equal(fetched.status, 0, fetched.stderr)
+  const ancestor = run(['merge-base', '--is-ancestor', `origin/${base}`, `origin/${head}`])
+  assert.equal(ancestor.status, 0, ancestor.stderr)
+}
+
+/**
+ * Run a function with temporary GitHub env variables.
+ * @param {Record<string, string | undefined>} env
+ * @param {Function} fn
+ */
+function withGitHubEnv(env, fn) {
+  const previous = {
+    GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY,
+    GH_TOKEN: process.env.GH_TOKEN,
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+  }
+  Object.entries(env).forEach(([key, value]) => {
+    if (value == null) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  })
+  try {
+    return fn()
+  } finally {
+    if (previous.GITHUB_REPOSITORY == null) {
+      delete process.env.GITHUB_REPOSITORY
+    } else {
+      process.env.GITHUB_REPOSITORY = previous.GITHUB_REPOSITORY
+    }
+    if (previous.GH_TOKEN == null) {
+      delete process.env.GH_TOKEN
+    } else {
+      process.env.GH_TOKEN = previous.GH_TOKEN
+    }
+    if (previous.GITHUB_TOKEN == null) {
+      delete process.env.GITHUB_TOKEN
+    } else {
+      process.env.GITHUB_TOKEN = previous.GITHUB_TOKEN
+    }
+  }
+}
+
+function createReconcileWorkspace() {
+  const remote = mkdtempSync(join(tmpdir(), 'code-foundry-remote-'))
+  const root = mkdtempSync(join(tmpdir(), 'code-foundry-workspace-'))
+  git(remote, ['init', '--bare'])
+  const run = (args) => git(root, args)
+  run(['init', '-q'])
+  run(['config', 'user.email', 'test@example.com'])
+  run(['config', 'user.name', 'Test'])
+  run(['remote', 'add', 'origin', remote])
+  return { root, remote, run }
+}
 
 function run(...args) {
   return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
@@ -328,9 +406,8 @@ describe('code-foundry CLI', () => {
       classifyReconciliation({
         mainSha: 'main',
         stagingSha: 'staging',
-        mergeBaseSha: 'staging',
-        mainChangedPaths: ['CHANGELOG.md', 'package.json'],
-        stagingChangedPaths: [],
+        mainOnlyCommits: [{ sha: 'r1', changedPaths: ['CHANGELOG.md', 'package.json'] }],
+        stagingOnlyCommits: [],
         allowed,
       }),
       { action: 'fast-forward', targetSha: 'main', reason: 'main only added approved release metadata.' },
@@ -339,8 +416,8 @@ describe('code-foundry CLI', () => {
       classifyReconciliation({
         mainSha: 'main',
         stagingSha: 'staging',
-        mergeBaseSha: 'staging',
-        mainChangedPaths: ['src/index.ts'],
+        mainOnlyCommits: [{ sha: 'r1', changedPaths: ['src/index.ts'] }],
+        stagingOnlyCommits: [],
         allowed,
       }).action,
       'fail',
@@ -349,13 +426,379 @@ describe('code-foundry CLI', () => {
       classifyReconciliation({
         mainSha: 'main',
         stagingSha: 'staging',
-        mergeBaseSha: 'older',
-        mainChangedPaths: [],
-        stagingChangedPaths: [],
+        mainOnlyCommits: [],
+        stagingOnlyCommits: [],
         allowed,
       }),
       { action: 'aligned', targetSha: 'main', reason: 'Branches have different history but identical content.' },
     )
+  })
+
+  it('recommends replaying staging-only work even when it touches release-only files', () => {
+    const allowed = approvedReleaseFiles()
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mainOnlyCommits: [{ sha: 'r1', changedPaths: ['package.json'] }],
+        stagingOnlyCommits: [{ sha: 's1', changedPaths: ['package.json', 'bun.lock'] }],
+        allowed,
+      }),
+      {
+        action: 'rebase-staging',
+        targetSha: 'main',
+        mainOnly: ['r1'],
+        stagingOnly: ['s1'],
+        reason: 'staging contains unpromoted commits; replay them onto main.',
+      },
+    )
+  })
+
+  it('fails when main-only commits include non-release files', () => {
+    const allowed = approvedReleaseFiles()
+    assert.equal(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mainOnlyCommits: [{ sha: 'main-commit', changedPaths: ['src/index.ts'] }],
+        stagingOnlyCommits: [],
+        allowed,
+      }).action,
+      'fail',
+    )
+    assert.equal(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mainOnlyCommits: [{ sha: 'main-commit', changedPaths: ['src/index.ts'] }],
+        stagingOnlyCommits: [{ sha: 'staging-commit', changedPaths: ['src/feature.ts'] }],
+        allowed,
+      }).action,
+      'fail',
+    )
+  })
+
+  it('surfaces exact reconciliation failure reason from local classification', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return run(['rev-parse', 'HEAD']).stdout.trim()
+    }
+
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
+    run(['add', 'package.json', 'CHANGELOG.md'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'src', 'index.ts'), 'export const x = 1\n')
+    run(['add', 'src/index.ts'])
+    commit('chore(main): touch source')
+
+    assert.throws(
+      () => reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
+      /main contains commits that are not release metadata\. Unexpected paths: src\/index.ts/,
+    )
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('fails when commit metadata inspection is indeterminate', () => {
+    const allowed = approvedReleaseFiles()
+    assert.equal(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mainOnlyCommits: [{ sha: 'main-commit', changedPaths: undefined }],
+        stagingOnlyCommits: [],
+        allowed,
+      }).action,
+      'fail',
+    )
+  })
+
+  it('plans a rebase for the promotion-copy deadlock topology', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-reconcile-deadlock-'))
+    const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+    const readRef = (ref) => {
+      const result = git(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = git(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+    const cherryPick = (sha) => {
+      const result = git(['cherry-pick', sha])
+      assert.equal(result.status, 0, result.stderr)
+    }
+
+    git(['init', '-q'])
+    git(['config', 'user.email', 'test@example.com'])
+    git(['config', 'user.name', 'Test'])
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
+    writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
+    git(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
+    commit('chore: initial')
+    git(['branch', '-M', 'main'])
+
+    git(['checkout', '-q', '-b', 'staging'])
+    writeFileSync(join(root, 'src/feature-a.ts'), 'export const a = 1\n')
+    git(['add', 'src/feature-a.ts'])
+    const featureAOnStaging = commit('feat: add a')
+    writeFileSync(join(root, 'src/feature-b.ts'), 'export const b = 1\n')
+    git(['add', 'src/feature-b.ts'])
+    const featureBOnStaging = commit('feat: add b')
+
+    git(['checkout', '-q', 'main'])
+    cherryPick(featureAOnStaging)
+    cherryPick(featureBOnStaging)
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+    appendFileSync(join(root, 'CHANGELOG.md'), '\n## 1.0.1\n', 'utf8')
+    git(['add', 'package.json', 'CHANGELOG.md'])
+    const releaseCommitSha = commit('chore(main): release 1.0.1')
+
+    git(['checkout', '-q', 'staging'])
+    writeFileSync(join(root, 'src/feature-c.ts'), 'export const c = 1\n')
+    git(['add', 'src/feature-c.ts'])
+    const featureOnlySha = commit('feat: add c')
+
+    const beforeMain = readRef('main')
+    const beforeStaging = readRef('staging')
+    const plan = reconcileRelease(root, { github: false, dryRun: true, base: 'main', head: 'staging' })
+    assert.equal(plan.action, 'rebase-staging')
+    assert.deepEqual(plan.mainOnly, [releaseCommitSha])
+    assert.equal(plan.stagingOnly.length, 1)
+    assert.equal(plan.stagingOnly[0], featureOnlySha)
+    assert.equal(beforeMain, readRef('main'))
+    assert.equal(beforeStaging, readRef('staging'))
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('replays pending staging-only work on a bare remote', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
+    writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
+    run(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    writeFileSync(join(root, 'src/feature-pending.ts'), 'export const pending = 1\n')
+    run(['add', 'src/feature-pending.ts'])
+    commit('feat: pending work')
+
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+    appendFileSync(join(root, 'CHANGELOG.md'), '\n## 1.0.1\n', 'utf8')
+    run(['add', 'package.json', 'CHANGELOG.md'])
+    commit('chore(main): release 1.0.1')
+
+    run(['push', '-u', 'origin', 'main'])
+    run(['checkout', '-q', 'staging'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const before = remoteHeadSha(root, 'staging')
+    const plan = withGitHubEnv({
+      GITHUB_REPOSITORY: 'owner/repo',
+      GH_TOKEN: 'token',
+    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    const after = remoteHeadSha(root, 'staging')
+
+    assert.equal(plan.action, 'rebase-staging')
+    assert.equal(plan.synchronization, 'replay')
+    assert.notEqual(before, after)
+    assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
+    const replayFile = run(['show', `${after}:src/feature-pending.ts`])
+    assert.equal(replayFile.status, 0)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('does not mutate remote staging when replay conflicts and leaves it unchanged', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
+    run(['add', 'package.json', 'CHANGELOG.md'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1-staging"}\n')
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\n## 1.0.1-staging\n')
+    run(['add', 'package.json', 'CHANGELOG.md'])
+    commit('feat: pending release-only change')
+
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1-main"}\n')
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\n## 1.0.1-main\n')
+    run(['add', 'package.json', 'CHANGELOG.md'])
+    commit('chore(main): release patch')
+
+    run(['push', '-u', 'origin', 'main'])
+    run(['checkout', '-q', 'staging'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const before = remoteHeadSha(root, 'staging')
+    const runReconcile = () => withGitHubEnv({
+      GITHUB_REPOSITORY: 'owner/repo',
+      GH_TOKEN: 'token',
+    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    assert.throws(runReconcile, /conflict|Cherry-pick|replay/)
+    const after = remoteHeadSha(root, 'staging')
+    assert.equal(before, after)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('retries stale leases without clobbering concurrent remote updates', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
+    run(['add', 'package.json', 'src/index.ts'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    writeFileSync(join(root, 'src/feature-pending.ts'), 'export const pending = 1\n')
+    run(['add', 'src/feature-pending.ts'])
+    commit('feat: pending work')
+
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+    run(['add', 'package.json'])
+    commit('chore(main): release 1.0.1')
+
+    run(['push', '-u', 'origin', 'main'])
+    run(['checkout', '-q', 'staging'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const toolDir = mkdtempSync(join(tmpdir(), 'code-foundry-git-wrapper-'))
+    const wrapperScript = join(toolDir, 'git')
+    const originalPath = process.env.PATH
+    const originalGitPath = spawnSync('sh', ['-lc', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+    const triggerFile = join(toolDir, 'triggered')
+    writeFileSync(wrapperScript, `#!/bin/sh\nif [ \"$1\" = \"push\" ] && [ \"$2\" = \"origin\" ] && [ ! -f \"$TRIGGER_FILE\" ]; then\n  printf 1 > \"$TRIGGER_FILE\"\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" checkout -q staging\n  printf 'export const concurrent = true\\n' > \"$REPO_ROOT/src/concurrent.ts\"\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" add src/concurrent.ts\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" commit -m 'chore: concurrent staging update'\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" push -q origin staging\nfi\nexec \"$ORIGINAL_GIT\" \"$@\"\n`)
+    chmodSync(wrapperScript, 0o755)
+    process.env.TRIGGER_FILE = triggerFile
+    process.env.ORIGINAL_GIT = originalGitPath
+    process.env.REPO_ROOT = root
+    process.env.PATH = `${toolDir}:${originalPath}`
+
+    const before = remoteHeadSha(root, 'staging')
+    let plan
+    try {
+      plan = withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    } finally {
+      process.env.PATH = originalPath
+      delete process.env.TRIGGER_FILE
+      delete process.env.ORIGINAL_GIT
+      delete process.env.REPO_ROOT
+    }
+
+    assert.equal(plan.action, 'rebase-staging')
+    assert.equal(plan.synchronization, 'replay')
+    const after = remoteHeadSha(root, 'staging')
+    assert.notEqual(before, after)
+    assert.equal(run(['show', `${after}:src/concurrent.ts`]).status, 0)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+    rmSync(toolDir, { recursive: true, force: true })
+  })
+
+  it('is idempotent when patch-equivalent branches are already synchronized', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const readRef = (ref) => {
+      const result = run(['rev-parse', ref])
+      assert.equal(result.status, 0, result.stderr)
+      return result.stdout.trim()
+    }
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return readRef('HEAD')
+    }
+
+    writeFileSync(join(root, 'src.txt'), 'base\n')
+    run(['add', 'src.txt'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+
+    run(['checkout', '-q', '-b', 'staging'])
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'src.txt'), 'main\n')
+    run(['add', 'src.txt'])
+    const mainCommit = commit('chore(main): release patch')
+
+    run(['checkout', '-q', 'staging'])
+    run(['cherry-pick', mainCommit])
+    run(['push', '-u', 'origin', 'main'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const firstPlan = withGitHubEnv({
+      GITHUB_REPOSITORY: 'owner/repo',
+      GH_TOKEN: 'token',
+    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    assert.equal(firstPlan.action, 'aligned')
+    assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
+
+    const secondPlan = withGitHubEnv({
+      GITHUB_REPOSITORY: 'owner/repo',
+      GH_TOKEN: 'token',
+    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    assert.equal(secondPlan.action, 'aligned')
+    assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
+    assert.equal(remoteHeadSha(root, 'staging'), remoteHeadSha(root, 'main'))
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
   })
 
   it('suppresses only release-only divergence from a rebased promotion', () => {

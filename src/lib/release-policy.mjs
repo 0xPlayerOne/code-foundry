@@ -217,41 +217,59 @@ function compareVersions(a, b) {
 }
 
 /**
- * Classify the relationship between main and staging. A fast-forward is safe
- * only when main is the ancestor of staging or staging is the ancestor of main
- * and the intervening main files are release metadata.
- * @param {{ mainSha: string, stagingSha: string, mergeBaseSha?: string, mainChangedPaths?: string[], stagingChangedPaths?: string[], allowed?: Set<string> }} input
+ * Classify the relationship between main and staging using commit-level divergence.
+ * Any non-release main-only commit fails. Any staging-only commit triggers a replay
+ * path so no staging-only work can be silently discarded.
+ * @param {{
+ *   mainSha: string,
+ *   stagingSha: string,
+ *   mainOnlyCommits?: Array<{ sha?: string, changedPaths?: string[] }>,
+ *   stagingOnlyCommits?: Array<{ sha?: string, changedPaths?: string[] }>,
+ *   allowed?: Set<string>,
+ * }} input
  */
 export function classifyReconciliation(input) {
   const {
     mainSha,
     stagingSha,
-    mergeBaseSha = '',
-    mainChangedPaths = [],
-    stagingChangedPaths = [],
+    mainOnlyCommits = [],
+    stagingOnlyCommits = [],
     allowed = approvedReleaseFiles(),
   } = input
   if (!mainSha || !stagingSha) return { action: 'fail', reason: 'Missing branch SHA.' }
   if (mainSha === stagingSha) return { action: 'aligned', reason: 'Branches already point at the same commit.' }
-  if (mainSha === mergeBaseSha) {
-    return { action: 'none', reason: 'staging contains commits that are not on main; no release-only reconciliation is needed.' }
+  const hasIndeterminateMainCommit = mainOnlyCommits.some((commit) => typeof commit.sha !== 'string' || !Array.isArray(commit.changedPaths))
+  if (hasIndeterminateMainCommit) return {
+    action: 'fail',
+    reason: 'Unable to inspect main-only commit metadata.',
   }
-  if (!mainChangedPaths.length && !stagingChangedPaths.length) {
-    return { action: 'aligned', targetSha: mainSha, reason: 'Branches have different history but identical content.' }
+  const hasIndeterminateStagingCommit = stagingOnlyCommits.some((commit) => typeof commit.sha !== 'string' || !Array.isArray(commit.changedPaths))
+  if (hasIndeterminateStagingCommit) return {
+    action: 'fail',
+    reason: 'Unable to inspect staging-only commit metadata.',
   }
-  const unexpectedMain = unexpectedReleasePaths(mainChangedPaths, allowed)
-  const unexpectedStaging = unexpectedReleasePaths(stagingChangedPaths, allowed)
-  if (unexpectedMain.length || unexpectedStaging.length) {
+  const unexpectedMain = unexpectedReleasePaths(
+    [...new Set(mainOnlyCommits.flatMap((commit) => commit.changedPaths || []))],
+    allowed,
+  )
+  if (unexpectedMain.length) {
     return {
       action: 'fail',
-      reason: 'Branch divergence includes repository code or configuration.',
-      unexpected: [...new Set([...unexpectedMain, ...unexpectedStaging])],
+      reason: 'main contains commits that are not release metadata.',
+      unexpected: unexpectedMain,
     }
   }
-  if (stagingSha === mergeBaseSha) {
-    return { action: 'fast-forward', targetSha: mainSha, reason: 'main only added approved release metadata.' }
+  if (stagingOnlyCommits.length) {
+    return {
+      action: 'rebase-staging',
+      targetSha: mainSha,
+      mainOnly: mainOnlyCommits.map((commit) => commit.sha).filter(Boolean),
+      stagingOnly: stagingOnlyCommits.map((commit) => commit.sha).filter(Boolean),
+      reason: 'staging contains unpromoted commits; replay them onto main.',
+    }
   }
-  return { action: 'pull-request', targetSha: mainSha, reason: 'Branches diverged, but only approved release metadata changed.' }
+  if (mainOnlyCommits.length) return { action: 'fast-forward', targetSha: mainSha, reason: 'main only added approved release metadata.' }
+  return { action: 'aligned', targetSha: mainSha, reason: 'Branches have different history but identical content.' }
 }
 
 export { DEFAULT_RELEASE_FILES }
