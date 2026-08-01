@@ -48,7 +48,7 @@ docs/*  test/*  refactor/*         │              │
 | `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |
 | `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |
 
-The default Git workflow is `staging-release`: topic branches merge into `staging` (typically after rebasing), then a promotion PR moves validated changes into `main`, followed by the versioned release PR. The default release merge strategy is `merge`, matching your preference for merge-commit promotions from staging to main. Configure `merge_strategy` as `rebase` or `squash` in `.github/code-foundry.yml` if a repository intentionally differs. Re-align `staging` with `main` after a release when needed.
+The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.
 
 ## Before you start
 
@@ -107,7 +107,7 @@ For maintainers, trusted contributors, and automation agents:
 
 8. Push the branch and open a pull request into `staging`.
 9. Address review feedback and failed checks on the same branch.
-10. Merge using the repository's configured `merge_strategy` after required checks pass and the change is ready.
+10. Merge with a squash after required checks pass and the change is ready; feature PRs land on `staging` with squash merges.
 
 ### Internal agent handoff
 
@@ -153,15 +153,17 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 ## Workflow and check behavior
 
-| Event                            | Expected automation                      |
-| -------------------------------- | ---------------------------------------- |
-| Push to `main` or `staging`      | CI, Test, Security, and CodeQL workflows |
-| Pull request targeting `staging` | CI, Test, Security, and CodeQL workflows |
-| Push to a working branch         | Draft PR workflow                        |
-| Push to `staging`                | Release PR workflow                      |
-| Version tag such as `v1.2.3`     | Release workflow                         |
+| Event | Expected automation |
+| --- | --- |
+| Pull request targeting `staging` | Fast validation: CI plus unit tests, ending in `Validation / Gate` |
+| Ordinary pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |
+| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate` |
+| Scheduled or manual validation | Full audit tier |
+| Push to a working branch | Draft PR workflow |
+| Push to `staging` | Promotion PR workflow; canonical validation waits for the PR event |
+| Push to `main` | Release workflow; canonical validation already ran on the merged PR |
 
-The workflows use separate concurrency groups keyed by the commit under test. A newer run for the same commit cancels a duplicate event-triggered run, while newer commits cancel older runs and independent CI, Test, Security, and CodeQL workflows continue in parallel.
+The single validation caller keys concurrency by event and pull-request head. A newer update to the same pull request cancels its superseded validation run; scheduled and manual audits remain independent. The mode-aware orchestrator fans out only the jobs required by that event and always concludes with the stable aggregate gate.
 
 Required checks are enforced by branch protection rulesets/branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 
@@ -173,10 +175,11 @@ Security checks can be skipped when repository visibility or the GitHub plan doe
 
 ## Review and merge protocol
 
-| Change            | Target    | Merge gate                                                |
-| ----------------- | --------- | --------------------------------------------------------- |
-| Working branch    | `staging` | All applicable required checks pass                       |
-| `staging` release | `main`    | Current staging checks, release review, and rollout notes |
+| Change | Target | Merge method | Merge gate |
+| ----------------- | --------- | ------------------------------------------------------- | --------------------------------------------------------- |
+| Working branch    | `staging` | Squash                                                  | All applicable required checks pass                       |
+| `staging` → `main` promotion | `main` | Rebase (`merge_strategy`)                   | Current staging checks, release review, and rollout notes |
+| Release Please version PR | `main` | Squash (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                  |
 
 Reviewers focus on correctness, security, maintainability, test coverage, operational impact, and compatibility. Authors remain responsible for responding to feedback and verifying the final commit.
 

@@ -1,6 +1,7 @@
 // @ts-check
 
-import { existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { approvedReleaseFiles, buildReleaseRecoveryPlan, classifyReconciliation, readReleaseConfig, selectGeneratedReleasePrs, validateReleasePullRequests } from '../lib/release-policy.mjs'
@@ -9,10 +10,11 @@ import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */
 
 /**
- * Reconcile staging after Release Please updates main. The local mode is
- * deterministic and suitable for CI; --github mirrors staging onto main's
- * tip through the GitHub API (fast-forward, then forced, then a linear sync
- * commit) and otherwise fails closed.
+ * Reconcile staging after Release Please updates main.
+ *
+ * Local mode is deterministic and suitable for CI; --github uses strict
+ * lease-based mirror retries with fresh refetch/reclassification and fails
+ * closed if classification or remote mutation fails.
  * @param {string} root
  * @param {ReleaseOptions} options
  */
@@ -20,51 +22,194 @@ export function reconcileRelease(root, options) {
   const target = resolve(root)
   const base = options.base || 'main'
   const head = options.head || 'staging'
-  const mainSha = git(target, ['rev-parse', `origin/${base}`]) || git(target, ['rev-parse', base])
-  const stagingSha = git(target, ['rev-parse', `origin/${head}`]) || git(target, ['rev-parse', head])
-  const mergeBaseSha = git(target, ['merge-base', mainSha, stagingSha])
-  // Compare the branch tips directly. Release Please may rebase or recreate
-  // commits during promotion, leaving equivalent code with different ancestry.
-  // Comparing both tips preserves the fail-closed behavior for real content
-  // differences without mistaking that normal history rewrite for a change.
-  const mainChangedPaths = diffNames(target, stagingSha, mainSha)
-  const stagingChangedPaths = diffNames(target, mainSha, stagingSha)
-  const plan = classifyReconciliation({
-    mainSha,
-    stagingSha,
-    mergeBaseSha,
-    mainChangedPaths,
-    stagingChangedPaths,
-    allowed: approvedReleaseFiles(readReleaseConfig(target)),
-  })
-  console.log(JSON.stringify({ base, head, ...plan }, null, 2))
-  if (plan.action === 'fail') throw new Error(plan.reason + (plan.unexpected?.length ? ` Unexpected paths: ${plan.unexpected.join(', ')}` : ''))
-  if (!['fast-forward', 'pull-request', 'aligned'].includes(plan.action) || !options.github || options.dryRun) return plan
-  if (!plan.targetSha) return plan
+  const allowed = approvedReleaseFiles(readReleaseConfig(target))
+  let state = resolveReconciliationState(target, base, head, allowed, options.github)
+  if (state.plan.action === 'fail') {
+    throw new Error(formatReconciliationFailure(state.plan))
+  }
+  console.log(JSON.stringify({ base, head, ...state.plan }, null, 2))
+  if (!['fast-forward', 'rebase-staging', 'aligned'].includes(state.plan.action) || !options.github || options.dryRun) return state.plan
+  if (state.plan.action === 'aligned' && state.mainSha === state.stagingSha) return state.plan
   if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   if (!token) throw new Error('GH_TOKEN or GITHUB_TOKEN is required for --github reconciliation.')
-  const targetSha = /** @type {string} */ (plan.targetSha)
-  // 1. Verified fast-forward through the API (linear, no force).
-  const fastForward = spawnSync('gh', [
-    'api', '--method', 'PATCH', `repos/${process.env.GITHUB_REPOSITORY}/git/refs/heads/${head}`,
-    '-f', `sha=${targetSha}`, '-F', 'force=false',
-  ], { cwd: target, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token } })
-  if (fastForward.status === 0) return { ...plan, synchronization: 'fast-forward' }
-  // 2. Forced update when staging may be rewritten without violating the
-  // linear-history rule (main's tip is linear and already contains staging's
-  // content, so nothing unpromoted is lost).
-  const forced = spawnSync('gh', [
-    'api', '--method', 'PATCH', `repos/${process.env.GITHUB_REPOSITORY}/git/refs/heads/${head}`,
-    '-f', `sha=${targetSha}`, '-F', 'force=true',
-  ], { cwd: target, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token } })
-  if (forced.status === 0) return { ...plan, synchronization: 'forced' }
-  // 3. Linear sync commit fallback: staging keeps its history and receives
-  // main's tree as a single-parent commit, which the ruleset always accepts.
-  const syncSha = createLinearSyncCommit(target, stagingSha, targetSha)
-  const push = spawnSync('git', ['push', 'origin', `${syncSha}:refs/heads/${head}`], { cwd: target, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token } })
-  if (push.status !== 0) throw new Error(`GitHub refused the linear synchronization of ${head}.`)
-  return { ...plan, syncSha, synchronization: 'linear-commit' }
+  const maxAttempts = 3
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    state = resolveReconciliationState(target, base, head, allowed, true)
+    if (state.plan.action === 'fail') throw new Error(formatReconciliationFailure(state.plan))
+    if (state.plan.action === 'aligned' && state.mainSha === state.stagingSha) return state.plan
+    const mutation = executeReconciliationMutation(target, head, state)
+    if (mutation.success) return { ...state.plan, ...mutation.result }
+    if (!mutation.retry) throw new Error(mutation.error)
+    const remoteSha = remoteRefSha(target, head)
+    if (remoteSha === state.stagingSha) {
+      throw new Error(`${head} synchronization was rejected by an exact lease while remote ${head} tip remained ${state.stagingSha}. ` +
+        'Update branch protection or remote policy to permit this mutation, then retry.')
+    }
+  }
+  throw new Error(`Reconciliation of ${head} was retried but failed while the branch moved concurrently.`)
+}
+
+/**
+ * Resolve current reconciliation state and plan from current refs.
+ * @param {string} target
+ * @param {string} base
+ * @param {string} head
+ * @param {Set<string>} allowed
+ * @param {boolean} requireRemote
+ */
+function resolveReconciliationState(target, base, head, allowed, requireRemote) {
+  validateRefName(base)
+  validateRefName(head)
+  if (requireRemote) refreshRemoteRefs(target, base, head)
+  const mainSha = resolveRef(target, base, requireRemote)
+  const stagingSha = resolveRef(target, head, requireRemote)
+  if (!mainSha || !stagingSha) {
+    return {
+      plan: {
+        action: 'fail',
+        reason: `Missing ${!mainSha ? `main (${base})` : `staging (${head})`} or staged branch ref during reconciliation.`,
+      },
+      mainSha,
+      stagingSha,
+      mainOnlyCommits: [],
+      stagingOnlyCommits: [],
+    }
+  }
+  try {
+    const mainOnlyCommits = divergentCommits(target, stagingSha, mainSha)
+    const stagingOnlyCommits = divergentCommits(target, mainSha, stagingSha)
+    const plan = classifyReconciliation({
+      mainSha,
+      stagingSha,
+      mainOnlyCommits,
+      stagingOnlyCommits,
+      allowed,
+    })
+    return { plan, mainSha, stagingSha, mainOnlyCommits, stagingOnlyCommits }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      plan: {
+        action: 'fail',
+        reason: `Failed to inspect divergent commits: ${message}`,
+      },
+      mainSha,
+      stagingSha,
+      mainOnlyCommits: [],
+      stagingOnlyCommits: [],
+    }
+  }
+}
+
+/** @param {{ reason: string, unexpected?: string[] }} plan */
+function formatReconciliationFailure(plan) {
+  return `${plan.reason}${plan.unexpected?.length ? ` Unexpected paths: ${plan.unexpected.join(', ')}` : ''}`
+}
+
+/** @param {string} ref */
+function validateRefName(ref) {
+  const result = spawnSync('git', ['check-ref-format', '--branch', ref], { encoding: 'utf8' })
+  if (result.status !== 0) throw new Error(`Invalid branch reference: ${ref}`)
+}
+
+/** @param {string} target @param {string} ref @param {boolean} requireRemote @returns {string} */
+function resolveRef(target, ref, requireRemote) {
+  const remote = git(target, ['rev-parse', `origin/${ref}`])
+  if (remote) return remote
+  if (!requireRemote) return git(target, ['rev-parse', ref])
+  return ''
+}
+
+/** @param {string} target @param {string} base @param {string} head */
+function refreshRemoteRefs(target, base, head) {
+  const result = spawnSync('git', ['fetch', 'origin', base, head], { cwd: target, encoding: 'utf8' })
+  if (result.status !== 0) throw new Error(`Failed to refresh origin/${base} and origin/${head} before reconciliation.`)
+}
+
+/** @param {string} target @param {string} branch */
+function remoteRefSha(target, branch) {
+  const result = spawnSync('git', ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`], { cwd: target, encoding: 'utf8' })
+  if (result.status !== 0) return ''
+  const [sha] = result.stdout.trim().split(/\t/, 1)
+  return sha || ''
+}
+
+/**
+ * Reconcile a single attempt from fresh state.
+ * @param {string} target
+ * @param {string} head
+ * @param {{
+ *  plan: ReturnType<typeof classifyReconciliation>,
+ *  mainSha: string,
+ *  stagingSha: string,
+ *  mainOnlyCommits: Array<{ sha: string, changedPaths: string[] }>,
+ *  stagingOnlyCommits: Array<{ sha: string, changedPaths: string[] }>,
+ * }} state
+ */
+function executeReconciliationMutation(target, head, state) {
+  if (!state.plan.targetSha) return { success: false, retry: false, error: `No target SHA for ${head} reconciliation.` }
+  if (state.plan.action === 'rebase-staging') {
+    const replaySha = replayOntoMain(target, state.mainSha, state.stagingOnlyCommits)
+    const push = pushWithLease(target, head, state.stagingSha, replaySha)
+    if (push.status === 0) return { success: true, result: { synchronization: 'replay', replaySha } }
+    return { success: false, retry: true, error: `Git push of replayed ${head} history failed: ${push.message}` }
+  }
+  const targetSha = /** @type {string} */ (state.plan.targetSha)
+  const leased = pushWithLease(target, head, state.stagingSha, targetSha)
+  if (leased.status === 0) return { success: true, result: { synchronization: state.plan.action === 'aligned' ? 'synced' : 'leased' } }
+  return { success: false, retry: true, error: `${head} synchronization failed with lease: ${leased.message}` }
+}
+
+/** @param {string} target @param {string} head @param {string} expectedSha @param {string} tipSha */
+function pushWithLease(target, head, expectedSha, tipSha) {
+  const result = spawnSync('git', [
+    'push',
+    'origin',
+    `--force-with-lease=refs/heads/${head}:${expectedSha}`,
+    `${tipSha}:refs/heads/${head}`,
+  ], { cwd: target, encoding: 'utf8' })
+  return {
+    status: result.status,
+    message: result.stdout?.trim() || result.stderr?.trim() || `push with lease failed for ${head}.`,
+  }
+}
+
+/**
+ * Replay staging-only commits onto a detached worktree at main.
+ * @param {string} target
+ * @param {string} mainSha
+ * @param {Array<{ sha: string, changedPaths: string[] }>} commits
+ */
+function replayOntoMain(target, mainSha, commits) {
+  const orderedCommits = commits.map((commit) => commit.sha).filter(Boolean)
+  if (!orderedCommits.length) return mainSha
+  const workspace = mkdtempSync(join(tmpdir(), 'code-foundry-reconcile-'))
+  const identityArgs = [
+    '-c',
+    'user.name=github-actions[bot]',
+    '-c',
+    'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+  ]
+  try {
+    const added = spawnSync('git', ['worktree', 'add', '--detach', workspace, mainSha], { cwd: target, encoding: 'utf8' })
+    if (added.status !== 0) throw new Error(`Failed to create temporary replay worktree: ${added.stderr?.trim() || added.stdout?.trim()}`)
+    for (const sha of orderedCommits) {
+      const cherryPick = spawnSync('git', [...identityArgs, 'cherry-pick', sha], { cwd: workspace, encoding: 'utf8' })
+      if (cherryPick.status !== 0) {
+        spawnSync('git', ['cherry-pick', '--abort'], { cwd: workspace, encoding: 'utf8' })
+        throw new Error(`Cherry-pick of ${sha} failed while replaying staging commits.`)
+      }
+    }
+    const replayTip = git(workspace, ['rev-parse', 'HEAD'])
+    if (!replayTip) throw new Error('Failed to resolve replay tip SHA.')
+    const ancestry = spawnSync('git', ['merge-base', '--is-ancestor', mainSha, replayTip], { cwd: workspace, encoding: 'utf8' })
+    if (ancestry.status !== 0) throw new Error('Replayed head is not based on the current main tip.')
+    return replayTip
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', workspace], { cwd: target, encoding: 'utf8' })
+    rmSync(workspace, { recursive: true, force: true })
+  }
 }
 
 /**
@@ -148,29 +293,36 @@ function git(root, args) {
   return result.status === 0 ? result.stdout.trim() : ''
 }
 
-/**
- * Build a linear commit whose tree equals main's tip and whose parent is the
- * current staging tip. Staging requires linear history and main's tip almost
- * always sits behind promotion merge commits, so a direct fast-forward to
- * main's tip is rejected by the branch ruleset ("must not contain merge
- * commits"). A single-parent commit is always pushable and keeps staging
- * content-identical to main.
- * @param {string} root @param {string} parentSha @param {string} mainSha @returns {string}
- */
-function createLinearSyncCommit(root, parentSha, mainSha) {
-  const tree = git(root, ['rev-parse', `${mainSha}^{tree}`])
-  if (!tree) throw new Error('Failed to resolve the target tree.')
-  const identity = ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com']
-  const result = spawnSync('git', [...identity, 'commit-tree', tree, '-p', parentSha, '-m', 'chore(release): synchronize staging with main'], { cwd: resolve(root), encoding: 'utf8' })
-  if (result.status !== 0) throw new Error(`Failed to create the synchronization commit: ${result.stderr.trim()}`)
-  return result.stdout.trim()
+/** @param {string} root @param {string} from @param {string} to @returns {Array<{ sha: string, changedPaths: string[] }>} */
+function divergentCommits(root, from, to) {
+  if (!from || !to || from === to) return []
+  const result = spawnSync('git', [
+    'log',
+    '--cherry-pick',
+    '--no-merges',
+    '--left-right',
+    '--reverse',
+    '--pretty=tformat:%m%H',
+    `${from}...${to}`,
+  ], { cwd: root, encoding: 'utf8' })
+  if (result.status !== 0) {
+    throw new Error(`Failed to enumerate divergent commits between ${from} and ${to}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+  }
+  return result.stdout
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('>'))
+    .map((line) => ({
+      sha: line.slice(1),
+      changedPaths: commitChangedPaths(root, line.slice(1)),
+    }))
+    .filter((entry) => entry.sha)
 }
 
-/** @param {string} root @param {string} from @param {string} to @returns {string[]} */
-function diffNames(root, from, to) {
-  if (!from || !to || from === to) return []
-  const result = spawnSync('git', ['diff', '--name-only', from, to], { cwd: root, encoding: 'utf8' })
-  return result.status === 0 ? result.stdout.split(/\r?\n/).filter(Boolean) : []
+/** @param {string} root @param {string} commitSha @returns {string[]} */
+function commitChangedPaths(root, commitSha) {
+  const result = spawnSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', commitSha], { cwd: root, encoding: 'utf8' })
+  if (result.status !== 0) throw new Error(`Unable to read changed paths for commit ${commitSha}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+  return result.stdout.split(/\r?\n/).filter(Boolean)
 }
 
 /** @param {string} root @param {string[]} args @returns {unknown} */

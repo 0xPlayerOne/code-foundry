@@ -6,6 +6,8 @@ import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
 import { configured, readConfig } from './lib/config.mjs'
+import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
+import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
 
 const root = process.cwd()
 const config = readConfig(resolve(root, '.github/code-foundry.yml'))
@@ -41,6 +43,57 @@ function hasScript(name) {
 
 function readPackage() {
   try { return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) } catch { return null }
+}
+
+/** @param {string} task */
+function validation(task) {
+  if (task === 'mode') {
+    writeOutput('mode', classifyValidationMode({
+      eventName: process.env.FOUNDRY_EVENT_NAME ?? '',
+      baseRef: process.env.FOUNDRY_BASE_REF ?? '',
+      headRef: process.env.FOUNDRY_HEAD_REF ?? '',
+    }))
+    return
+  }
+  if (task === 'gate') {
+    const mode = process.env.FOUNDRY_MODE ?? ''
+    const gate = evaluateValidationGate({
+      mode,
+      results: {
+        ci: process.env.FOUNDRY_CI,
+        test: process.env.FOUNDRY_TEST,
+        security: process.env.FOUNDRY_SECURITY,
+        codeql: process.env.FOUNDRY_CODEQL,
+        'release-policy': process.env.FOUNDRY_RELEASE_POLICY,
+      },
+    })
+    if (gate.valid) {
+      console.log(`Validation gate passed for ${mode} mode.`)
+      return
+    }
+    for (const failure of gate.failures) console.error(`::error::${failure.job}: ${failure.result}`)
+    process.exitCode = 1
+    return
+  }
+  if (task === 'release_diff') {
+    const baseSha = process.env.FOUNDRY_BASE_SHA ?? ''
+    const changedPaths = baseSha ? capture('git', ['diff', '--name-only', `${baseSha}...HEAD`]).split(/\r?\n/) : []
+    const result = validateGeneratedReleaseDiff({
+      headRef: process.env.FOUNDRY_HEAD_REF ?? '',
+      headRepo: process.env.FOUNDRY_HEAD_REPO ?? '',
+      repository: process.env.FOUNDRY_REPOSITORY ?? '',
+      changedPaths,
+      config: readReleaseConfig(root),
+    })
+    if (!result.valid) {
+      for (const error of result.errors) console.error(`::error::${error}`)
+      process.exitCode = 1
+      return
+    }
+    console.log(`Release policy passed: ${result.changedPaths.length} approved changed path(s).`)
+    return
+  }
+  throw new Error(`Unknown validation task: ${task || '(missing)'}`)
 }
 
 /** @param {string} key @param {unknown} value */
@@ -347,6 +400,7 @@ try {
   else if (area === 'security') security(task, ecosystem)
   else if (area === 'codeql') codeql()
   else if (area === 'profile') printProfile(task)
+  else if (area === 'validation') validation(task)
   else if (area === 'pre-commit') preCommit()
   else throw new Error(`Unknown runtime command: ${area || '(missing)'}`)
 } catch (error) {
