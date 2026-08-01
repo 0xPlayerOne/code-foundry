@@ -33,7 +33,6 @@ on:
         required: false
         type: number
         default: 1
-
 permissions:
   actions: read
   contents: read
@@ -76,17 +75,19 @@ jobs:
         id: security
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
         run: |
           status="disabled"
-          if [ "${{ github.event.repository.visibility }}" = "public" ]; then
+          if [ "$REPOSITORY_VISIBILITY" = "public" ]; then
             status="enabled"
           else
             status="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.security_and_analysis.code_security.status // "disabled"' 2>/dev/null || printf 'disabled')"
           fi
           printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 2
           filter: blob:none
           sparse-checkout: |
@@ -101,8 +102,9 @@ jobs:
             package-lock.json
           sparse-checkout-cone-mode: false
       - name: Runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -138,14 +140,17 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.actions_available == 'true' &&
           needs.detect.outputs.actions_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Runtime
         if: >-
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.actions_available == 'true' &&
           needs.detect.outputs.actions_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -193,14 +198,17 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.javascript_available == 'true' &&
           needs.detect.outputs.javascript_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Runtime
         if: >-
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.javascript_available == 'true' &&
           needs.detect.outputs.javascript_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -248,14 +256,17 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.python_available == 'true' &&
           needs.detect.outputs.python_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Runtime
         if: >-
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.python_available == 'true' &&
           needs.detect.outputs.python_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -308,14 +319,17 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.rust_available == 'true' &&
           needs.detect.outputs.rust_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Runtime
         if: >-
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.rust_available == 'true' &&
           needs.detect.outputs.rust_changed == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -388,7 +402,7 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.rust_available == 'true' &&
           needs.detect.outputs.rust_changed == 'true'
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         with:
           languages: rust
           build-mode: ${{ needs.detect.outputs.rust_build_mode }}
@@ -399,7 +413,7 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.rust_available == 'true' &&
           needs.detect.outputs.rust_changed == 'true'
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         with:
           category: /language:rust/${{ steps.scope.outputs.scope_id }}
           upload-database: false

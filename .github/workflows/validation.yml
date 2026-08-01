@@ -57,6 +57,11 @@ on:
         required: false
         type: number
         default: 1
+    secrets:
+      TURBO_TOKEN:
+        required: false
+      NEXTAUTH_SECRET:
+        required: false
 
 # The orchestrator keeps the union of permissions needed by the chain it calls
 # (CodeQL uploads require security-events: write). Nested reusable workflows
@@ -76,7 +81,9 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.ci-runner }}
-    secrets: inherit
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
 
   test:
     name: Test
@@ -88,7 +95,8 @@ jobs:
       runner: ${{ inputs.test-runner }}
       unit-runner: ${{ inputs.unit-runner }}
       unit-only: ${{ inputs.mode == 'fast' }}
-    secrets: inherit
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
   security:
     name: Security
@@ -98,7 +106,6 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.security-runner }}
-    secrets: inherit
 
   codeql:
     name: CodeQL
@@ -111,7 +118,6 @@ jobs:
       rust-shards: ${{ inputs.rust-shards }}
       rust-threads: ${{ inputs.rust-threads }}
       rust-max-parallel: ${{ inputs.rust-max-parallel }}
-    secrets: inherit
 
   release-policy:
     name: Release Policy
@@ -120,13 +126,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0
           filter: blob:none
       - name: Checkout runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -160,8 +168,9 @@ jobs:
       FOUNDRY_RELEASE_POLICY: ${{ needs.release-policy.result }}
     steps:
       - name: Checkout runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry

@@ -12,15 +12,9 @@ on:
     - cron: '31 6 * * 1'
   workflow_dispatch:
 
-# The caller must grant the union of every permission the validation chain
-# needs: CodeQL uploads require security-events: write, and reusable workflows
-# can only maintain or reduce the caller's permissions. No write permissions
-# beyond that union are granted; labels and PR titles are never trusted.
-permissions:
-  actions: read
-  contents: read
-  packages: read
-  security-events: write
+# Default every caller job to no repository permissions. Individual jobs grant
+# only the scopes their own validation path consumes.
+permissions: {}
 
 # Superseded PR updates cancel the previous run; schedule and dispatch runs
 # are keyed by event so periodic audits and manual runs stay independent.
@@ -33,12 +27,15 @@ jobs:
     name: Mode
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       mode: ${{ steps.classify.outputs.mode }}
     steps:
       - name: Checkout runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: 0xPlayerOne/code-foundry
           ref: ${{ github.sha }}
           path: .github/.code-foundry
@@ -60,6 +57,13 @@ jobs:
   validation:
     name: Validation
     needs: mode
+    # Reusable workflows can only maintain or reduce the caller job's scopes.
+    # The audit tier needs security-events: write for CodeQL uploads.
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
     uses: ./.github/workflows/validation.yml
     with:
       mode: ${{ needs.mode.outputs.mode }}
@@ -73,4 +77,6 @@ jobs:
       rust-shards: '["all"]'
       rust-threads: '1'
       rust-max-parallel: 1
-    secrets: inherit
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}

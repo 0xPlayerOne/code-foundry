@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
-import { appendFileSync, chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
@@ -1342,10 +1342,67 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /validation mode/)
     assert.match(caller, /mode: \$\{\{ needs\.mode\.outputs\.mode \}\}/)
     assert.match(caller, /uses: \.\/\.github\/workflows\/validation\.yml/)
+    assert.match(caller, /secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
+    assert.doesNotMatch(caller, /secrets:\s*inherit/)
     // Least-permission union needed for the CodeQL chain; no extra write scopes.
     assert.match(caller, /security-events: write/)
     assert.doesNotMatch(caller, /pull-requests: write/)
     assert.doesNotMatch(caller, /contents: write/)
+  })
+
+  it('passes only consumed secrets through validation workflow-call boundaries', () => {
+    const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
+    const ci = readFileSync('.github/workflows/ci.yml', 'utf8')
+    const test = readFileSync('.github/workflows/test.yml', 'utf8')
+    const security = readFileSync('.github/workflows/security.yml', 'utf8')
+    const codeql = readFileSync('.github/workflows/codeql.yml', 'utf8')
+
+    assert.match(caller, /uses: \.\/\.github\/workflows\/validation\.yml/)
+    assert.match(caller, /secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
+    assert.doesNotMatch(caller, /secrets:\s*inherit/)
+
+    assert.match(orchestrator, /secrets:\n\s+TURBO_TOKEN:\n\s+required: false\n\s+NEXTAUTH_SECRET:\n\s+required: false/)
+    assert.match(ci, /secrets:\n\s+TURBO_TOKEN:\n\s+required: false\n\s+NEXTAUTH_SECRET:\n\s+required: false/)
+    assert.match(test, /secrets:\n\s+TURBO_TOKEN:\n\s+required: false/)
+    assert.doesNotMatch(test, /NEXTAUTH_SECRET/)
+    assert.doesNotMatch(security, /^    secrets:/m)
+    assert.doesNotMatch(codeql, /^    secrets:/m)
+
+    assert.match(orchestrator, /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
+    assert.match(orchestrator, /test:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}/)
+    assert.doesNotMatch(orchestrator, /security:\n[\s\S]*?runner: \$\{\{ inputs\.security-runner \}\}\n\s+secrets:/)
+    assert.doesNotMatch(orchestrator, /codeql:\n[\s\S]*?rust-max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}\n\s+secrets:/)
+    assert.doesNotMatch(orchestrator, /secrets:\s*inherit/)
+  })
+
+  it('requires persist-credentials: false for every external checkout action in workflow YAML', () => {
+    const workflowFiles = readdirSync('.github/workflows').filter((file) => file.endsWith('.yml')).sort()
+
+    const violations = workflowFiles.flatMap((workflow) => {
+      const path = `.github/workflows/${workflow}`
+      return listCheckoutStepsWithoutPersistCredentialsFalse(path)
+    })
+
+    assert.equal(violations.length, 0, `checkout actions missing persist-credentials: false:\n${violations.map((entry) => `${entry.file}:${entry.line}`).join('\n')}`)
+  })
+
+  it('prepares git authentication immediately before the reconcile CLI in the Release / Reconcile job', () => {
+    const release = readFileSync('.github/workflows/release.yml', 'utf8').split(/\r?\n/)
+    const configureIndex = release.findIndex((line) => line.includes('name: Configure git for trusted reconcile'))
+    const reconcileIndex = release.findIndex((line) => line.includes('name: Reconcile release metadata'))
+
+    assert.notEqual(configureIndex, -1)
+    assert.notEqual(reconcileIndex, -1)
+    assert.equal(reconcileIndex > configureIndex, true)
+
+    const nextStepAfterConfigure = release.findIndex((line, index) => index > configureIndex && /^\s{6}- name: /.test(line))
+    assert.equal(nextStepAfterConfigure, reconcileIndex)
+
+    assert.match(
+      release.slice(configureIndex, nextStepAfterConfigure + 1).join('\n'),
+      /name: Configure git for trusted reconcile[\s\S]*?run: gh auth setup-git/,
+    )
   })
 
   it('exposes exactly one stable Validation / Gate aggregate check that always runs', () => {
@@ -1366,14 +1423,55 @@ describe('code-foundry CLI', () => {
     for (const job of ['ci', 'test', 'security', 'codeql', 'release-policy']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
-    assert.match(orchestrator, /if: inputs\.mode == 'fast' \|\| inputs\.mode == 'audit'/)
-    assert.match(orchestrator, /if: inputs\.mode == 'audit'/)
-    assert.match(orchestrator, /if: inputs\.mode == 'release'/)
-    assert.match(orchestrator, /unit-only: \$\{\{ inputs\.mode == 'fast' \}\}/)
+    assert.match(orchestrator, /if: inputs.mode == 'fast' \|\| inputs.mode == 'audit'/)
+    assert.match(orchestrator, /if: inputs.mode == 'audit'/)
+    assert.match(orchestrator, /if: inputs.mode == 'release'/)
+    assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
     assert.match(orchestrator, /validation release_diff/)
-    assert.match(orchestrator, /secrets: inherit/)
+    assert.match(orchestrator, /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
+    assert.match(orchestrator, /test:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}/)
+    assert.doesNotMatch(orchestrator, /secrets:\s*inherit/)
     assert.match(orchestrator, /FOUNDRY_HEAD_REPO: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/)
     assert.match(orchestrator, /FOUNDRY_REPOSITORY: \$\{\{ github\.repository \}\}/)
+  })
+
+  it('pins all external workflow/action refs to immutable SHAs', () => {
+    const workflows = [
+      '.github/workflows/validation_self-ci.yml',
+      '.github/workflows/validation.yml',
+      '.github/workflows/ci.yml',
+      '.github/workflows/test.yml',
+      '.github/workflows/security.yml',
+      '.github/workflows/codeql.yml',
+      '.github/workflows/release.yml',
+      '.github/workflows/release-pr.yml',
+      '.github/workflows/opencode-security_self-ci.yml',
+    ].reduce((acc, file) => acc + readFileSync(file), '')
+
+    const expectedPins = [
+      'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6',
+      'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7',
+      'actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5',
+      'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7',
+      'github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4',
+      'github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4',
+      'googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5',
+      'taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2',
+      'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5',
+      '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@b3dce823322672b285fbe99b870ea984c01826cb # main',
+    ]
+    for (const pin of expectedPins) {
+      assert.match(workflows, new RegExp(pin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    }
+
+    assert.doesNotMatch(workflows, /uses: actions\/checkout@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: actions\/setup-node@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: actions\/upload-artifact@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: github\/codeql-action\/(init|analyze)@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: googleapis\/release-please-action@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: taiki-e\/install-action@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: actions\/dependency-review-action@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: 0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@main/)
   })
 
   it('keeps the reusable test interface backward compatible with an additive unit-only input', () => {
@@ -1502,6 +1600,75 @@ describe('code-foundry CLI', () => {
 })
 
 /** @param {string} stem */
+/**
+ * @param {string} file
+ * @returns {Array<{ file: string, line: number }>} checkout steps that lack persist-credentials: false
+ */
+function listCheckoutStepsWithoutPersistCredentialsFalse(file) {
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+  const checkoutPattern = /^\s*uses:\s*actions\/checkout@/
+  const stepStartPattern = /^(\s*)-\s+/
+  const issues = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const checkoutMatch = lines[i].match(checkoutPattern)
+    if (!checkoutMatch) continue
+
+    const usesIndent = (lines[i].match(/^\s*/) || [''])[0].length
+    let stepIndent = usesIndent
+    for (let k = i - 1; k >= 0; k--) {
+      const stepMatch = lines[k].match(stepStartPattern)
+      if (stepMatch) {
+        stepIndent = stepMatch[1].length
+        break
+      }
+    }
+
+    let hasWith = false
+    let inWith = false
+    let withIndent = -1
+    let persistValue = null
+
+    for (let j = i + 1; j < lines.length; j++) {
+      const raw = lines[j]
+      if (!raw.trim()) continue
+
+      const stepMatch = raw.match(stepStartPattern)
+      if (stepMatch && stepMatch[1].length <= stepIndent) break
+      if (/^\S/.test(raw)) break
+
+      const indent = (raw.match(/^\s*/) || [''])[0].length
+      const trimmed = raw.trim()
+
+      if (trimmed === 'with:') {
+        if (indent === usesIndent) {
+          hasWith = true
+          inWith = true
+          withIndent = indent
+        }
+        continue
+      }
+
+      if (!inWith) continue
+      if (indent <= withIndent) {
+        inWith = false
+        continue
+      }
+
+      const match = trimmed.match(/^persist-credentials:\s*(.+)$/)
+      if (match) {
+        persistValue = match[1].trim()
+      }
+    }
+
+    if (!hasWith || persistValue !== 'false') {
+      issues.push({ file, line: i + 1 })
+    }
+  }
+
+  return issues
+}
+
 function legacyCaller(stem) {
   return [
     'name: Code Foundry',
