@@ -551,6 +551,57 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /name: Release \/ Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
+  it('waits for release PR mergeability before attempting the guarded auto-merge', () => {
+    const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+
+    // gh pr checks --watch only covers checks registered when the watch
+    // starts; a ruleset can register additional required checks afterwards
+    // (observed: "Validation / Gate" appearing after "Tauri 2 / Linux" had
+    // passed), leaving the PR policy-blocked at merge time. The workflow must
+    // poll mergeStateStatus after the watch and accept only states GitHub
+    // reports as mergeable.
+    assert.match(workflow, /Waiting for release PR #\$pr to become mergeable under branch policy/)
+    assert.match(workflow, /--json mergeStateStatus,mergeable/)
+    assert.match(workflow, /'\[\.mergeStateStatus, \.mergeable\] \| @tsv'/)
+    assert.match(workflow, /case "\$merge_state" in/)
+    assert.match(workflow, /CLEAN\|UNSTABLE\)\n\s+if \[ "\$mergeable" = MERGEABLE \]; then\n\s+break/)
+    assert.match(workflow, /DIRTY\)\n\s+echo "Release PR #\$pr is not mergeable \(mergeStateStatus=\$merge_state\)/)
+    assert.match(workflow, /\[ "\$mergeable" = CONFLICTING \]/)
+    assert.match(workflow, /resolve conflicts before retrying the release/)
+    assert.match(workflow, /merge_state=UNKNOWN\n\s+mergeable=UNKNOWN/)
+
+    // Non-required checks do not block the merge: UNSTABLE with mergeable
+    // MERGEABLE is accepted immediately (observed: Kilo Code Review still
+    // running after every required check passed), while BLOCKED, BEHIND, and
+    // UNKNOWN keep the guard polling.
+    assert.match(workflow, /Kilo\n\s+# Code Review running after every required check passed/)
+    assert.match(workflow, /UNSTABLE is still mergeable when only\n\s+# non-required checks are failing or still running/)
+    assert.match(workflow, /keep\n\s+# waiting for BLOCKED\/BEHIND\/UNKNOWN/)
+    assert.match(workflow, /\{ \[ "\$merge_state" != CLEAN \] && \[ "\$merge_state" != UNSTABLE \]; \} \|\| \[ "\$mergeable" != MERGEABLE \]/)
+
+    // The guard must be bounded: 30 attempts at a 10 second interval, and a
+    // useful fail-closed error when the PR never reaches an accepted state.
+    // Transient gh failures reset the state to UNKNOWN instead of dropping it
+    // to empty.
+    assert.match(workflow, /for attempt in \$\(seq 1 30\)/)
+    assert.match(workflow, /sleep 10/)
+    assert.match(workflow, /did not become mergeable within the mergeability window \(last mergeStateStatus=\$merge_state, mergeable=\$mergeable\)/)
+    assert.match(workflow, /Required checks may still be pending or branch policy blocks the merge/)
+    assert.match(workflow, /treat the state as unknown and keep polling/)
+
+    // The guard runs after the required-checks watch and before the merge,
+    // which still keeps match-head SHA protection and delete-branch, and
+    // never falls back to --admin.
+    const watchIndex = workflow.indexOf('--watch \\')
+    const guardIndex = workflow.indexOf('--json mergeStateStatus,mergeable')
+    const timeoutIndex = workflow.indexOf('did not become mergeable within the mergeability window')
+    const mergeIndex = workflow.indexOf('gh pr merge "$pr"')
+    assert.ok(watchIndex !== -1 && guardIndex !== -1 && timeoutIndex !== -1 && mergeIndex !== -1)
+    assert.ok(watchIndex < guardIndex && guardIndex < timeoutIndex && timeoutIndex < mergeIndex)
+    assert.match(workflow, /gh pr merge "\$pr"[\s\S]*--match-head-commit "\$release_head"[\s\S]*--delete-branch/)
+    assert.doesNotMatch(workflow, /--admin/)
+  })
+
   it('doctor and sync reject merge strategies outside the audit topology', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-merge-policy-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })

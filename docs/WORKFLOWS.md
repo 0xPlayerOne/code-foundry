@@ -50,6 +50,15 @@ workflow refuses to run unless its strategy is exactly `squash`.
 | `staging` → `main` promotion PR | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase`; merge commits are rejected |
 | Release Please version PR into `main` | Squash (`release_merge_strategy: squash`) | Release automation fails closed unless `squash`; never defaults to `merge`, never uses `--admin` |
 
+Release auto-merge waits for required checks and then polls `mergeStateStatus`
+until it is `CLEAN`, or `UNSTABLE` with `mergeable` `MERGEABLE`, before
+merging. Non-required checks that branch policy does not require (for example
+external code review) never block the merge, so a ruleset that registers
+additional required checks after earlier ones have passed (for example
+`Validation / Gate` appearing after a platform-specific check) cannot leave the
+merge policy-blocked. The mergeability poll is bounded and fails closed on
+conflicts or timeout; releases without an automation token remain manual.
+
 Keeping `main` linear — rebase promotions and squash release PRs — is what
 lets the post-release reconciliation fast-forward or replay `staging` safely.
 
