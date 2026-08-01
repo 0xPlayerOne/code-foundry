@@ -80,7 +80,15 @@ Configure a narrowly scoped `RELEASE_PLEASE_TOKEN` repository or organization
 secret to enable guarded automatic merging and downstream workflows triggered
 by the resulting release. The token needs `contents`, `issues`, and
 `pull-requests` write permissions. Code Foundry validates every changed path in
-the generated version pull request before using the token to merge it.
+the generated version pull request before using the token to merge it, waits
+for the required checks to finish, and then polls the pull request's
+`mergeStateStatus` until it is `CLEAN`, or `UNSTABLE` with `mergeable`
+`MERGEABLE`, before merging. Non-required checks that branch policy does not
+require (for example external code review still running after every required
+check passed) do not block the merge; conflicts fail immediately and a bounded
+polling window fails closed if branch or ruleset policy still blocks the merge
+(a ruleset may register additional required checks after earlier ones have
+already passed).
 
 ## Operational checklist
 

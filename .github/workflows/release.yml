@@ -218,6 +218,56 @@ jobs:
               --watch \
               --fail-fast \
               --interval 10
+            # gh pr checks --watch only waits for checks registered when the
+            # watch starts; a ruleset may register additional required checks
+            # afterwards (observed: "Validation / Gate" appearing after
+            # "Tauri 2 / Linux" had passed), which leaves the PR blocked by
+            # branch policy at merge time. Poll mergeStateStatus and accept
+            # only states GitHub reports as mergeable: CLEAN, or UNSTABLE with
+            # mergeable MERGEABLE. UNSTABLE is still mergeable when only
+            # non-required checks are failing or still running (observed: Kilo
+            # Code Review running after every required check passed); keep
+            # waiting for BLOCKED/BEHIND/UNKNOWN, fail fast on
+            # DIRTY/CONFLICTING, and fail closed on a bounded timeout so the
+            # workflow never sleeps indefinitely.
+            echo "Waiting for release PR #$pr to become mergeable under branch policy"
+            merge_state=UNKNOWN
+            mergeable=UNKNOWN
+            for attempt in $(seq 1 30); do
+              : "$attempt"
+              if read -r merge_state mergeable < <(
+                gh pr view "$pr" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --json mergeStateStatus,mergeable \
+                  --jq -r '[.mergeStateStatus, .mergeable] | @tsv' 2>/dev/null
+              ); then
+                case "$merge_state" in
+                  CLEAN|UNSTABLE)
+                    if [ "$mergeable" = MERGEABLE ]; then
+                      break
+                    fi
+                    ;;
+                  DIRTY)
+                    echo "Release PR #$pr is not mergeable (mergeStateStatus=$merge_state); resolve conflicts before retrying the release." >&2
+                    exit 1
+                    ;;
+                esac
+                if [ "$mergeable" = CONFLICTING ]; then
+                  echo "Release PR #$pr is not mergeable (mergeable=$mergeable); resolve conflicts before retrying the release." >&2
+                  exit 1
+                fi
+              else
+                # gh API failure: read leaves the variables empty on EOF;
+                # treat the state as unknown and keep polling.
+                merge_state=UNKNOWN
+                mergeable=UNKNOWN
+              fi
+              sleep 10
+            done
+            if { [ "$merge_state" != CLEAN ] && [ "$merge_state" != UNSTABLE ]; } || [ "$mergeable" != MERGEABLE ]; then
+              echo "Release PR #$pr did not become mergeable within the mergeability window (last mergeStateStatus=$merge_state, mergeable=$mergeable). Required checks may still be pending or branch policy blocks the merge; review the pull request before retrying." >&2
+              exit 1
+            fi
             release_head=$(gh pr view "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --json headRefOid \
