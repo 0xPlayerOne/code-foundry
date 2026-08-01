@@ -62,8 +62,10 @@ a personal-repository ruleset for `staging` enforces a Deploy Key bypass for
 checkout + GitHub API calls.
 
 When used, the optional `STAGING_DEPLOY_KEY` is written at runtime only for
-reconcile, used to set `GIT_SSH_COMMAND` and trusted host settings for the
-`release reconcile` transport, then scrubbed after the step.
+reconcile, then used to set `GIT_SSH_COMMAND` and trusted host settings for
+`release reconcile` over SSH push operations only; regular `git fetch` reads still
+use HTTPS from the checked-out origin configuration. The key material is scrubbed
+after the step.
 
 When absent, the job keeps `GH_TOKEN = github.token` and runs `gh auth setup-git`
 so repositories without a Deploy Key ruleset bypass still reconcile successfully.
