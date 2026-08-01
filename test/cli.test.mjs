@@ -1516,7 +1516,7 @@ describe('code-foundry CLI', () => {
     assert.match(test, /type: boolean/)
     assert.match(test, /default: false/)
     for (const job of ['integration', 'e2e', 'smoke']) {
-      assert.match(test, new RegExp(`^  ${job}:\n    name: [A-Za-z0-9]+\n    if: inputs\.unit-only != true`, 'm'))
+      assert.match(test, new RegExp(`^  ${job}:\n    name: [A-Za-z0-9]+\n    if: inputs\\.unit-only != true`, 'm'))
     }
     for (const input of ['runtime-repository', 'runtime-ref', 'runner', 'unit-runner']) {
       assert.match(test, new RegExp(`^      ${input}:`, 'm'))
