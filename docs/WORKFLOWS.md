@@ -47,11 +47,23 @@ Keeping `main` linear — rebase promotions and squash release PRs — is what
 lets the post-release reconciliation fast-forward or replay `staging` safely.
 
 Protect `staging` with the aggregate `Validation / Gate`, squash-only pull
-requests, and a single GitHub Actions integration bypass. That bypass exists
-only so the trusted post-release reconciliation job can replay pending work
-with an exact `--force-with-lease`; maintainer PATs and administrator roles do
-not bypass the ruleset. The reconciliation job deliberately authenticates with
-`github.token`, not `CODE_FOUNDRY_TOKEN` or `RELEASE_PLEASE_TOKEN`.
+requests, and a single GitHub Actions integration path. That path uses the
+GitHub Actions integration token by default, and optionally an SSH deploy key
+when `STAGING_DEPLOY_KEY` is configured. The deploy key is required only when
+a personal-repository ruleset for `staging` enforces a Deploy Key bypass for
+`release reconcile`; repositories without that bypass continue with tokenless
+checkout + GitHub API calls.
+
+When used, the optional `STAGING_DEPLOY_KEY` is written at runtime only for
+reconcile, used to set `GIT_SSH_COMMAND` and trusted host settings for the
+`release reconcile` transport, then scrubbed after the step.
+
+When absent, the job keeps `GH_TOKEN = github.token` and runs `gh auth setup-git`
+so repositories without a Deploy Key ruleset bypass still reconcile successfully.
+
+For this reconciliation path, maintainer PATs and administrator roles are not
+authorized bypasses; the job deliberately authenticates with `github.token`,
+not `CODE_FOUNDRY_TOKEN` or `RELEASE_PLEASE_TOKEN`.
 
 ## GitHub Stacks
 

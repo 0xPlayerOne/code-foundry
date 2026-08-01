@@ -44,6 +44,7 @@ export function doctorGithub(root) {
   details.secrets = {
     codeFoundryTokenPresent: secretNames.includes('CODE_FOUNDRY_TOKEN'),
     releasePleaseTokenPresent: secretNames.includes('RELEASE_PLEASE_TOKEN'),
+    stagingDeployKeyPresent: secretNames.includes('STAGING_DEPLOY_KEY'),
   }
   if (!details.secrets.codeFoundryTokenPresent && !details.secrets.releasePleaseTokenPresent) {
     warnings.push('CODE_FOUNDRY_TOKEN and RELEASE_PLEASE_TOKEN are both absent. PR workflow triggers and automation may require manual readiness.')

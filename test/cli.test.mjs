@@ -446,6 +446,7 @@ describe('code-foundry CLI', () => {
     )
     assert.equal(both.details.secrets.codeFoundryTokenPresent, true)
     assert.equal(both.details.secrets.releasePleaseTokenPresent, true)
+    assert.equal(both.details.secrets.stagingDeployKeyPresent, false)
 
     for (const token of ['CODE_FOUNDRY_TOKEN', 'RELEASE_PLEASE_TOKEN']) {
       const one = withFakeGh([token], () =>
@@ -460,8 +461,17 @@ describe('code-foundry CLI', () => {
     const messages = neither.warnings.join(' ')
     assert.equal(neither.details.secrets.codeFoundryTokenPresent, false)
     assert.equal(neither.details.secrets.releasePleaseTokenPresent, false)
+    assert.equal(neither.details.secrets.stagingDeployKeyPresent, false)
     assert.match(messages, /are both absent/i)
     assert.match(messages, /CODE_FOUNDRY_TOKEN.*RELEASE_PLEASE_TOKEN/)
+
+    const keyOnly = withFakeGh(['STAGING_DEPLOY_KEY'], () =>
+      withGitHubEnv({ GITHUB_REPOSITORY: 'owner/repo' }, () => doctorGithub(root))
+    )
+    assert.equal(keyOnly.details.secrets.codeFoundryTokenPresent, false)
+    assert.equal(keyOnly.details.secrets.releasePleaseTokenPresent, false)
+    assert.equal(keyOnly.details.secrets.stagingDeployKeyPresent, true)
+
     rmSync(root, { recursive: true, force: true })
   })
   it('passes dedicated token secrets to PR creation reusable workflows', () => {
@@ -481,6 +491,9 @@ describe('code-foundry CLI', () => {
     assert.match(releaseCaller, /on:\n\s+push:\n\s+branches: \[staging\]/)
     assert.match(releaseCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
     assert.match(releaseCaller, /RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+
+    const releaseMainCaller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
+    assert.match(releaseMainCaller, /STAGING_DEPLOY_KEY: \$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
 
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
     assert.match(validationCaller, /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/)
@@ -1388,22 +1401,44 @@ describe('code-foundry CLI', () => {
     assert.equal(violations.length, 0, `checkout actions missing persist-credentials: false:\n${violations.map((entry) => `${entry.file}:${entry.line}`).join('\n')}`)
   })
 
-  it('prepares git authentication immediately before the reconcile CLI in the Release / Reconcile job', () => {
-    const release = readFileSync('.github/workflows/release.yml', 'utf8').split(/\r?\n/)
-    const configureIndex = release.findIndex((line) => line.includes('name: Configure git for trusted reconcile'))
-    const reconcileIndex = release.findIndex((line) => line.includes('name: Reconcile release metadata'))
+  it('prepares reconcile transport for staging with optional deploy-key path and fallback auth', () => {
+    const release = readFileSync('.github/workflows/release.yml', 'utf8')
+    assert.match(release, /STAGING_DEPLOY_KEY:\n\s+required: false/)
 
-    assert.notEqual(configureIndex, -1)
+    const releaseLines = release.split(/\r?\n/)
+    const prepareIndex = releaseLines.findIndex((line) => line.includes('name: Configure staging reconcile transport'))
+    const authIndex = releaseLines.findIndex((line) => line.includes('name: Configure git for trusted reconcile'))
+    const reconcileIndex = releaseLines.findIndex((line) => line.includes('name: Reconcile release metadata'))
+    const clearIndex = releaseLines.findIndex((line) => line.includes('name: Clear reconcile SSH material'))
+    const skipIndex = releaseLines.findIndex((line) => line.includes('name: Skip without staging'))
+
+    assert.notEqual(prepareIndex, -1)
+    assert.notEqual(authIndex, -1)
     assert.notEqual(reconcileIndex, -1)
-    assert.equal(reconcileIndex > configureIndex, true)
+    assert.notEqual(clearIndex, -1)
+    assert.notEqual(skipIndex, -1)
 
-    const nextStepAfterConfigure = release.findIndex((line, index) => index > configureIndex && /^\s{6}- name: /.test(line))
-    assert.equal(nextStepAfterConfigure, reconcileIndex)
+    const segment = releaseLines.slice(prepareIndex, reconcileIndex + 1).join('\n')
+    assert.match(segment, /name: Configure staging reconcile transport[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT == 'true'/)
+    assert.match(segment, /env:\n\s+STAGING_DEPLOY_KEY:\s+\$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
+    assert.match(segment, /gh api \/meta/)
+    assert.match(segment, /printf '%s\\n' "\$STAGING_DEPLOY_KEY" >/)
+    assert.match(segment, /git remote set-url origin "git@github.com:\$\{GITHUB_REPOSITORY\}\.git"/)
+    assert.match(segment, /name: Configure git for trusted reconcile[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT != 'true'/)
+    assert.match(segment, /run: gh auth setup-git/)
 
-    assert.match(
-      release.slice(configureIndex, nextStepAfterConfigure + 1).join('\n'),
-      /name: Configure git for trusted reconcile[\s\S]*?run: gh auth setup-git/,
-    )
+    assert.equal(clearIndex > reconcileIndex, true)
+    assert.equal(skipIndex > clearIndex, true)
+
+    assert.equal(prepareIndex < authIndex, true)
+    assert.equal(authIndex < reconcileIndex, true)
+
+    const nextStepAfterAuth = releaseLines.findIndex((line, index) => index > authIndex && /^\s{6}- name: /.test(line))
+    assert.equal(nextStepAfterAuth, reconcileIndex)
+
+    const reconcileSection = releaseLines.slice(reconcileIndex, clearIndex + 1).join('\n')
+    assert.match(reconcileSection, /name: Reconcile release metadata[\s\S]*?GIT_SSH_COMMAND: \$\{\{ steps\.staging-reconcile-ssh\.outputs\.ssh_command \|\| '' \}\}/)
+    assert.match(reconcileSection, /run: node \"\$RUNNER_TEMP\/code-foundry\/src\/cli\.mjs\" release reconcile --github --base main --head staging/)
   })
 
   it('exposes exactly one stable Validation / Gate aggregate check that always runs', () => {
