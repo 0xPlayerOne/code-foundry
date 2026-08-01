@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.0...v0.34.1) (2026-08-01)
+
+
+### Bug Fixes
+
+* **release:** wait for PR mergeability before guarded auto-merge ([#311](https://github.com/0xPlayerOne/code-foundry/issues/311)) ([e9be192](https://github.com/0xPlayerOne/code-foundry/commit/e9be192e6b42020f327d42d928f2c6a835358e59))
+
 ## [0.34.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.33.0...v0.34.0) (2026-08-01)
 
 
