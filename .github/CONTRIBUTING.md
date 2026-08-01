@@ -153,15 +153,17 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 ## Workflow and check behavior
 
-| Event                            | Expected automation                      |
-| -------------------------------- | ---------------------------------------- |
-| Push to `main` or `staging`      | CI, Test, Security, and CodeQL workflows |
-| Pull request targeting `staging` | CI, Test, Security, and CodeQL workflows |
-| Push to a working branch         | Draft PR workflow                        |
-| Push to `staging`                | Release PR workflow                      |
-| Version tag such as `v1.2.3`     | Release workflow                         |
+| Event | Expected automation |
+| --- | --- |
+| Pull request targeting `staging` | Fast validation: CI plus unit tests, ending in `Validation / Gate` |
+| Ordinary pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |
+| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate` |
+| Scheduled or manual validation | Full audit tier |
+| Push to a working branch | Draft PR workflow |
+| Push to `staging` | Promotion PR workflow; canonical validation waits for the PR event |
+| Push to `main` | Release workflow; canonical validation already ran on the merged PR |
 
-The workflows use separate concurrency groups keyed by the commit under test. A newer run for the same commit cancels a duplicate event-triggered run, while newer commits cancel older runs and independent CI, Test, Security, and CodeQL workflows continue in parallel.
+The single validation caller keys concurrency by event and pull-request head. A newer update to the same pull request cancels its superseded validation run; scheduled and manual audits remain independent. The mode-aware orchestrator fans out only the jobs required by that event and always concludes with the stable aggregate gate.
 
 Required checks are enforced by branch protection rulesets/branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 

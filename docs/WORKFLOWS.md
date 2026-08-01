@@ -2,16 +2,23 @@
 
 ## Standard triggers
 
-The default standard callers use:
+The canonical validation caller uses pull requests plus bounded audit entry
+points; it does not run the same suites again on branch pushes:
 
 ```yaml
-push:
-  branches: [main, staging]
 pull_request:
   branches: [main, staging]
+schedule:
+  - cron: '31 6 * * 1'
+workflow_dispatch:
 ```
 
-Draft PR automation may additionally listen to supported topic branches.
+Pull requests into `staging` run the fast tier, ordinary pull requests into
+`main` run the full audit tier, and exact Release Please pull requests into
+`main` run only release policy. Scheduled and manual runs select the audit
+tier. Draft PR automation separately listens to supported topic-branch pushes,
+promotion automation listens to `staging` pushes, and release automation
+listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should keep their own triggers and permissions.
 
