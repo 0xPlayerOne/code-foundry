@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.33.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.4...v0.33.0) (2026-08-01)
+
+
+### Features
+
+* add tiered validation workflow ([#301](https://github.com/0xPlayerOne/code-foundry/issues/301)) ([dd3015e](https://github.com/0xPlayerOne/code-foundry/commit/dd3015ea22ab94b2ed3d55f6e900a04f3e968aeb))
+
+
+### Bug Fixes
+
+* preserve regex escape in test assertion ([#303](https://github.com/0xPlayerOne/code-foundry/issues/303)) ([0a3c56f](https://github.com/0xPlayerOne/code-foundry/commit/0a3c56f5318baa8002b1079687797702f2c06383))
+
 ## [0.32.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.32.3...v0.32.4) (2026-08-01)
 
 
