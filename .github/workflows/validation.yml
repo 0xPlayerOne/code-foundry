@@ -1,0 +1,174 @@
+name: Code Foundry Validation
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: Validation tier (fast, audit, or release).
+        required: true
+        type: string
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: false
+        type: string
+        default: 0xPlayerOne/code-foundry
+      runtime-ref:
+        description: Code Foundry runtime tag or ref.
+        required: false
+        type: string
+        default: v0.32.4
+      ci-runner:
+        description: Runner used by CI jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      test-runner:
+        description: Runner used by non-unit test jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      unit-runner:
+        description: Runner used by unit tests.
+        required: false
+        type: string
+        default: ubuntu-slim
+      security-runner:
+        description: Runner used by Security jobs.
+        required: false
+        type: string
+        default: ubuntu-slim
+      codeql-runner:
+        description: Runner used by CodeQL jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      rust-shards:
+        description: JSON array of Rust scope sharding values. Use ["all"] for single-pass behavior.
+        required: false
+        type: string
+        default: '["all"]'
+      rust-threads:
+        description: Threads used for Rust extraction and analysis. Values above 1 opt into local parallelism.
+        required: false
+        type: string
+        default: '1'
+      rust-max-parallel:
+        description: Maximum Rust shard jobs allowed to run concurrently.
+        required: false
+        type: number
+        default: 1
+
+# The orchestrator keeps the union of permissions needed by the chain it calls
+# (CodeQL uploads require security-events: write). Nested reusable workflows
+# can only maintain or reduce permissions, never elevate them.
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+jobs:
+  ci:
+    name: CI
+    if: inputs.mode == 'fast' || inputs.mode == 'audit'
+    uses: ./.github/workflows/ci.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.ci-runner }}
+    secrets: inherit
+
+  test:
+    name: Test
+    if: inputs.mode == 'fast' || inputs.mode == 'audit'
+    uses: ./.github/workflows/test.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.test-runner }}
+      unit-runner: ${{ inputs.unit-runner }}
+      unit-only: ${{ inputs.mode == 'fast' }}
+    secrets: inherit
+
+  security:
+    name: Security
+    if: inputs.mode == 'audit'
+    uses: ./.github/workflows/security.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.security-runner }}
+    secrets: inherit
+
+  codeql:
+    name: CodeQL
+    if: inputs.mode == 'audit'
+    uses: ./.github/workflows/codeql.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.codeql-runner }}
+      rust-shards: ${{ inputs.rust-shards }}
+      rust-threads: ${{ inputs.rust-threads }}
+      rust-max-parallel: ${{ inputs.rust-max-parallel }}
+    secrets: inherit
+
+  release-policy:
+    name: Release Policy
+    if: inputs.mode == 'release'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Checkout runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            src/lib
+            src/runtime.mjs
+      - name: Install runtime
+        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Validate generated release diff
+        env:
+          FOUNDRY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FOUNDRY_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          FOUNDRY_REPOSITORY: ${{ github.repository }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
+
+  # Aggregate check: "Validation / Gate" (caller job name + this job name).
+  # Always evaluates; only jobs required for the mode must have succeeded.
+  gate:
+    name: Gate
+    needs: [ci, test, security, codeql, release-policy]
+    if: always()
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    env:
+      FOUNDRY_MODE: ${{ inputs.mode }}
+      FOUNDRY_CI: ${{ needs.ci.result }}
+      FOUNDRY_TEST: ${{ needs.test.result }}
+      FOUNDRY_SECURITY: ${{ needs.security.result }}
+      FOUNDRY_CODEQL: ${{ needs.codeql.result }}
+      FOUNDRY_RELEASE_POLICY: ${{ needs.release-policy.result }}
+    steps:
+      - name: Checkout runtime
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            src/lib
+            src/runtime.mjs
+      - name: Install runtime
+        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Evaluate aggregate gate
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation gate

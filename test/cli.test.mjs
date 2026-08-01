@@ -8,7 +8,19 @@ import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, classifyPromotion, classifyReconciliation } from '../src/lib/release-policy.mjs'
 import { buildReleaseRecoveryPlan, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
+import { validateGeneratedReleaseDiff } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, buildReleaseManifest, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
+import {
+  AGGREGATE_CHECK_NAME,
+  RELEASE_PLEASE_PREFIX,
+  VALIDATION_EVENTS,
+  VALIDATION_JOBS,
+  VALIDATION_MODES,
+  classifyValidationMode,
+  evaluateValidationGate,
+  isReleasePleaseHead,
+  requiredValidationJobs,
+} from '../src/lib/validation-policy.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
@@ -105,16 +117,16 @@ describe('code-foundry CLI', () => {
     assert.equal(exists(join(root, 'ruff.toml')), false)
     assert.equal(exists(join(root, '.prettierrc')), false)
     assert.match(readFileSync(join(root, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/)
-    assert.match(
-      readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'),
-      /code-foundry\/\.github\/workflows\/ci\.yml@v/
-    )
+    const validationCaller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(validationCaller, /code-foundry\/\.github\/workflows\/validation\.yml@v/)
     assert.equal(exists(join(root, '.github/workflows/slither.yml')), true)
     assert.equal(exists(join(root, '.github/workflows/opencode-security.yml')), false)
-    const codeqlWorkflow = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8')
-    assert.match(codeqlWorkflow, /rust-shards: '\["all"\]'/)
-    assert.match(codeqlWorkflow, /rust-threads: '1'/)
-    assert.match(codeqlWorkflow, /rust-max-parallel: 1/)
+    for (const legacy of ['ci', 'test', 'security', 'codeql']) {
+      assert.equal(exists(join(root, `.github/workflows/${legacy}.yml`)), false, legacy)
+    }
+    assert.match(validationCaller, /rust-shards: '\["all"\]'/)
+    assert.match(validationCaller, /rust-threads: '1'/)
+    assert.match(validationCaller, /rust-max-parallel: 1/)
     assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
     doctor(root)
   })
@@ -149,7 +161,7 @@ describe('code-foundry CLI', () => {
     )
 
     syncRepository({ target: root, source: process.cwd() })
-    const workflow = readFileSync(join(root, '.github/workflows/codeql.yml'), 'utf8')
+    const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     assert.match(workflow, /rust-shards: '\["crates\/api","crates\/worker"\]'/)
     assert.match(workflow, /rust-threads: '4'/)
     assert.match(workflow, /rust-max-parallel: 2/)
@@ -170,9 +182,113 @@ describe('code-foundry CLI', () => {
     )
 
     syncRepository({ target: root, source: process.cwd() })
-    const workflow = readFileSync(join(root, '.github/workflows/test.yml'), 'utf8')
-    assert.match(workflow, /runner: ubuntu-latest/)
+    const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(workflow, /test-runner: ubuntu-latest/)
     assert.match(workflow, /unit-runner: ubuntu-latest/)
+  })
+
+  it('migrates generated legacy callers and preserves custom workflows byte-for-byte', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-migrate-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    for (const stem of ['ci', 'test', 'security', 'codeql']) {
+      writeFileSync(join(root, `.github/workflows/${stem}.yml`), legacyCaller(stem))
+    }
+    const custom = 'name: Deploy\n\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n'
+    writeFileSync(join(root, '.github/workflows/deploy.yml'), custom)
+
+    const result = syncRepository({ target: root, source: process.cwd() })
+
+    for (const stem of ['ci', 'test', 'security', 'codeql']) {
+      assert.equal(exists(join(root, `.github/workflows/${stem}.yml`)), false, stem)
+    }
+    assert.equal(readFileSync(join(root, '.github/workflows/deploy.yml'), 'utf8'), custom)
+    assert.equal(exists(join(root, '.github/workflows/validation.yml')), true)
+    assert.ok(result.changed.includes('.github/workflows/ci.yml'))
+    assert.ok(result.changed.includes('.github/workflows/validation.yml'))
+    const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(caller, /^\s+ref: v\d+\.\d+\.\d+$/m)
+    assert.match(caller, /runtime-ref: v\d+\.\d+\.\d+/)
+  })
+
+  it('preserves unrecognized legacy-named callers as repository-owned workflows', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-preserve-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    const custom = 'name: Custom CI\n\non:\n  pull_request:\n\npermissions:\n  contents: read\n\njobs:\n  ci:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo custom\n'
+    writeFileSync(join(root, '.github/workflows/ci.yml'), custom)
+
+    syncRepository({ target: root, source: process.cwd() })
+
+    assert.equal(readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8'), custom)
+  })
+
+  it('keeps the tiered topology idempotent across repeated syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-idempotent-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/workflows/deploy.yml'), 'name: Deploy\n')
+    syncRepository({ target: root, source: process.cwd(), init: true })
+
+    const second = syncRepository({ target: root, source: process.cwd() })
+
+    assert.deepEqual(second.changed, [])
+    assert.equal(readFileSync(join(root, '.github/workflows/deploy.yml'), 'utf8'), 'name: Deploy\n')
+  })
+
+  it('previews legacy caller removal in dry-run without writing files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-dryrun-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(join(root, '.github/workflows/ci.yml'), legacyCaller('ci'))
+
+    const preview = syncRepository({ target: root, source: process.cwd(), dryRun: true })
+
+    assert.ok(preview.changed.includes('.github/workflows/ci.yml'))
+    assert.equal(exists(join(root, '.github/workflows/ci.yml')), true)
+    assert.equal(exists(join(root, '.github/workflows/validation.yml')), false)
+    const real = syncRepository({ target: root, source: process.cwd() })
+    assert.equal(exists(join(root, '.github/workflows/ci.yml')), false)
+    assert.equal(exists(join(root, '.github/workflows/validation.yml')), true)
+    assert.ok(real.changed.includes('.github/workflows/validation.yml'))
+  })
+
+  it('doctor flags stale legacy callers and unpinned or mismatched runtime refs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-doctor-validation-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    syncRepository({ target: root, source: process.cwd() })
+    const callerPath = join(root, '.github/workflows/validation.yml')
+    const captureWarnings = (fn) => {
+      /** @type {string[]} */
+      const warnings = []
+      const original = console.warn
+      console.warn = (message) => warnings.push(String(message))
+      try { fn() } finally { console.warn = original }
+      return warnings
+    }
+    const captureErrors = (fn) => {
+      /** @type {string[]} */
+      const errors = []
+      const original = console.error
+      console.error = (message) => errors.push(String(message))
+      try { fn() } catch { /* doctor throws only a summary; details are in errors */ } finally { console.error = original }
+      return errors
+    }
+    writeFileSync(join(root, '.github/workflows/ci.yml'), legacyCaller('ci'))
+    const stale = captureWarnings(() => doctor(root))
+    assert.ok(stale.some((message) => /stale generated legacy caller ci\.yml/.test(message)), stale.join('\n'))
+
+    const mismatched = readFileSync(callerPath, 'utf8').replace(/^(\s+)ref: v\d+\.\d+\.\d+$/m, '$1ref: v0.31.0')
+    writeFileSync(callerPath, mismatched)
+    const mismatchErrors = captureErrors(() => doctor(root))
+    assert.ok(mismatchErrors.some((message) => /mismatched runtime refs/.test(message)), mismatchErrors.join('\n'))
+
+    const unpinned = readFileSync(callerPath, 'utf8')
+      .replace(/runtime-ref: v\d+\.\d+\.\d+/, 'runtime-ref: main')
+      .replace(/^(\s+)ref: v\d+\.\d+\.\d+$/m, '$1ref: main')
+    writeFileSync(callerPath, unpinned)
+    const warning = captureWarnings(() => doctor(root))
+    assert.ok(warning.some((message) => /not a released tag/.test(message)), warning.join('\n'))
   })
 
   it('lets a manifest Release Please config own the release strategy', () => {
@@ -290,9 +406,9 @@ describe('code-foundry CLI', () => {
     }
   })
 
-  it('attaches required checks to staging and main pull requests', () => {
-    for (const workflow of ['ci', 'codeql', 'security', 'test', 'opencode-security']) {
-      const caller = readFileSync(`.github/workflows/${workflow}_self-ci.yml`, 'utf8')
+  it('attaches validation and opencode-security triggers to staging and main pull requests', () => {
+    for (const workflow of ['validation_self-ci', 'opencode-security_self-ci']) {
+      const caller = readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')
       assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
     }
   })
@@ -436,6 +552,328 @@ describe('code-foundry CLI', () => {
     assert.match(readFileSync(join(root, 'ruff.toml'), 'utf8'), /line-length = 100/)
   })
 
+  it('classifies pull requests to staging as fast regardless of head shape', () => {
+    for (const head of ['feature/foo', 'staging', 'main', RELEASE_PLEASE_PREFIX, `${RELEASE_PLEASE_PREFIX}--v1.2.3`]) {
+      assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'staging', headRef: head }), 'fast')
+    }
+  })
+
+  it('classifies main pull requests from the exact Release Please prefix as release', () => {
+    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: RELEASE_PLEASE_PREFIX }), 'release')
+    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: `${RELEASE_PLEASE_PREFIX}--v1.2.3` }), 'release')
+    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: `${RELEASE_PLEASE_PREFIX}--v1.2.3--rc.1` }), 'release')
+    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: `${RELEASE_PLEASE_PREFIX}--` }), 'release')
+  })
+
+  it('rejects malicious lookalikes that miss the exact Release Please prefix boundary', () => {
+    const lookalikes = [
+      `${RELEASE_PLEASE_PREFIX}x`,
+      `${RELEASE_PLEASE_PREFIX}s`,
+      `${RELEASE_PLEASE_PREFIX}-v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX}_v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX}/v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX} `,
+      ` ${RELEASE_PLEASE_PREFIX}`,
+      'Release-please--branches--main--v1.2.3',
+      'release-please--branches--MAIN--v1.2.3',
+      'release-please--branches--staging--v1.2.3',
+      'release-please--branches--mains--v1.2.3',
+      'release-please--branches--mainx/v1.2.3',
+    ]
+    for (const head of lookalikes) {
+      assert.equal(isReleasePleaseHead(head), false, head)
+      assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: head }), 'audit', head)
+    }
+  })
+
+  it('classifies every other main pull request as audit, including promotion PRs', () => {
+    for (const head of ['feature/foo', 'staging', 'main', 'release-please--branches--staging--v1.2.3', 'chore(main): release 1.2.3']) {
+      assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: head }), 'audit', head)
+    }
+  })
+
+  it('classifies schedule and workflow_dispatch as audit', () => {
+    assert.equal(classifyValidationMode({ eventName: 'schedule' }), 'audit')
+    assert.equal(classifyValidationMode({ eventName: 'workflow_dispatch' }), 'audit')
+  })
+
+  it('rejects unsupported events so canonical validation never runs off-trigger', () => {
+    for (const eventName of ['push', 'pull_request_target', 'merge_group', 'release', '']) {
+      assert.throws(() => classifyValidationMode({ eventName, baseRef: 'main', headRef: 'staging' }), /Unsupported validation event/, eventName)
+    }
+    assert.throws(() => classifyValidationMode({}), /Unsupported validation event/)
+    assert.throws(() => classifyValidationMode({ eventName: 'push' }), /Unsupported validation event/)
+  })
+
+  it('rejects pull_request classification without base or head refs', () => {
+    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', headRef: 'feature/x' }), /requires base_ref/)
+    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef: 'main' }), /requires head_ref/)
+    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef: '', headRef: 'feature/x' }), /requires base_ref/)
+    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: '' }), /requires head_ref/)
+  })
+
+  it('rejects unsupported base branches instead of guessing a mode', () => {
+    for (const baseRef of ['release', 'dev', 'feature/x', 'refs/heads/staging', 'refs/heads/main']) {
+      assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef, headRef: 'feature/x' }), /Unsupported pull_request base branch/, baseRef)
+    }
+  })
+
+  it('matches only the exact Release Please prefix boundary', () => {
+    assert.equal(isReleasePleaseHead(RELEASE_PLEASE_PREFIX), true)
+    assert.equal(isReleasePleaseHead(`${RELEASE_PLEASE_PREFIX}--v1.2.3`), true)
+    assert.equal(isReleasePleaseHead(`${RELEASE_PLEASE_PREFIX}--v1.2.3--rc.1`), true)
+    assert.equal(isReleasePleaseHead(`${RELEASE_PLEASE_PREFIX}--`), true)
+    for (const head of [
+      `${RELEASE_PLEASE_PREFIX}x`, `${RELEASE_PLEASE_PREFIX}s`, `${RELEASE_PLEASE_PREFIX}-v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX}_v1.2.3`, `${RELEASE_PLEASE_PREFIX}/v1.2.3`, `${RELEASE_PLEASE_PREFIX} `,
+      ' release-please--branches--main', 'Release-please--branches--main', 'release-please--branches--MAIN',
+      'release-please--branches--staging--v1.0.0', 'release-please--branches--mainx', 'main', 'staging', '',
+    ]) {
+      assert.equal(isReleasePleaseHead(head), false, head)
+    }
+    assert.equal(isReleasePleaseHead(undefined), false)
+    assert.equal(isReleasePleaseHead(null), false)
+    assert.equal(isReleasePleaseHead(42), false)
+  })
+
+  it('keeps one required-job truth table per mode', () => {
+    assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
+    assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql'])
+    assert.deepEqual(requiredValidationJobs('release'), ['release-policy'])
+    assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
+    assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
+    assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql', 'release-policy'])
+    assert.equal(AGGREGATE_CHECK_NAME, 'Validation / Gate')
+    assert.throws(() => requiredValidationJobs('unknown'), /Unknown validation mode/)
+    assert.throws(() => requiredValidationJobs(), /Unknown validation mode/)
+    assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
+  })
+
+  it('passes the gate only when every job required for the mode succeeded', () => {
+    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success' } }), {
+      valid: true,
+      required: ['ci', 'test'],
+      failures: [],
+    })
+    assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' } }), {
+      valid: true,
+      required: ['ci', 'test', 'security', 'codeql'],
+      failures: [],
+    })
+    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { 'release-policy': 'success' } }), {
+      valid: true,
+      required: ['release-policy'],
+      failures: [],
+    })
+  })
+
+  it('lets expected skips of non-required jobs pass the gate', () => {
+    assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'skipped', 'release-policy': 'skipped' } }).valid, true)
+    assert.equal(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'success', 'release-policy': 'skipped' } }).valid, true)
+    assert.equal(evaluateValidationGate({ mode: 'release', results: { 'release-policy': 'success', ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'skipped' } }).valid, true)
+    // Non-required jobs never influence the gate, even when they fail.
+    assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', codeql: 'failure' } }).valid, true)
+    assert.equal(evaluateValidationGate({ mode: 'fast', results: {} }).valid, false)
+  })
+
+  it('fails closed on failure, cancellation, unexpected skip, and unknown results', () => {
+    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'failure', test: 'success' } }), {
+      valid: false,
+      required: ['ci', 'test'],
+      failures: [{ job: 'ci', result: 'failure' }],
+    })
+    assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'cancelled' } }).failures, [
+      { job: 'codeql', result: 'cancelled' },
+    ])
+    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { 'release-policy': 'skipped' } }).failures, [
+      { job: 'release-policy', result: 'skipped' },
+    ])
+    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'weird' } }).failures, [
+      { job: 'test', result: 'weird' },
+    ])
+  })
+
+  it('fails closed on missing results and unknown modes', () => {
+    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success' } }).failures, [{ job: 'test', result: 'missing' }])
+    assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: {} }).failures, [
+      { job: 'ci', result: 'missing' },
+      { job: 'test', result: 'missing' },
+      { job: 'security', result: 'missing' },
+      { job: 'codeql', result: 'missing' },
+    ])
+    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: null } }).failures, [{ job: 'test', result: 'missing' }])
+    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: undefined } }).failures, [{ job: 'test', result: 'missing' }])
+    const unknown = evaluateValidationGate({ mode: 'unknown', results: {} })
+    assert.equal(unknown.valid, false)
+    assert.deepEqual(unknown.required, [])
+    assert.equal(unknown.failures.length, 1)
+    assert.equal(unknown.failures[0].job, 'mode')
+    assert.match(unknown.failures[0].result, /Unknown validation mode/)
+  })
+
+  it('generates one validation caller with PR, schedule, and dispatch triggers only', () => {
+    const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    assert.doesNotMatch(caller, /^  push:/m)
+    assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
+    assert.match(caller, /schedule:/)
+    assert.match(caller, /workflow_dispatch:/)
+    assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
+    assert.match(caller, /cancel-in-progress: true/)
+  })
+
+  it('classifies the validation mode through the pinned runtime in the caller', () => {
+    const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    assert.match(caller, /FOUNDRY_EVENT_NAME: \$\{\{ github\.event_name \}\}/)
+    assert.match(caller, /FOUNDRY_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/)
+    assert.match(caller, /FOUNDRY_HEAD_REF: \$\{\{ github\.event\.pull_request\.head\.ref \}\}/)
+    assert.match(caller, /validation mode/)
+    assert.match(caller, /mode: \$\{\{ needs\.mode\.outputs\.mode \}\}/)
+    assert.match(caller, /uses: \.\/\.github\/workflows\/validation\.yml/)
+    // Least-permission union needed for the CodeQL chain; no extra write scopes.
+    assert.match(caller, /security-events: write/)
+    assert.doesNotMatch(caller, /pull-requests: write/)
+    assert.doesNotMatch(caller, /contents: write/)
+  })
+
+  it('exposes exactly one stable Validation / Gate aggregate check that always runs', () => {
+    const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
+    assert.match(caller, /^  validation:\n    name: Validation/m)
+    assert.match(orchestrator, /^  gate:\n    name: Gate/m)
+    assert.match(orchestrator, /needs: \[ci, test, security, codeql, release-policy\]/)
+    assert.match(orchestrator, /if: always\(\)/)
+    assert.match(orchestrator, /validation gate/)
+    assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
+    assert.match(orchestrator, /FOUNDRY_RELEASE_POLICY: \$\{\{ needs\.release-policy\.result \}\}/)
+    assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
+  })
+
+  it('runs only the mode-required tier jobs in the orchestrator', () => {
+    const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
+    for (const job of ['ci', 'test', 'security', 'codeql', 'release-policy']) {
+      assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
+    }
+    assert.match(orchestrator, /if: inputs\.mode == 'fast' \|\| inputs\.mode == 'audit'/)
+    assert.match(orchestrator, /if: inputs\.mode == 'audit'/)
+    assert.match(orchestrator, /if: inputs\.mode == 'release'/)
+    assert.match(orchestrator, /unit-only: \$\{\{ inputs\.mode == 'fast' \}\}/)
+    assert.match(orchestrator, /validation release_diff/)
+    assert.match(orchestrator, /secrets: inherit/)
+    assert.match(orchestrator, /FOUNDRY_HEAD_REPO: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/)
+    assert.match(orchestrator, /FOUNDRY_REPOSITORY: \$\{\{ github\.repository \}\}/)
+  })
+
+  it('keeps the reusable test interface backward compatible with an additive unit-only input', () => {
+    const test = readFileSync('.github/workflows/test.yml', 'utf8')
+    assert.match(test, /unit-only:\n\s+description:/)
+    assert.match(test, /type: boolean/)
+    assert.match(test, /default: false/)
+    for (const job of ['integration', 'e2e', 'smoke']) {
+      assert.match(test, new RegExp(`^  ${job}:\n    name: [A-Za-z0-9]+\n    if: inputs\.unit-only != true`, 'm'))
+    }
+    for (const input of ['runtime-repository', 'runtime-ref', 'runner', 'unit-runner']) {
+      assert.match(test, new RegExp(`^      ${input}:`, 'm'))
+    }
+  })
+
+  it('classifies real event metadata through the runtime mode task', () => {
+    const run = (env) => spawnSync(process.execPath, [runtime, 'validation', 'mode'], {
+      encoding: 'utf8',
+      env: { ...testEnv, ...env },
+    })
+    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'staging', FOUNDRY_HEAD_REF: 'feature/x' }).stdout, /^mode=fast$/m)
+    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.2.3' }).stdout, /^mode=release$/m)
+    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'staging' }).stdout, /^mode=audit$/m)
+    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'feature/x' }).stdout, /^mode=audit$/m)
+    assert.match(run({ FOUNDRY_EVENT_NAME: 'workflow_dispatch' }).stdout, /^mode=audit$/m)
+    assert.match(run({ FOUNDRY_EVENT_NAME: 'schedule' }).stdout, /^mode=audit$/m)
+    const push = run({ FOUNDRY_EVENT_NAME: 'push', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'staging' })
+    assert.notEqual(push.status, 0)
+    assert.match(push.stderr, /Unsupported validation event/)
+  })
+
+  it('evaluates the aggregate gate through the runtime gate task', () => {
+    const run = (env) => spawnSync(process.execPath, [runtime, 'validation', 'gate'], {
+      encoding: 'utf8',
+      env: { ...testEnv, ...env },
+    })
+    const audit = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    assert.equal(audit.status, 0)
+    assert.match(audit.stdout, /gate passed/)
+    const fast = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    assert.equal(fast.status, 0)
+    const release = run({ FOUNDRY_MODE: 'release', FOUNDRY_CI: 'skipped', FOUNDRY_TEST: 'skipped', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped', FOUNDRY_RELEASE_POLICY: 'success' })
+    assert.equal(release.status, 0)
+    const failed = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'failure', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    assert.notEqual(failed.status, 0)
+    assert.match(failed.stderr, /::error::ci: failure/)
+    const cancelled = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'cancelled', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    assert.notEqual(cancelled.status, 0)
+    assert.match(cancelled.stderr, /::error::codeql: cancelled/)
+    const unknown = run({ FOUNDRY_MODE: 'bogus', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success', FOUNDRY_RELEASE_POLICY: 'success' })
+    assert.notEqual(unknown.status, 0)
+    assert.match(unknown.stderr, /Unknown validation mode/)
+  })
+
+  it('enforces the strict generated-release diff and version policy', () => {
+    const base = { headRef: 'release-please--branches--main--v1.0.0', headRepo: 'owner/repo', repository: 'owner/repo' }
+    assert.equal(validateGeneratedReleaseDiff({ ...base, changedPaths: ['package.json', 'CHANGELOG.md'] }).valid, true)
+    const unexpected = validateGeneratedReleaseDiff({ ...base, changedPaths: ['package.json', 'src/index.ts'] })
+    assert.equal(unexpected.valid, false)
+    assert.match(unexpected.errors.join(' '), /unexpected paths: src\/index\.ts/)
+    assert.equal(validateGeneratedReleaseDiff({ ...base, headRef: 'release-please--branches--mainx--v1.0.0', changedPaths: ['package.json'] }).valid, false)
+    assert.equal(validateGeneratedReleaseDiff({ ...base, headRepo: 'evil/fork', changedPaths: ['package.json'] }).valid, false)
+    // Missing repository identity fails closed, not just mismatched identity.
+    assert.equal(validateGeneratedReleaseDiff({ ...base, headRepo: '', changedPaths: ['package.json'] }).valid, false)
+    assert.equal(validateGeneratedReleaseDiff({ ...base, repository: '', changedPaths: ['package.json'] }).valid, false)
+    assert.equal(validateGeneratedReleaseDiff({ ...base, headRepo: undefined, repository: undefined, changedPaths: ['package.json'] }).valid, false)
+    assert.equal(validateGeneratedReleaseDiff({ ...base, changedPaths: [] }).valid, false)
+    const noBump = validateGeneratedReleaseDiff({ ...base, changedPaths: ['CHANGELOG.md'] })
+    assert.equal(noBump.valid, false)
+    assert.match(noBump.errors.join(' '), /no version metadata/)
+    const extraFile = validateGeneratedReleaseDiff({
+      ...base,
+      changedPaths: ['src/version.ts', 'CHANGELOG.md'],
+      config: { 'extra-files': ['src/version.ts'] },
+    })
+    assert.equal(extraFile.valid, true)
+    assert.deepEqual(extraFile.changedPaths, ['src/version.ts', 'CHANGELOG.md'])
+  })
+
+  it('validates generated release diffs through the runtime release_diff task', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-diff-'))
+    const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+    git(['init', '-q'])
+    git(['config', 'user.email', 'test@example.com'])
+    git(['config', 'user.name', 'Test'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    git(['add', '-A'])
+    git(['commit', '-q', '-m', 'base'])
+    const baseSha = git(['rev-parse', 'HEAD']).stdout.trim()
+    git(['checkout', '-q', '-b', 'release-please--branches--main--v1.0.0'])
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.1.0"}\n')
+    git(['add', '-A'])
+    git(['commit', '-q', '-m', 'chore(main): release 1.1.0'])
+    const run = (env) => spawnSync(process.execPath, [runtime, 'validation', 'release_diff'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...testEnv, ...env },
+    })
+    const valid = run({ FOUNDRY_BASE_SHA: baseSha, FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0', FOUNDRY_HEAD_REPO: 'owner/repo', FOUNDRY_REPOSITORY: 'owner/repo' })
+    assert.equal(valid.status, 0, valid.stderr)
+    assert.match(valid.stdout, /Release policy passed/)
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/index.ts'), 'export const value = 1\n')
+    git(['add', '-A'])
+    git(['commit', '-q', '-m', 'sneak'])
+    const sneaky = run({ FOUNDRY_BASE_SHA: baseSha, FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0', FOUNDRY_HEAD_REPO: 'owner/repo', FOUNDRY_REPOSITORY: 'owner/repo' })
+    assert.notEqual(sneaky.status, 0)
+    assert.match(sneaky.stderr, /unexpected paths: src\/index\.ts/)
+    const fork = run({ FOUNDRY_BASE_SHA: baseSha, FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0', FOUNDRY_HEAD_REPO: 'evil/fork', FOUNDRY_REPOSITORY: 'owner/repo' })
+    assert.notEqual(fork.status, 0)
+    assert.match(fork.stderr, /same-repository/)
+  })
+
   it('produces a non-destructive release recovery plan', () => {
     const plan = buildReleaseRecoveryPlan({
       tags: ['v1.0.0', 'v1.1.0'],
@@ -449,6 +887,34 @@ describe('code-foundry CLI', () => {
     assert.match(plan.actions[0], /v1\.1\.0/)
   })
 })
+
+/** @param {string} stem */
+function legacyCaller(stem) {
+  return [
+    'name: Code Foundry',
+    '',
+    'on:',
+    '  push:',
+    '    branches: [main, staging]',
+    '  pull_request:',
+    '    branches: [main, staging]',
+    '  workflow_dispatch:',
+    '',
+    'permissions:',
+    '  contents: read',
+    '',
+    'jobs:',
+    `  ${stem}:`,
+    `    name: ${stem}`,
+    `    uses: 0xPlayerOne/code-foundry/.github/workflows/${stem}.yml@v0.31.12`,
+    '    with:',
+    '      runtime-repository: 0xPlayerOne/code-foundry',
+    '      runtime-ref: v0.31.12',
+    '      runner: ubuntu-latest',
+    '    secrets: inherit',
+    '',
+  ].join('\n')
+}
 
 function exists(file) {
   try {

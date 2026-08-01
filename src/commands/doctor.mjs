@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
+import { isGeneratedEventCaller } from './sync.mjs'
 
 /** @param {string} root @param {{ github?: boolean }} [options] */
 export function doctor(root, options = {}) {
@@ -68,10 +69,42 @@ export function doctor(root, options = {}) {
     }
   }
 
-  for (const workflow of ['ci', 'codeql', 'security', 'test', 'draft-pr', 'release-pr', 'release']) {
-    if (includesValue(config.features ?? 'all', workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
+  const features = config.features ?? 'all'
+  for (const workflow of ['validation', 'draft-pr', 'release-pr', 'release']) {
+    if (includesValue(features, workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
   }
-  console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.')
+  const validationEnabled = includesValue(features, 'validation') || ['ci', 'test', 'security', 'codeql'].some((legacy) => includesValue(features, legacy))
+  const validationCaller = ['validation.yml', 'validation_self-ci.yml']
+    .map((file) => join(target, `.github/workflows/${file}`))
+    .find((file) => existsSync(file) && /pull_request:/.test(readFileSync(file, 'utf8')))
+  if (validationEnabled && !validationCaller) {
+    error('missing tiered validation caller; run code-foundry sync to adopt validation.yml')
+  } else if (validationCaller) {
+    const caller = readFileSync(validationCaller, 'utf8')
+    if (!/^  validation:\n    name: Validation/m.test(caller)) {
+      error('validation caller is missing the Validation job; the Validation / Gate aggregate check cannot form.')
+    }
+    if (!/uses:\s+(?:\.\/\.github\/workflows\/validation\.yml|\S+\/\.github\/workflows\/validation\.yml@)/.test(caller)) {
+      error('validation caller does not reference the validation orchestrator.')
+    }
+    const runtimeRef = caller.match(/^\s+runtime-ref:\s+(.+?)\s*$/m)?.[1]
+    const checkoutRef = caller.match(/^\s+ref:\s+(.+?)\s*$/m)?.[1]
+    if (!runtimeRef || !checkoutRef) {
+      error('validation caller is missing runtime ref wiring (mode checkout or orchestrator input).')
+    } else if (runtimeRef !== checkoutRef) {
+      error(`validation caller pins mismatched runtime refs (${runtimeRef} vs ${checkoutRef}).`)
+    } else if (runtimeRef !== '${{ github.sha }}' && !/^v\d+\.\d+\.\d+$/.test(runtimeRef)) {
+      warn(`validation caller runtime ref ${runtimeRef} is not a released tag; pin a vX.Y.Z tag.`)
+    }
+  }
+  const runtimeRepository = config.runtime_repository ?? '0xPlayerOne/code-foundry'
+  for (const stem of ['ci', 'test', 'security', 'codeql']) {
+    const legacy = join(target, `.github/workflows/${stem}.yml`)
+    if (existsSync(legacy) && isGeneratedEventCaller(readFileSync(legacy, 'utf8'), stem, runtimeRepository)) {
+      warn(`stale generated legacy caller ${stem}.yml still triggers canonical suites; run code-foundry sync to migrate to validation.yml.`)
+    }
+  }
+  console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by the tiered validation orchestrator.')
   if (options.github) {
     const github = doctorGithub(target)
     for (const message of github.warnings) warn(`GitHub: ${message}`)
