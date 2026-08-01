@@ -1614,6 +1614,8 @@ describe('code-foundry CLI', () => {
 
     const reconcileSection = releaseLines.slice(reconcileIndex, clearIndex + 1).join('\n')
     assert.match(reconcileSection, /name: Reconcile release metadata[\s\S]*?GIT_SSH_COMMAND: \$\{\{ steps\.staging-reconcile-ssh\.outputs\.ssh_command \|\| '' \}\}/)
+    const prepareSection = releaseLines.slice(prepareIndex, authIndex).join('\n')
+    assert.match(prepareSection, /ssh_command=ssh -F \/dev\/null -i \$STAGING_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=\$STAGING_HOSTS -o StrictHostKeyChecking=yes/)
     assert.match(reconcileSection, /run: node \"\$RUNNER_TEMP\/code-foundry\/src\/cli\.mjs\" release reconcile --github --base main --head staging/)
   })
 
