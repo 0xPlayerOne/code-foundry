@@ -44,7 +44,8 @@ export function reconcileRelease(root, options) {
     const remoteSha = remoteRefSha(target, head)
     if (remoteSha === state.stagingSha) {
       throw new Error(`${head} synchronization was rejected by an exact lease while remote ${head} tip remained ${state.stagingSha}. ` +
-        'Update branch protection or remote policy to permit this mutation, then retry.')
+        'Update branch protection or remote policy to permit this mutation, then retry. ' +
+        `Last failure detail: ${mutation.error}`)
     }
   }
   throw new Error(`Reconciliation of ${head} was retried but failed while the branch moved concurrently.`)
@@ -150,15 +151,55 @@ function remoteRefSha(target, branch) {
 function executeReconciliationMutation(target, head, state) {
   if (!state.plan.targetSha) return { success: false, retry: false, error: `No target SHA for ${head} reconciliation.` }
   if (state.plan.action === 'rebase-staging') {
-    const replaySha = replayOntoMain(target, state.mainSha, state.stagingOnlyCommits)
+    let replaySha
+    try {
+      replaySha = replayOntoMain(target, state.mainSha, state.stagingOnlyCommits)
+    } catch (error) {
+      return {
+        success: false,
+        retry: false,
+        error: `Replay conflict while applying staging-only commits before replay: ${String(error instanceof Error ? error.message : error)}`,
+      }
+    }
+
     const push = pushWithLease(target, head, state.stagingSha, replaySha)
     if (push.status === 0) return { success: true, result: { synchronization: 'replay', replaySha } }
-    return { success: false, retry: true, error: `Git push of replayed ${head} history failed: ${push.message}` }
+    const classification = classifyPushFailure(head, push.message)
+    if (classification.category === 'authentication') {
+      return {
+        success: false,
+        retry: false,
+        error: `${head} authentication failed during replay push: ${classification.message}`,
+      }
+    }
+    if (classification.category === 'policy') {
+      return {
+        success: false,
+        retry: false,
+        error: `${head} reconciliation was blocked by branch policy: ${classification.message}`,
+      }
+    }
+    return { success: false, retry: true, error: `${head} synchronization failed with lease: ${classification.message}` }
   }
   const targetSha = /** @type {string} */ (state.plan.targetSha)
   const leased = pushWithLease(target, head, state.stagingSha, targetSha)
   if (leased.status === 0) return { success: true, result: { synchronization: state.plan.action === 'aligned' ? 'synced' : 'leased' } }
-  return { success: false, retry: true, error: `${head} synchronization failed with lease: ${leased.message}` }
+  const classification = classifyPushFailure(head, leased.message)
+  if (classification.category === 'authentication') {
+    return {
+      success: false,
+      retry: false,
+      error: `${head} authentication failed during push: ${classification.message}`,
+    }
+  }
+  if (classification.category === 'policy') {
+    return {
+      success: false,
+      retry: false,
+      error: `${head} reconciliation was blocked by branch policy: ${classification.message}`,
+    }
+  }
+  return { success: false, retry: true, error: `${head} synchronization failed with lease: ${classification.message}` }
 }
 
 /** @param {string} target @param {string} head @param {string} expectedSha @param {string} tipSha */
@@ -169,10 +210,38 @@ function pushWithLease(target, head, expectedSha, tipSha) {
     `--force-with-lease=refs/heads/${head}:${expectedSha}`,
     `${tipSha}:refs/heads/${head}`,
   ], { cwd: target, encoding: 'utf8' })
+  const message = `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim() || `push with lease failed for ${head}.`
   return {
     status: result.status,
-    message: result.stdout?.trim() || result.stderr?.trim() || `push with lease failed for ${head}.`,
+    message: sanitizeReconcileOutput(message),
   }
+}
+
+/**
+ * Classify a push failure to avoid leaking sensitive details and provide useful
+ * diagnostics while preserving exact-lease behavior.
+ * @param {string} branch
+ * @param {string} raw
+ */
+function classifyPushFailure(branch, raw) {
+  const message = sanitizeReconcileOutput(raw)
+  if (!message) return { category: 'other', message: `push with lease failed for ${branch}.` }
+  const lower = message.toLowerCase()
+  if (/permission denied|authentication failed|could not read from remote repository|publickey|not authorized|bad credentials/.test(lower)) {
+    return { category: 'authentication', message }
+  }
+  if (/remote:\s*error|protected branch|required status checks|pre-receive hook|branch policy|ruleset|gh006|gh007|gh008/.test(lower)) {
+    return { category: 'policy', message }
+  }
+  return { category: 'other', message }
+}
+
+/** @param {string} value */
+function sanitizeReconcileOutput(value) {
+  return value
+    .replace(/https?:\/\/[^\s@]+:[^\s@]*@/g, 'https://***:***@')
+    .replace(/https?:\/\/[^\s@]+@/g, 'https://***@')
+    .trim()
 }
 
 /**
@@ -198,7 +267,8 @@ function replayOntoMain(target, mainSha, commits) {
       const cherryPick = spawnSync('git', [...identityArgs, 'cherry-pick', sha], { cwd: workspace, encoding: 'utf8' })
       if (cherryPick.status !== 0) {
         spawnSync('git', ['cherry-pick', '--abort'], { cwd: workspace, encoding: 'utf8' })
-        throw new Error(`Cherry-pick of ${sha} failed while replaying staging commits.`)
+        const details = [cherryPick.stdout?.trim(), cherryPick.stderr?.trim()].filter(Boolean).join('\n')
+        throw new Error(`Cherry-pick of ${sha} failed while replaying staging commits: ${sanitizeReconcileOutput(details)}`)
       }
     }
     const replayTip = git(workspace, ['rev-parse', 'HEAD'])
