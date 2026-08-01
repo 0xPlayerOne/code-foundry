@@ -239,7 +239,7 @@ jobs:
                 gh pr view "$pr" \
                   --repo "$GITHUB_REPOSITORY" \
                   --json mergeStateStatus,mergeable \
-                  --jq -r '[.mergeStateStatus, .mergeable] | @tsv' 2>/dev/null
+                  --jq '[.mergeStateStatus, .mergeable] | @tsv' 2>/dev/null
               ); then
                 case "$merge_state" in
                   CLEAN|UNSTABLE)
