@@ -2,16 +2,23 @@
 
 ## Standard triggers
 
-The default standard callers use:
+The canonical validation caller uses pull requests plus bounded audit entry
+points; it does not run the same suites again on branch pushes:
 
 ```yaml
-push:
-  branches: [main, staging]
 pull_request:
   branches: [main, staging]
+schedule:
+  - cron: '31 6 * * 1'
+workflow_dispatch:
 ```
 
-Draft PR automation may additionally listen to supported topic branches.
+Pull requests into `staging` run the fast tier, ordinary pull requests into
+`main` run the full audit tier, and exact Release Please pull requests into
+`main` run only release policy. Scheduled and manual runs select the audit
+tier. Draft PR automation separately listens to supported topic-branch pushes,
+promotion automation listens to `staging` pushes, and release automation
+listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should keep their own triggers and permissions.
 
@@ -30,6 +37,49 @@ repository-owned extensions and should keep their own triggers and permissions.
 Use concise job names such as `CI / Format`, `Test / Unit`, and
 `CodeQL / Analyze (Python)`. Required checks should match the jobs actually
 enabled for the repository profile.
+
+## Merge methods
+
+The merge audit pins one merge method per transition. `code-foundry doctor`
+and `code-foundry sync` fail closed on any other strategy, and the release
+workflow refuses to run unless its strategy is exactly `squash`.
+
+| Transition | Merge method | Enforcement |
+| --- | --- | --- |
+| Feature/fix PR into `staging` | Squash | Contribution policy; see `CONTRIBUTING.md` |
+| `staging` → `main` promotion PR | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase`; merge commits are rejected |
+| Release Please version PR into `main` | Squash (`release_merge_strategy: squash`) | Release automation fails closed unless `squash`; never defaults to `merge`, never uses `--admin` |
+
+Keeping `main` linear — rebase promotions and squash release PRs — is what
+lets the post-release reconciliation fast-forward or replay `staging` safely.
+
+Protect `staging` with the aggregate `Validation / Gate`, squash-only pull
+requests, and a single GitHub Actions integration path. That path uses the
+GitHub Actions integration token by default, and optionally an SSH deploy key
+when `STAGING_DEPLOY_KEY` is configured. The deploy key is required only when
+a personal-repository ruleset for `staging` enforces a Deploy Key bypass for
+`release reconcile`; repositories without that bypass continue with tokenless
+checkout + GitHub API calls.
+
+When used, the optional `STAGING_DEPLOY_KEY` is written at runtime only for
+reconcile, used to set `GIT_SSH_COMMAND` and trusted host settings for the
+`release reconcile` transport, then scrubbed after the step.
+
+When absent, the job keeps `GH_TOKEN = github.token` and runs `gh auth setup-git`
+so repositories without a Deploy Key ruleset bypass still reconcile successfully.
+
+For this reconciliation path, maintainer PATs and administrator roles are not
+authorized bypasses; the job deliberately authenticates with `github.token`,
+not `CODE_FOUNDRY_TOKEN` or `RELEASE_PLEASE_TOKEN`.
+
+## GitHub Stacks
+
+GitHub Stacks (stacked pull requests) is not part of this topology and does
+not reduce required workflow runs. Every pull request in a stack still
+triggers its own validation run, and each branch keeps its own required
+checks; stacking never collapses or skips a required check in the tiered
+validation gate. Land changes through the standard `staging-release` flow
+instead.
 
 ## Language defaults
 

@@ -88,10 +88,13 @@ GitHub Code Quality or other paid GitHub features.
 See [Workflow and CI conventions](docs/WORKFLOWS.md) for triggers, required
 checks, runners, coverage, caching, and custom workflow extensions.
 
-The default contribution policy uses the `staging-release` workflow with
-rebase merges. Repositories can set `merge_strategy: squash` or
-`merge_strategy: merge` in `.github/code-foundry.yml` when their governance
-requires another merge convention.
+The contribution policy uses the `staging-release` workflow: feature PRs squash
+into `staging`, the promotion PR rebases into `main` (`merge_strategy: rebase`),
+and Release Please version PRs squash into `main` (`release_merge_strategy:
+squash`). Release automation never defaults to a merge method and never merges
+with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on
+any other strategy. GitHub Stacks is not part of this topology and does not
+reduce the required workflow runs.
 
 ## Releases and publishing
 

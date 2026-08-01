@@ -16,10 +16,17 @@ const standardFiles = [
   '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', '.github/dependabot.yml',
   '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
-  '.github/workflows/ci.yml', '.github/workflows/codeql.yml', '.github/workflows/draft-pr.yml',
+  '.github/workflows/validation.yml', '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
-  '.github/workflows/security.yml', '.github/workflows/test.yml', '.github/workflows/opencode-security.yml',
+  '.github/workflows/opencode-security.yml',
 ]
+
+/**
+ * Legacy event callers that the tiered validation caller replaces. Sync
+ * removes them only when they are recognized as Code Foundry-generated;
+ * custom workflows are always preserved byte-for-byte.
+ */
+const LEGACY_GENERATED_CALLERS = ['ci', 'test', 'security', 'codeql']
 
 const protectedFiles = new Set([
   'AGENTS.md', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
@@ -72,6 +79,14 @@ export function syncRepository(options) {
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
     throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
   }
+  const mergeStrategy = configured(config.merge_strategy, 'rebase')
+  if (mergeStrategy !== 'rebase') {
+    throw new Error(`Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`)
+  }
+  const releaseMergeStrategy = configured(config.release_merge_strategy, '')
+  if (includesValue(features, 'release') && releaseMergeStrategy !== 'squash') {
+    throw new Error(`Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires squash for Release Please version pull requests and never defaults to merge.`)
+  }
   const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
   const changed = []
 
@@ -98,6 +113,10 @@ export function syncRepository(options) {
     }
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'preserve' && existsSync(destination)) continue
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'none') continue
+    // An explicit license policy makes the license block below the single
+    // owner of LICENSE; copying the runtime's own root LICENSE here would
+    // fight it and break idempotence on the next sync.
+    if (file === 'LICENSE' && license !== 'preserve' && license !== 'none') continue
     if (file === '.github/CODEOWNERS' && existsSync(destination)) continue
     let content = readFileSync(sourceFile)
     if (file === 'release-please-config.json') {
@@ -115,6 +134,18 @@ export function syncRepository(options) {
     if (!existsSync(destination) || !buffersEqual(content, readFileSync(destination))) {
       changed.push(file)
       writeOrReport(destination, content, dryRun)
+    }
+  }
+
+  for (const stem of LEGACY_GENERATED_CALLERS) {
+    const destination = join(target, `.github/workflows/${stem}.yml`)
+    if (!existsSync(destination)) continue
+    if (isGeneratedEventCaller(readFileSync(destination, 'utf8'), stem, runtimeRepository)) {
+      changed.push(`.github/workflows/${stem}.yml`)
+      if (dryRun) console.log(`Would remove generated legacy caller ${stem}.yml; validation.yml replaces it.`)
+      else rmSync(destination, { force: true })
+    } else {
+      console.log(`Preserved ${stem}.yml: not recognized as a Code Foundry-generated caller.`)
     }
   }
 
@@ -143,7 +174,11 @@ export function syncRepository(options) {
     const licenseFile = license === 'mit' ? 'MIT.txt' : license === 'agpl-3.0-or-later' ? 'AGPL-3.0-or-later.txt' : 'GPL-3.0-or-later.txt'
     const sourceLicense = join(source, '.github/licenses', licenseFile)
     if (!existsSync(sourceLicense)) throw new Error(`License template missing: ${sourceLicense}`)
-    writeOrReport(join(target, 'LICENSE'), readFileSync(sourceLicense), dryRun)
+    const licenseContent = readFileSync(sourceLicense)
+    if (!existsSync(join(target, 'LICENSE')) || !buffersEqual(licenseContent, readFileSync(join(target, 'LICENSE')))) {
+      changed.push('LICENSE')
+      writeOrReport(join(target, 'LICENSE'), licenseContent, dryRun)
+    }
     if (!existsSync(join(target, 'NOTICE'))) writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
   }
 
@@ -217,6 +252,11 @@ function shouldInclude(file, languages, features, config) {
   if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
   if (file === '.github/workflows/opencode-security.yml') return ['true', 'auto'].includes(config.opencode_security ?? 'false')
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
+  // The tiered validation caller supersedes the legacy ci/test/security/codeql
+  // event callers, so legacy feature names keep selecting it.
+  if (workflow === 'validation') {
+    return includesValue(features, 'validation') || LEGACY_GENERATED_CALLERS.some((legacy) => includesValue(features, legacy))
+  }
   return !workflow || includesValue(features, workflow)
 }
 
@@ -245,7 +285,13 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
   rendered = rendered.replace(new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'), `$&@${ref}`)
-  rendered = rendered.replace(/^(\s+runtime-ref:)\s+.*$/m, `$1 ${ref}`)
+  // Pin every runtime reference in the rendered caller: the orchestrator input
+  // in the `with:` block and the mode job's runtime checkout. Self templates
+  // use ${{ github.sha }} and are only rewritten when rendered for consumers.
+  rendered = rendered.replace(/^(\s+runtime-ref:)\s+.*$/gm, `$1 ${ref}`)
+  rendered = rendered.replace(/^(\s+ref:)\s+\$\{\{\s*github\.sha\s*\}\}\s*$/gm, `$1 ${ref}`)
+  rendered = rendered.replace(/^(\s+runtime-repository:)\s+.*$/gm, `$1 ${repository}`)
+  rendered = rendered.replace(new RegExp(`^(\\s+repository:)\\s+0xPlayerOne\\/code-foundry\\s*$`, 'gm'), `$1 ${repository}`)
   /** @type {Record<string, string|undefined>} */
   const runners = {
     ci: config.ci_runner ?? config.runner,
@@ -261,6 +307,23 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   if (runner) rendered = rendered.replace(/^(\s+runner:)\s+.*$/m, `$1 ${runner}`)
   if (workflow === 'test' && config.unit_runner) {
     rendered = rendered.replace(/^(\s+unit-runner:)\s+.*$/m, `$1 ${config.unit_runner}`)
+  }
+  if (workflow === 'validation') {
+    /** @type {Record<string, string|undefined>} */
+    const runnerInputs = {
+      'ci-runner': config.ci_runner ?? config.runner,
+      'test-runner': config.test_runner ?? config.runner,
+      'security-runner': config.security_runner ?? config.runner,
+      'codeql-runner': config.codeql_runner ?? config.runner,
+      'unit-runner': config.unit_runner,
+    }
+    for (const [input, value] of Object.entries(runnerInputs)) {
+      if (!value) continue
+      rendered = rendered.replace(new RegExp(`^(\\s+${input}:)\\s+.*$`, 'm'), `$1 ${value}`)
+    }
+    rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/m, `$1 '${rustCodeql.shards}'`)
+    rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/m, `$1 '${rustCodeql.threads}'`)
+    rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/m, `$1 ${rustCodeql.maxParallel}`)
   }
   if (workflow === 'codeql') {
     rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/m, `$1 '${rustCodeql.shards}'`)
@@ -318,6 +381,27 @@ function validateRustCodeqlConfig(config) {
 
 /** @param {string} value */
 function escapeRegExp(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+
+/**
+ * Recognize a Code Foundry-generated legacy event caller (the consumer copies
+ * of the old ci/test/security/codeql callers). Recognition is structural and
+ * end-to-end: the generated name, a thin caller with no steps or runs-on, the
+ * runtime wiring, a single job named after the workflow, and a pinned remote
+ * reference to the runtime's reusable workflow. Anything else is treated as a
+ * repository-owned workflow and preserved byte-for-byte.
+ * @param {string|Buffer} content
+ * @param {string} stem
+ * @param {string} runtimeRepository
+ * @returns {boolean}
+ */
+export function isGeneratedEventCaller(content, stem, runtimeRepository) {
+  const text = Buffer.isBuffer(content) ? content.toString('utf8') : String(content)
+  if (!/^name:\s*Code Foundry\s*$/m.test(text)) return false
+  if (/^\s*(runs-on|steps):/m.test(text)) return false
+  if (!text.includes('runtime-repository:')) return false
+  if (!new RegExp(`^  ${stem}:`, 'm').test(text)) return false
+  return new RegExp(`uses:\\s*${escapeRegExp(runtimeRepository)}/\\.github/workflows/${stem}\\.yml@`).test(text)
+}
 
 /** @param {string} baseline @param {string} existing */
 function mergeGitignore(baseline, existing) {

@@ -18,6 +18,15 @@ on:
         required: false
         type: string
         default: v0.31.12
+    secrets:
+      CODE_FOUNDRY_TOKEN:
+        required: false
+      RELEASE_PLEASE_TOKEN:
+        required: false
+      STAGING_DEPLOY_KEY:
+        required: false
+      NPM_TOKEN:
+        required: false
 
 permissions:
   actions: write
@@ -47,12 +56,14 @@ jobs:
       npm_publish: ${{ steps.profile.outputs.npm_publish }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           filter: blob:none
       - name: Checkout runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -72,12 +83,18 @@ jobs:
             : {}
           let releaseType = config.release_type || 'auto'
           let npmPublish = config.npm_publish || 'false'
-          let releaseMergeStrategy = String(config.release_merge_strategy || config.merge_strategy || 'merge').trim().toLowerCase()
+          // The merge audit topology requires squash for Release Please version
+          // pull requests into main. Release automation never defaults to a
+          // merge method: an unset or non-squash release_merge_strategy fails
+          // the release job before any pull request is created or merged.
+          const releaseMergeStrategy = String(config.release_merge_strategy || '').trim().toLowerCase()
           if (releaseType === 'auto') {
             releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
           }
           if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
-          if (!['rebase', 'squash', 'merge'].includes(releaseMergeStrategy)) throw new Error(`Unsupported merge_strategy: ${releaseMergeStrategy}`)
+          if (releaseMergeStrategy !== 'squash') {
+            throw new Error(`release_merge_strategy must be "squash" for automated release merges; got ${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}`)
+          }
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
           let legacyReleaseType = ''
           if (releaseType !== 'none') {
@@ -98,9 +115,9 @@ jobs:
       - name: Detect release credentials
         id: credentials
         env:
-          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
         run: |
-          if [ -n "$RELEASE_PLEASE_TOKEN" ]; then
+          if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
             echo "auto_merge=true" >> "$GITHUB_OUTPUT"
           else
             echo "auto_merge=false" >> "$GITHUB_OUTPUT"
@@ -108,19 +125,57 @@ jobs:
       - name: Release Please
         id: release
         if: steps.profile.outputs.release_type != 'none'
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Normalize generated release PR draft state
+        if: steps.release.outcome == 'success'
+        env:
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t release_prs < <(
+            gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --base main \
+              --json number,headRefName \
+              --jq '.[] | select(.headRefName | startswith("release-please--branches--main")) | .number'
+          )
+
+          if [ ${#release_prs[@]} -eq 0 ]; then
+            exit 0
+          fi
+
+          for pr in "${release_prs[@]}"; do
+            PR_DRAFT=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+              if [ "$PR_DRAFT" = true ]; then
+                gh pr ready "$pr" --repo "$GITHUB_REPOSITORY"
+              fi
+            else
+              if [ "$PR_DRAFT" = false ]; then
+                gh pr ready --undo "$pr" --repo "$GITHUB_REPOSITORY"
+              fi
+              echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. No CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN is configured, so release PRs are left in draft and need manual readiness before validation and merge workflows trigger."
+            fi
+          done
       - name: Leave release pull request for manual merge
         if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge != 'true'
+        env:
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
         run: |
-          echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. RELEASE_PLEASE_TOKEN is not configured, so Code Foundry skipped guarded auto-merge. Configure the token before merging when downstream release workflows must run automatically."
+          if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
+            echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN to enable guarded auto-merge when downstream release workflows require it."
+          fi
+
       - name: Merge generated version pull requests
         if: steps.credentials.outputs.auto_merge == 'true'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           mapfile -t release_prs < <(
@@ -135,11 +190,12 @@ jobs:
             echo 'No generated release pull request is open; nothing to merge.'
             exit 0
           fi
-          node $RUNNER_TEMP/code-foundry/src/cli.mjs release validate-prs
+          node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release validate-prs
           for pr in "${release_prs[@]}"; do
             echo "Waiting for required checks on release PR #$pr"
             checks_seen=false
             for attempt in $(seq 1 60); do
+              : "$attempt"
               if required_count=$(gh pr checks "$pr" \
                 --repo "$GITHUB_REPOSITORY" \
                 --required \
@@ -162,10 +218,18 @@ jobs:
               --watch \
               --fail-fast \
               --interval 10
+            release_head=$(gh pr view "$pr" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json headRefOid \
+              --jq '.headRefOid')
+            if [ -z "$release_head" ]; then
+              echo "Could not resolve head commit SHA for release PR #$pr" >&2
+              exit 1
+            fi
             gh pr merge "$pr" \
               --repo "$GITHUB_REPOSITORY" \
-              --admin \
               --${{ steps.profile.outputs.release_merge_strategy }} \
+              --match-head-commit "$release_head" \
               --delete-branch
           done
 
@@ -179,15 +243,21 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      # Reconciliation is the sole staging-ruleset bypass. Keep GH_TOKEN scoped to
+      # the repository's own GitHub Actions integration token; deploy key use is
+      # optional and only activated when STAGING_DEPLOY_KEY is provided.
+      GH_TOKEN: ${{ github.token }}
+      STAGING_DEPLOY_KEY_PRESENT: ${{ secrets.STAGING_DEPLOY_KEY != '' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Checkout runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -205,9 +275,48 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Configure staging reconcile transport
+        id: staging-reconcile-ssh
+        if: steps.staging.outputs.exists == 'true' && env.STAGING_DEPLOY_KEY_PRESENT == 'true'
+        env:
+          STAGING_DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+          STAGING_SSH_DIR: ${{ runner.temp }}/staging-reconcile-ssh
+        run: |
+          set -euo pipefail
+          mkdir -p "$STAGING_SSH_DIR"
+          chmod 700 "$STAGING_SSH_DIR"
+          STAGING_KEY="$STAGING_SSH_DIR/staging_deploy_key"
+          STAGING_HOSTS="$STAGING_SSH_DIR/known_hosts"
+          printf '%s\n' "$STAGING_DEPLOY_KEY" > "$STAGING_KEY"
+          chmod 600 "$STAGING_KEY"
+          node <<'NODE' > "$STAGING_HOSTS"
+          const { execSync } = require('node:child_process')
+          const meta = JSON.parse(execSync('gh api /meta', { encoding: 'utf8' }))
+          const keys = Array.isArray(meta?.ssh_keys) ? meta.ssh_keys : []
+          const lines = keys
+            .filter((value) => typeof value === 'string' && value.trim())
+            .map((value) => `github.com ${value.trim()}`)
+            .join('\n')
+          if (!lines) process.exit(1)
+          process.stdout.write(`${lines}\n`)
+          NODE
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          echo "ssh_command=-F /dev/null -i $STAGING_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$STAGING_HOSTS -o StrictHostKeyChecking=yes" >> "$GITHUB_OUTPUT"
+      - name: Configure git for trusted reconcile
+        if: steps.staging.outputs.exists == 'true' && env.STAGING_DEPLOY_KEY_PRESENT != 'true'
+        run: gh auth setup-git
       - name: Reconcile release metadata
         if: steps.staging.outputs.exists == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/cli.mjs release reconcile --github --base main --head staging
+        env:
+          GIT_SSH_COMMAND: ${{ steps.staging-reconcile-ssh.outputs.ssh_command || '' }}
+        run: node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release reconcile --github --base main --head staging
+      - name: Clear reconcile SSH material
+        if: always() && steps.staging.outputs.exists == 'true'
+        env:
+          STAGING_SSH_DIR: ${{ runner.temp }}/staging-reconcile-ssh
+        run: |
+          rm -f -- "$STAGING_SSH_DIR/staging_deploy_key" "$STAGING_SSH_DIR/known_hosts"
+          rmdir "$STAGING_SSH_DIR" 2>/dev/null || true
       - name: Skip without staging
         if: steps.staging.outputs.exists != 'true'
         run: echo 'No staging branch exists; release reconciliation is not applicable.'
@@ -225,16 +334,19 @@ jobs:
       actions: write
       contents: read
     env:
-      RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+      RELEASE_PLEASE_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+      GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.release.outputs.tag_name }}
           filter: blob:none
       - name: Checkout runtime
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           repository: ${{ inputs.runtime-repository }}
           ref: ${{ inputs.runtime-ref }}
           path: .github/.code-foundry
@@ -260,7 +372,7 @@ jobs:
           NODE
       - name: Dispatch post-release hook once
         if: steps.hook.outputs.enabled == 'true' && steps.hook.outputs.workflow != ''
-        run: node $RUNNER_TEMP/code-foundry/src/cli.mjs release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
+        run: node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
       - name: Explain disabled post-release hook
         if: steps.hook.outputs.enabled != 'true' || steps.hook.outputs.workflow == ''
         run: echo 'No post-release workflow configured; artifact delivery is intentionally skipped.'
@@ -278,17 +390,18 @@ jobs:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout release
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           ref: ${{ needs.release.outputs.tag_name }}
       - name: Setup Node (trusted)
         if: env.NPM_TOKEN == ''
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
       - name: Setup Node (token)
         if: env.NPM_TOKEN != ''
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org

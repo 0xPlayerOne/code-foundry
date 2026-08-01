@@ -41,12 +41,18 @@ export function doctorGithub(root) {
 
   const secrets = ghJson(['secret', 'list', '--repo', repository, '--json', 'name'])
   const secretNames = Array.isArray(secrets) ? secrets.map(/** @param {any} secret */ (secret) => secret.name) : []
-  details.secrets = { releasePleaseTokenPresent: secretNames.includes('RELEASE_PLEASE_TOKEN') }
-  if (!details.secrets.releasePleaseTokenPresent) warnings.push('RELEASE_PLEASE_TOKEN is not configured; Release Please auto-merge and direct post-release dispatch are unavailable.')
+  details.secrets = {
+    codeFoundryTokenPresent: secretNames.includes('CODE_FOUNDRY_TOKEN'),
+    releasePleaseTokenPresent: secretNames.includes('RELEASE_PLEASE_TOKEN'),
+    stagingDeployKeyPresent: secretNames.includes('STAGING_DEPLOY_KEY'),
+  }
+  if (!details.secrets.codeFoundryTokenPresent && !details.secrets.releasePleaseTokenPresent) {
+    warnings.push('CODE_FOUNDRY_TOKEN and RELEASE_PLEASE_TOKEN are both absent. PR workflow triggers and automation may require manual readiness.')
+  }
 
   const config = readConfig(root)
-  if (['workflow-dispatch', 'dispatch'].includes(config.post_release_mode) && config.post_release !== 'false' && !details.secrets.releasePleaseTokenPresent) {
-    errors.push('post-release workflow-dispatch mode requires RELEASE_PLEASE_TOKEN to be present.')
+  if (['workflow-dispatch', 'dispatch'].includes(config.post_release_mode) && config.post_release !== 'false' && !details.secrets.codeFoundryTokenPresent && !details.secrets.releasePleaseTokenPresent) {
+    errors.push('post-release workflow-dispatch mode requires CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN to be present.')
   }
   const credentialChecks = {
     npmTokenPresent: secretNames.includes('NPM_TOKEN'),

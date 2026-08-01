@@ -8,13 +8,18 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+    secrets:
+      CODE_FOUNDRY_TOKEN:
+        required: false
+      RELEASE_PLEASE_TOKEN:
+        required: false
 
 permissions:
   contents: read
   pull-requests: write
 
 env:
-  GH_TOKEN: ${{ github.token }}
+  HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
 
 jobs:
   create-draft-pr:
@@ -27,15 +32,21 @@ jobs:
     steps:
       - name: Check
         id: check-pr
+        env:
+          HEAD_REF: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
-          BRANCH="${{ github.ref_name }}"
+          BRANCH="$HEAD_REF"
           EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --limit 1 --base staging --head "$BRANCH" --state open --json number,title 2>/dev/null | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
       - name: Create
         if: steps.check-pr.outputs.existing == '0'
+        env:
+          HEAD_REF: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
-          BRANCH="${{ github.ref_name }}"
+          BRANCH="$HEAD_REF"
           PREFIX="${BRANCH%%/*}"
           SUFFIX="${BRANCH#*/}"
           PR_TITLE=""
@@ -60,23 +71,19 @@ jobs:
             PR_TITLE="$BRANCH"
           fi
 
+          DRAFT_ARGS=()
+          if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+            BODY_NOTICE="This PR is ready for review and merging once required validation passes."
+          else
+            DRAFT_ARGS+=(--draft)
+            BODY_NOTICE="This PR was created automatically and is currently in draft mode."
+            echo "::notice title=Manual PR readiness required::No automation token is configured; this PR may remain draft until manually marked ready for validation and merge."
+          fi
+
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base staging \
             --head "$BRANCH" \
-            --draft \
+            "${DRAFT_ARGS[@]}" \
             --title "$PR_TITLE" \
-            --body "Draft PR created automatically by CI.
-
-            This PR is a draft and should not be merged until CI passes and a reviewer (or the Daily Review agent) marks it ready.
-
-            **CI Status:** Pending — this workflow triggered on push to \`$BRANCH\`."
-
-      - name: Mark ready
-        if: steps.check-pr.outputs.existing == '0'
-        run: |
-          BRANCH="${{ github.ref_name }}"
-          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --limit 1 --base staging --head "$BRANCH" --state open --json number 2>/dev/null | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]")[0]?.number || ""))')
-          if [ -n "$PR_NUMBER" ]; then
-            gh pr ready "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
-          fi
+            --body "CI PR created automatically by this workflow.\n\n            $BODY_NOTICE\n\n            **CI Status:** Pending \u2014 this workflow triggered on push to \`$BRANCH\`."

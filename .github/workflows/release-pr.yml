@@ -8,13 +8,18 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+    secrets:
+      CODE_FOUNDRY_TOKEN:
+        required: false
+      RELEASE_PLEASE_TOKEN:
+        required: false
 
 permissions:
   contents: read
   pull-requests: write
 
 env:
-  GH_TOKEN: ${{ github.token }}
+  HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
 
 jobs:
   create-release-pr:
@@ -26,13 +31,16 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
           filter: blob:none
 
       - name: Check
         id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           EXISTING=$(gh pr list \
@@ -101,15 +109,19 @@ jobs:
               RELEASE_ONLY=true
             fi
           fi
-          echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
-          echo "commits=$TOTAL_COMMITS" >> "$GITHUB_OUTPUT"
-          echo "tree_equal=$TREE_EQUAL" >> "$GITHUB_OUTPUT"
-          echo "release_only=$RELEASE_ONLY" >> "$GITHUB_OUTPUT"
+          {
+            echo "existing=$EXISTING"
+            echo "commits=$TOTAL_COMMITS"
+            echo "tree_equal=$TREE_EQUAL"
+            echo "release_only=$RELEASE_ONLY"
+          } >> "$GITHUB_OUTPUT"
 
       - name: No changes
         if: steps.check-pr.outputs.existing == '0' && (steps.check-pr.outputs.commits == '0' || steps.check-pr.outputs.tree_equal == 'true' || steps.check-pr.outputs.release_only == 'true')
+        env:
+          RELEASE_ONLY: ${{ steps.check-pr.outputs.release_only }}
         run: |
-          if [ "${{ steps.check-pr.outputs.release_only }}" = true ]; then
+          if [ "$RELEASE_ONLY" = true ]; then
             echo 'Only approved release metadata differs between rebased branch histories; reconciliation from main to staging is pending, so no promotion PR is needed.'
           else
             echo 'staging is already aligned with main; no promotion PR is needed.'
@@ -117,6 +129,8 @@ jobs:
 
       - name: Create
         if: steps.check-pr.outputs.existing == '0' && steps.check-pr.outputs.commits != '0' && steps.check-pr.outputs.tree_equal != 'true' && steps.check-pr.outputs.release_only != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
           DATE=$(date +%Y-%m-%d)
           BODY_FILE="$RUNNER_TEMP/release-pr.md"
@@ -128,7 +142,7 @@ jobs:
             LAST_PAGE=$(( (TOTAL_COMMITS + 99) / 100 ))
             gh api "$COMPARE_URL?per_page=100&page=$LAST_PAGE" > "$COMPARE_FILE"
           fi
-          COMMITS=$(node -e 'const d=require(process.argv[1]); for (const c of d.commits || []) console.log(`- ${c.commit.message.split("\\n")[0]} (${c.sha.slice(0, 7)})`)' "$COMPARE_FILE")
+          COMMITS=$(node -e "const d=require(process.argv[1]); for (const c of d.commits || []) console.log('- ' + c.commit.message.split('\\n')[0] + ' (' + c.sha.slice(0, 7) + ')')" "$COMPARE_FILE")
           if [ -z "$COMMITS" ]; then
             COMMITS='- No commits found since main.'
           fi
@@ -157,14 +171,22 @@ jobs:
           ### Validation
 
           - Required CI, test, security, and CodeQL checks must pass before merge.
-          - Merge using the repository's configured \`merge_strategy\` (default: **rebase**).
+          - Merge using the repository's configured \`merge_strategy\` (**rebase**).
+          - The promotion topology requires rebase; never merge a promotion PR with a merge commit.
           - After merge, Release Please opens a separate versioned release PR with the changelog.
           EOF
+
+          DRAFT_ARGS=()
+          if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
+            DRAFT_ARGS+=(--draft)
+            echo "::notice title=Manual PR readiness required::Created draft promotion PR because no automation token is configured. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN, or mark this PR ready manually to trigger validation."
+          fi
 
           if ! gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base main \
             --head staging \
+            "${DRAFT_ARGS[@]}" \
             --title "Promote staging -> main ($DATE)" \
             --body-file "$BODY_FILE"; then
             EXISTING_NUMBER=$(gh pr list \

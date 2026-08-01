@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
+import { isGeneratedEventCaller } from './sync.mjs'
 
 /** @param {string} root @param {{ github?: boolean }} [options] */
 export function doctor(root, options = {}) {
@@ -68,15 +69,64 @@ export function doctor(root, options = {}) {
     }
   }
 
-  for (const workflow of ['ci', 'codeql', 'security', 'test', 'draft-pr', 'release-pr', 'release']) {
-    if (includesValue(config.features ?? 'all', workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
+  const features = config.features ?? 'all'
+  const mergeStrategy = config.merge_strategy ?? 'rebase'
+  if (mergeStrategy !== 'rebase') {
+    error(`merge_strategy must be "rebase" for the staging-release promotion topology; got "${mergeStrategy}".`)
   }
-  console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by reusable workflow wrappers.')
+  const releaseMergeStrategy = config.release_merge_strategy ?? ''
+  if (includesValue(features, 'release') && releaseMergeStrategy !== 'squash') {
+    error(`release_merge_strategy must be "squash" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`)
+  }
+  for (const workflow of ['validation', 'draft-pr', 'release-pr', 'release']) {
+    if (includesValue(features, workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
+  }
+  const validationEnabled = includesValue(features, 'validation') || ['ci', 'test', 'security', 'codeql'].some((legacy) => includesValue(features, legacy))
+  const validationCaller = ['validation.yml', 'validation_self-ci.yml']
+    .map((file) => join(target, `.github/workflows/${file}`))
+    .find((file) => existsSync(file) && /pull_request:/.test(readFileSync(file, 'utf8')))
+  if (validationEnabled && !validationCaller) {
+    error('missing tiered validation caller; run code-foundry sync to adopt validation.yml')
+  } else if (validationCaller) {
+    const caller = readFileSync(validationCaller, 'utf8')
+    if (!/^  validation:\n    name: Validation/m.test(caller)) {
+      error('validation caller is missing the Validation job; the Validation / Gate aggregate check cannot form.')
+    }
+    if (!/uses:\s+(?:\.\/\.github\/workflows\/validation\.yml|\S+\/\.github\/workflows\/validation\.yml@)/.test(caller)) {
+      error('validation caller does not reference the validation orchestrator.')
+    }
+    const runtimeRef = caller.match(/^\s+runtime-ref:\s+(.+?)\s*$/m)?.[1]
+    const checkoutRef = caller.match(/^\s+ref:\s+(.+?)\s*$/m)?.[1]
+    if (!runtimeRef || !checkoutRef) {
+      error('validation caller is missing runtime ref wiring (mode checkout or orchestrator input).')
+    } else if (runtimeRef !== checkoutRef) {
+      error(`validation caller pins mismatched runtime refs (${runtimeRef} vs ${checkoutRef}).`)
+    } else if (runtimeRef !== '${{ github.sha }}' && !/^v\d+\.\d+\.\d+$/.test(runtimeRef)) {
+      warn(`validation caller runtime ref ${runtimeRef} is not a released tag; pin a vX.Y.Z tag.`)
+    }
+  }
+  const runtimeRepository = config.runtime_repository ?? '0xPlayerOne/code-foundry'
+  for (const stem of ['ci', 'test', 'security', 'codeql']) {
+    const legacy = join(target, `.github/workflows/${stem}.yml`)
+    if (existsSync(legacy) && isGeneratedEventCaller(readFileSync(legacy, 'utf8'), stem, runtimeRepository)) {
+      warn(`stale generated legacy caller ${stem}.yml still triggers canonical suites; run code-foundry sync to migrate to validation.yml.`)
+    }
+  }
+  console.log('Remote CI, Test, Security, CodeQL, and release runtimes are loaded by the tiered validation orchestrator.')
   if (options.github) {
     const github = doctorGithub(target)
+    /** @type {{ codeFoundryTokenPresent?: boolean, releasePleaseTokenPresent?: boolean, stagingDeployKeyPresent?: boolean }} */
+    const secrets = github.details.secrets ?? {}
     for (const message of github.warnings) warn(`GitHub: ${message}`)
     for (const message of github.errors) error(`GitHub: ${message}`)
     console.log(`GitHub doctor inspected ${github.details.repository}.`)
+    const codeFoundryToken = secrets.codeFoundryTokenPresent ? 'present' : 'absent'
+    const releasePleaseToken = secrets.releasePleaseTokenPresent ? 'present' : 'absent'
+    const stagingDeployKey = secrets.stagingDeployKeyPresent ? 'present' : 'absent'
+    console.log(`GitHub secrets: CODE_FOUNDRY_TOKEN=${codeFoundryToken}, RELEASE_PLEASE_TOKEN=${releasePleaseToken}, STAGING_DEPLOY_KEY=${stagingDeployKey}`)
+    if (!secrets.codeFoundryTokenPresent && !secrets.releasePleaseTokenPresent) {
+      warn('GitHub token routing fallback: PR creation will remain draft and requires manual ready-for-review to trigger validation.')
+    }
   }
   if (errors) throw new Error(`Repository doctor found ${errors} error(s).`)
   console.log('Repository doctor passed.')
