@@ -71,17 +71,26 @@ its manifest.
 
 ## Pull request permissions
 
-Release Please falls back to the repository's `GITHUB_TOKEN` when a
-`RELEASE_PLEASE_TOKEN` secret is unavailable. In that mode, Code Foundry opens
-or updates the version pull request, leaves it for manual merge, and completes
-the release job successfully.
+The release job validates the configured automation token
+(`CODE_FOUNDRY_TOKEN`, falling back to `RELEASE_PLEASE_TOKEN`) against the
+current repository with an authenticated REST probe before any write. When no
+automation token is configured, or the configured token is rejected by GitHub
+(observed with long-lived fine-grained tokens that GitHub rejects with HTTP
+403 even on REST), the release job fails over to the repository's short-lived
+`GITHUB_TOKEN`. In that mode, Code Foundry opens or updates the version pull
+request, leaves it for manual merge, and completes the release job
+successfully. The token value is never printed or written to step outputs.
 
-Configure a narrowly scoped `RELEASE_PLEASE_TOKEN` repository or organization
-secret to enable guarded automatic merging and downstream workflows triggered
-by the resulting release. The token needs `contents`, `issues`, and
-`pull-requests` write permissions. Code Foundry validates every changed path in
-the generated version pull request before using the token to merge it, waits
-for the required checks to finish, and then polls the pull request's
+Guarded automatic merging and the downstream workflows triggered by the
+resulting release are enabled only when the configured automation token was
+validated successfully; a rejected token never falls through to any write.
+Configure a valid, narrowly scoped `CODE_FOUNDRY_TOKEN` or
+`RELEASE_PLEASE_TOKEN` repository or organization secret to enable guarded
+automatic merging and downstream workflows triggered by the resulting
+release. The token needs `contents`, `issues`, and `pull-requests` write
+permissions. Code Foundry validates every changed path in the generated
+version pull request before using the token to merge it, waits for the
+required checks to finish, and then polls the pull request's
 `mergeStateStatus` until it is `CLEAN`, or `UNSTABLE` with `mergeable`
 `MERGEABLE`, before merging. Non-required checks that branch policy does not
 require (for example external code review still running after every required

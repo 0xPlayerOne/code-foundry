@@ -54,6 +54,7 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created || 'false' }}
       tag_name: ${{ steps.release.outputs.tag_name }}
       npm_publish: ${{ steps.profile.outputs.npm_publish }}
+      token_source: ${{ steps.credentials.outputs.token_source }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -116,25 +117,80 @@ jobs:
         id: credentials
         env:
           HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
         run: |
-          if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+          set -euo pipefail
+          # NiftyLeague rejects long-lived fine-grained automation tokens with
+          # HTTP 403 even on REST (observed in the release-pr promotion flow),
+          # so the configured automation token is validated against the current
+          # repository before any write. gh api authenticates through the
+          # GH_TOKEN environment variable and never prints the token; the
+          # response body is discarded and only the exit status selects the
+          # credential for the rest of the job.
+          if [ "$HAS_AUTOMATION_TOKEN" = true ] && gh api "repos/${GITHUB_REPOSITORY}" --jq '.full_name' >/dev/null 2>&1; then
             echo "auto_merge=true" >> "$GITHUB_OUTPUT"
+            echo "token_source=configured" >> "$GITHUB_OUTPUT"
           else
             echo "auto_merge=false" >> "$GITHUB_OUTPUT"
+            echo "token_source=fallback" >> "$GITHUB_OUTPUT"
+            if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+              echo "::warning title=Release token fallback::The configured CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN was rejected by GitHub; failing over to the short-lived workflow token. The version pull request will be left for manual merge."
+            fi
           fi
-      - name: Release Please
-        id: release
-        if: steps.profile.outputs.release_type != 'none'
+      - name: Release Please (automation token)
+        id: release_automation
+        if: steps.profile.outputs.release_type != 'none' && steps.credentials.outputs.token_source == 'configured'
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
-          token: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          token: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Release Please (workflow token)
+        id: release_workflow
+        if: steps.profile.outputs.release_type != 'none' && steps.credentials.outputs.token_source != 'configured'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          token: ${{ github.token }}
+          config-file: release-please-config.json
+          release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Normalize Release Please outputs
+        id: release
+        if: steps.profile.outputs.release_type != 'none'
+        env:
+          AUTOMATION_RELEASE_CREATED: ${{ steps.release_automation.outputs.release_created }}
+          AUTOMATION_TAG_NAME: ${{ steps.release_automation.outputs.tag_name }}
+          AUTOMATION_PRS_CREATED: ${{ steps.release_automation.outputs.prs_created }}
+          WORKFLOW_RELEASE_CREATED: ${{ steps.release_workflow.outputs.release_created }}
+          WORKFLOW_TAG_NAME: ${{ steps.release_workflow.outputs.tag_name }}
+          WORKFLOW_PRS_CREATED: ${{ steps.release_workflow.outputs.prs_created }}
+        run: |
+          set -euo pipefail
+          # Exactly one of the two Release Please steps runs, so selecting the
+          # source by a non-empty release_created is deterministic. The stable
+          # release step id keeps the job outputs and downstream jobs reading
+          # steps.release.outputs.* unchanged.
+          if [ -n "$AUTOMATION_RELEASE_CREATED" ]; then
+            {
+              echo "release_created=$AUTOMATION_RELEASE_CREATED"
+              echo "tag_name=$AUTOMATION_TAG_NAME"
+              echo "prs_created=$AUTOMATION_PRS_CREATED"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "release_created=$WORKFLOW_RELEASE_CREATED"
+              echo "tag_name=$WORKFLOW_TAG_NAME"
+              echo "prs_created=$WORKFLOW_PRS_CREATED"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Normalize generated release PR draft state
         if: steps.release.outcome == 'success'
         env:
-          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          # The credential selected by the validation step is reused verbatim
+          # for every release-PR shell operation: the configured token only
+          # when it validated, github.token after fallback. The token value
+          # lives only in this masked env expression, never in step outputs.
+          AUTO_MERGE: ${{ steps.credentials.outputs.auto_merge }}
+          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
         run: |
           set -euo pipefail
           mapfile -t release_prs < <(
@@ -152,7 +208,7 @@ jobs:
 
           for pr in "${release_prs[@]}"; do
             PR_DRAFT=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
-            if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+            if [ "$AUTO_MERGE" = true ]; then
               if [ "$PR_DRAFT" = true ]; then
                 gh pr ready "$pr" --repo "$GITHUB_REPOSITORY"
               fi
@@ -160,22 +216,18 @@ jobs:
               if [ "$PR_DRAFT" = false ]; then
                 gh pr ready --undo "$pr" --repo "$GITHUB_REPOSITORY"
               fi
-              echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. No CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN is configured, so release PRs are left in draft and need manual readiness before validation and merge workflows trigger."
+              echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. No valid automation token is available (absent or rejected by GitHub), so release PRs are left in draft and need manual readiness before validation and merge workflows trigger."
             fi
           done
       - name: Leave release pull request for manual merge
         if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge != 'true'
-        env:
-          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
         run: |
-          if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
-            echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN to enable guarded auto-merge when downstream release workflows require it."
-          fi
+          echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. Configure a valid CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN to enable guarded auto-merge when downstream release workflows require it."
 
       - name: Merge generated version pull requests
         if: steps.credentials.outputs.auto_merge == 'true'
         env:
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
         run: |
           set -euo pipefail
           mapfile -t release_prs < <(
@@ -388,8 +440,11 @@ jobs:
       actions: write
       contents: read
     env:
-      RELEASE_PLEASE_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
-      GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      # The release job validates the configured automation token and exposes
+      # the selection; the post hook reuses the same selected credential so a
+      # rejected long-lived token is never used after fallback.
+      RELEASE_PLEASE_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
+      GH_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
