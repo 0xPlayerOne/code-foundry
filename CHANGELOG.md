@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.11](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.10...v0.34.11) (2026-08-02)
+
+
+### Bug Fixes
+
+* **draft-pr:** fall back to workflow token ([#350](https://github.com/0xPlayerOne/code-foundry/issues/350)) ([aef07db](https://github.com/0xPlayerOne/code-foundry/commit/aef07db6945badd7d7b3526b5490b1512ac1a468))
+
 ## [0.34.10](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.9...v0.34.10) (2026-08-02)
 
 
