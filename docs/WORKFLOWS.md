@@ -79,6 +79,16 @@ after the step.
 When absent, the job keeps `GH_TOKEN = github.token` and runs `gh auth setup-git`
 so repositories without a Deploy Key ruleset bypass still reconcile successfully.
 
+When the protected `staging` branch rejects the exact-lease reconcile push with
+a branch-policy/ruleset/required-PR error, the reconcile job does not fail:
+it opens (or reuses) a generated `code-foundry/reconcile/main-to-staging`
+pull request whose head contains the exact target tip (the `main` tip for a
+fast-forward, the replay tip when staging-only commits are replayed) and whose
+body documents the reconciliation. Reruns reuse the open pull request instead
+of duplicating it; unexpected code divergence, replay conflicts, authentication
+errors, and ambiguous or stale pull request state still fail the job closed,
+and exact-lease protection stays in place for every direct push.
+
 For this reconciliation path, maintainer PATs and administrator roles are not
 authorized bypasses; the job deliberately authenticates with `github.token`,
 not `CODE_FOUNDRY_TOKEN` or `RELEASE_PLEASE_TOKEN`.

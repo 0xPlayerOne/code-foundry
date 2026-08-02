@@ -6,8 +6,7 @@ import { appendFileSync, chmodSync, mkdtempSync, mkdirSync, readFileSync, readdi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
-import { approvedReleaseFiles, classifyPromotion, classifyReconciliation } from '../src/lib/release-policy.mjs'
-import { buildReleaseRecoveryPlan, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
+import { approvedReleaseFiles, buildReconciliationPullRequestBody, buildReleaseRecoveryPlan, classifyPromotion, classifyReconciliation, reconciliationPullRequestBranch, reconciliationPullRequestTitle, selectGeneratedReleasePrs, selectReconciliationPullRequest, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
 import { validateGeneratedReleaseDiff } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, buildReleaseManifest, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import {
@@ -178,6 +177,56 @@ function createReconcileWorkspace() {
 }
 
 /**
+ * Workspace where staging is protected by a ruleset: main carries an approved
+ * release commit ahead of staging, and every exact-lease push to staging is
+ * rejected with a branch-policy error while the reconciliation head branch
+ * remains pushable.
+ * @param {{ withStagingCommit?: boolean }} [options]
+ * @returns {{ root: string, remote: string, run: (args: string[]) => import('node:child_process').SpawnSyncReturns<string>, readRef: (ref: string) => string, commit: (message: string) => string }}
+ */
+function createPolicyBlockedReconcileWorkspace({ withStagingCommit = false } = {}) {
+  const { root, remote, run } = createReconcileWorkspace()
+  const readRef = (ref) => {
+    const result = run(['rev-parse', ref])
+    assert.equal(result.status, 0, result.stderr)
+    return result.stdout.trim()
+  }
+  const commit = (message) => {
+    const result = run(['commit', '-m', message])
+    assert.equal(result.status, 0, result.stderr)
+    return readRef('HEAD')
+  }
+
+  mkdirSync(join(root, 'src'))
+  writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+  writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
+  writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
+  run(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
+  commit('chore: initial')
+  run(['branch', '-M', 'main'])
+
+  run(['checkout', '-q', '-b', 'staging'])
+  if (withStagingCommit) {
+    writeFileSync(join(root, 'src/feature-pending.ts'), 'export const pending = 1\n')
+    run(['add', 'src/feature-pending.ts'])
+    commit('feat: pending work')
+  }
+
+  run(['checkout', '-q', 'main'])
+  writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
+  appendFileSync(join(root, 'CHANGELOG.md'), '\n## 1.0.1\n', 'utf8')
+  run(['add', 'package.json', 'CHANGELOG.md'])
+  commit('chore(main): release 1.0.1')
+
+  run(['push', '-u', 'origin', 'main'])
+  run(['checkout', '-q', 'staging'])
+  run(['push', '-u', 'origin', 'staging'])
+  return { root, remote, run, readRef, commit }
+}
+
+const POLICY_PUSH_FAILURE = 'remote: error: GH007: Your push was rejected by a repository rule.\nremote: error: protected branch hook declined.\nTo github.com/owner/repo.git\n ! [remote rejected] staging -> staging (push declined by rule)'
+
+/**
  * @param {(git: string) => void} fn
  * @param {string} message
  */
@@ -203,6 +252,153 @@ exec ${originalGit} "$@"
   } finally {
     process.env.PATH = oldPath
     rmSync(toolDir, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Fail only the exact-lease reconcile push to staging so the policy fallback
+ * can still create and refresh the reconciliation head branch.
+ * @param {Function} fn
+ * @param {string} message
+ */
+function withFakeStagingPolicyPushFailure(fn, message) {
+  const oldPath = process.env.PATH
+  const toolDir = mkdtempSync(join(tmpdir(), 'code-foundry-git-policy-'))
+  const script = join(toolDir, 'git')
+  const originalGit = spawnSync('sh', ['-lc', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+  writeFileSync(
+    script,
+    `#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in
+    --force-with-lease=refs/heads/staging:*)
+      echo "${message}"
+      exit 1
+      ;;
+  esac
+done
+exec ${originalGit} "$@"
+`,
+  )
+  chmodSync(script, 0o755)
+  process.env.PATH = `${toolDir}:${oldPath}`
+  try {
+    return fn()
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(toolDir, { recursive: true, force: true })
+  }
+}
+
+const fakeReconcileGhSource = `#!/usr/bin/env node
+'use strict'
+const { spawnSync } = require('node:child_process')
+const fs = require('node:fs')
+
+const stateFile = process.env.FAKE_GH_STATE
+const logFile = process.env.FAKE_GH_LOG
+const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+const args = process.argv.slice(2)
+const log = (line) => fs.appendFileSync(logFile, line + '\\n')
+const read = (name) => {
+  const index = args.indexOf(name)
+  return index >= 0 ? args[index + 1] : undefined
+}
+const remoteTip = (branch) => {
+  const result = spawnSync('git', ['ls-remote', '--heads', 'origin', 'refs/heads/' + branch], { encoding: 'utf8' })
+  if (result.status !== 0) return ''
+  const [sha] = result.stdout.trim().split(/\\t/, 1)
+  return sha || ''
+}
+
+log('gh ' + args.join(' '))
+
+if (args[0] === '--version') {
+  process.stdout.write('gh version 2.55.0\\n')
+  process.exit(0)
+}
+if (args[0] === 'pr' && args[1] === 'list') {
+  if (process.env.FAKE_GH_FAIL_LIST) {
+    process.stderr.write('gh: pr list failed\\n')
+    process.exit(1)
+  }
+  const head = read('--head')
+  const prs = state.prs
+    .filter((pr) => !head || pr.headRefName === head)
+    .map((pr) => ({ ...pr, headRefOid: remoteTip(pr.headRefName) }))
+  process.stdout.write(JSON.stringify(prs))
+  process.exit(0)
+}
+if (args[0] === 'pr' && args[1] === 'create') {
+  if (process.env.FAKE_GH_FAIL_CREATE) {
+    process.stderr.write('gh: pr create failed\\n')
+    process.exit(1)
+  }
+  const head = read('--head')
+  const pr = {
+    number: state.nextNumber,
+    title: read('--title'),
+    body: read('--body'),
+    headRefName: head,
+    baseRefName: read('--base'),
+    headRefOid: remoteTip(head),
+    url: 'https://github.com/' + process.env.FAKE_GH_REPO + '/pull/' + state.nextNumber,
+    state: 'OPEN',
+  }
+  state.prs.push(pr)
+  state.nextNumber += 1
+  fs.writeFileSync(stateFile, JSON.stringify(state))
+  process.stdout.write(pr.url + '\\n')
+  process.exit(0)
+}
+if (args[0] === 'pr' && args[1] === 'edit') {
+  const pr = state.prs.find((entry) => String(entry.number) === args[2])
+  if (pr) {
+    pr.body = read('--body')
+    fs.writeFileSync(stateFile, JSON.stringify(state))
+  }
+  process.exit(0)
+}
+process.stdout.write('{}\\n')
+`
+
+/**
+ * Run fn with a fake gh CLI that records calls and manages seeded open pull
+ * requests, mirroring gh pr list/create/edit behavior for the reconciliation
+ * pull request fallback.
+ * @param {{ prs?: Array<Record<string, unknown>>, failList?: boolean, failCreate?: boolean }} seed
+ * @param {Function} fn
+ * @returns {{ result: unknown, log: string, state: { prs: Array<Record<string, unknown>>, nextNumber: number } }}
+ */
+function withReconcileGh(seed, fn) {
+  const oldPath = process.env.PATH
+  const dir = mkdtempSync(join(tmpdir(), 'code-foundry-gh-reconcile-'))
+  const script = join(dir, 'gh')
+  const stateFile = join(dir, 'state.json')
+  const logFile = join(dir, 'calls.log')
+  writeFileSync(stateFile, JSON.stringify({ prs: seed.prs ?? [], nextNumber: seed.nextNumber ?? 42 }))
+  writeFileSync(script, fakeReconcileGhSource)
+  chmodSync(script, 0o755)
+  process.env.FAKE_GH_STATE = stateFile
+  process.env.FAKE_GH_LOG = logFile
+  process.env.FAKE_GH_REPO = 'owner/repo'
+  if (seed.failList) process.env.FAKE_GH_FAIL_LIST = '1'
+  if (seed.failCreate) process.env.FAKE_GH_FAIL_CREATE = '1'
+  process.env.PATH = `${dir}:${oldPath}`
+  try {
+    return {
+      result: fn(),
+      log: readFileSync(logFile, 'utf8'),
+      state: JSON.parse(readFileSync(stateFile, 'utf8')),
+    }
+  } finally {
+    process.env.PATH = oldPath
+    delete process.env.FAKE_GH_STATE
+    delete process.env.FAKE_GH_LOG
+    delete process.env.FAKE_GH_REPO
+    delete process.env.FAKE_GH_FAIL_LIST
+    delete process.env.FAKE_GH_FAIL_CREATE
+    rmSync(dir, { recursive: true, force: true })
   }
 }
 
@@ -547,9 +743,9 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release_head=\$\(gh pr view \"\$pr\"[\s\S]*--json headRefOid[\s\S]*--jq '\.headRefOid'\)/)
     assert.match(workflow, /--match-head-commit \"\$release_head\"/)
     assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
-    assert.match(workflow, /name: Release \/ Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/)
+    assert.match(workflow, /name: Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/)
     assert.match(workflow, /if: needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
-    assert.match(workflow, /name: Release \/ Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
   it('waits for release PR mergeability before attempting the guarded auto-merge', () => {
@@ -1077,44 +1273,63 @@ describe('code-foundry CLI', () => {
     rmSync(remote, { recursive: true, force: true })
   })
 
-  it('classifies branch policy rejections without retrying blindly', () => {
-    const { root, remote, run } = createReconcileWorkspace()
-    const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
-      assert.equal(result.status, 0, result.stderr)
-      return result.stdout.trim()
-    }
-    const commit = (message) => {
-      const result = run(['commit', '-m', message])
-      assert.equal(result.status, 0, result.stderr)
-      return readRef('HEAD')
-    }
+  it('flattens reusable release job names below a Release caller job', () => {
+    const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
-    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
-    run(['add', 'package.json'])
-    commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    // The caller workflow is named Code Foundry with a job named Release, so
+    // reusable job names must be flat (Version, Reconcile, Post Hook,
+    // Publish npm) to render Code Foundry / Release / Version instead of
+    // Code Foundry / Release / Release / Version.
+    assert.match(workflow, /^  release:\n    name: Version\n/m)
+    assert.match(workflow, /^  reconcile:\n    name: Reconcile\n/m)
+    assert.match(workflow, /^  post-release:\n    name: Post Hook\n/m)
+    assert.match(workflow, /^  npm:\n    name: Publish npm\n/m)
+    assert.doesNotMatch(workflow, /name: Release \/ Version/)
+    assert.doesNotMatch(workflow, /name: Release \/ Reconcile/)
+    assert.doesNotMatch(workflow, /name: Release \/ Post Hook/)
+    assert.doesNotMatch(workflow, /name: Release \/ Publish npm/)
+    assert.doesNotMatch(workflow, /name: Release \/ /)
 
-    run(['checkout', '-q', '-b', 'staging'])
-    run(['checkout', '-q', 'main'])
-    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
-    run(['add', 'package.json'])
-    commit('chore(main): release 1.0.1')
+    const caller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
+    assert.match(caller, /^  release:\n    name: Release\n/m)
+  })
 
-    run(['push', '-u', 'origin', 'main'])
-    run(['checkout', '-q', 'staging'])
-    run(['push', '-u', 'origin', 'staging'])
+  it('keeps reconciliation pull request metadata deterministic and reuse-safe', () => {
+    assert.equal(reconciliationPullRequestBranch('main', 'staging'), 'code-foundry/reconcile/main-to-staging')
+    assert.equal(reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }), 'chore(staging): reconcile release metadata from main')
+    const body = buildReconciliationPullRequestBody({
+      sourceBase: 'main',
+      targetHead: 'staging',
+      mainSha: 'main-tip',
+      stagingSha: 'staging-tip',
+      targetSha: 'main-tip',
+      action: 'fast-forward',
+      pushError: 'remote: error: GH007: rejected by a repository rule',
+    })
+    assert.match(body, /## Automated release reconciliation/)
+    assert.match(body, /generated by Code Foundry release reconciliation/)
+    // The body names the protected PR base (staging) and the source (main).
+    assert.match(body, /- Base `staging`: `staging-tip`/)
+    assert.match(body, /- `main` tip: `main-tip`/)
+    assert.match(body, /main-tip/)
+    assert.match(body, /staging-tip/)
+    assert.match(body, /GH007: rejected by a repository rule/)
+    assert.match(body, /fail the release job closed/)
+    assert.match(body, /updated instead of duplicated/)
 
-    const failure = 'remote: error: GH007: Your push was rejected by a repository rule.\nremote: error: protected branch hook declined.\nTo github.com/owner/repo.git\n ! [remote rejected] staging -> staging (push declined by rule)'
-    assert.throws(() => withFakeGitPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      failure,
-    ), /branch policy|GH007|ruleset|protected branch/)
-    rmSync(root, { recursive: true, force: true })
-    rmSync(remote, { recursive: true, force: true })
+    const branch = reconciliationPullRequestBranch('main', 'staging')
+    const title = reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' })
+    assert.deepEqual(selectReconciliationPullRequest([], { targetBase: 'staging', branch, title }), { create: true })
+    const ours = { number: 5, title, headRefName: branch, baseRefName: 'staging', url: 'https://github.com/owner/repo/pull/5' }
+    assert.deepEqual(selectReconciliationPullRequest([ours], { targetBase: 'staging', branch, title }), { create: false, reuse: ours })
+    const renamed = { number: 6, title: 'chore: user edited title', headRefName: branch, baseRefName: 'staging' }
+    assert.match(selectReconciliationPullRequest([renamed], { targetBase: 'staging', branch, title }).error, /unexpected base or title/)
+    const wrongBase = { number: 7, title, headRefName: branch, baseRefName: 'main' }
+    assert.match(selectReconciliationPullRequest([wrongBase], { targetBase: 'staging', branch, title }).error, /unexpected base or title/)
+    assert.match(
+      selectReconciliationPullRequest([ours, { ...ours, number: 8 }], { targetBase: 'staging', branch, title }).error,
+      /Multiple open pull requests/,
+    )
   })
 
   it('keeps exact-lease stale failure detail in diagnostics', () => {
@@ -1165,6 +1380,205 @@ describe('code-foundry CLI', () => {
     assert.ok(caught instanceof Error)
     assert.match(caught.message, /rejected by an exact lease/i)
     assert.match(caught.message, /Last failure detail/i)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('opens an idempotent reconciliation pull request when staging policy rejects the lease push', () => {
+    const { root, remote, readRef } = createPolicyBlockedReconcileWorkspace()
+    const branch = reconciliationPullRequestBranch('main', 'staging')
+    const mainSha = readRef('main')
+    const stagingBefore = remoteHeadSha(root, 'staging')
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      POLICY_PUSH_FAILURE,
+    )
+
+    const { result, log, state } = withReconcileGh({}, execute)
+
+    assert.equal(result.action, 'fast-forward')
+    assert.equal(result.synchronization, 'pull-request')
+    assert.equal(result.pullRequest.base, 'staging')
+    assert.equal(result.pullRequest.head, branch)
+    assert.equal(result.pullRequest.branch, branch)
+    assert.equal(result.pullRequest.number, 42)
+    assert.equal(result.pullRequest.title, 'chore(staging): reconcile release metadata from main')
+    assert.match(result.pullRequest.body, /## Automated release reconciliation/)
+    assert.match(result.pullRequest.body, /GH007/)
+    assert.match(result.pullRequest.body, new RegExp(`Target tip in this branch: \`${mainSha}\``))
+    // The PR targets the protected head branch while the body names the
+    // release source (main) explicitly.
+    assert.match(result.pullRequest.body, /- Base `staging`: `/)
+    assert.match(result.pullRequest.body, /- `main` tip: `/)
+    assert.doesNotMatch(result.pullRequest.body, /- Base `main`: /)
+    // Staging is untouched while the head branch carries the exact main tip.
+    assert.equal(remoteHeadSha(root, 'staging'), stagingBefore)
+    assert.equal(remoteHeadSha(root, branch), mainSha)
+    // Exactly one create with the generated metadata; no edit or duplicate.
+    assert.match(log, new RegExp(`pr create --repo owner/repo --base staging --head ${branch} --title chore\\(staging\\): reconcile release metadata from main --body`))
+    assert.doesNotMatch(log, /pr edit/)
+    assert.equal(state.prs.length, 1)
+    assert.equal(state.prs[0].baseRefName, 'staging')
+    assert.equal(state.prs[0].headRefName, branch)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('does not convert generic remote errors into reconciliation pull requests', () => {
+    const { root, remote } = createPolicyBlockedReconcileWorkspace()
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      'remote: error: temporary GitHub server failure',
+    )
+
+    assert.throws(execute, /rejected by an exact lease/i)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('reuses the open reconciliation pull request on reruns without duplicating it', () => {
+    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace()
+    const branch = reconciliationPullRequestBranch('main', 'staging')
+    const mainSha = readRef('main')
+    // A previous run already delivered the exact main tip and left the PR open.
+    run(['push', 'origin', `main:refs/heads/${branch}`])
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      POLICY_PUSH_FAILURE,
+    )
+
+    const { result, log, state } = withReconcileGh({
+      prs: [{
+        number: 17,
+        title: reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
+        headRefName: branch,
+        baseRefName: 'staging',
+        url: 'https://github.com/owner/repo/pull/17',
+      }],
+    }, execute)
+
+    assert.equal(result.synchronization, 'pull-request')
+    assert.equal(result.pullRequest.base, 'staging')
+    assert.equal(result.pullRequest.head, branch)
+    assert.equal(result.pullRequest.number, 17)
+    assert.equal(remoteHeadSha(root, branch), mainSha)
+    assert.doesNotMatch(log, /pr create/)
+    assert.doesNotMatch(log, /pr edit/)
+    assert.equal(state.prs.length, 1)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('refreshes a stale reconciliation pull request head and body to the exact target tip', () => {
+    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace()
+    const branch = reconciliationPullRequestBranch('main', 'staging')
+    const mainSha = readRef('main')
+    const staleSha = readRef('staging')
+    // The previous run predates the latest release: branch and PR head are stale.
+    run(['push', 'origin', `staging:refs/heads/${branch}`])
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      POLICY_PUSH_FAILURE,
+    )
+
+    const { result, log, state } = withReconcileGh({
+      prs: [{
+        number: 23,
+        title: reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
+        headRefName: branch,
+        baseRefName: 'staging',
+        url: 'https://github.com/owner/repo/pull/23',
+      }],
+    }, execute)
+
+    assert.equal(result.synchronization, 'pull-request')
+    assert.equal(result.pullRequest.base, 'staging')
+    assert.equal(result.pullRequest.head, branch)
+    assert.equal(result.pullRequest.number, 23)
+    assert.notEqual(staleSha, mainSha)
+    // The branch is refreshed under the exact lease and the body is updated.
+    assert.equal(remoteHeadSha(root, branch), mainSha)
+    assert.doesNotMatch(log, /pr create/)
+    assert.match(log, /pr edit 23/)
+    assert.equal(state.prs.length, 1)
+    assert.match(state.prs[0].body, new RegExp(`Target tip in this branch: \`${mainSha}\``))
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('replays staging-only commits into the reconciliation pull request head', () => {
+    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace({ withStagingCommit: true })
+    const branch = reconciliationPullRequestBranch('main', 'staging')
+    const mainSha = readRef('main')
+    const stagingBefore = remoteHeadSha(root, 'staging')
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      POLICY_PUSH_FAILURE,
+    )
+
+    const { result, log, state } = withReconcileGh({}, execute)
+
+    assert.equal(result.action, 'rebase-staging')
+    assert.equal(result.synchronization, 'pull-request')
+    assert.ok(result.replaySha)
+    const headTip = remoteHeadSha(root, branch)
+    assert.equal(headTip, result.replaySha)
+    assert.notEqual(headTip, mainSha)
+    assert.equal(remoteHeadSha(root, 'staging'), stagingBefore)
+    // The replay tip is based on the current main tip and keeps the pending work.
+    assert.equal(run(['merge-base', '--is-ancestor', 'origin/main', `origin/${branch}`]).status, 0)
+    assert.equal(run(['show', `${headTip}:src/feature-pending.ts`]).status, 0)
+    assert.match(state.prs[0].body, /rebase-staging/)
+    assert.match(log, /pr create/)
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('fails closed when reconciliation pull request state is ambiguous or gh fails', () => {
+    const { root, remote } = createPolicyBlockedReconcileWorkspace()
+    const branch = reconciliationPullRequestBranch('main', 'staging')
+    const title = reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' })
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      POLICY_PUSH_FAILURE,
+    )
+    const seeded = (number, overrides = {}) => ({
+      number,
+      title,
+      headRefName: branch,
+      baseRefName: 'staging',
+      url: `https://github.com/owner/repo/pull/${number}`,
+      ...overrides,
+    })
+
+    // Two open PRs claim the deterministic branch: ambiguous, fail closed.
+    assert.throws(() => withReconcileGh({ prs: [seeded(1), seeded(2)] }, execute), /Multiple open pull requests/)
+    // A foreign title on the deterministic branch: fail closed before pushing.
+    assert.throws(() => withReconcileGh({ prs: [seeded(3, { title: 'chore: user edited title' })] }, execute), /unexpected base or title/)
+    // A pull request from the branch into another base: fail closed.
+    assert.throws(() => withReconcileGh({ prs: [seeded(4, { baseRefName: 'main' })] }, execute), /unexpected base or title/)
+    // gh pr list failure: fail closed.
+    assert.throws(() => withReconcileGh({ failList: true }, execute), /Failed to list open pull requests/)
+    // gh pr create failure with no reusable PR: fail closed.
+    assert.throws(() => withReconcileGh({ failCreate: true }, execute), /gh pr create failed/)
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
   })
@@ -1271,6 +1685,10 @@ describe('code-foundry CLI', () => {
       const caller = readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')
       assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
     }
+
+    const scanner = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
+    assert.match(scanner, /source_ref: b3dce823322672b285fbe99b870ea984c01826cb/)
+    assert.doesNotMatch(scanner, /source_ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.ref/)
   })
 
   it('keeps generated Rust CodeQL configuration inside the workspace', () => {
