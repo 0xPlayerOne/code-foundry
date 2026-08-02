@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.4...v0.34.5) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** reconcile protected staging branches ([fa18bfb](https://github.com/0xPlayerOne/code-foundry/commit/fa18bfbb90aaed5c78ff70dbb3dc17d5633e7e5f))
+
 ## [0.34.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.3...v0.34.4) (2026-08-02)
 
 
