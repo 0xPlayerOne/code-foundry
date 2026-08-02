@@ -1747,7 +1747,7 @@ describe('code-foundry CLI', () => {
     assert.match(createStep, /--field head=staging/)
     assert.match(createStep, /--field title="Promote staging -> main \(\$DATE\)"/)
     assert.match(createStep, /--field body=@"\$BODY_FILE"/)
-    assert.match(createStep, /if ! gh api "\$\{CREATE_ARGS\[\@\]\}"/)
+    assert.match(createStep, /if gh api "\$\{CREATE_ARGS\[\@\]\}"; then/)
     assert.match(createStep, /--field draft=true/)
     const draftCondition = createStep.indexOf('HAS_AUTOMATION_TOKEN" != true')
     const draftField = createStep.indexOf('--field draft=true')
@@ -1774,6 +1774,62 @@ describe('code-foundry CLI', () => {
     assert.ok(authSetup !== -1, 'workflow configures git auth for the promisor fetch')
     assert.ok(mergeBase !== -1)
     assert.ok(authSetup < mergeBase, 'git auth setup must precede the merge-base comparison')
+  })
+
+  it('uses github.token for read-only promotion lookups and falls back to it for writes', () => {
+    const workflow = readFileSync('.github/workflows/release-pr.yml', 'utf8')
+    const stepSlice = (name) => {
+      const start = workflow.indexOf(`- name: ${name}\n`)
+      assert.ok(start !== -1, `workflow has a ${name} step`)
+      const next = workflow.indexOf('- name: ', start + 1)
+      return next === -1 ? workflow.slice(start) : workflow.slice(start, next)
+    }
+
+    // Read-only operations (partial-clone git auth, existing-PR lookup,
+    // commit-tree and compare lookups) must use the short-lived workflow
+    // token: NiftyLeague rejects long-lived fine-grained automation tokens
+    // with HTTP 403 even on REST, so the automation secrets must not appear
+    // in the Configure git auth or Check step environments.
+    const authStep = stepSlice('Configure git auth for blob fetch')
+    assert.match(authStep, /GH_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.doesNotMatch(authStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
+
+    const checkStep = stepSlice('Check')
+    assert.match(checkStep, /GH_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.doesNotMatch(checkStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
+
+    // Writes keep the configured automation token when present and fall back
+    // to github.token only when no automation token is configured.
+    const createStep = stepSlice('Create')
+    assert.match(createStep, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+
+    // A failed REST POST is retried once with the short-lived workflow token,
+    // and only when an automation token was actually configured (otherwise the
+    // first attempt already ran as github.token). The retry must be the same
+    // REST payload, not a gh pr create.
+    const retry = 'GH_TOKEN="${{ github.token }}" gh api "${CREATE_ARGS[@]}"'
+    const retryIndex = createStep.indexOf(retry)
+    assert.ok(retryIndex !== -1, 'Create step retries the POST with github.token')
+    const tokenGuard = createStep.indexOf('[ "$HAS_AUTOMATION_TOKEN" = true ]')
+    assert.ok(tokenGuard !== -1 && tokenGuard < retryIndex, 'the github.token retry is guarded by HAS_AUTOMATION_TOKEN')
+
+    // The create-race fallback lookup runs only after creation failed: with
+    // a configured automation token present but rejected (and its github.token
+    // retry failed), or with no automation token configured, where the first
+    // attempt already ran as github.token. The lookup always uses the
+    // short-lived workflow token so it cannot be rejected by the automation
+    // token policy, and it must come after the retry so a successful retry
+    // skips the lookup.
+    const fallback = 'GH_TOKEN="${{ github.token }}" gh api \\'
+    const fallbackIndex = createStep.indexOf(fallback)
+    assert.ok(fallbackIndex !== -1 && fallbackIndex > retryIndex, 'the create-race lookup uses github.token after the retry')
+
+    const createCommands = createStep
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    assert.doesNotMatch(createCommands, /gh pr list/)
+    assert.doesNotMatch(createCommands, /gh pr create/)
   })
 
   it('keys runtime concurrency by event so promotion PRs do not cancel push checks', () => {
