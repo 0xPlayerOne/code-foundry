@@ -286,7 +286,11 @@ jobs:
   reconcile:
     name: Release / Reconcile
     needs: release
-    if: needs.release.result == 'success'
+    # A normal promotion push can successfully run Release Please without
+    # creating a release. Reconciliation is only meaningful after a release
+    # commit/tag is actually created; otherwise the promotion's source changes
+    # are incorrectly rejected as non-metadata commits.
+    if: needs.release.result == 'success' && needs.release.outputs.release_created == 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     permissions:
