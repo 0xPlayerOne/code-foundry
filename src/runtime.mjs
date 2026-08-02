@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
 import { configured, readConfig } from './lib/config.mjs'
+import { classifyTestFiles } from './lib/test-discovery.mjs'
 import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
 import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
 
@@ -126,6 +127,19 @@ function capture(command, args = []) {
   return result.status === 0 ? result.stdout.trim() : ''
 }
 
+/** @returns {string[]} */
+function repositoryTestFiles() {
+  return capture('git', ['ls-files'])
+    .split(/\r?\n/)
+    .map((file) => file.trim())
+    .filter(Boolean)
+}
+
+/** @param {'unit'|'integration'|'e2e'|'smoke'} task */
+function taskTestFiles(task) {
+  return classifyTestFiles(repositoryTestFiles(), task)
+}
+
 /** @param {string[]} args @returns {[string|null, string[]]} */
 function packageCommand(args) {
   switch (packageManager) {
@@ -212,8 +226,16 @@ function relevant(task) {
     return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) || (rust && hasRootRustProject())
   }
   if (['unit', 'integration', 'e2e', 'smoke'].includes(task)) {
-    return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) ||
-      (rust && hasRootRustProject()) || (hasLanguage('solidity') && hasRootJavascriptProject())
+    if (taskTestFiles(/** @type {'unit'|'integration'|'e2e'|'smoke'} */ (task)).length > 0) return true
+    // A project with inline Rust/Python/JavaScript unit tests is still a unit
+    // test target even when it has no conventional test file path. Other
+    // categories must have an explicit script or discoverable test files so
+    // their workflow jobs become skipped instead of successful no-ops.
+    if (task === 'unit') {
+      return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) ||
+        (rust && hasRootRustProject()) || (hasLanguage('solidity') && hasRootJavascriptProject())
+    }
+    return false
   }
   return true
 }
@@ -274,15 +296,47 @@ function ci(task) {
     smoke: ['test:smoke', 'smoke'],
   }
   const scripts = scriptsByTask[task]
-  if (scripts) runScript(scripts)
-  if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['test'])
+  const scripted = scripts ? runScript(scripts) : false
+  const testFiles = taskTestFiles(/** @type {'unit'|'integration'|'e2e'|'smoke'} */ (task))
+  const javascriptTests = testFiles.filter((file) => /\.(?:[cm]?[jt]sx?)$/i.test(file))
+  const pythonTests = testFiles.filter((file) => /\.py$/i.test(file))
+  const rustTests = testFiles.filter((file) => /\.rs$/i.test(file))
+
+  // A repository script is authoritative for that package. When it is absent,
+  // use Bun's native runner with only the discovered files for the requested
+  // category; this prevents smoke/integration files from being re-run as unit
+  // tests and avoids no-op category jobs.
+  if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript') || hasLanguage('solidity')) && hasRootJavascriptProject()) {
+    if (javascriptTests.length > 0 || task === 'unit') run('bun', ['test', ...javascriptTests])
+  }
+
   if (hasLanguage('python') && hasRootPythonProject()) {
     const python = existsSync(resolve(root, '.venv/bin/python')) ? resolve(root, '.venv/bin/python') : 'python'
-    const integrationTests = resolve(root, 'tests/integration')
-    if (task !== 'integration' || existsSync(integrationTests)) {
-      run(python, ['-m', 'pytest', ...(task === 'integration' ? ['tests/integration'] : [])])
+    if (pythonTests.length > 0 || task === 'unit') run(python, ['-m', 'pytest', ...pythonTests])
+  }
+
+  if (hasLanguage('rust') && hasRootRustProject()) {
+    if (task === 'unit') {
+      if (existsSync(resolve(root, 'src/lib.rs'))) run('cargo', ['test', '--lib'])
+      if (existsSync(resolve(root, 'src/main.rs'))) run('cargo', ['test', '--bin', packageName()])
+      if (!existsSync(resolve(root, 'src/lib.rs')) && !existsSync(resolve(root, 'src/main.rs'))) run('cargo', ['test'])
+    } else {
+      for (const file of rustTests) {
+        const match = file.match(/^tests\/(.+)\.rs$/)
+        if (match && !match[1].includes('/')) run('cargo', ['test', '--test', match[1]])
+      }
     }
   }
+}
+
+function packageName() {
+  const cargo = readFileSafe(resolve(root, 'Cargo.toml'))
+  return cargo?.match(/^name\s*=\s*"([^"]+)"/m)?.[1] ?? 'app'
+}
+
+/** @param {string} file */
+function readFileSafe(file) {
+  try { return readFileSync(file, 'utf8') } catch { return null }
 }
 
 /** @param {string} task @param {string} ecosystem */
