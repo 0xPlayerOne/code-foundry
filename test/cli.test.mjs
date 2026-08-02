@@ -1719,7 +1719,7 @@ describe('code-foundry CLI', () => {
       .join('\n')
     assert.doesNotMatch(checkCommands, /gh pr list/)
 
-    // The create-race fallback after a failed `gh pr create` must use the
+    // The create-race fallback after a failed creation POST must use the
     // same authenticated REST query as the Check step, extracting the first
     // open PR's number and failing closed when none exists.
     const createStart = workflow.indexOf('- name: Create\n')
@@ -1735,14 +1735,36 @@ describe('code-foundry CLI', () => {
       .join('\n')
     assert.doesNotMatch(createCommands, /gh pr list/)
 
-    // No `gh pr list` invocation may remain anywhere in the reusable
-    // workflow; comment lines may explain why it is not used, but the
-    // invocation itself must not appear in any shell command line.
+    // Creation must use authenticated REST (gh api POST) rather than
+    // `gh pr create`, which issues a GraphQL mutation that NiftyLeague's
+    // long-lived fine-grained token policy rejects. The REST payload must
+    // carry the exact base/head/title/body fields, add draft=true only when
+    // no automation token is configured, and fail closed on API errors.
+    assert.match(createStep, /CREATE_ARGS=\(\n/)
+    assert.match(createStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
+    assert.match(createStep, /--method POST/)
+    assert.match(createStep, /--field base=main/)
+    assert.match(createStep, /--field head=staging/)
+    assert.match(createStep, /--field title="Promote staging -> main \(\$DATE\)"/)
+    assert.match(createStep, /--field body=@"\$BODY_FILE"/)
+    assert.match(createStep, /if ! gh api "\$\{CREATE_ARGS\[\@\]\}"/)
+    assert.match(createStep, /--field draft=true/)
+    const draftCondition = createStep.indexOf('HAS_AUTOMATION_TOKEN" != true')
+    const draftField = createStep.indexOf('--field draft=true')
+    assert.ok(draftCondition !== -1 && draftField !== -1)
+    assert.ok(draftCondition < draftField, 'draft=true must be added only when no automation token is configured')
+    assert.doesNotMatch(createCommands, /gh pr create/)
+
+    // No `gh pr list` or `gh pr create` invocation may remain anywhere in
+    // the reusable workflow; comment lines may explain why they are not
+    // used, but the invocations themselves must not appear in any shell
+    // command line.
     const commands = workflow
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('#'))
       .join('\n')
     assert.doesNotMatch(commands, /gh pr list/)
+    assert.doesNotMatch(commands, /gh pr create/)
 
     // The partial clone defers blob downloads, so the merge-base/diff
     // comparison can trigger a promisor fetch that needs git auth. Read-only
