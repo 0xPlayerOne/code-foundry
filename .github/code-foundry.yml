@@ -11,7 +11,7 @@ dependency_review: auto
 package_manager: bun
 toolchain: auto
 runtime_repository: 0xPlayerOne/code-foundry
-runtime_ref: v0.32.3
+runtime_ref: v0.34.4
 release_type: node
 npm_publish: true
 license: agpl-3.0-or-later
