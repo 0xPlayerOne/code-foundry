@@ -1690,6 +1690,7 @@ describe('code-foundry CLI', () => {
     const workflow = readFileSync('.github/workflows/release-pr.yml', 'utf8')
 
     assert.match(workflow, /fetch-depth: 0/)
+    assert.match(workflow, /persist-credentials: false/)
     assert.match(workflow, /git merge-base --is-ancestor origin\/main origin\/staging/)
     assert.match(workflow, /git diff --name-only origin\/staging origin\/main/)
     assert.match(workflow, /release_only=\$RELEASE_ONLY/)
@@ -1697,6 +1698,15 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
     assert.match(workflow, /merge_strategy.*rebase/)
     assert.match(workflow, /never merge a promotion PR with a merge commit/)
+
+    // The partial clone defers blob downloads, so the merge-base/diff
+    // comparison can trigger a promisor fetch that needs git auth. Read-only
+    // auth must be configured before that comparison runs.
+    const authSetup = workflow.indexOf('gh auth setup-git')
+    const mergeBase = workflow.indexOf('git merge-base --is-ancestor origin/main origin/staging')
+    assert.ok(authSetup !== -1, 'workflow configures git auth for the promisor fetch')
+    assert.ok(mergeBase !== -1)
+    assert.ok(authSetup < mergeBase, 'git auth setup must precede the merge-base comparison')
   })
 
   it('keys runtime concurrency by event so promotion PRs do not cancel push checks', () => {
