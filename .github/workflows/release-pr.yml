@@ -53,13 +53,14 @@ jobs:
           GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
-          EXISTING=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --limit 1 \
-            --base main \
-            --head staging \
-            --state open \
-            --json number | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
+          # The existing-promotion-PR lookup uses authenticated REST (gh api)
+          # rather than gh pr list, which issues a GraphQL query that
+          # NiftyLeague's long-lived fine-grained token policy rejects. The
+          # REST query keeps the exact base/head/state filter and the per_page=1
+          # cap (existing is 0 or 1) and fails closed on any API error.
+          EXISTING=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=staging&state=open&per_page=1" \
+            --jq 'length')
           MAIN_TREE=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.commit.tree.sha')
           STAGING_TREE=$(gh api "repos/${GITHUB_REPOSITORY}/commits/staging" --jq '.commit.tree.sha')
           TREE_EQUAL=false

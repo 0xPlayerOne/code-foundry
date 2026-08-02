@@ -1699,6 +1699,26 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /merge_strategy.*rebase/)
     assert.match(workflow, /never merge a promotion PR with a merge commit/)
 
+    // The existing-promotion-PR lookup must use authenticated REST, not
+    // `gh pr list` (GraphQL): NiftyLeague's long-lived fine-grained token
+    // policy rejects the GraphQL query. The REST query keeps the exact
+    // base/head/state filter and the per_page=1 cap (existing is 0 or 1),
+    // and the step stays fail-closed via set -euo pipefail.
+    const checkStart = workflow.indexOf('- name: Check\n')
+    const checkEnd = workflow.indexOf('- name: ', checkStart + 1)
+    assert.ok(checkStart !== -1 && checkEnd !== -1, 'workflow has a Check step')
+    const checkStep = workflow.slice(checkStart, checkEnd)
+    assert.match(checkStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=staging&state=open&per_page=1"/)
+    assert.match(checkStep, /--jq 'length'/)
+    assert.match(checkStep, /set -euo pipefail/)
+    // Comment lines may explain why gh pr list is not used; the invocation
+    // itself must not appear in any shell command line of the Check step.
+    const checkCommands = checkStep
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    assert.doesNotMatch(checkCommands, /gh pr list/)
+
     // The partial clone defers blob downloads, so the merge-base/diff
     // comparison can trigger a promisor fetch that needs git auth. Read-only
     // auth must be configured before that comparison runs.
