@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.12](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.11...v0.34.12) (2026-08-02)
+
+
+### Bug Fixes
+
+* **reconcile:** classify final tree deltas ([#353](https://github.com/0xPlayerOne/code-foundry/issues/353)) ([18d23e4](https://github.com/0xPlayerOne/code-foundry/commit/18d23e4847ffbcfc274bc11c80244ecac64395ed))
+
 ## [0.34.11](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.10...v0.34.11) (2026-08-02)
 
 
