@@ -187,19 +187,26 @@ jobs:
           - After merge, Release Please opens a separate versioned release PR with the changelog.
           EOF
 
-          DRAFT_ARGS=()
+          # Creation uses authenticated REST (gh api POST) rather than
+          # `gh pr create`, which issues a GraphQL mutation that
+          # NiftyLeague's long-lived fine-grained token policy rejects. The
+          # REST payload keeps the exact base/head/title/body fields, adds
+          # draft=true only when no automation token is configured, and stays
+          # fail-closed through the create-race fallback below.
+          CREATE_ARGS=(
+            "repos/${GITHUB_REPOSITORY}/pulls"
+            --method POST
+            --field base=main
+            --field head=staging
+            --field title="Promote staging -> main ($DATE)"
+            --field body=@"$BODY_FILE"
+          )
           if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
-            DRAFT_ARGS+=(--draft)
+            CREATE_ARGS+=(--field draft=true)
             echo "::notice title=Manual PR readiness required::Created draft promotion PR because no automation token is configured. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN, or mark this PR ready manually to trigger validation."
           fi
 
-          if ! gh pr create \
-            --repo "$GITHUB_REPOSITORY" \
-            --base main \
-            --head staging \
-            "${DRAFT_ARGS[@]}" \
-            --title "Promote staging -> main ($DATE)" \
-            --body-file "$BODY_FILE"; then
+          if ! gh api "${CREATE_ARGS[@]}"; then
             # The create-race lookup uses the same authenticated REST query as
             # the Check step; gh pr list issues a GraphQL query that
             # NiftyLeague's long-lived fine-grained token policy rejects.
