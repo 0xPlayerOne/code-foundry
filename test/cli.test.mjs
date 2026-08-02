@@ -876,16 +876,112 @@ describe('code-foundry CLI', () => {
 
     assert.match(workflow, /name: Detect release credentials/)
     assert.match(workflow, /auto_merge=false/)
-    assert.match(workflow, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
     assert.match(workflow, /name: Normalize generated release PR draft state/)
-    assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
     assert.match(workflow, /gh pr ready --undo/)
-    assert.match(workflow, /No CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN is configured/)
+    assert.match(workflow, /No valid automation token is available \(absent or rejected by GitHub\)/)
     assert.match(workflow, /name: Leave release pull request for manual merge/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge != 'true'/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge == 'true'/)
-    assert.match(workflow, /RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
-    assert.match(workflow, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+    assert.match(workflow, /RELEASE_PLEASE_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN\) \|\| github\.token \}\}/)
+    assert.match(workflow, /GH_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN\) \|\| github\.token \}\}/)
+  })
+  it('validates release automation credentials and fails over to the workflow token', () => {
+    const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+    const stepSlice = (name) => {
+      const start = workflow.indexOf(`- name: ${name}\n`)
+      assert.ok(start !== -1, `workflow has a ${name} step`)
+      const next = workflow.indexOf('- name: ', start + 1)
+      return next === -1 ? workflow.slice(start) : workflow.slice(start, next)
+    }
+
+    // The configured automation token is validated with authenticated REST
+    // against the current repository (NiftyLeague rejects long-lived
+    // fine-grained tokens with HTTP 403 even on REST, so the gh api probe is
+    // the single source of truth for the credential selection). The response
+    // body is discarded and only the exit status selects the credential.
+    const credentialsStep = stepSlice('Detect release credentials')
+    assert.match(credentialsStep, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(credentialsStep, /if \[ "\$HAS_AUTOMATION_TOKEN" = true \] && gh api "repos\/\$\{GITHUB_REPOSITORY\}" --jq '\.full_name' >\/dev\/null 2>&1/)
+    assert.match(credentialsStep, /token_source=configured/)
+    assert.match(credentialsStep, /token_source=fallback/)
+    assert.match(credentialsStep, /::warning title=Release token fallback::/)
+
+    // auto_merge stays true only in the branch where the configured token was
+    // validated; any absence or rejection selects the short-lived workflow
+    // token and leaves the release PR for manual merge.
+    const ghProbe = credentialsStep.indexOf('gh api')
+    const autoMergeTrue = credentialsStep.indexOf('echo "auto_merge=true"')
+    const configured = credentialsStep.indexOf('token_source=configured')
+    const fallback = credentialsStep.indexOf('token_source=fallback')
+    const autoMergeFalse = credentialsStep.indexOf('echo "auto_merge=false"')
+    assert.ok(ghProbe !== -1 && autoMergeTrue !== -1 && configured !== -1 && fallback !== -1 && autoMergeFalse !== -1)
+    assert.ok(ghProbe < autoMergeTrue && autoMergeTrue < configured, 'auto_merge=true must follow a successful gh api validation')
+    assert.ok(autoMergeFalse < fallback, 'fallback selection must follow auto_merge=false')
+
+    // The token value must never be echoed, exported to outputs, or otherwise
+    // logged: the step env carries the (masked) secret, the run block only
+    // lets gh read it from the environment.
+    const credentialsRun = credentialsStep.slice(credentialsStep.indexOf('run: |'))
+    assert.doesNotMatch(credentialsRun, /(?:\$|\$\{)GH_TOKEN/)
+    assert.doesNotMatch(credentialsRun, /printenv/)
+    assert.doesNotMatch(credentialsRun, /GH_TOKEN[^\n]*GITHUB_OUTPUT/)
+
+    // Two mutually-exclusive Release Please steps: the configured secret only
+    // when it validated, github.token otherwise. Action inputs cannot carry a
+    // shell-selected secret, so the selection happens in the if conditions.
+    const automationStep = stepSlice('Release Please (automation token)')
+    assert.match(automationStep, /id: release_automation/)
+    assert.match(automationStep, /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source == 'configured'/)
+    assert.match(automationStep, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(automationStep, /config-file: release-please-config\.json/)
+    assert.match(automationStep, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
+    assert.doesNotMatch(automationStep, /github\.token/)
+
+    const workflowStep = stepSlice('Release Please (workflow token)')
+    assert.match(workflowStep, /id: release_workflow/)
+    assert.match(workflowStep, /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source != 'configured'/)
+    assert.match(workflowStep, /token: \$\{\{ github\.token \}\}/)
+    assert.match(workflowStep, /config-file: release-please-config\.json/)
+    assert.doesNotMatch(workflowStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
+    assert.doesNotMatch(workflow, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+
+    // The normalize step keeps the stable release id so job outputs and
+    // downstream jobs keep reading steps.release.outputs.* unchanged, and it
+    // forwards release_created, tag_name, and prs_created from whichever of
+    // the two action steps ran.
+    const normalizeStep = stepSlice('Normalize Release Please outputs')
+    assert.match(normalizeStep, /id: release/)
+    for (const [source, prefix] of [['release_automation', 'AUTOMATION'], ['release_workflow', 'WORKFLOW']]) {
+      assert.match(normalizeStep, new RegExp(`${prefix}_RELEASE_CREATED: \\$\\{\\{ steps\\.${source}\\.outputs\\.release_created \\}\\}`))
+      assert.match(normalizeStep, new RegExp(`${prefix}_TAG_NAME: \\$\\{\\{ steps\\.${source}\\.outputs\\.tag_name \\}\\}`))
+      assert.match(normalizeStep, new RegExp(`${prefix}_PRS_CREATED: \\$\\{\\{ steps\\.${source}\\.outputs\\.prs_created \\}\\}`))
+      assert.match(normalizeStep, new RegExp(`release_created=\\$${prefix}_RELEASE_CREATED`))
+      assert.match(normalizeStep, new RegExp(`tag_name=\\$${prefix}_TAG_NAME`))
+      assert.match(normalizeStep, new RegExp(`prs_created=\\$${prefix}_PRS_CREATED`))
+    }
+    assert.match(workflow, /release_created: \$\{\{ steps\.release\.outputs\.release_created \|\| 'false' \}\}/)
+    assert.match(workflow, /tag_name: \$\{\{ steps\.release\.outputs\.tag_name \}\}/)
+    assert.match(workflow, /token_source: \$\{\{ steps\.credentials\.outputs\.token_source \}\}/)
+
+    // The same selected credential backs every shell step that lists, readies,
+    // edits, validates, and merges generated release PRs: the draft-state step
+    // and the merge step must use the identical selection expression, and the
+    // post-release job must reuse the release job's token_source output.
+    const selected = /steps\.credentials\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN\) \|\| github\.token/
+    const draftStep = stepSlice('Normalize generated release PR draft state')
+    const mergeStep = stepSlice('Merge generated version pull requests')
+    assert.match(draftStep, new RegExp(`GH_TOKEN: \\$\\{\\{ ${selected.source} \\}\\}`))
+    assert.match(mergeStep, new RegExp(`GH_TOKEN: \\$\\{\\{ ${selected.source} \\}\\}`))
+    const draftLine = draftStep.split('\n').find((line) => line.includes('GH_TOKEN:'))
+    const mergeLine = mergeStep.split('\n').find((line) => line.includes('GH_TOKEN:'))
+    assert.equal(draftLine, mergeLine, 'draft and merge steps must use the same selected credential')
+    assert.match(draftStep, /AUTO_MERGE: \$\{\{ steps\.credentials\.outputs\.auto_merge \}\}/)
+    assert.match(draftStep, /if \[ "\$AUTO_MERGE" = true \]/)
+    assert.doesNotMatch(workflow, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+
+    const postReleaseEnv = workflow.slice(workflow.indexOf('post-release:\n'))
+    assert.match(postReleaseEnv, /RELEASE_PLEASE_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN\) \|\| github\.token \}\}/)
+    assert.match(postReleaseEnv, /GH_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN\) \|\| github\.token \}\}/)
   })
   it('allows only release metadata during post-release reconciliation', () => {
     const allowed = approvedReleaseFiles({
