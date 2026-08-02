@@ -1719,6 +1719,31 @@ describe('code-foundry CLI', () => {
       .join('\n')
     assert.doesNotMatch(checkCommands, /gh pr list/)
 
+    // The create-race fallback after a failed `gh pr create` must use the
+    // same authenticated REST query as the Check step, extracting the first
+    // open PR's number and failing closed when none exists.
+    const createStart = workflow.indexOf('- name: Create\n')
+    const nextStep = workflow.indexOf('- name: ', createStart + 1)
+    assert.ok(createStart !== -1, 'workflow has a Create step')
+    const createStep = nextStep === -1 ? workflow.slice(createStart) : workflow.slice(createStart, nextStep)
+    assert.match(createStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=staging&state=open&per_page=1"/)
+    assert.match(createStep, /--jq '\.\[0\]\.number \/\/ empty'/)
+    assert.match(createStep, /Pull request creation failed and no existing promotion PR was found\./)
+    const createCommands = createStep
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    assert.doesNotMatch(createCommands, /gh pr list/)
+
+    // No `gh pr list` invocation may remain anywhere in the reusable
+    // workflow; comment lines may explain why it is not used, but the
+    // invocation itself must not appear in any shell command line.
+    const commands = workflow
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+    assert.doesNotMatch(commands, /gh pr list/)
+
     // The partial clone defers blob downloads, so the merge-base/diff
     // comparison can trigger a promisor fetch that needs git auth. Read-only
     // auth must be configured before that comparison runs.
