@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.9](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.8...v0.34.9) (2026-08-02)
+
+
+### Bug Fixes
+
+* **ci:** fall back to github token for promotion ([37ff019](https://github.com/0xPlayerOne/code-foundry/commit/37ff019e95a9024338c05fec7579476bd5cf0b3f))
+
 ## [0.34.8](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.7...v0.34.8) (2026-08-02)
 
 
