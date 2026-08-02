@@ -83,14 +83,16 @@ function resolveReconciliationState(target, base, head, allowed, requireRemote) 
   try {
     const mainOnlyCommits = divergentCommits(target, stagingSha, mainSha)
     const stagingOnlyCommits = divergentCommits(target, mainSha, stagingSha)
+    const directChangedPaths = treeChangedPaths(target, stagingSha, mainSha)
     const plan = classifyReconciliation({
       mainSha,
       stagingSha,
       mainOnlyCommits,
       stagingOnlyCommits,
+      directChangedPaths,
       allowed,
     })
-    return { plan, mainSha, stagingSha, mainOnlyCommits, stagingOnlyCommits }
+    return { plan, mainSha, stagingSha, mainOnlyCommits, stagingOnlyCommits, directChangedPaths }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return {
@@ -102,6 +104,7 @@ function resolveReconciliationState(target, base, head, allowed, requireRemote) 
       stagingSha,
       mainOnlyCommits: [],
       stagingOnlyCommits: [],
+      directChangedPaths: [],
     }
   }
 }
@@ -567,6 +570,15 @@ function divergentCommits(root, from, to) {
 function commitChangedPaths(root, commitSha) {
   const result = spawnSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', commitSha], { cwd: root, encoding: 'utf8' })
   if (result.status !== 0) throw new Error(`Unable to read changed paths for commit ${commitSha}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+  return result.stdout.split(/\r?\n/).filter(Boolean)
+}
+
+/** @param {string} root @param {string} from @param {string} to @returns {string[]} */
+function treeChangedPaths(root, from, to) {
+  const result = spawnSync('git', ['diff', '--name-only', from, to], { cwd: root, encoding: 'utf8' })
+  if (result.status !== 0) {
+    throw new Error(`Failed to compare branch trees between ${from} and ${to}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+  }
   return result.stdout.split(/\r?\n/).filter(Boolean)
 }
 
