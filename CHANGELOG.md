@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.6](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.5...v0.34.6) (2026-08-02)
+
+
+### Bug Fixes
+
+* **sync:** keep prettier ignores idempotent ([5db5307](https://github.com/0xPlayerOne/code-foundry/commit/5db53072fded27a57cca3cedf7c40527cd238507))
+
 ## [0.34.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.4...v0.34.5) (2026-08-02)
 
 
