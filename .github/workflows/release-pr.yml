@@ -37,6 +37,16 @@ jobs:
           fetch-depth: 0
           filter: blob:none
 
+      - name: Configure git auth for blob fetch
+        # The partial clone (filter: blob:none) defers blob downloads, so the
+        # merge-base/diff comparison below can trigger a promisor fetch. With
+        # persist-credentials disabled, git has no auth for that fetch; configure
+        # the credential helper with the same token the Check step uses. The token
+        # is scoped to contents: read, so this never enables write credentials.
+        env:
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        run: gh auth setup-git
+
       - name: Check
         id: check-pr
         env:
