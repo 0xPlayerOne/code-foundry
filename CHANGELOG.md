@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.2...v0.34.3) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** reconcile only after creating a release ([#317](https://github.com/0xPlayerOne/code-foundry/issues/317)) ([#318](https://github.com/0xPlayerOne/code-foundry/issues/318)) ([6f2b00c](https://github.com/0xPlayerOne/code-foundry/commit/6f2b00c5f3fe27e56b448671902bf6f5e33cca1f))
+
 ## [0.34.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.1...v0.34.2) (2026-08-01)
 
 
