@@ -44,7 +44,7 @@ env:
 
 jobs:
   release:
-    name: Release / Version
+    name: Version
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     concurrency:
@@ -284,7 +284,7 @@ jobs:
           done
 
   reconcile:
-    name: Release / Reconcile
+    name: Reconcile
     needs: release
     # A normal promotion push can successfully run Release Please without
     # creating a release. Reconciliation is only meaningful after a release
@@ -376,7 +376,7 @@ jobs:
         run: echo 'No staging branch exists; release reconciliation is not applicable.'
 
   post-release:
-    name: Release / Post Hook
+    name: Post Hook
     needs: release
     if: needs.release.outputs.release_created == 'true'
     runs-on: ${{ inputs.runner }}
@@ -432,7 +432,7 @@ jobs:
         run: echo 'No post-release workflow configured; artifact delivery is intentionally skipped.'
 
   npm:
-    name: Release / Publish npm
+    name: Publish npm
     needs: release
     if: needs.release.outputs.release_created == 'true' && needs.release.outputs.npm_publish == 'true'
     runs-on: ${{ inputs.runner }}
