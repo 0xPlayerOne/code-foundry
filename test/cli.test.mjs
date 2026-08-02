@@ -547,7 +547,8 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release_head=\$\(gh pr view \"\$pr\"[\s\S]*--json headRefOid[\s\S]*--jq '\.headRefOid'\)/)
     assert.match(workflow, /--match-head-commit \"\$release_head\"/)
     assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
-    assert.match(workflow, /name: Release \/ Reconcile\n\s+needs: release\n\s+if: needs\.release\.result == 'success'/)
+    assert.match(workflow, /name: Release \/ Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/)
+    assert.match(workflow, /if: needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
     assert.match(workflow, /name: Release \/ Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
