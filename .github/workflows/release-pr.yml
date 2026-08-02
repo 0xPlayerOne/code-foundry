@@ -200,13 +200,11 @@ jobs:
             "${DRAFT_ARGS[@]}" \
             --title "Promote staging -> main ($DATE)" \
             --body-file "$BODY_FILE"; then
-            EXISTING_NUMBER=$(gh pr list \
-              --repo "$GITHUB_REPOSITORY" \
-              --limit 1 \
-              --base main \
-              --head staging \
-              --state open \
-              --json number \
+            # The create-race lookup uses the same authenticated REST query as
+            # the Check step; gh pr list issues a GraphQL query that
+            # NiftyLeague's long-lived fine-grained token policy rejects.
+            EXISTING_NUMBER=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=staging&state=open&per_page=1" \
               --jq '.[0].number // empty')
             if [ -z "$EXISTING_NUMBER" ]; then
               echo 'Pull request creation failed and no existing promotion PR was found.' >&2
