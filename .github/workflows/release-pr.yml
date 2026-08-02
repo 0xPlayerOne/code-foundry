@@ -41,19 +41,24 @@ jobs:
         # The partial clone (filter: blob:none) defers blob downloads, so the
         # merge-base/diff comparison below can trigger a promisor fetch. With
         # persist-credentials disabled, git has no auth for that fetch; configure
-        # the credential helper with the same token the Check step uses. The token
-        # is scoped to contents: read, so this never enables write credentials.
+        # the credential helper with the short-lived workflow token. NiftyLeague
+        # rejects long-lived fine-grained automation tokens with HTTP 403 even
+        # on REST, so all read-only operations use github.token; it is scoped
+        # to contents: read, so this never enables write credentials.
         env:
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: gh auth setup-git
 
       - name: Check
         id: check-pr
         env:
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # The existing-promotion-PR lookup uses authenticated REST (gh api)
+          # Every lookup in this step is read-only and uses the short-lived
+          # workflow token: NiftyLeague rejects long-lived fine-grained
+          # automation tokens with HTTP 403 even on REST. The
+          # existing-promotion-PR lookup uses authenticated REST (gh api)
           # rather than gh pr list, which issues a GraphQL query that
           # NiftyLeague's long-lived fine-grained token policy rejects. The
           # REST query keeps the exact base/head/state filter and the per_page=1
@@ -206,11 +211,31 @@ jobs:
             echo "::notice title=Manual PR readiness required::Created draft promotion PR because no automation token is configured. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN, or mark this PR ready manually to trigger validation."
           fi
 
-          if ! gh api "${CREATE_ARGS[@]}"; then
-            # The create-race lookup uses the same authenticated REST query as
-            # the Check step; gh pr list issues a GraphQL query that
-            # NiftyLeague's long-lived fine-grained token policy rejects.
-            EXISTING_NUMBER=$(gh api \
+          # Prefer the configured automation token for the write, but
+          # NiftyLeague rejects long-lived fine-grained tokens with HTTP 403
+          # even on REST, so retry the POST once with the short-lived workflow
+          # token before the create-race fallback. With no automation token
+          # configured, the first attempt already runs as github.token, so the
+          # retry only applies when an automation token was configured.
+          CREATED=false
+          if gh api "${CREATE_ARGS[@]}"; then
+            CREATED=true
+          elif [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+            echo "::warning title=Token fallback::Automation token PR creation failed; retrying with the short-lived workflow token."
+            if GH_TOKEN="${{ github.token }}" gh api "${CREATE_ARGS[@]}"; then
+              CREATED=true
+            fi
+          fi
+
+          if [ "$CREATED" != true ]; then
+            # The create-race lookup runs only after creation failed: with a
+            # configured automation token that was rejected (its github.token
+            # retry also failed), or with no automation token configured, when
+            # the first attempt already ran as github.token. The lookup uses
+            # the same authenticated REST query as the Check step, always with
+            # the short-lived workflow token; gh pr list issues a GraphQL query
+            # that NiftyLeague's long-lived fine-grained token policy rejects.
+            EXISTING_NUMBER=$(GH_TOKEN="${{ github.token }}" gh api \
               "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=staging&state=open&per_page=1" \
               --jq '.[0].number // empty')
             if [ -z "$EXISTING_NUMBER" ]; then
