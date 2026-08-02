@@ -217,12 +217,16 @@ function compareVersions(a, b) {
 }
 
 /**
- * Classify the relationship between main and staging using commit-level divergence.
- * Any non-release main-only commit fails. Any staging-only commit triggers a replay
- * path so no staging-only work can be silently discarded.
+ * Classify the relationship between main and staging using the final tree delta
+ * when available. Historical commit paths can include equivalent workflow or
+ * configuration changes that are no longer present in the branch delta, so the
+ * final trees are the source of truth for release-only reconciliation. Any
+ * staging-only commit still triggers a replay path so no staging-only work can
+ * be silently discarded.
  * @param {{
  *   mainSha: string,
  *   stagingSha: string,
+ *   directChangedPaths?: string[],
  *   mainOnlyCommits?: Array<{ sha?: string, changedPaths?: string[] }>,
  *   stagingOnlyCommits?: Array<{ sha?: string, changedPaths?: string[] }>,
  *   allowed?: Set<string>,
@@ -232,6 +236,7 @@ export function classifyReconciliation(input) {
   const {
     mainSha,
     stagingSha,
+    directChangedPaths,
     mainOnlyCommits = [],
     stagingOnlyCommits = [],
     allowed = approvedReleaseFiles(),
@@ -247,6 +252,29 @@ export function classifyReconciliation(input) {
   if (hasIndeterminateStagingCommit) return {
     action: 'fail',
     reason: 'Unable to inspect staging-only commit metadata.',
+  }
+  if (Array.isArray(directChangedPaths)) {
+    const paths = [...new Set(directChangedPaths.map((path) => path.trim()).filter(Boolean))]
+    const unexpected = unexpectedReleasePaths(paths, allowed)
+    const stagingOnlyReleaseOnly = stagingOnlyCommits.length > 0 && stagingOnlyCommits.every((commit) =>
+      Array.isArray(commit.changedPaths) && commit.changedPaths.length > 0 && unexpectedReleasePaths(commit.changedPaths, allowed).length === 0,
+    )
+    if (!unexpected.length && !stagingOnlyReleaseOnly) {
+      return {
+        action: 'fast-forward',
+        targetSha: mainSha,
+        reason: paths.length
+          ? 'Branches differ only by approved release metadata.'
+          : 'Branches have different history but identical content.',
+      }
+    }
+    if (!stagingOnlyCommits.length) {
+      return {
+        action: 'fail',
+        reason: 'branch content differs outside release metadata.',
+        unexpected,
+      }
+    }
   }
   const unexpectedMain = unexpectedReleasePaths(
     [...new Set(mainOnlyCommits.flatMap((commit) => commit.changedPaths || []))],

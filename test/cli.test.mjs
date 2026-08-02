@@ -1051,6 +1051,34 @@ describe('code-foundry CLI', () => {
     )
   })
 
+  it('classifies historical workflow commits by their final tree delta', () => {
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        directChangedPaths: ['CHANGELOG.md', 'Cargo.toml', 'Cargo.lock'],
+        mainOnlyCommits: [{ sha: 'workflow-main', changedPaths: ['.github/workflows/release.yml'] }],
+        stagingOnlyCommits: [{ sha: 'workflow-staging', changedPaths: ['.github/workflows/release.yml'] }],
+        allowed: approvedReleaseFiles(),
+      }),
+      { action: 'fast-forward', targetSha: 'main', reason: 'Branches differ only by approved release metadata.' },
+    )
+  })
+
+  it('fails closed when the final tree delta contains an unexpected path', () => {
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        directChangedPaths: ['CHANGELOG.md', 'src/index.ts'],
+        mainOnlyCommits: [{ sha: 'main-code', changedPaths: ['src/index.ts'] }],
+        stagingOnlyCommits: [],
+        allowed: approvedReleaseFiles(),
+      }),
+      { action: 'fail', reason: 'branch content differs outside release metadata.', unexpected: ['src/index.ts'] },
+    )
+  })
+
   it('recommends replaying staging-only work even when it touches release-only files', () => {
     const allowed = approvedReleaseFiles()
     assert.deepEqual(
@@ -1118,7 +1146,7 @@ describe('code-foundry CLI', () => {
 
     assert.throws(
       () => reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
-      /main contains commits that are not release metadata\. Unexpected paths: src\/index.ts/,
+      /branch content differs outside release metadata\. Unexpected paths: src\/index.ts/,
     )
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
