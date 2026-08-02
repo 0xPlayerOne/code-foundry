@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.3...v0.34.4) (2026-08-02)
+
+
+### Bug Fixes
+
+* split native test suites by category ([93c9ede](https://github.com/0xPlayerOne/code-foundry/commit/93c9ede6e202a790befe1ee0e57633e3d01dc428))
+
 ## [0.34.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.2...v0.34.3) (2026-08-02)
 
 
