@@ -729,10 +729,12 @@ describe('code-foundry CLI', () => {
     const draftCallee = readFileSync('.github/workflows/draft-pr.yml', 'utf8')
     assert.match(draftCallee, /CODE_FOUNDRY_TOKEN:\n\s+required: false/)
     assert.match(draftCallee, /RELEASE_PLEASE_TOKEN:\n\s+required: false/)
-    assert.match(draftCallee, /HAS_AUTOMATION_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN != '' \|\| secrets\.RELEASE_PLEASE_TOKEN != '' \}\}/)
-    assert.match(draftCallee, /if \[ "\$HAS_AUTOMATION_TOKEN" = true \]; then/)
-    assert.match(draftCallee, /DRAFT_ARGS=\(\)/)
-    assert.match(draftCallee, /\$\{DRAFT_ARGS\[\@\]\}/)
+    assert.match(draftCallee, /GH_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.match(draftCallee, /AUTOMATION_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(draftCallee, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.match(draftCallee, /CREATE_ARGS=\(/)
+    assert.match(draftCallee, /DRAFT_ARGS=\("\$\{CREATE_ARGS\[@\]\}" --field draft=true\)/)
+    assert.doesNotMatch(draftCallee, /gh pr create/)
 
     const draftCaller = readFileSync('.github/workflows/draft-pr_self-ci.yml', 'utf8')
     assert.match(draftCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
@@ -748,6 +750,35 @@ describe('code-foundry CLI', () => {
 
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
     assert.match(validationCaller, /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/)
+  })
+  it('creates draft PRs through REST and falls back from rejected automation tokens', () => {
+    const workflow = readFileSync('.github/workflows/draft-pr.yml', 'utf8')
+    const stepSlice = (name) => {
+      const start = workflow.indexOf(`- name: ${name}\n`)
+      assert.ok(start !== -1, `workflow has a ${name} step`)
+      const next = workflow.indexOf('- name: ', start + 1)
+      return next === -1 ? workflow.slice(start) : workflow.slice(start, next)
+    }
+
+    const checkStep = stepSlice('Check')
+    assert.match(checkStep, /GH_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.doesNotMatch(checkStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
+
+    const createStep = stepSlice('Create')
+    assert.match(createStep, /AUTOMATION_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(createStep, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.match(createStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
+    assert.match(createStep, /--method POST/)
+    assert.match(createStep, /--field base=staging/)
+    assert.match(createStep, /--field head="\$BRANCH"/)
+    assert.match(createStep, /--field title="\$PR_TITLE"/)
+    assert.match(createStep, /--field body="@\$BODY_FILE"/)
+    assert.match(createStep, /GH_TOKEN="\$AUTOMATION_TOKEN" gh api "\$\{CREATE_ARGS\[@\]\}"/)
+    assert.match(createStep, /DRAFT_ARGS=\("\$\{CREATE_ARGS\[@\]\}" --field draft=true\)/)
+    assert.match(createStep, /GH_TOKEN="\$GITHUB_TOKEN" gh api "\$\{DRAFT_ARGS\[@\]\}"/)
+    assert.match(createStep, /Manual PR readiness required/)
+    assert.doesNotMatch(createStep, /echo "\$AUTOMATION_TOKEN"|printenv|GITHUB_OUTPUT/)
+    assert.doesNotMatch(workflow, /gh pr create/)
   })
   it('fails closed on a non-squash release merge strategy and never uses --admin', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')

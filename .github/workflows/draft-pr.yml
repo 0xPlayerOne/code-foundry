@@ -18,9 +18,6 @@ permissions:
   contents: read
   pull-requests: write
 
-env:
-  HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
-
 jobs:
   create-draft-pr:
     name: Create
@@ -34,7 +31,7 @@ jobs:
         id: check-pr
         env:
           HEAD_REF: ${{ github.ref_name }}
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="$HEAD_REF"
           EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --limit 1 --base staging --head "$BRANCH" --state open --json number,title 2>/dev/null | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
@@ -43,9 +40,11 @@ jobs:
       - name: Create
         if: steps.check-pr.outputs.existing == '0'
         env:
+          AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           HEAD_REF: ${{ github.ref_name }}
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
         run: |
+          set -euo pipefail
           BRANCH="$HEAD_REF"
           PREFIX="${BRANCH%%/*}"
           SUFFIX="${BRANCH#*/}"
@@ -71,19 +70,42 @@ jobs:
             PR_TITLE="$BRANCH"
           fi
 
-          DRAFT_ARGS=()
-          if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
-            BODY_NOTICE="This PR is ready for review and merging once required validation passes."
-          else
-            DRAFT_ARGS+=(--draft)
-            BODY_NOTICE="This PR was created automatically and is currently in draft mode."
-            echo "::notice title=Manual PR readiness required::No automation token is configured; this PR may remain draft until manually marked ready for validation and merge."
+          BODY_FILE=$(mktemp)
+          ERROR_FILE=$(mktemp)
+          trap 'rm -f -- "$BODY_FILE" "$ERROR_FILE"' EXIT
+          cat > "$BODY_FILE" <<EOF
+          CI PR created automatically by this workflow.
+
+          This PR is ready for review once required validation passes. If the
+          configured automation token is rejected, it is intentionally opened
+          as a draft for manual readiness.
+
+          **CI Status:** Pending — this workflow triggered on push to $BRANCH.
+          EOF
+
+          CREATE_ARGS=(
+            "repos/${GITHUB_REPOSITORY}/pulls"
+            --method POST
+            --field base=staging
+            --field head="$BRANCH"
+            --field title="$PR_TITLE"
+            --field body="@$BODY_FILE"
+          )
+
+          CREATED=false
+          if [ -n "$AUTOMATION_TOKEN" ] && GH_TOKEN="$AUTOMATION_TOKEN" gh api "${CREATE_ARGS[@]}" > /dev/null 2> "$ERROR_FILE"; then
+            CREATED=true
           fi
 
-          gh pr create \
-            --repo "$GITHUB_REPOSITORY" \
-            --base staging \
-            --head "$BRANCH" \
-            "${DRAFT_ARGS[@]}" \
-            --title "$PR_TITLE" \
-            --body "CI PR created automatically by this workflow.\n\n            $BODY_NOTICE\n\n            **CI Status:** Pending \u2014 this workflow triggered on push to \`$BRANCH\`."
+          if [ "$CREATED" != true ]; then
+            DRAFT_ARGS=("${CREATE_ARGS[@]}" --field draft=true)
+            if GH_TOKEN="$GITHUB_TOKEN" gh api "${DRAFT_ARGS[@]}" > /dev/null 2> "$ERROR_FILE"; then
+              echo "::notice title=Manual PR readiness required::The configured automation token was absent or rejected; this PR was opened as a draft with the short-lived workflow token."
+              CREATED=true
+            fi
+          fi
+
+          if [ "$CREATED" != true ]; then
+            echo "::error title=Draft PR creation failed::Both the configured automation token and the workflow token failed to create the pull request."
+            exit 1
+          fi
