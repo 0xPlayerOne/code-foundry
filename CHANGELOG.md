@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.7](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.6...v0.34.7) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** authenticate partial clone comparisons ([172dfbe](https://github.com/0xPlayerOne/code-foundry/commit/172dfbef53ab1a9eee44cf68f648889ae99b93b1))
+
 ## [0.34.6](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.5...v0.34.6) (2026-08-02)
 
 
