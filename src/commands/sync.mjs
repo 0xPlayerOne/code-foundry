@@ -412,9 +412,12 @@ function mergeGitignore(baseline, existing) {
 
 /** @param {string} baseline @param {string} existing */
 function mergeIgnoreFile(baseline, existing) {
+  const marker = '# Repository-specific rules'
   const baselineLines = new Set(baseline.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))
-  const custom = existing.split(/\r?\n/).map((line) => line.trimEnd()).filter((line) => line.trim() && !baselineLines.has(line.trim()))
-  return custom.length ? `${baseline.trimEnd()}\n\n# Repository-specific rules\n${custom.join('\n')}\n` : baseline
+  const custom = existing.split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim() && line.trim() !== marker && !baselineLines.has(line.trim()))
+  return custom.length ? `${baseline.trimEnd()}\n\n${marker}\n${custom.join('\n')}\n` : baseline
 }
 
 /** @param {string} file @param {string} content */
