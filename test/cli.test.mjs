@@ -606,6 +606,32 @@ describe('code-foundry CLI', () => {
     assert.equal(readFileSync(join(root, '.github/workflows/deploy.yml'), 'utf8'), 'name: Deploy\n')
   })
 
+  it('keeps repository-owned .prettierignore entries stable across repeated syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-prettierignore-idempotent-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(
+      join(root, '.prettierignore'),
+      ['# Local build output', 'dist/', 'coverage/', ''].join('\n')
+    )
+
+    const first = syncRepository({ target: root, source: process.cwd() })
+    const merged = readFileSync(join(root, '.prettierignore'), 'utf8')
+
+    assert.ok(first.changed.includes('.prettierignore'))
+    assert.match(merged, /^# Generated release metadata is intentionally managed by Release Please\.\nCHANGELOG\.md/m)
+    assert.match(merged, /^\.github\/\.code-foundry$/m)
+    assert.equal((merged.match(/# Repository-specific rules/g) ?? []).length, 1)
+    assert.match(merged, /# Repository-specific rules\n# Local build output\ndist\/\ncoverage\/$/m)
+
+    const second = syncRepository({ target: root, source: process.cwd() })
+    const afterSecond = readFileSync(join(root, '.prettierignore'), 'utf8')
+
+    assert.ok(!second.changed.includes('.prettierignore'), second.changed.join(', '))
+    assert.equal(afterSecond, merged)
+    assert.equal((afterSecond.match(/# Repository-specific rules/g) ?? []).length, 1)
+  })
+
   it('previews legacy caller removal in dry-run without writing files', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-dryrun-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
