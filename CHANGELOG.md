@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.10](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.9...v0.34.10) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** validate automation token before Release Please ([654094f](https://github.com/0xPlayerOne/code-foundry/commit/654094f452a4a6351de247aa82bf2448d7ea79c6))
+
 ## [0.34.9](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.8...v0.34.9) (2026-08-02)
 
 
