@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.8](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.7...v0.34.8) (2026-08-02)
+
+
+### Bug Fixes
+
+* **ci:** create promotion PRs through REST ([c123e21](https://github.com/0xPlayerOne/code-foundry/commit/c123e21e868de685a91de228ca57cf6614767bb7))
+
 ## [0.34.7](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.6...v0.34.7) (2026-08-02)
 
 
