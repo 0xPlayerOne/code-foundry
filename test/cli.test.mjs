@@ -780,7 +780,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(createStep, /echo "\$AUTOMATION_TOKEN"|printenv|GITHUB_OUTPUT/)
     assert.doesNotMatch(workflow, /gh pr create/)
   })
-  it('fails closed on a non-squash release merge strategy and never uses --admin', () => {
+  it('fails closed on a non-rebase release merge strategy and never uses --admin', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
     assert.match(workflow, /if \(!releaseConfig\.packages && !releaseConfig\['release-type'\]\)/)
@@ -791,7 +791,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
     assert.doesNotMatch(workflow, /--admin/)
-    assert.match(workflow, /release_merge_strategy must be "squash"/)
+    assert.match(workflow, /release_merge_strategy must be "rebase"/)
     assert.match(workflow, /release automation never defaults to merge/)
     assert.doesNotMatch(workflow, /release_merge_strategy \|\| config\.merge_strategy/)
     assert.doesNotMatch(workflow, /\|\| 'merge'/)
@@ -873,20 +873,20 @@ describe('code-foundry CLI', () => {
       return errors
     }
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n')
     syncRepository({ target: root, source: process.cwd() })
     assert.doesNotThrow(() => doctor(root))
 
     writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\nrelease_merge_strategy: merge\n')
     const promotion = captureErrors(() => doctor(root))
     assert.ok(promotion.some((message) => /merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
-    assert.ok(promotion.some((message) => /release_merge_strategy must be "squash"/.test(message)), promotion.join('\n'))
+    assert.ok(promotion.some((message) => /release_merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
     assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported merge_strategy: merge/)
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n')
     const release = captureErrors(() => doctor(root))
-    assert.ok(release.some((message) => /release_merge_strategy must be "squash"/.test(message)), release.join('\n'))
-    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported release_merge_strategy: rebase/)
+    assert.ok(release.some((message) => /release_merge_strategy must be "rebase"/.test(message)), release.join('\n'))
+    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported release_merge_strategy: squash/)
 
     // Release automation is the only consumer of release_merge_strategy;
     // a profile without the release feature never needs the key.
