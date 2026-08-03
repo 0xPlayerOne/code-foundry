@@ -256,6 +256,12 @@ export function classifyReconciliation(input) {
   if (Array.isArray(directChangedPaths)) {
     const paths = [...new Set(directChangedPaths.map((path) => path.trim()).filter(Boolean))]
     const unexpected = unexpectedReleasePaths(paths, allowed)
+    // Git may hide patch-equivalent commits when divergentCommits uses
+    // --cherry-pick. If the final trees are identical and no non-equivalent
+    // commits remain, classify the branches consistently as aligned.
+    if (!paths.length && !mainOnlyCommits.length && !stagingOnlyCommits.length) {
+      return { action: 'aligned', targetSha: mainSha, reason: 'Branches have different history but identical content.' }
+    }
     const stagingOnlyReleaseOnly = stagingOnlyCommits.length > 0 && stagingOnlyCommits.every((commit) =>
       Array.isArray(commit.changedPaths) && commit.changedPaths.length > 0 && unexpectedReleasePaths(commit.changedPaths, allowed).length === 0,
     )
