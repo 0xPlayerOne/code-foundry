@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.13](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.12...v0.34.13) (2026-08-03)
+
+
+### Bug Fixes
+
+* **reconcile:** classify patch-equivalent trees consistently ([#360](https://github.com/0xPlayerOne/code-foundry/issues/360)) ([c95f1bd](https://github.com/0xPlayerOne/code-foundry/commit/c95f1bdeaa69fc5fbcd42821bc633edbbd31de49))
+* **release:** use rebase for release PRs ([#358](https://github.com/0xPlayerOne/code-foundry/issues/358)) ([3b2b2f5](https://github.com/0xPlayerOne/code-foundry/commit/3b2b2f5cee15e3f61a1688e5b3ef0847a6eb8c55))
+
 ## [0.34.12](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.11...v0.34.12) (2026-08-02)
 
 
