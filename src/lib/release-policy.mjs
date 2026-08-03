@@ -220,9 +220,14 @@ function compareVersions(a, b) {
  * Classify the relationship between main and staging using the final tree delta
  * when available. Historical commit paths can include equivalent workflow or
  * configuration changes that are no longer present in the branch delta, so the
- * final trees are the source of truth for release-only reconciliation. Any
- * staging-only commit still triggers a replay path so no staging-only work can
- * be silently discarded.
+ * final trees are the source of truth for release-only reconciliation. When
+ * directChangedPaths is supplied, unexpected paths in historical main-only
+ * commits are ignored only when they are absent from the final tree delta
+ * (their content is already identical in both branches); unexpected main-only
+ * paths that still differ between the final trees fail closed. Without
+ * directChangedPaths the historical check stays strict. Any staging-only
+ * commit still triggers a replay path so no staging-only work can be silently
+ * discarded.
  * @param {{
  *   mainSha: string,
  *   stagingSha: string,
@@ -282,10 +287,19 @@ export function classifyReconciliation(input) {
       }
     }
   }
+  // Historical main-only commits may list paths whose content is already
+  // identical in the final staging tree (for example an equivalent workflow
+  // change). When the final tree delta is available, such paths are not
+  // genuine content differences and are ignored unless they also appear in
+  // the direct tree delta; without directChangedPaths the strict historical
+  // check is preserved unchanged.
+  const directTreePaths = Array.isArray(directChangedPaths)
+    ? new Set(directChangedPaths.map((path) => path.trim()).filter(Boolean))
+    : null
   const unexpectedMain = unexpectedReleasePaths(
     [...new Set(mainOnlyCommits.flatMap((commit) => commit.changedPaths || []))],
     allowed,
-  )
+  ).filter((path) => directTreePaths === null || directTreePaths.has(path))
   if (unexpectedMain.length) {
     return {
       action: 'fail',
