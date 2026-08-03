@@ -502,6 +502,47 @@ describe('code-foundry CLI', () => {
     doctor(root)
   })
 
+  it('installs the Apache 2.0 license for consumers configured with apache-2.0', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-apache-license-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: none',
+        'package_manager: none',
+        'license: apache-2.0',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const license = readFileSync(join(root, 'LICENSE'), 'utf8')
+    assert.match(license, /Apache License/)
+    assert.match(license, /Version 2\.0, January 2004/)
+    assert.match(license, /TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION/)
+    assert.doesNotMatch(license, /GNU/)
+    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /license: apache-2\.0/)
+  })
+
+  it('rejects unsupported license policies with the supported list', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-license-policy-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: none',
+        'package_manager: none',
+        'license: bsd-3-clause',
+        '',
+      ].join('\n')
+    )
+
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported license: bsd-3-clause; use gpl-3\.0-or-later, agpl-3\.0-or-later, apache-2\.0, mit, preserve, none\./
+    )
+  })
+
   it('rejects unsafe Rust CodeQL parallelism configuration', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-codeql-config-'))
     mkdirSync(join(root, '.github'), { recursive: true })

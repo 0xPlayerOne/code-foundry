@@ -46,7 +46,7 @@ repository manifests and source
 | `runtime_ref` | tag or branch | Reusable workflow version |
 | `release_type` | `node`, `python`, `rust`, `simple`, `none` | Release strategy |
 | `npm_publish` | `true` or `false` | Opt into npm publication |
-| `license` | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3 |
+| `license` | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3 |
 | `git_workflow` | `staging-release` | Branch/release model; the standard model promotes `staging` into `main` |
 | `merge_strategy` | `rebase` | Promotion merge method for `staging` → `main`; the staging-release topology requires rebase |
 | `release_merge_strategy` | `rebase` | Merge method for Release Please version PRs into `main`; release automation fails closed unless rebase |
