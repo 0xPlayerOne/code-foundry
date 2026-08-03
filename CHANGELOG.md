@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.14](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.13...v0.34.14) (2026-08-03)
+
+
+### Bug Fixes
+
+* **reconcile:** ignore historical paths absent from final tree ([#362](https://github.com/0xPlayerOne/code-foundry/issues/362)) ([8b8a123](https://github.com/0xPlayerOne/code-foundry/commit/8b8a123a1a7ea23a789c491414d3c9ea235a3d72))
+
 ## [0.34.13](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.12...v0.34.13) (2026-08-03)
 
 
