@@ -541,6 +541,14 @@ describe('code-foundry CLI', () => {
       () => syncRepository({ target: root, source: process.cwd() }),
       /Unsupported license: bsd-3-clause; use gpl-3\.0-or-later, agpl-3\.0-or-later, apache-2\.0, mit, preserve, none\./
     )
+    // Validation happens before any writes: the config must not gain default
+    // additions and no generated baseline files may exist.
+    assert.equal(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      'languages: none\npackage_manager: none\nlicense: bsd-3-clause\n'
+    )
+    assert.deepEqual(readdirSync(root).sort(), ['.github'])
+    assert.deepEqual(readdirSync(join(root, '.github')).sort(), ['code-foundry.yml'])
   })
 
   it('rejects unsafe Rust CodeQL parallelism configuration', () => {
