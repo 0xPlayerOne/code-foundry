@@ -1123,6 +1123,67 @@ describe('code-foundry CLI', () => {
     )
   })
 
+  it('rebase-staging historical main-only paths absent from the final tree delta', () => {
+    const allowed = approvedReleaseFiles()
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        directChangedPaths: ['CHANGELOG.md', 'src/index.ts'],
+        mainOnlyCommits: [
+          { sha: 'release-commit', changedPaths: ['CHANGELOG.md', 'package.json'] },
+          { sha: 'historical-workflow', changedPaths: ['.github/workflows/release.yml'] },
+        ],
+        stagingOnlyCommits: [{ sha: 'staging-feature', changedPaths: ['src/index.ts'] }],
+        allowed,
+      }),
+      {
+        action: 'rebase-staging',
+        targetSha: 'main',
+        mainOnly: ['release-commit', 'historical-workflow'],
+        stagingOnly: ['staging-feature'],
+        reason: 'staging contains unpromoted commits; replay them onto main.',
+      },
+    )
+  })
+
+  it('fails when a historical main-only unexpected path still differs in the final tree delta', () => {
+    const allowed = approvedReleaseFiles()
+    assert.deepEqual(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        directChangedPaths: ['CHANGELOG.md', '.github/workflows/release.yml'],
+        mainOnlyCommits: [
+          { sha: 'main-workflow', changedPaths: ['.github/workflows/release.yml'] },
+        ],
+        stagingOnlyCommits: [{ sha: 'staging-feature', changedPaths: ['src/index.ts'] }],
+        allowed,
+      }),
+      {
+        action: 'fail',
+        reason: 'main contains commits that are not release metadata.',
+        unexpected: ['.github/workflows/release.yml'],
+      },
+    )
+  })
+
+  it('keeps historical main-only path rejection strict without directChangedPaths', () => {
+    const allowed = approvedReleaseFiles()
+    assert.equal(
+      classifyReconciliation({
+        mainSha: 'main',
+        stagingSha: 'staging',
+        mainOnlyCommits: [
+          { sha: 'main-workflow', changedPaths: ['.github/workflows/release.yml'] },
+        ],
+        stagingOnlyCommits: [{ sha: 'staging-feature', changedPaths: ['src/index.ts'] }],
+        allowed,
+      }).action,
+      'fail',
+    )
+  })
+
   it('surfaces exact reconciliation failure reason from local classification', () => {
     const { root, remote, run } = createReconcileWorkspace()
     const commit = (message) => {
