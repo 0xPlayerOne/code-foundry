@@ -84,8 +84,8 @@ export function syncRepository(options) {
     throw new Error(`Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`)
   }
   const releaseMergeStrategy = configured(config.release_merge_strategy, '')
-  if (includesValue(features, 'release') && releaseMergeStrategy !== 'squash') {
-    throw new Error(`Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires squash for Release Please version pull requests and never defaults to merge.`)
+  if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
+    throw new Error(`Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase for Release Please version pull requests and never defaults to merge.`)
   }
   const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
   const changed = []
@@ -460,7 +460,7 @@ function createDefaultConfig(root, source) {
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
     opencode_security: 'false',
     sync_mode: 'overlay', custom_workflows: 'preserve',
-    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase', release_merge_strategy: 'squash',
+    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase', release_merge_strategy: 'rebase',
   }
 }
 

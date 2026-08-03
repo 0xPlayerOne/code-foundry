@@ -42,13 +42,13 @@ enabled for the repository profile.
 
 The merge audit pins one merge method per transition. `code-foundry doctor`
 and `code-foundry sync` fail closed on any other strategy, and the release
-workflow refuses to run unless its strategy is exactly `squash`.
+workflow refuses to run unless its strategy is exactly `rebase`.
 
 | Transition | Merge method | Enforcement |
 | --- | --- | --- |
 | Feature/fix PR into `staging` | Squash | Contribution policy; see `CONTRIBUTING.md` |
 | `staging` → `main` promotion PR | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase`; merge commits are rejected |
-| Release Please version PR into `main` | Squash (`release_merge_strategy: squash`) | Release automation fails closed unless `squash`; never defaults to `merge`, never uses `--admin` |
+| Release Please version PR into `main` | Rebase (`release_merge_strategy: rebase`) | Release automation fails closed unless `rebase`; never defaults to `merge`, never uses `--admin` |
 
 Release auto-merge waits for required checks and then polls `mergeStateStatus`
 until it is `CLEAN`, or `UNSTABLE` with `mergeable` `MERGEABLE`, before
@@ -59,7 +59,7 @@ additional required checks after earlier ones have passed (for example
 merge policy-blocked. The mergeability poll is bounded and fails closed on
 conflicts or timeout; releases without an automation token remain manual.
 
-Keeping `main` linear — rebase promotions and squash release PRs — is what
+Keeping `main` linear — rebase promotions and rebase release PRs — is what
 lets the post-release reconciliation fast-forward or replay `staging` safely.
 
 Protect `staging` with the aggregate `Validation / Gate`, squash-only pull

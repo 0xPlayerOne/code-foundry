@@ -90,8 +90,8 @@ checks, runners, coverage, caching, and custom workflow extensions.
 
 The contribution policy uses the `staging-release` workflow: feature PRs squash
 into `staging`, the promotion PR rebases into `main` (`merge_strategy: rebase`),
-and Release Please version PRs squash into `main` (`release_merge_strategy:
-squash`). Release automation never defaults to a merge method and never merges
+and Release Please version PRs rebase into `main` (`release_merge_strategy:
+rebase`). Release automation never defaults to a merge method and never merges
 with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on
 any other strategy. GitHub Stacks is not part of this topology and does not
 reduce the required workflow runs.
