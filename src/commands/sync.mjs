@@ -33,6 +33,14 @@ const protectedFiles = new Set([
   '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', 'NOTICE',
 ])
 
+/** @type {Record<string, string>} */
+const licenseFiles = {
+  'gpl-3.0-or-later': 'GPL-3.0-or-later.txt',
+  'agpl-3.0-or-later': 'AGPL-3.0-or-later.txt',
+  'apache-2.0': 'APACHE-2.0.txt',
+  'mit': 'MIT.txt',
+}
+
 const legacyFiles = [
   '.github/code-foundry.yml.example', '.github/template.yml', '.github/template.yml.example',
   '.github/scripts/bootstrap.sh', '.github/scripts/changed-files.sh', '.github/scripts/ci.sh',
@@ -171,7 +179,11 @@ export function syncRepository(options) {
   }
 
   if (license !== 'preserve' && license !== 'none') {
-    const licenseFile = license === 'mit' ? 'MIT.txt' : license === 'agpl-3.0-or-later' ? 'AGPL-3.0-or-later.txt' : 'GPL-3.0-or-later.txt'
+    const licenseFile = licenseFiles[license]
+    if (!licenseFile) {
+      const supported = [...Object.keys(licenseFiles), 'preserve', 'none'].join(', ')
+      throw new Error(`Unsupported license: ${license}; use ${supported}.`)
+    }
     const sourceLicense = join(source, '.github/licenses', licenseFile)
     if (!existsSync(sourceLicense)) throw new Error(`License template missing: ${sourceLicense}`)
     const licenseContent = readFileSync(sourceLicense)
