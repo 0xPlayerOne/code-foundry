@@ -48,7 +48,7 @@ docs/*  test/*  refactor/*         │              │
 | `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |
 | `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |
 
-The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.
+The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.
 
 ## Before you start
 
@@ -179,7 +179,7 @@ Security checks can be skipped when repository visibility or the GitHub plan doe
 | ----------------- | --------- | ------------------------------------------------------- | --------------------------------------------------------- |
 | Working branch    | `staging` | Squash                                                  | All applicable required checks pass                       |
 | `staging` → `main` promotion | `main` | Rebase (`merge_strategy`)                   | Current staging checks, release review, and rollout notes |
-| Release Please version PR | `main` | Squash (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                  |
+| Release Please version PR | `main` | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                  |
 
 Reviewers focus on correctness, security, maintainability, test coverage, operational impact, and compatibility. Authors remain responsible for responding to feedback and verifying the final commit.
 

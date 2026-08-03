@@ -84,17 +84,18 @@ jobs:
             : {}
           let releaseType = config.release_type || 'auto'
           let npmPublish = config.npm_publish || 'false'
-          // The merge audit topology requires squash for Release Please version
-          // pull requests into main. Release automation never defaults to a
-          // merge method: an unset or non-squash release_merge_strategy fails
-          // the release job before any pull request is created or merged.
+          // The merge audit topology requires rebase for Release Please version
+          // pull requests into main, matching the linear-history ruleset.
+          // Release automation never defaults to a merge method: an unset or
+          // non-rebase release_merge_strategy fails the release job before any
+          // pull request is created or merged.
           const releaseMergeStrategy = String(config.release_merge_strategy || '').trim().toLowerCase()
           if (releaseType === 'auto') {
             releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
           }
           if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
-          if (releaseMergeStrategy !== 'squash') {
-            throw new Error(`release_merge_strategy must be "squash" for automated release merges; got ${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}`)
+          if (releaseMergeStrategy !== 'rebase') {
+            throw new Error(`release_merge_strategy must be "rebase" for automated release merges; got ${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}`)
           }
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
           let legacyReleaseType = ''

@@ -75,8 +75,8 @@ export function doctor(root, options = {}) {
     error(`merge_strategy must be "rebase" for the staging-release promotion topology; got "${mergeStrategy}".`)
   }
   const releaseMergeStrategy = config.release_merge_strategy ?? ''
-  if (includesValue(features, 'release') && releaseMergeStrategy !== 'squash') {
-    error(`release_merge_strategy must be "squash" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`)
+  if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
+    error(`release_merge_strategy must be "rebase" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`)
   }
   for (const workflow of ['validation', 'draft-pr', 'release-pr', 'release']) {
     if (includesValue(features, workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)

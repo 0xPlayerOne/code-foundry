@@ -49,7 +49,7 @@ repository manifests and source
 | `license` | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3 |
 | `git_workflow` | `staging-release` | Branch/release model; the standard model promotes `staging` into `main` |
 | `merge_strategy` | `rebase` | Promotion merge method for `staging` → `main`; the staging-release topology requires rebase |
-| `release_merge_strategy` | `squash` | Merge method for Release Please version PRs into `main`; release automation fails closed unless squash |
+| `release_merge_strategy` | `rebase` | Merge method for Release Please version PRs into `main`; release automation fails closed unless rebase |
 | `runner` fields | GitHub runner names | Per-workflow runner policy |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,

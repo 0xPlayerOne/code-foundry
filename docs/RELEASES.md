@@ -15,10 +15,10 @@ versions and generate grouped changelog notes.
 The merge audit pins one merge method per transition in this topology. Feature
 and fix branches land on `staging` with **squash** merges, the `staging` → `main`
 promotion PR merges with **rebase** (`merge_strategy: rebase`), and Release
-Please version PRs merge with **squash** (`release_merge_strategy: squash`).
+Please version PRs merge with **rebase** (`release_merge_strategy: rebase`).
 Release automation never defaults to a merge method and never merges with
 `--admin`: the release workflow fails closed unless `release_merge_strategy` is
-exactly `squash`. The current supported `git_workflow` is `staging-release`.
+exactly `rebase`. The current supported `git_workflow` is `staging-release`.
 
 The release workflow opens or updates a versioned PR after changes reach
 `main`. Merging that PR updates the changelog, creates the Git tag and GitHub
@@ -35,13 +35,13 @@ Set these values in `.github/code-foundry.yml`:
 release_type: auto # auto, node, python, rust, simple, or none
 npm_publish: false # true only for an npm package
 merge_strategy: rebase # required: staging -> main promotion PRs rebase
-release_merge_strategy: squash # required: Release Please version PRs squash only
+release_merge_strategy: rebase # required: Release Please version PRs rebase only
 ```
 
 `merge_strategy` applies to promotion PRs (`staging` into `main`) and
 `release_merge_strategy` to Release Please version PRs; feature PRs into
 `staging` use squash merges. The topology requires `merge_strategy: rebase`
-and `release_merge_strategy: squash`; `code-foundry doctor` and
+and `release_merge_strategy: rebase`; `code-foundry doctor` and
 `code-foundry sync` reject any other value, and the release workflow fails
 closed instead of falling back to `merge`. Both keep `main` fully linear,
 which is what makes the post-release reconciliation possible: release-only
@@ -103,6 +103,6 @@ already passed).
 
 1. Merge tested changes from `staging` into `main`.
 2. Review the generated Release Please PR and changelog.
-3. Merge the release PR with the repository's configured `release_merge_strategy` (**squash**; the release workflow fails closed on any other value).
+3. Merge the release PR with the repository's configured `release_merge_strategy` (**rebase**; the release workflow fails closed on any other value).
 4. Confirm the GitHub Release and any package publication.
 5. Synchronize `staging` with the new `main` release commit.
