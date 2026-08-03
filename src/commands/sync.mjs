@@ -65,6 +65,15 @@ export function syncRepository(options) {
   if (!Object.keys(existingConfig).length && !options.init) throw new Error('Missing .github/code-foundry.yml; run init first.')
   const defaults = createDefaultConfig(target, source)
   let config = { ...defaults, ...existingConfig }
+  // Resolve and validate the license policy before any sync writes occur
+  // (including config/default additions) so an unsupported policy fails
+  // fast without leaving partially generated files behind.
+  const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
+  const licenseFile = licenseFiles[license]
+  if (license !== 'preserve' && license !== 'none' && !licenseFile) {
+    const supported = [...Object.keys(licenseFiles), 'preserve', 'none'].join(', ')
+    throw new Error(`Unsupported license: ${license}; use ${supported}.`)
+  }
   if (!Object.keys(existingConfig).length) {
     writeOrReport(configPath, renderConfig(config), dryRun)
   } else {
@@ -95,7 +104,6 @@ export function syncRepository(options) {
   if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
     throw new Error(`Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase for Release Please version pull requests and never defaults to merge.`)
   }
-  const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
   const changed = []
 
   // Keep normal semver pins current during sync while preserving intentional
@@ -179,11 +187,6 @@ export function syncRepository(options) {
   }
 
   if (license !== 'preserve' && license !== 'none') {
-    const licenseFile = licenseFiles[license]
-    if (!licenseFile) {
-      const supported = [...Object.keys(licenseFiles), 'preserve', 'none'].join(', ')
-      throw new Error(`Unsupported license: ${license}; use ${supported}.`)
-    }
     const sourceLicense = join(source, '.github/licenses', licenseFile)
     if (!existsSync(sourceLicense)) throw new Error(`License template missing: ${sourceLicense}`)
     const licenseContent = readFileSync(sourceLicense)
