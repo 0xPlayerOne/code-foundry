@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.35.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.14...v0.35.0) (2026-08-04)
+
+
+### Features
+
+* support Apache 2.0 license sync ([538e7e4](https://github.com/0xPlayerOne/code-foundry/commit/538e7e4e85f9ee8c0af3e319f0440fc78e14dae9))
+
+
+### Bug Fixes
+
+* validate license policy before sync ([5baffa8](https://github.com/0xPlayerOne/code-foundry/commit/5baffa80c59f907fbf27974b43dfa4e063842d71))
+
 ## [0.34.14](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.13...v0.34.14) (2026-08-03)
 
 
