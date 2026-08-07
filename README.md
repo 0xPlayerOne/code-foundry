@@ -68,8 +68,8 @@ when present and otherwise uses native language tooling; choose `native` or
 
 The standard workflow triggers are:
 
-- Pushes to `main` and `staging`.
-- Pull requests targeting `staging`.
+- Pushes to `main` (and `staging` when `git_workflow: staging-release` is configured).
+- Pull requests targeting `main` (and `staging` in the staging-release topology).
 - Draft PR automation for supported feature/fix branches.
 
 Jobs are language-aware and skip irrelevant setup while remaining visible as
@@ -88,20 +88,25 @@ GitHub Code Quality or other paid GitHub features.
 See [Workflow and CI conventions](docs/WORKFLOWS.md) for triggers, required
 checks, runners, coverage, caching, and custom workflow extensions.
 
-The contribution policy uses the `staging-release` workflow: feature PRs squash
-into `staging`, the promotion PR rebases into `main` (`merge_strategy: rebase`),
-and Release Please version PRs rebase into `main` (`release_merge_strategy:
-rebase`). Release automation never defaults to a merge method and never merges
-with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on
-any other strategy. GitHub Stacks is not part of this topology and does not
-reduce the required workflow runs.
+The contribution policy defaults to the `direct` workflow: feature PRs squash
+into `main`, and Release Please version PRs rebase into `main`
+(`release_merge_strategy: rebase`). Repositories with a preview/staging
+environment opt into `git_workflow: staging-release`, where feature PRs squash
+into `staging`, the promotion PR rebases into `main` (`merge_strategy:
+rebase`), and Release Please version PRs rebase into `main`. Release automation
+never defaults to a merge method and never merges with `--admin`;
+`code-foundry doctor` and `code-foundry sync` fail closed on any other
+strategy. GitHub Stacks is not part of this topology and does not reduce the
+required workflow runs.
 
 ## Releases and publishing
 
-The standard flow promotes `staging` into `main`, lets Release Please open a
-versioned release PR, and creates a GitHub release after that PR is merged.
-npm publication is opt-in through `npm_publish: true` and supports npm trusted
-publishing or an `NPM_TOKEN` fallback.
+In the default `direct` flow, changes reach `main` through feature pull
+requests and Release Please opens a versioned release PR against `main`. In
+the `staging-release` flow, a promotion PR promotes `staging` into `main`
+first. Either way, Release Please creates a GitHub release after the version
+PR is merged. npm publication is opt-in through `npm_publish: true` and
+supports npm trusted publishing or an `NPM_TOKEN` fallback.
 
 Read [Release management](docs/RELEASES.md) and
 [Publishing packages](docs/PUBLISHING.md) before enabling automated

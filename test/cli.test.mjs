@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
-import { appendFileSync, chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
@@ -818,7 +818,7 @@ describe('code-foundry CLI', () => {
     assert.match(createStep, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/)
     assert.match(createStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
     assert.match(createStep, /--method POST/)
-    assert.match(createStep, /--field base=staging/)
+    assert.match(createStep, /--field base="\$\{\{\s*inputs\.base\s*\}\}"/)
     assert.match(createStep, /--field head="\$BRANCH"/)
     assert.match(createStep, /--field title="\$PR_TITLE"/)
     assert.match(createStep, /--field body="@\$BODY_FILE"/)
@@ -922,25 +922,109 @@ describe('code-foundry CLI', () => {
       return errors
     }
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n')
     syncRepository({ target: root, source: process.cwd() })
     assert.doesNotThrow(() => doctor(root))
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\nrelease_merge_strategy: merge\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: merge\nrelease_merge_strategy: merge\n')
     const promotion = captureErrors(() => doctor(root))
     assert.ok(promotion.some((message) => /merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
     assert.ok(promotion.some((message) => /release_merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
     assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported merge_strategy: merge/)
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n')
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n')
     const release = captureErrors(() => doctor(root))
     assert.ok(release.some((message) => /release_merge_strategy must be "rebase"/.test(message)), release.join('\n'))
     assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported release_merge_strategy: squash/)
 
     // Release automation is the only consumer of release_merge_strategy;
-    // a profile without the release feature never needs the key.
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nfeatures: ci,test\nmerge_strategy: rebase\n')
+    // a profile without the release feature never needs the key. merge_strategy
+    // is likewise only enforced by the staging-release topology: a direct
+    // repository may carry any value (or none) because no promotion exists.
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nfeatures: ci,test\ngit_workflow: staging-release\nmerge_strategy: rebase\n')
     assert.doesNotThrow(() => syncRepository({ target: root, source: process.cwd() }))
+
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\n')
+    assert.doesNotThrow(() => syncRepository({ target: root, source: process.cwd() }))
+    assert.doesNotThrow(() => doctor(root))
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('renders the direct topology by default and drops every staging reference', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-direct-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    // No existing config: sync with init writes the fully resolved default.
+    syncRepository({ target: root, source: process.cwd(), init: true })
+
+    const config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
+    assert.match(config, /^git_workflow: direct$/m)
+
+    const validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(validation, /branches: \[main\]/)
+    assert.doesNotMatch(validation, /staging/)
+
+    const draft = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
+    assert.match(draft, /base: main/)
+    assert.doesNotMatch(draft, /base: staging/)
+
+    const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
+    assert.match(dependabot, /target-branch: main/)
+    assert.doesNotMatch(dependabot, /target-branch: staging/)
+
+    // No promotion caller and no promotion prose in the direct topology.
+    assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must not emit release-pr.yml')
+    const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+    assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
+    assert.doesNotMatch(contributing, /Branch from `staging`/)
+    assert.doesNotMatch(contributing, /target normal pull requests here/)
+    assert.doesNotMatch(contributing, /staging` → `main` release PR/)
+    const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    assert.match(agents, /branch from `main` and target pull requests at `main`/)
+    assert.doesNotMatch(agents, /staging/)
+    const security = readFileSync(join(root, '.github/SECURITY.md'), 'utf8')
+    assert.match(security, /The latest commit on `main` receives security patches/)
+    assert.doesNotMatch(security, /staging/)
+
+    // Idempotent: a second sync must not churn the direct flavor.
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.deepEqual(second.changed, [])
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('renders the staging-release topology when configured', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-staging-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\n')
+    syncRepository({ target: root, source: process.cwd() })
+
+    const validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(validation, /branches: \[main, staging\]/)
+
+    const draft = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
+    assert.match(draft, /base: staging/)
+
+    const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
+    assert.match(dependabot, /target-branch: staging/)
+
+    // The promotion caller and staging contribution policy are kept.
+    assert.ok(existsSync(join(root, '.github/workflows/release-pr.yml')), 'staging-release sync must emit release-pr.yml')
+    const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+    assert.match(contributing, /Branch from `staging` and target pull requests at `staging`/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('rejects an unknown git_workflow and prunes a stale promotion caller on flip to direct', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-gitflow-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: nonsense\n')
+    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported git_workflow: nonsense/)
+
+    // A repository that already carries a generated promotion caller flips to
+    // direct: sync must remove the caller so it cannot linger dormant.
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(join(root, '.github/workflows/release-pr.yml'), 'name: Code Foundry\non:\n  push:\n    branches: [staging]\npermissions:\n  contents: write\njobs:\n  release-pr:\n    name: Release PR\n    uses: 0xPlayerOne/code-foundry/.github/workflows/release-pr.yml@v1.2.3\n    with:\n      runtime-repository: 0xPlayerOne/code-foundry\n      runtime-ref: v1.2.3\n    secrets:\n      CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}\n')
+    syncRepository({ target: root, source: process.cwd() })
+    assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must prune a stale generated promotion caller')
     rmSync(root, { recursive: true, force: true })
   })
 

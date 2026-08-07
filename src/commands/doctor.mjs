@@ -70,16 +70,21 @@ export function doctor(root, options = {}) {
   }
 
   const features = config.features ?? 'all'
+  const workflow = config.git_workflow ?? 'direct'
+  if (!['direct', 'staging-release'].includes(workflow)) {
+    error(`unsupported git_workflow: ${workflow}; use direct or staging-release`)
+  }
   const mergeStrategy = config.merge_strategy ?? 'rebase'
-  if (mergeStrategy !== 'rebase') {
+  if (workflow === 'staging-release' && mergeStrategy !== 'rebase') {
     error(`merge_strategy must be "rebase" for the staging-release promotion topology; got "${mergeStrategy}".`)
   }
   const releaseMergeStrategy = config.release_merge_strategy ?? ''
   if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
     error(`release_merge_strategy must be "rebase" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`)
   }
-  for (const workflow of ['validation', 'draft-pr', 'release-pr', 'release']) {
-    if (includesValue(features, workflow) && !existsSync(join(target, `.github/workflows/${workflow}.yml`))) error(`missing enabled workflow: ${workflow}.yml`)
+  for (const name of ['validation', 'draft-pr', 'release-pr', 'release']) {
+    if (name === 'release-pr' && workflow !== 'staging-release') continue
+    if (includesValue(features, name) && !existsSync(join(target, `.github/workflows/${name}.yml`))) error(`missing enabled workflow: ${name}.yml`)
   }
   const validationEnabled = includesValue(features, 'validation') || ['ci', 'test', 'security', 'codeql'].some((legacy) => includesValue(features, legacy))
   const validationCaller = ['validation.yml', 'validation_self-ci.yml']

@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+      base:
+        description: Base branch for the draft pull request (staging for the staging-release topology, main for the direct topology).
+        required: false
+        type: string
+        default: staging
     secrets:
       CODE_FOUNDRY_TOKEN:
         required: false
@@ -34,7 +39,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="$HEAD_REF"
-          EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --limit 1 --base staging --head "$BRANCH" --state open --json number,title 2>/dev/null | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
+          EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --limit 1 --base "${{ inputs.base }}" --head "$BRANCH" --state open --json number,title 2>/dev/null | node -e 'let d=""; process.stdin.on("data", c => d += c).on("end", () => console.log(JSON.parse(d || "[]").length))')
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
 
       - name: Create
@@ -86,7 +91,7 @@ jobs:
           CREATE_ARGS=(
             "repos/${GITHUB_REPOSITORY}/pulls"
             --method POST
-            --field base=staging
+            --field base="${{ inputs.base }}"
             --field head="$BRANCH"
             --field title="$PR_TITLE"
             --field body="@$BODY_FILE"

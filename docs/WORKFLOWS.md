@@ -7,18 +7,22 @@ points; it does not run the same suites again on branch pushes:
 
 ```yaml
 pull_request:
-  branches: [main, staging]
+  branches: [main, staging]   # staging-release topology
+  # direct topology: branches: [main]
 schedule:
   - cron: '31 6 * * 1'
 workflow_dispatch:
 ```
 
-Pull requests into `staging` run the fast tier, ordinary pull requests into
-`main` run the full audit tier, and exact Release Please pull requests into
-`main` run only release policy. Scheduled and manual runs select the audit
-tier. Draft PR automation separately listens to supported topic-branch pushes,
-promotion automation listens to `staging` pushes, and release automation
-listens to `main` pushes.
+In the `staging-release` topology, pull requests into `staging` run the fast
+tier, ordinary pull requests into `main` run the full audit tier, and exact
+Release Please pull requests into `main` run only release policy. In the
+`direct` topology (the default) every pull request targets `main` and runs the
+full audit tier, because there is no integration branch for a fast pass.
+Scheduled and manual runs select the audit tier in both topologies. Draft PR
+automation separately listens to supported topic-branch pushes, promotion
+automation listens to `staging` pushes (staging-release only), and release
+automation listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should keep their own triggers and permissions.
 
@@ -31,7 +35,7 @@ repository-owned extensions and should keep their own triggers and permissions.
 | Security | Profile, audits, and public-only Dependency Review |
 | CodeQL | GitHub-native code scanning, kept separate from CI |
 | Draft PR | Create/update development pull requests |
-| Release PR | Promote `staging` into `main` |
+| Release PR | Promote `staging` into `main` (staging-release topology only) |
 | Release | Release Please, GitHub release, and optional npm publication |
 
 Use concise job names such as `CI / Format`, `Test / Unit`, and
@@ -46,9 +50,14 @@ workflow refuses to run unless its strategy is exactly `rebase`.
 
 | Transition | Merge method | Enforcement |
 | --- | --- | --- |
-| Feature/fix PR into `staging` | Squash | Contribution policy; see `CONTRIBUTING.md` |
-| `staging` → `main` promotion PR | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase`; merge commits are rejected |
+| Feature/fix PR into `main` (direct topology) | Squash | Contribution policy; see `CONTRIBUTING.md` |
+| Feature/fix PR into `staging` (staging-release topology) | Squash | Contribution policy; see `CONTRIBUTING.md` |
+| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase` when `git_workflow: staging-release`; merge commits are rejected |
 | Release Please version PR into `main` | Rebase (`release_merge_strategy: rebase`) | Release automation fails closed unless `rebase`; never defaults to `merge`, never uses `--admin` |
+
+The promotion rows above apply only to `staging-release`; `direct`
+repositories never generate a promotion caller and `merge_strategy` is not
+enforced for them.
 
 Release auto-merge waits for required checks and then polls `mergeStateStatus`
 until it is `CLEAN`, or `UNSTABLE` with `mergeable` `MERGEABLE`, before
@@ -60,10 +69,13 @@ merge policy-blocked. The mergeability poll is bounded and fails closed on
 conflicts or timeout; releases without an automation token remain manual.
 
 Keeping `main` linear — rebase promotions and rebase release PRs — is what
-lets the post-release reconciliation fast-forward or replay `staging` safely.
+lets the post-release reconciliation fast-forward or replay `staging` safely
+in the `staging-release` topology. `direct` repositories have no reconciliation
+step: releases merge straight into `main` with `release_merge_strategy: rebase`.
 
-Protect `staging` with the aggregate `Validation / Gate`, squash-only pull
-requests, and a single GitHub Actions integration path. That path uses the
+Protect `main` with the aggregate `Validation / Gate` and squash-only pull
+requests. In the `staging-release` topology, protect `staging` the same way
+with a single GitHub Actions integration path. That path uses the
 GitHub Actions integration token by default, and optionally an SSH deploy key
 when `STAGING_DEPLOY_KEY` is configured. The deploy key is required only when
 a personal-repository ruleset for `staging` enforces a Deploy Key bypass for
@@ -99,8 +111,8 @@ GitHub Stacks (stacked pull requests) is not part of this topology and does
 not reduce required workflow runs. Every pull request in a stack still
 triggers its own validation run, and each branch keeps its own required
 checks; stacking never collapses or skips a required check in the tiered
-validation gate. Land changes through the standard `staging-release` flow
-instead.
+validation gate. Land changes through the standard `direct` or
+`staging-release` flow instead.
 
 ## Language defaults
 
