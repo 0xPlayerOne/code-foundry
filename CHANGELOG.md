@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.35.0...v0.36.0) (2026-08-07)
+
+
+### Features
+
+* make staging-release opt-in and direct-to-main the default ([#370](https://github.com/0xPlayerOne/code-foundry/issues/370)) ([7c66507](https://github.com/0xPlayerOne/code-foundry/commit/7c665071769f0b0332e2f47929ee0c19bbfd5af3))
+
 ## [0.35.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.34.14...v0.35.0) (2026-08-04)
 
 
