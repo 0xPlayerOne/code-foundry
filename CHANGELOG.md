@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.36.1...v0.36.2) (2026-08-07)
+
+
+### Bug Fixes
+
+* **sync:** prettier-canonical dependabot ignore quotes ([491e06a](https://github.com/0xPlayerOne/code-foundry/commit/491e06ade14531eb02f1d7aa729cee3b1acdf78b))
+
 ## [0.36.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.36.0...v0.36.1) (2026-08-07)
 
 
