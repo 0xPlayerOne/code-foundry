@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.36.2...v0.37.0) (2026-08-07)
+
+
+### Features
+
+* **agents:** add explicit merge-workflow guidance ([a74c0ce](https://github.com/0xPlayerOne/code-foundry/commit/a74c0ce61c8dc53795a645ab5f2062ded732e3a5))
+
 ## [0.36.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.36.1...v0.36.2) (2026-08-07)
 
 
