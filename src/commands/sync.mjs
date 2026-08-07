@@ -434,6 +434,10 @@ const DIRECT_DOC_REPLACEMENTS = {
       'Use `push` for `main, staging` and `pull_request` for `staging` unless a workflow has a documented event-specific reason.',
       'Use `push` for `main` and `pull_request` for `main` unless a workflow has a documented event-specific reason.',
     ],
+    [
+      'This repository uses the `staging-release` workflow: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `staging` with squash merges; promotion and release PRs land on `main` with rebase merges. Re-align `staging` with `main` after a release when needed.',
+      'This repository uses the `direct` workflow: topic branches **squash** directly into `main`, and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `main` with squash merges; release PRs land on `main` with rebase merges. No integration branch exists; all pull requests target `main`.',
+    ],
   ],
   '.github/CONTRIBUTING.md': [
     [
