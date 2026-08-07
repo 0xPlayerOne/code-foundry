@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.36.0...v0.36.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* **sync:** prettier-canonical direct doc tables + dependabot ignore for runtime pins ([f4286b6](https://github.com/0xPlayerOne/code-foundry/commit/f4286b62ac06145b250d02ede9421f36df72a344))
+
 ## [0.36.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.35.0...v0.36.0) (2026-08-07)
 
 
