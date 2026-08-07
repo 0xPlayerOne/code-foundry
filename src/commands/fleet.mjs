@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { syncRepository } from './sync.mjs'
 
-/** @typedef {{ path: string, repository: string, runtimeRef: string, dirty: boolean, configured: boolean }} FleetRepository */
+/** @typedef {{ path: string, repository: string, runtimeRef: string, dirty: boolean, configured: boolean, gitWorkflow: string }} FleetRepository */
 
 /** @param {string} root @returns {FleetRepository[]} */
 export function discoverRepositories(root) {
@@ -24,6 +24,7 @@ export function discoverRepositories(root) {
       runtimeRef: config.runtime_ref ?? '',
       dirty: Boolean(git(candidate, ['status', '--porcelain'])),
       configured,
+      gitWorkflow: config.git_workflow ?? 'direct',
     })
   }
   return result.sort((a, b) => a.path.localeCompare(b.path))
@@ -64,12 +65,13 @@ export function upgradeFleet(root, source, options) {
 /** @param {FleetRepository} repository @param {string} source @param {string} version */
 function upgradeRepository(repository, source, version) {
   const branch = `codex/code-foundry-upgrade-${version.replace(/^v/, '')}`
+  const base = repository.gitWorkflow === 'staging-release' ? 'staging' : 'main'
   const temporary = mkdtempSync(join(tmpdir(), 'code-foundry-fleet-'))
   try {
-    const fetch = spawnSync('git', ['-C', repository.path, 'fetch', 'origin', 'staging', '--quiet'], { encoding: 'utf8' })
-    if (fetch.status !== 0) return { path: repository.path, status: 'skipped', reason: fetch.stderr.trim() || 'unable to refresh staging baseline' }
-    const baseline = spawnSync('git', ['-C', repository.path, 'rev-parse', 'origin/staging'], { encoding: 'utf8' })
-    if (baseline.status !== 0) return { path: repository.path, status: 'skipped', reason: 'remote staging branch is unavailable' }
+    const fetch = spawnSync('git', ['-C', repository.path, 'fetch', 'origin', base, '--quiet'], { encoding: 'utf8' })
+    if (fetch.status !== 0) return { path: repository.path, status: 'skipped', reason: fetch.stderr.trim() || `unable to refresh ${base} baseline` }
+    const baseline = spawnSync('git', ['-C', repository.path, 'rev-parse', `origin/${base}`], { encoding: 'utf8' })
+    if (baseline.status !== 0) return { path: repository.path, status: 'skipped', reason: `remote ${base} branch is unavailable` }
     const add = spawnSync('git', ['-C', repository.path, 'worktree', 'add', '-b', branch, temporary, baseline.stdout.trim()], { encoding: 'utf8' })
     if (add.status !== 0) return { path: repository.path, status: 'skipped', reason: add.stderr.trim() || 'unable to create isolated worktree' }
     const result = syncRepository({ target: temporary, source, force: false })
@@ -90,7 +92,7 @@ function upgradeRepository(repository, source, version) {
     if (commit.status !== 0) return { path: repository.path, status: 'failed', reason: commit.stderr.trim() || 'commit failed' }
     const push = spawnSync('git', ['-C', temporary, 'push', '-u', 'origin', branch], { encoding: 'utf8' })
     if (push.status !== 0) return { path: repository.path, status: 'failed', reason: push.stderr.trim() || 'push failed' }
-    const pr = spawnSync('gh', ['pr', 'create', '--repo', repository.repository, '--base', 'staging', '--head', branch, '--title', `chore(code-foundry): upgrade to ${version}`, '--body', `Automated isolated Code Foundry runtime upgrade to ${version}.\n\nThe sync preserved protected repository-owned documents and custom workflows.`], { encoding: 'utf8' })
+    const pr = spawnSync('gh', ['pr', 'create', '--repo', repository.repository, '--base', base, '--head', branch, '--title', `chore(code-foundry): upgrade to ${version}`, '--body', `Automated isolated Code Foundry runtime upgrade to ${version}.\n\nThe sync preserved protected repository-owned documents and custom workflows.`], { encoding: 'utf8' })
     return pr.status === 0
       ? { path: repository.path, status: 'pr-created', branch, pullRequest: pr.stdout.trim() }
       : { path: repository.path, status: 'failed', branch, reason: pr.stderr.trim() || 'pull request creation failed' }

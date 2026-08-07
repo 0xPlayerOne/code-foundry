@@ -47,13 +47,36 @@ repository manifests and source
 | `release_type` | `node`, `python`, `rust`, `simple`, `none` | Release strategy |
 | `npm_publish` | `true` or `false` | Opt into npm publication |
 | `license` | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3 |
-| `git_workflow` | `staging-release` | Branch/release model; the standard model promotes `staging` into `main` |
-| `merge_strategy` | `rebase` | Promotion merge method for `staging` → `main`; the staging-release topology requires rebase |
+| `git_workflow` | `direct` (default), `staging-release` | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
+| `merge_strategy` | `rebase` | Promotion merge method for `staging` → `main`; only enforced by the `staging-release` topology |
 | `release_merge_strategy` | `rebase` | Merge method for Release Please version PRs into `main`; release automation fails closed unless rebase |
 | `runner` fields | GitHub runner names | Per-workflow runner policy |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
 `release-pr`, `release`, and `dependabot`.
+
+## Git workflow
+
+`git_workflow` selects the branch topology:
+
+- `direct` (default): feature branches open pull requests directly into
+  `main`. Validation and security scans run on every PR. No `staging` branch
+  exists, no promotion caller is generated, and `merge_strategy` is not
+  enforced. Dependabot updates target `main`. This is the right choice when a
+  repository has no preview or staging environment.
+- `staging-release` (opt-in): feature branches squash into `staging`, a
+  promotion PR rebases validated changes into `main` (`merge_strategy:
+  rebase`), and Release Please version PRs rebase into `main`
+  (`release_merge_strategy: rebase`). Choose this only when the repository
+  maintains a preview/staging environment that needs validated integration
+  before release.
+
+```yaml
+# A repository with a preview/staging environment
+git_workflow: staging-release
+```
+
+Any other value is rejected by `code-foundry sync` and `code-foundry doctor`.
 
 ## Editing workflow
 

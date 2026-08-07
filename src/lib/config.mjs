@@ -22,7 +22,7 @@ export function readConfig(file) {
   return config
 }
 
-/** @param {string} value @param {string} fallback */
+/** @param {string | undefined} value @param {string} fallback */
 export function configured(value, fallback) {
   return value === undefined || value === '' ? fallback : value
 }
@@ -35,4 +35,21 @@ export function listValue(value) {
 /** @param {string} value @param {string} item */
 export function includesValue(value, item) {
   return value === 'all' || listValue(value).includes(item)
+}
+
+/**
+ * Supported Git workflows. `direct` (the default) opens feature branches
+ * directly into `main`; `staging-release` is opt-in for repositories that
+ * maintain a preview/staging integration branch.
+ */
+export const GIT_WORKFLOWS = ['direct', 'staging-release']
+
+/** @param {string|undefined} value @returns {string} */
+export function gitWorkflow(value) {
+  return configured(value, 'direct')
+}
+
+/** @param {string|undefined} value @returns {boolean} */
+export function isStagingRelease(value) {
+  return gitWorkflow(value) === 'staging-release'
 }

@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectLanguages, detectPackageManager, detectProfile, recommendRunners } from '../lib/profile.mjs'
-import { configured, includesValue, readConfig } from '../lib/config.mjs'
+import { configured, gitWorkflow, includesValue, isStagingRelease, readConfig } from '../lib/config.mjs'
 import { buildReleaseConfig, buildReleaseManifest } from '../lib/release-manifest.mjs'
 import { customWorkflowFiles, overlayPolicy } from '../lib/overlay.mjs'
 
@@ -96,8 +96,12 @@ export function syncRepository(options) {
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
     throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
   }
+  const workflow = gitWorkflow(config.git_workflow)
+  if (!['direct', 'staging-release'].includes(workflow)) {
+    throw new Error(`Unsupported git_workflow: ${workflow}; use direct or staging-release.`)
+  }
   const mergeStrategy = configured(config.merge_strategy, 'rebase')
-  if (mergeStrategy !== 'rebase') {
+  if (workflow === 'staging-release' && mergeStrategy !== 'rebase') {
     throw new Error(`Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`)
   }
   const releaseMergeStrategy = configured(config.release_merge_strategy, '')
@@ -141,6 +145,12 @@ export function syncRepository(options) {
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
       content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef, rustCodeql))
     }
+    if (file === '.github/dependabot.yml') {
+      content = Buffer.from(renderDependabot(content.toString('utf8'), config))
+    }
+    if (['AGENTS.md', '.github/CONTRIBUTING.md', '.github/SECURITY.md'].includes(file)) {
+      content = Buffer.from(renderContributionDocs(content.toString('utf8'), file, config))
+    }
     if (file === '.gitignore' && existsSync(destination)) {
       content = Buffer.from(mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8')))
     }
@@ -162,6 +172,18 @@ export function syncRepository(options) {
       else rmSync(destination, { force: true })
     } else {
       console.log(`Preserved ${stem}.yml: not recognized as a Code Foundry-generated caller.`)
+    }
+  }
+
+  // A repository that no longer opts into the staging-release topology must
+  // not keep a generated staging promotion caller that would otherwise
+  // linger dormant (it triggers on pushes to a branch that does not exist).
+  if (!isStagingRelease(config.git_workflow)) {
+    const promotion = join(target, '.github/workflows/release-pr.yml')
+    if (existsSync(promotion) && isGeneratedEventCaller(readFileSync(promotion, 'utf8'), 'release-pr', runtimeRepository)) {
+      changed.push('.github/workflows/release-pr.yml')
+      if (dryRun) console.log('Would remove generated release-pr caller; the direct topology targets pull requests at main.')
+      else rmSync(promotion, { force: true })
     }
   }
 
@@ -267,6 +289,9 @@ function shouldInclude(file, languages, features, config) {
   if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
   if (file === '.github/workflows/opencode-security.yml') return ['true', 'auto'].includes(config.opencode_security ?? 'false')
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
+  // The staging promotion caller only exists in the staging-release topology;
+  // direct repositories open feature branches into main and need no promotion.
+  if (workflow === 'release-pr' && !isStagingRelease(config.git_workflow)) return false
   // The tiered validation caller supersedes the legacy ci/test/security/codeql
   // event callers, so legacy feature names keep selecting it.
   if (workflow === 'validation') {
@@ -318,6 +343,18 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     release: config.release_runner ?? config.runner,
   }
   const workflow = content.match(/\.github\/workflows\/([^/]+)\.yml/)?.[1]
+  // The staging-release topology validates and scans pull requests against
+  // both main and the integration branch; direct repositories only ever
+  // target main, so their callers trigger on main alone.
+  if (!isStagingRelease(config.git_workflow)) {
+    rendered = rendered.replace(/^(\s+branches:)\s*\[main,\s*staging\]\s*$/gm, `$1 [main]`)
+  }
+  if (workflow === 'draft-pr') {
+    // The draft PR caller states the PR base explicitly so the shared
+    // reusable workflow creates pull requests against the repository's
+    // configured integration branch (staging) or main (direct).
+    rendered = rendered.replace(/^(\s+base:)\s+.*$/m, `$1 ${isStagingRelease(config.git_workflow) ? 'staging' : 'main'}`)
+  }
   const runner = workflow ? runners[workflow] : undefined
   if (runner) rendered = rendered.replace(/^(\s+runner:)\s+.*$/m, `$1 ${runner}`)
   if (workflow === 'test' && config.unit_runner) {
@@ -346,6 +383,142 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/m, `$1 ${rustCodeql.maxParallel}`)
   }
   return rendered
+}
+
+/**
+ * Dependabot updates land on the repository's integration branch. Direct
+ * repositories have no staging branch, so every update targets main.
+ * @param {string} content
+ * @param {Record<string,string>} config
+ * @returns {string}
+ */
+function renderDependabot(content, config) {
+  if (isStagingRelease(config.git_workflow)) return content
+  return content.replaceAll('target-branch: staging', 'target-branch: main')
+}
+
+/**
+ * Contribution policy documents describe the repository's branch flow. The
+ * canonical templates describe the staging-release topology (this runtime
+ * itself uses it); direct repositories render the equivalent main-targeting
+ * policy. The transformation is exact-string based so any template drift
+ * fails loudly (a missed replacement leaves staging prose intact) instead of
+ * producing a partial hybrid.
+ * @param {string} content
+ * @param {string} file
+ * @param {Record<string,string>} config
+ * @returns {string}
+ */
+export function renderContributionDocs(content, file, config) {
+  if (isStagingRelease(config.git_workflow)) return content
+  const replacements = DIRECT_DOC_REPLACEMENTS[file]
+  if (!replacements) return content
+  let rendered = content
+  for (const [from, to] of replacements) {
+    if (!rendered.includes(from)) {
+      throw new Error(`Missing direct-workflow template marker in ${file}: ${JSON.stringify(from)}`)
+    }
+    rendered = rendered.replace(from, to)
+  }
+  return rendered
+}
+
+/** @type {Record<string, Array<[string, string]>>} */
+const DIRECT_DOC_REPLACEMENTS = {
+  'AGENTS.md': [
+    [
+      'For normal feature work, branch from `staging` and target pull requests at `staging`. Treat `main` as the protected release branch.',
+      'For normal feature work, branch from `main` and target pull requests at `main`. Treat `main` as the protected release branch.',
+    ],
+    [
+      'Use `push` for `main, staging` and `pull_request` for `staging` unless a workflow has a documented event-specific reason.',
+      'Use `push` for `main` and `pull_request` for `main` unless a workflow has a documented event-specific reason.',
+    ],
+  ],
+  '.github/CONTRIBUTING.md': [
+    [
+      '4. Branch from `staging` and target pull requests at `staging`; do not work directly on `main`.',
+      '4. Branch from `main` and target pull requests at `main`; do not push directly to `main`.',
+    ],
+    [
+      '```text\n                                      release PR\n                                   ┌──────────────┐\n                                   │              ▼\nfeat/*  fix/*  chore/*  ──PR──▶  staging  ──PR──▶  main\ndocs/*  test/*  refactor/*         │              │\n                                   │              └── protected release branch\n                                   └── integration branch\n```',
+      '```text\n                              release PR\n                           ┌──────────────┐\n                           │              ▼\nfeat/*  fix/*  chore/*  ──PR──▶  main\ndocs/*  test/*  refactor/*         │\n                                   └── protected release branch\n```',
+    ],
+    [
+      '| `main`                                                         | Protected release branch | Merge through the `staging` → `main` release PR. No direct pushes.        |',
+      '| `main`                                                         | Protected release branch | Merge through pull requests only. No direct pushes.                        |',
+    ],
+    [
+      '| `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |\n',
+      '',
+    ],
+    [
+      '| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |',
+      '| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `main`; keep changes small and reviewable.                   |',
+    ],
+    [
+      'The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.',
+      'The Git workflow is `direct`: topic branches **squash** directly into `main`, and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other release merge strategy. Feature branches never touch `staging`; repositories with a preview/staging environment opt into `git_workflow: staging-release` explicitly.',
+    ],
+    [
+      'git switch staging\ngit pull --ff-only origin staging',
+      'git switch main\ngit pull --ff-only origin main',
+    ],
+    [
+      '1. Start from an up-to-date `staging` branch.',
+      '1. Start from an up-to-date `main` branch.',
+    ],
+    [
+      '8. Push the branch and open a pull request into `staging`.',
+      '8. Push the branch and open a pull request into `main`.',
+    ],
+    [
+      '10. Merge with a squash after required checks pass and the change is ready; feature PRs land on `staging` with squash merges.',
+      '10. Merge with a squash after required checks pass and the change is ready; feature PRs land on `main` with squash merges.',
+    ],
+    [
+      '3. Branch from the upstream `staging` branch.',
+      '3. Branch from the upstream `main` branch.',
+    ],
+    [
+      '7. Push to the fork and open a pull request targeting `staging`.',
+      '7. Push to the fork and open a pull request targeting `main`.',
+    ],
+    [
+      '| Pull request targeting `staging` | Fast validation: CI plus unit tests, ending in `Validation / Gate` |\n',
+      '',
+    ],
+    [
+      '| Ordinary pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |',
+      '| Pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |',
+    ],
+    [
+      '| Push to `staging` | Promotion PR workflow; canonical validation waits for the PR event |\n',
+      '',
+    ],
+    [
+      '| Working branch    | `staging` | Squash                                                  | All applicable required checks pass                       |',
+      '| Working branch    | `main`    | Squash                                                  | All applicable required checks pass                       |',
+    ],
+    [
+      '| `staging` → `main` promotion | `main` | Rebase (`merge_strategy`)                   | Current staging checks, release review, and rollout notes |\n',
+      '',
+    ],
+    [
+      '1. Create a focused branch from `staging`.',
+      '1. Create a focused branch from `main`.',
+    ],
+  ],
+  '.github/SECURITY.md': [
+    [
+      'The latest commit on `staging` receives security patches. Patches are promoted to `main` through the next release cycle.',
+      'The latest commit on `main` receives security patches.',
+    ],
+    [
+      '| `staging`        | ✅        |\n',
+      '',
+    ],
+  ],
 }
 
 /** @param {Record<string,string>} config */
@@ -475,7 +648,7 @@ function createDefaultConfig(root, source) {
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
     opencode_security: 'false',
     sync_mode: 'overlay', custom_workflows: 'preserve',
-    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'staging-release', merge_strategy: 'rebase', release_merge_strategy: 'rebase',
+    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'direct', merge_strategy: 'rebase', release_merge_strategy: 'rebase',
   }
 }
 
