@@ -2,7 +2,14 @@
 
 ## Branch flow
 
-The standard environment flow is:
+The default `direct` flow is:
+
+```text
+topic branch -> main -> versioned release
+```
+
+Repositories that maintain a preview/staging environment opt into the
+`staging-release` flow:
 
 ```text
 topic branch -> staging -> main -> versioned release
@@ -12,13 +19,15 @@ Keep commits Conventional Commit-shaped (`feat:`, `fix:`, `docs:`, `ci:`,
 `chore:`, and so on). Release Please uses them to select patch/minor/major
 versions and generate grouped changelog notes.
 
-The merge audit pins one merge method per transition in this topology. Feature
-and fix branches land on `staging` with **squash** merges, the `staging` → `main`
-promotion PR merges with **rebase** (`merge_strategy: rebase`), and Release
-Please version PRs merge with **rebase** (`release_merge_strategy: rebase`).
-Release automation never defaults to a merge method and never merges with
-`--admin`: the release workflow fails closed unless `release_merge_strategy` is
-exactly `rebase`. The current supported `git_workflow` is `staging-release`.
+The merge audit pins one merge method per transition. In the `staging-release`
+topology, feature and fix branches land on `staging` with **squash** merges,
+the `staging` → `main` promotion PR merges with **rebase** (`merge_strategy:
+rebase`), and Release Please version PRs merge with **rebase**
+(`release_merge_strategy: rebase`). In the `direct` topology, feature and fix
+branches squash straight into `main` and only Release Please version PRs merge
+with **rebase**; `merge_strategy` is not enforced. Release automation never
+defaults to a merge method and never merges with `--admin`: the release
+workflow fails closed unless `release_merge_strategy` is exactly `rebase`.
 
 The release workflow opens or updates a versioned PR after changes reach
 `main`. Merging that PR updates the changelog, creates the Git tag and GitHub
@@ -34,27 +43,32 @@ Set these values in `.github/code-foundry.yml`:
 ```yaml
 release_type: auto # auto, node, python, rust, simple, or none
 npm_publish: false # true only for an npm package
-merge_strategy: rebase # required: staging -> main promotion PRs rebase
+git_workflow: direct # direct (default) or staging-release
+merge_strategy: rebase # staging-release only: staging -> main promotion PRs rebase
 release_merge_strategy: rebase # required: Release Please version PRs rebase only
 ```
 
-`merge_strategy` applies to promotion PRs (`staging` into `main`) and
-`release_merge_strategy` to Release Please version PRs; feature PRs into
-`staging` use squash merges. The topology requires `merge_strategy: rebase`
-and `release_merge_strategy: rebase`; `code-foundry doctor` and
-`code-foundry sync` reject any other value, and the release workflow fails
-closed instead of falling back to `merge`. Both keep `main` fully linear,
-which is what makes the post-release reconciliation possible: release-only
-main commits cannot be discarded because they are allowed metadata-only, and
-all non-metadata drift is rejected before mutation.
+`git_workflow: staging-release` is opt-in; without it, repositories use the
+`direct` flow and no promotion PR exists. When the staging-release topology is
+selected, `merge_strategy` applies to promotion PRs (`staging` into `main`)
+and `release_merge_strategy` to Release Please version PRs; feature PRs into
+`staging` use squash merges. `code-foundry doctor` and `code-foundry sync`
+reject any non-`rebase` `merge_strategy` only when `staging-release` is
+configured, and always reject a non-`rebase` `release_merge_strategy`; the
+release workflow fails closed instead of falling back to `merge`. Both keep
+`main` fully linear, which is what makes the post-release reconciliation
+possible: release-only main commits cannot be discarded because they are
+allowed metadata-only, and all non-metadata drift is rejected before mutation.
 
-Patch-equivalent divergence between `main` and `staging` is treated as aligned.
-When `staging` has pending commits that are not yet represented on `main`, the
-release workflow replays those staging-only commits in order onto a detached
-worktree rooted at `main`, and then updates `staging` with an exact
+The `staging` → `main` reconciliation exists only in the `staging-release`
+topology. Patch-equivalent divergence between `main` and `staging` is treated
+as aligned. When `staging` has pending commits that are not yet represented on
+`main`, the release workflow replays those staging-only commits in order onto a
+detached worktree rooted at `main`, and then updates `staging` with an exact
 `--force-with-lease` to prevent
 unintended branch rewrites. There is no unconditional mirror force-push and no
-fallback synchronization commit path.
+fallback synchronization commit path. `direct` repositories skip this step
+entirely.
 
 `auto` selects a supported manifest. Use `simple` with `version.txt` for a
 repository without a package manifest and `none` for a repository that should
@@ -101,8 +115,8 @@ already passed).
 
 ## Operational checklist
 
-1. Merge tested changes from `staging` into `main`.
+1. Merge tested changes into `main` (direct: feature PRs; staging-release: promote `staging` into `main`).
 2. Review the generated Release Please PR and changelog.
 3. Merge the release PR with the repository's configured `release_merge_strategy` (**rebase**; the release workflow fails closed on any other value).
 4. Confirm the GitHub Release and any package publication.
-5. Synchronize `staging` with the new `main` release commit.
+5. staging-release only: synchronize `staging` with the new `main` release commit.
