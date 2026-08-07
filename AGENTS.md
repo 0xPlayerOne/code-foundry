@@ -71,6 +71,12 @@ Ask for clarification when a missing decision would materially change the implem
 
 For normal feature work, branch from `staging` and target pull requests at `staging`. Treat `main` as the protected release branch. Follow `.github/CONTRIBUTING.md` for the complete internal and external contribution flow.
 
+## Git workflow and merging
+
+This repository uses the `staging-release` workflow: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `staging` with squash merges; promotion and release PRs land on `main` with rebase merges. Re-align `staging` with `main` after a release when needed.
+
+Merge only with the repository's canonical method. Never merge with `--admin`, never default or auto-select a merge method, and never use a method the branch ruleset does not allow. When in doubt, prefer the merge button's configured method and verify the ruleset after merging. Check `.github/CONTRIBUTING.md` for the complete flow and merge table.
+
 ## Toolchain and dependencies
 
 - Follow `toolchain: auto` in `.github/code-foundry.yml`; use native tools by
