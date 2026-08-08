@@ -153,15 +153,15 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 
 ## Workflow and check behavior
 
-| Event | Expected automation |
-| --- | --- |
-| Pull request targeting `staging` | Fast validation: CI plus unit tests, ending in `Validation / Gate` |
-| Ordinary pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |
-| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate` |
-| Scheduled or manual validation | Full audit tier |
-| Push to a working branch | Draft PR workflow |
-| Push to `staging` | Promotion PR workflow; canonical validation waits for the PR event |
-| Push to `main` | Release workflow; canonical validation already ran on the merged PR |
+| Event                                              | Expected automation                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Pull request targeting `staging`                   | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |
+| Ordinary pull request targeting `main`             | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |
+| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate`                         |
+| Scheduled or manual validation                     | Full audit tier                                                                       |
+| Push to a working branch                           | Draft PR workflow                                                                     |
+| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |
+| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |
 
 The single validation caller keys concurrency by event and pull-request head. A newer update to the same pull request cancels its superseded validation run; scheduled and manual audits remain independent. The mode-aware orchestrator fans out only the jobs required by that event and always concludes with the stable aggregate gate.
 
@@ -175,11 +175,11 @@ Security checks can be skipped when repository visibility or the GitHub plan doe
 
 ## Review and merge protocol
 
-| Change | Target | Merge method | Merge gate |
-| ----------------- | --------- | ------------------------------------------------------- | --------------------------------------------------------- |
-| Working branch    | `staging` | Squash                                                  | All applicable required checks pass                       |
-| `staging` → `main` promotion | `main` | Rebase (`merge_strategy`)                   | Current staging checks, release review, and rollout notes |
-| Release Please version PR | `main` | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                  |
+| Change                       | Target    | Merge method                                    | Merge gate                                                |
+| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |
+| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |
+| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |
+| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |
 
 Reviewers focus on correctness, security, maintainability, test coverage, operational impact, and compatibility. Authors remain responsible for responding to feedback and verifying the final commit.
 
