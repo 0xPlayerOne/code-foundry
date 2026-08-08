@@ -991,6 +991,30 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('renders prettier-canonical CONTRIBUTING.md tables for both topologies', () => {
+    // Regression: the runtime template and every DIRECT_DOC_REPLACEMENTS
+    // variant must render tables prettier@3.9.6-canonical, otherwise the
+    // fleet Format check fails on the synced document.
+    const content = readFileSync(join(process.cwd(), '.github/CONTRIBUTING.md'), 'utf8')
+    for (const wf of ['staging-release', 'direct']) {
+      const root = mkdtempSync(join(tmpdir(), 'code-foundry-canon-'))
+      mkdirSync(join(root, '.github/workflows'), { recursive: true })
+      writeFileSync(join(root, '.github/code-foundry.yml'), `languages: typescript\npackage_manager: bun\ngit_workflow: ${wf}\n`)
+      syncRepository({ target: root, source: process.cwd() })
+      const rendered = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+      // The replacement must actually fire: staging keeps the staging row,
+      // direct drops it.
+      assert.strictEqual(rendered.includes('Pull request targeting `staging`'), wf === 'staging-release')
+      assert.strictEqual(rendered.includes('Working branch               | `staging`') || rendered.includes('Working branch | `staging`'), wf === 'staging-release')
+      // No unpadded separator line may survive: prettier pads markdown tables.
+      assert.doesNotMatch(rendered, /\| --- \|/)
+      // Idempotent sync must not churn the canonical document.
+      const second = syncRepository({ target: root, source: process.cwd() })
+      assert.deepEqual(second.changed, [])
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('renders the staging-release topology when configured', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-staging-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
