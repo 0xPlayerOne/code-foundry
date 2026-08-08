@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.0...v0.37.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* **sync:** prettier-canonical CONTRIBUTING.md tables for both topologies ([af9137b](https://github.com/0xPlayerOne/code-foundry/commit/af9137bc788853ed97c4c17aef9848b7f9d15fbf))
+
 ## [0.37.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.36.2...v0.37.0) (2026-08-07)
 
 
