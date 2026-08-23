@@ -1,7 +1,7 @@
 // @ts-check
 
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { isReleasePleaseHead } from './validation-policy.mjs'
 
 const DEFAULT_RELEASE_FILES = new Set([
@@ -69,6 +69,61 @@ function addPath(allowed, prefix, path) {
 export function unexpectedReleasePaths(paths, allowed) {
   return [...new Set(paths.map((path) => path.trim()).filter(Boolean))]
     .filter((path) => !allowed.has(path))
+}
+
+/**
+ * Verify Cargo package versions remain reproducible after Release Please
+ * updates a manifest. Release Please's Node updater can change Cargo.toml
+ * while leaving a configured generic Cargo.lock extra-file untouched.
+ * @param {string} root
+ * @param {Record<string, unknown>} config
+ * @returns {string[]}
+ */
+export function validateCargoLockVersions(root, config = {}) {
+  const paths = new Set(['Cargo.lock'])
+  const addEntries = (entries, prefix = '') => {
+    if (!Array.isArray(entries)) return
+    for (const entry of entries) {
+      const value = typeof entry === 'string' ? entry : entry && typeof entry === 'object' && 'path' in entry ? entry.path : ''
+      if (typeof value !== 'string' || !value.endsWith('Cargo.lock')) continue
+      const clean = value.replace(/^\.\//, '').replace(/\\/g, '/')
+      paths.add(prefix ? `${prefix}/${clean}` : clean)
+    }
+  }
+  addEntries(config['extra-files'])
+  const packages = config.packages
+  if (packages && typeof packages === 'object' && !Array.isArray(packages)) {
+    for (const [directory, value] of Object.entries(packages)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        addEntries(value['extra-files'], directory === '.' ? '' : directory.replace(/\/$/, ''))
+      }
+    }
+  }
+
+  /** @type {string[]} */
+  const errors = []
+  for (const relativeLockPath of paths) {
+    const lockPath = join(root, relativeLockPath)
+    const manifestPath = join(root, dirname(relativeLockPath), 'Cargo.toml')
+    if (!existsSync(lockPath) || !existsSync(manifestPath)) continue
+    const manifestLines = readFileSync(manifestPath, 'utf8').split(/\r?\n/)
+    const packageStart = manifestLines.findIndex((line) => line.trim() === '[package]')
+    if (packageStart < 0) continue
+    const nextSection = manifestLines.findIndex((line, index) => index > packageStart && /^\s*\[/.test(line))
+    const packageSection = manifestLines.slice(packageStart + 1, nextSection < 0 ? manifestLines.length : nextSection).join('\n')
+    const packageName = packageSection.match(/^name\s*=\s*"([^"]+)"\s*$/m)?.[1]
+    const packageVersion = packageSection.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1]
+    if (!packageName || !packageVersion) continue
+    const lock = readFileSync(lockPath, 'utf8')
+    const lockPackage = [...lock.matchAll(/\[\[package\]\]\s+name\s*=\s*"([^"]+)"\s+version\s*=\s*"([^"]+)"/g)]
+      .find((match) => match[1] === packageName)
+    if (!lockPackage) {
+      errors.push(`${relativeLockPath} is missing the ${packageName} package entry.`)
+    } else if (lockPackage[2] !== packageVersion) {
+      errors.push(`${relativeLockPath} version ${lockPackage[2]} does not match ${relativeLockPath.replace(/Cargo\.lock$/, 'Cargo.toml')} version ${packageVersion}.`)
+    }
+  }
+  return errors
 }
 
 /**
@@ -144,7 +199,7 @@ const VERSION_METADATA_FILES = new Set([
  * @returns {{ valid: boolean, errors: string[], changedPaths: string[] }}
  */
 export function validateGeneratedReleaseDiff(input) {
-  const { headRef = '', headRepo = '', repository = '', changedPaths = [], config = {} } = input
+  const { headRef = '', headRepo = '', repository = '', changedPaths = [], config = {}, root = process.cwd() } = input
   /** @type {string[]} */
   const errors = []
   if (!isReleasePleaseHead(headRef)) {
@@ -173,6 +228,7 @@ export function validateGeneratedReleaseDiff(input) {
   if (!paths.some((path) => versionMetadata.has(path))) {
     errors.push('Generated release pull request changes no version metadata.')
   }
+  errors.push(...validateCargoLockVersions(root, config))
   return { valid: errors.length === 0, errors, changedPaths: paths }
 }
 
