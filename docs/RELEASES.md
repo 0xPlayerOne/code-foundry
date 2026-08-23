@@ -57,8 +57,9 @@ reject any non-`rebase` `merge_strategy` only when `staging-release` is
 configured, and always reject a non-`rebase` `release_merge_strategy`; the
 release workflow fails closed instead of falling back to `merge`. Both keep
 `main` fully linear, which is what makes the post-release reconciliation
-possible: release-only main commits cannot be discarded because they are
-allowed metadata-only, and all non-metadata drift is rejected before mutation.
+possible. The final branch trees are inspected before mutation; validated
+main-only changes are inherited by `staging`, while unpromoted staging work is
+replayed on top of `main`.
 
 The `staging` → `main` reconciliation exists only in the `staging-release`
 topology. Patch-equivalent divergence between `main` and `staging` is treated
@@ -67,8 +68,8 @@ as aligned. When `staging` has pending commits that are not yet represented on
 detached worktree rooted at `main`, and then updates `staging` with an exact
 `--force-with-lease` to prevent
 unintended branch rewrites. There is no unconditional mirror force-push and no
-fallback synchronization commit path. `direct` repositories skip this step
-entirely.
+fallback synchronization commit path. Indeterminate history, replay conflicts,
+and stale leases fail closed. `direct` repositories skip this step entirely.
 
 `auto` selects a supported manifest. Use `simple` with `version.txt` for a
 repository without a package manifest and `none` for a repository that should
