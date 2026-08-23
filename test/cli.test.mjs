@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
 import { approvedReleaseFiles, buildReconciliationPullRequestBody, buildReleaseRecoveryPlan, classifyPromotion, classifyReconciliation, reconciliationPullRequestBranch, reconciliationPullRequestTitle, selectGeneratedReleasePrs, selectReconciliationPullRequest, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
-import { validateGeneratedReleaseDiff } from '../src/lib/release-policy.mjs'
+import { validateCargoLockVersions, validateGeneratedReleaseDiff } from '../src/lib/release-policy.mjs'
 import { buildReleaseConfig, buildReleaseManifest, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
 import {
   AGGREGATE_CHECK_NAME,
@@ -2791,6 +2791,27 @@ describe('code-foundry CLI', () => {
     })
     assert.equal(extraFile.valid, true)
     assert.deepEqual(extraFile.changedPaths, ['src/version.ts', 'CHANGELOG.md'])
+  })
+
+  it('rejects generated release diffs with a stale configured Cargo.lock', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-cargo-release-'))
+    const desktopRoot = join(root, 'apps', 'desktop', 'src-tauri')
+    mkdirSync(desktopRoot, { recursive: true })
+    writeFileSync(join(desktopRoot, 'Cargo.toml'), '[package]\nname = "agent-hq-desktop"\nversion = "0.3.2"\n')
+    writeFileSync(join(desktopRoot, 'Cargo.lock'), '# generated\n\n[[package]]\nname = "agent-hq-desktop"\nversion = "0.3.1"\n')
+    const config = { 'extra-files': [{ type: 'generic', path: 'apps/desktop/src-tauri/Cargo.lock' }] }
+    const errors = validateCargoLockVersions(root, config)
+    assert.match(errors.join(' '), /Cargo\.lock version 0\.3\.1 does not match .*Cargo\.toml version 0\.3\.2/)
+    const result = validateGeneratedReleaseDiff({
+      headRef: 'release-please--branches--main--v0.3.2',
+      headRepo: 'owner/repo',
+      repository: 'owner/repo',
+      changedPaths: ['package.json', 'apps/desktop/src-tauri/Cargo.toml'],
+      config,
+      root,
+    })
+    assert.equal(result.valid, false)
+    assert.match(result.errors.join(' '), /Cargo\.lock version 0\.3\.1/)
   })
 
   it('validates generated release diffs through the runtime release_diff task', () => {
