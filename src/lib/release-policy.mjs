@@ -81,6 +81,7 @@ export function unexpectedReleasePaths(paths, allowed) {
  */
 export function validateCargoLockVersions(root, config = {}) {
   const paths = new Set(['Cargo.lock'])
+  /** @param {unknown} entries @param {string} [prefix] */
   const addEntries = (entries, prefix = '') => {
     if (!Array.isArray(entries)) return
     for (const entry of entries) {
@@ -195,7 +196,7 @@ const VERSION_METADATA_FILES = new Set([
  * must carry the exact approved Release Please prefix, come from the same
  * repository, change at least one path, change no unexpected paths, and bump
  * at least one version-metadata file (or a declared extra file).
- * @param {{ headRef?: string, headRepo?: string, repository?: string, changedPaths?: string[], config?: Record<string, unknown> }} input
+ * @param {{ headRef?: string, headRepo?: string, repository?: string, changedPaths?: string[], config?: Record<string, unknown>, root?: string }} input
  * @returns {{ valid: boolean, errors: string[], changedPaths: string[] }}
  */
 export function validateGeneratedReleaseDiff(input) {
