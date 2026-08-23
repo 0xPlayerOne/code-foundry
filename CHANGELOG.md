@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.4...v0.37.5) (2026-08-23)
+
+
+### Bug Fixes
+
+* **sync:** omit Cargo Dependabot outside Rust repos ([#398](https://github.com/0xPlayerOne/code-foundry/issues/398)) ([395c4f3](https://github.com/0xPlayerOne/code-foundry/commit/395c4f34887bbb3e9f67378325b70c21d467adf0))
+
 ## [0.37.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.3...v0.37.4) (2026-08-23)
 
 
