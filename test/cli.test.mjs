@@ -607,6 +607,24 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /unit-runner: ubuntu-latest/)
   })
 
+  it('renders the configured default runner for validation mode classification', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-validation-runner-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: typescript',
+        'package_manager: bun',
+        'runner: ubuntu-latest',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(workflow, /^  mode:\n    name: Mode\n    runs-on: ubuntu-latest$/m)
+  })
+
   it('migrates generated legacy callers and preserves custom workflows byte-for-byte', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-migrate-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
@@ -1222,7 +1240,7 @@ describe('code-foundry CLI', () => {
     )
   })
 
-  it('fails closed when the final tree delta contains an unexpected path', () => {
+  it('synchronizes validated main changes when staging has no unpromoted work', () => {
     assert.deepEqual(
       classifyReconciliation({
         mainSha: 'main',
@@ -1232,7 +1250,11 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed: approvedReleaseFiles(),
       }),
-      { action: 'fail', reason: 'branch content differs outside release metadata.', unexpected: ['src/index.ts'] },
+      {
+        action: 'fast-forward',
+        targetSha: 'main',
+        reason: 'main contains validated changes that staging must inherit.',
+      },
     )
   })
 
@@ -1304,7 +1326,7 @@ describe('code-foundry CLI', () => {
     )
   })
 
-  it('fails when a historical main-only unexpected path still differs in the final tree delta', () => {
+  it('replays staging work after validated main changes', () => {
     const allowed = approvedReleaseFiles()
     assert.deepEqual(
       classifyReconciliation({
@@ -1318,9 +1340,11 @@ describe('code-foundry CLI', () => {
         allowed,
       }),
       {
-        action: 'fail',
-        reason: 'main contains commits that are not release metadata.',
-        unexpected: ['.github/workflows/release.yml'],
+        action: 'rebase-staging',
+        targetSha: 'main',
+        mainOnly: ['main-workflow'],
+        stagingOnly: ['staging-feature'],
+        reason: 'staging contains unpromoted commits; replay them onto main.',
       },
     )
   })
@@ -1341,7 +1365,7 @@ describe('code-foundry CLI', () => {
     )
   })
 
-  it('surfaces exact reconciliation failure reason from local classification', () => {
+  it('plans local synchronization for validated main-only source changes', () => {
     const { root, remote, run } = createReconcileWorkspace()
     const commit = (message) => {
       const result = run(['commit', '-m', message])
@@ -1362,9 +1386,13 @@ describe('code-foundry CLI', () => {
     run(['add', 'src/index.ts'])
     commit('chore(main): touch source')
 
-    assert.throws(
-      () => reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
-      /branch content differs outside release metadata\. Unexpected paths: src\/index.ts/,
+    assert.deepEqual(
+      reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
+      {
+        action: 'fast-forward',
+        targetSha: run(['rev-parse', 'main']).stdout.trim(),
+        reason: 'main contains validated changes that staging must inherit.',
+      },
     )
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
