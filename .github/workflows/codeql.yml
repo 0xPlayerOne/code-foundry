@@ -402,7 +402,7 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.rust_available == 'true' &&
           needs.detect.outputs.rust_changed == 'true'
-        uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           languages: rust
           build-mode: ${{ needs.detect.outputs.rust_build_mode }}
@@ -413,7 +413,7 @@ jobs:
           needs.detect.outputs.enabled == 'true' &&
           needs.detect.outputs.rust_available == 'true' &&
           needs.detect.outputs.rust_changed == 'true'
-        uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           category: /language:rust/${{ steps.scope.outputs.scope_id }}
           upload-database: false
