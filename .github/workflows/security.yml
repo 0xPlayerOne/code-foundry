@@ -215,7 +215,7 @@ jobs:
           cache-save: ${{ github.event_name != 'pull_request' }}
       - name: Install cargo-audit
         if: steps.applicability.outputs.applicable == 'true'
-        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
+        uses: taiki-e/install-action@a2a5f6e99e1a31540baa0468acfa302cff0f359f # v2
         with:
           tool: cargo-audit
       - name: Audit dependencies
