@@ -245,44 +245,14 @@ jobs:
           fi
           node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release validate-prs
           for pr in "${release_prs[@]}"; do
-            echo "Waiting for required checks on release PR #$pr"
-            checks_seen=false
-            for attempt in $(seq 1 60); do
-              : "$attempt"
-              if required_count=$(gh pr checks "$pr" \
-                --repo "$GITHUB_REPOSITORY" \
-                --required \
-                --json name \
-                --jq 'length' 2>/dev/null); then
-                if [ "$required_count" -gt 0 ]; then
-                  checks_seen=true
-                  break
-                fi
-              fi
-              sleep 5
-            done
-            if [ "$checks_seen" != true ]; then
-              echo "Required checks were not registered for release PR #$pr within the readiness window." >&2
-              exit 1
-            fi
-            gh pr checks "$pr" \
-              --repo "$GITHUB_REPOSITORY" \
-              --required \
-              --watch \
-              --fail-fast \
-              --interval 10
-            # gh pr checks --watch only waits for checks registered when the
-            # watch starts; a ruleset may register additional required checks
-            # afterwards (observed: "Validation / Gate" appearing after
-            # "Tauri 2 / Linux" had passed), which leaves the PR blocked by
-            # branch policy at merge time. Poll mergeStateStatus and accept
-            # only states GitHub reports as mergeable: CLEAN, or UNSTABLE with
-            # mergeable MERGEABLE. UNSTABLE is still mergeable when only
-            # non-required checks are failing or still running (observed: Kilo
-            # Code Review running after every required check passed); keep
-            # waiting for BLOCKED/BEHIND/UNKNOWN, fail fast on
-            # DIRTY/CONFLICTING, and fail closed on a bounded timeout so the
-            # workflow never sleeps indefinitely.
+            # GitHub's merge state is the authoritative required-check gate.
+            # `gh pr checks --required` is not reliable for ruleset-backed
+            # required contexts in private repositories: it can return an
+            # empty result even while the required aggregate check is present
+            # and green. Polling mergeStateStatus avoids that discovery race;
+            # GitHub reports MERGEABLE only after branch policy permits the
+            # requested merge strategy. Non-required checks may leave the PR
+            # UNSTABLE, so accept that state only with mergeable MERGEABLE.
             echo "Waiting for release PR #$pr to become mergeable under branch policy"
             merge_state=UNKNOWN
             mergeable=UNKNOWN
