@@ -85,6 +85,7 @@ function validation(task) {
       repository: process.env.FOUNDRY_REPOSITORY ?? '',
       changedPaths,
       config: readReleaseConfig(root),
+      root,
     })
     if (!result.valid) {
       for (const error of result.errors) console.error(`::error::${error}`)
