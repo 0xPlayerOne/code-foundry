@@ -97,9 +97,11 @@ it opens (or reuses) a generated `code-foundry/reconcile/main-to-staging`
 pull request whose head contains the exact target tip (the `main` tip for a
 fast-forward, the replay tip when staging-only commits are replayed) and whose
 body documents the reconciliation. Reruns reuse the open pull request instead
-of duplicating it; unexpected code divergence, replay conflicts, authentication
-errors, and ambiguous or stale pull request state still fail the job closed,
-and exact-lease protection stays in place for every direct push.
+of duplicating it. Validated changes that landed directly on `main` are synced
+back into `staging`; unpromoted staging commits are replayed on top. Indeterminate
+history, replay conflicts, authentication errors, and ambiguous or stale pull
+request state still fail the job closed, and exact-lease protection stays in
+place for every direct push.
 
 For this reconciliation path, maintainer PATs and administrator roles are not
 authorized bypasses; the job deliberately authenticates with `github.token`,

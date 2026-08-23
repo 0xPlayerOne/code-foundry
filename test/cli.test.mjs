@@ -607,6 +607,24 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /unit-runner: ubuntu-latest/)
   })
 
+  it('renders the configured default runner for validation mode classification', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-validation-runner-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: typescript',
+        'package_manager: bun',
+        'runner: ubuntu-latest',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(workflow, /^  mode:\n    name: Mode\n    runs-on: ubuntu-latest$/m)
+  })
+
   it('migrates generated legacy callers and preserves custom workflows byte-for-byte', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-migrate-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
@@ -991,6 +1009,30 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('renders prettier-canonical CONTRIBUTING.md tables for both topologies', () => {
+    // Regression: the runtime template and every DIRECT_DOC_REPLACEMENTS
+    // variant must render tables prettier@3.9.6-canonical, otherwise the
+    // fleet Format check fails on the synced document.
+    const content = readFileSync(join(process.cwd(), '.github/CONTRIBUTING.md'), 'utf8')
+    for (const wf of ['staging-release', 'direct']) {
+      const root = mkdtempSync(join(tmpdir(), 'code-foundry-canon-'))
+      mkdirSync(join(root, '.github/workflows'), { recursive: true })
+      writeFileSync(join(root, '.github/code-foundry.yml'), `languages: typescript\npackage_manager: bun\ngit_workflow: ${wf}\n`)
+      syncRepository({ target: root, source: process.cwd() })
+      const rendered = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+      // The replacement must actually fire: staging keeps the staging row,
+      // direct drops it.
+      assert.strictEqual(rendered.includes('Pull request targeting `staging`'), wf === 'staging-release')
+      assert.strictEqual(rendered.includes('Working branch               | `staging`') || rendered.includes('Working branch | `staging`'), wf === 'staging-release')
+      // No unpadded separator line may survive: prettier pads markdown tables.
+      assert.doesNotMatch(rendered, /\| --- \|/)
+      // Idempotent sync must not churn the canonical document.
+      const second = syncRepository({ target: root, source: process.cwd() })
+      assert.deepEqual(second.changed, [])
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('renders the staging-release topology when configured', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-staging-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
@@ -1198,7 +1240,7 @@ describe('code-foundry CLI', () => {
     )
   })
 
-  it('fails closed when the final tree delta contains an unexpected path', () => {
+  it('synchronizes validated main changes when staging has no unpromoted work', () => {
     assert.deepEqual(
       classifyReconciliation({
         mainSha: 'main',
@@ -1208,7 +1250,11 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed: approvedReleaseFiles(),
       }),
-      { action: 'fail', reason: 'branch content differs outside release metadata.', unexpected: ['src/index.ts'] },
+      {
+        action: 'fast-forward',
+        targetSha: 'main',
+        reason: 'main contains validated changes that staging must inherit.',
+      },
     )
   })
 
@@ -1280,7 +1326,7 @@ describe('code-foundry CLI', () => {
     )
   })
 
-  it('fails when a historical main-only unexpected path still differs in the final tree delta', () => {
+  it('replays staging work after validated main changes', () => {
     const allowed = approvedReleaseFiles()
     assert.deepEqual(
       classifyReconciliation({
@@ -1294,9 +1340,11 @@ describe('code-foundry CLI', () => {
         allowed,
       }),
       {
-        action: 'fail',
-        reason: 'main contains commits that are not release metadata.',
-        unexpected: ['.github/workflows/release.yml'],
+        action: 'rebase-staging',
+        targetSha: 'main',
+        mainOnly: ['main-workflow'],
+        stagingOnly: ['staging-feature'],
+        reason: 'staging contains unpromoted commits; replay them onto main.',
       },
     )
   })
@@ -1317,7 +1365,7 @@ describe('code-foundry CLI', () => {
     )
   })
 
-  it('surfaces exact reconciliation failure reason from local classification', () => {
+  it('plans local synchronization for validated main-only source changes', () => {
     const { root, remote, run } = createReconcileWorkspace()
     const commit = (message) => {
       const result = run(['commit', '-m', message])
@@ -1338,9 +1386,13 @@ describe('code-foundry CLI', () => {
     run(['add', 'src/index.ts'])
     commit('chore(main): touch source')
 
-    assert.throws(
-      () => reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
-      /branch content differs outside release metadata\. Unexpected paths: src\/index.ts/,
+    assert.deepEqual(
+      reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
+      {
+        action: 'fast-forward',
+        targetSha: run(['rev-parse', 'main']).stdout.trim(),
+        reason: 'main contains validated changes that staging must inherit.',
+      },
     )
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
