@@ -2684,7 +2684,7 @@ describe('code-foundry CLI', () => {
     assert.match(orchestrator, /FOUNDRY_REPOSITORY: \$\{\{ github\.repository \}\}/)
   })
 
-  it('pins all external workflow/action refs to immutable SHAs', () => {
+  it('pins all external workflow/action refs to approved immutable SHAs', () => {
     const workflows = [
       '.github/workflows/validation_self-ci.yml',
       '.github/workflows/validation.yml',
@@ -2697,20 +2697,25 @@ describe('code-foundry CLI', () => {
       '.github/workflows/opencode-security_self-ci.yml',
     ].reduce((acc, file) => acc + readFileSync(file), '')
 
-    const expectedPins = [
-      'actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6',
-      'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7',
-      'actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5',
-      'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7',
-      'github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4',
-      'github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4',
-      'googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5',
-      'taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2',
-      'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5',
-      '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@b3dce823322672b285fbe99b870ea984c01826cb # main',
-    ]
-    for (const pin of expectedPins) {
-      assert.match(workflows, new RegExp(pin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    const approvedRefs = new Set([
+      'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+      'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+      'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+      'github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3',
+      'github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3',
+      'googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7',
+      'taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8',
+      'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294',
+      '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@b3dce823322672b285fbe99b870ea984c01826cb',
+    ])
+
+    const externalPins = workflows.match(/^\s*uses:\s+(?!\.\/)(\S+@\S+)(?:\s+#\s+\S+)?\s*$/gm) ?? []
+    assert.ok(externalPins.length > 0, 'expected at least one external workflow/action pin')
+    for (const line of externalPins) {
+      const pin = line.trim().replace(/^uses:\s+/, '')
+      assert.match(pin, /@[0-9a-f]{40}\s+#\s+\S+$/, `external ref is not an immutable SHA: ${pin}`)
+      const reference = pin.split(/\s+#/, 1)[0]
+      assert.ok(approvedRefs.has(reference), `external ref is not approved: ${pin}`)
     }
 
     assert.doesNotMatch(workflows, /uses: actions\/checkout@v[0-9]+/)
