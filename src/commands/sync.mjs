@@ -146,7 +146,7 @@ export function syncRepository(options) {
       content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef, rustCodeql))
     }
     if (file === '.github/dependabot.yml') {
-      content = Buffer.from(renderDependabot(content.toString('utf8'), config))
+      content = Buffer.from(renderDependabot(content.toString('utf8'), config, languages))
     }
     if (['AGENTS.md', '.github/CONTRIBUTING.md', '.github/SECURITY.md'].includes(file)) {
       content = Buffer.from(renderContributionDocs(content.toString('utf8'), file, config))
@@ -393,14 +393,23 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
 
 /**
  * Dependabot updates land on the repository's integration branch. Direct
- * repositories have no staging branch, so every update targets main.
+ * repositories have no staging branch, so every update targets main. Cargo
+ * updates are emitted only when Rust is part of the configured language set.
  * @param {string} content
  * @param {Record<string,string>} config
+ * @param {string} languages
  * @returns {string}
  */
-function renderDependabot(content, config) {
-  if (isStagingRelease(config.git_workflow)) return content
-  return content.replaceAll('target-branch: staging', 'target-branch: main')
+function renderDependabot(content, config, languages) {
+  let rendered = content
+  if (!includesValue(languages, 'rust')) {
+    rendered = rendered
+      .split(/(?=^  - package-ecosystem: )/m)
+      .filter((block) => !block.startsWith('  - package-ecosystem: cargo\n'))
+      .join('')
+  }
+  if (isStagingRelease(config.git_workflow)) return rendered
+  return rendered.replaceAll('target-branch: staging', 'target-branch: main')
 }
 
 /**
