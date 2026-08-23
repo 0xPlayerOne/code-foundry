@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.3...v0.37.4) (2026-08-23)
+
+
+### Bug Fixes
+
+* release-workspace-state ([#395](https://github.com/0xPlayerOne/code-foundry/issues/395)) ([a708bc0](https://github.com/0xPlayerOne/code-foundry/commit/a708bc07272b9751b22a457771cc386601bbe3d8))
+
 ## [0.37.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.2...v0.37.3) (2026-08-23)
 
 
