@@ -220,7 +220,7 @@ function compareVersions(a, b) {
  * Classify the relationship between main and staging using the final tree delta
  * when available. Historical commit paths can include equivalent workflow or
  * configuration changes that are no longer present in the branch delta, so the
- * final trees are the source of truth for release-only reconciliation. When
+ * final trees are the source of truth for reconciliation. When
  * directChangedPaths is supplied, unexpected paths in historical main-only
  * commits are ignored only when they are absent from the final tree delta
  * (their content is already identical in both branches); unexpected main-only
@@ -281,9 +281,9 @@ export function classifyReconciliation(input) {
     }
     if (!stagingOnlyCommits.length) {
       return {
-        action: 'fail',
-        reason: 'branch content differs outside release metadata.',
-        unexpected,
+        action: 'fast-forward',
+        targetSha: mainSha,
+        reason: 'main contains validated changes that staging must inherit.',
       }
     }
   }
@@ -300,7 +300,11 @@ export function classifyReconciliation(input) {
     [...new Set(mainOnlyCommits.flatMap((commit) => commit.changedPaths || []))],
     allowed,
   ).filter((path) => directTreePaths === null || directTreePaths.has(path))
-  if (unexpectedMain.length) {
+  // Without a final-tree comparison, retain the historical fail-closed
+  // behavior. When the final delta is known, main is the validated release
+  // source of truth: replay any staging-only work on top instead of deadlocking
+  // every later release because a hotfix landed directly on main.
+  if (unexpectedMain.length && directTreePaths === null) {
     return {
       action: 'fail',
       reason: 'main contains commits that are not release metadata.',
@@ -373,7 +377,7 @@ export function buildReconciliationPullRequestBody(input) {
     '',
     `Merging this pull request synchronizes \`${targetHead}\` with the exact target tip above; no other commits are introduced.`,
     '',
-    'Code Foundry reconciles only release metadata. Unexpected code divergence, replay conflicts, authentication failures, and ambiguous or stale state fail the release job closed and are never pushed around branch protection. Later releases retry the direct push first; when branch policy still rejects it, this pull request is updated instead of duplicated.',
+    `Code Foundry treats validated \`${sourceBase}\` as the shipped source of truth and preserves unpromoted \`${targetHead}\` work by replaying it on top. Indeterminate history, replay conflicts, authentication failures, and ambiguous or stale state fail the release job closed and are never pushed around branch protection. Later releases retry the direct push first; when branch policy still rejects it, this pull request is updated instead of duplicated.`,
   )
   return lines.join('\n')
 }

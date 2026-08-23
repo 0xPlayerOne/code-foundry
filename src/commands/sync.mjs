@@ -361,6 +361,12 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     rendered = rendered.replace(/^(\s+unit-runner:)\s+.*$/m, `$1 ${config.unit_runner}`)
   }
   if (workflow === 'validation') {
+    // The mode classifier is a normal runner job in the caller rather than a
+    // reusable-workflow input. Keep it on the configured default runner so
+    // consumers that cannot use ubuntu-slim do not fail before validation.
+    if (config.runner) {
+      rendered = rendered.replace(/^  mode:\n    name: Mode\n    runs-on:\s+.*$/m, `  mode:\n    name: Mode\n    runs-on: ${config.runner}`)
+    }
     /** @type {Record<string, string|undefined>} */
     const runnerInputs = {
       'ci-runner': config.ci_runner ?? config.runner,
