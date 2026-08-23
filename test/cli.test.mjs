@@ -976,6 +976,7 @@ describe('code-foundry CLI', () => {
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
     assert.match(dependabot, /target-branch: main/)
     assert.doesNotMatch(dependabot, /target-branch: staging/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
 
     // No promotion caller and no promotion prose in the direct topology.
     assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must not emit release-pr.yml')
@@ -1035,11 +1036,23 @@ describe('code-foundry CLI', () => {
 
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
     assert.match(dependabot, /target-branch: staging/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
 
     // The promotion caller and staging contribution policy are kept.
     assert.ok(existsSync(join(root, '.github/workflows/release-pr.yml')), 'staging-release sync must emit release-pr.yml')
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `staging` and target pull requests at `staging`/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('renders Cargo Dependabot updates only for Rust repositories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-rust-dependabot-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: rust\npackage_manager: none\n')
+    syncRepository({ target: root, source: process.cwd() })
+
+    const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
+    assert.match(dependabot, /package-ecosystem: cargo/)
     rmSync(root, { recursive: true, force: true })
   })
 
