@@ -434,6 +434,10 @@ const DIRECT_DOC_REPLACEMENTS = {
       'Use `push` for `main, staging` and `pull_request` for `staging` unless a workflow has a documented event-specific reason.',
       'Use `push` for `main` and `pull_request` for `main` unless a workflow has a documented event-specific reason.',
     ],
+    [
+      'This repository uses the `staging-release` workflow: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `staging` with squash merges; promotion and release PRs land on `main` with rebase merges. Re-align `staging` with `main` after a release when needed.',
+      'This repository uses the `direct` workflow: topic branches **squash** directly into `main`, and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `main` with squash merges; release PRs land on `main` with rebase merges. No integration branch exists; all pull requests target `main`.',
+    ],
   ],
   '.github/CONTRIBUTING.md': [
     [
@@ -445,16 +449,8 @@ const DIRECT_DOC_REPLACEMENTS = {
       '```text\n                              release PR\n                           ┌──────────────┐\n                           │              ▼\nfeat/*  fix/*  chore/*  ──PR──▶  main\ndocs/*  test/*  refactor/*         │\n                                   └── protected release branch\n```',
     ],
     [
-      '| `main`                                                         | Protected release branch | Merge through the `staging` → `main` release PR. No direct pushes.        |',
-      '| `main`                                                         | Protected release branch | Merge through pull requests only. No direct pushes.                        |',
-    ],
-    [
-      '| `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |\n',
-      '',
-    ],
-    [
-      '| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |',
-      '| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `main`; keep changes small and reviewable.                   |',
+      '| Branch                                                         | Purpose                  | Contribution rule                                                         |\n| -------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------- |\n| `main`                                                         | Protected release branch | Merge through the `staging` → `main` release PR. No direct pushes.        |\n| `staging`                                                      | Integration branch       | Target normal pull requests here. Required checks must pass before merge. |\n| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `staging`; keep changes small and reviewable.                 |\n',
+      '| Branch                                                         | Purpose                  | Contribution rule                                      |\n| -------------------------------------------------------------- | ------------------------ | ------------------------------------------------------ |\n| `main`                                                         | Protected release branch | Merge through pull requests only. No direct pushes.    |\n| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*` | Focused work             | Branch from `main`; keep changes small and reviewable. |\n',
     ],
     [
       'The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.',
@@ -485,24 +481,12 @@ const DIRECT_DOC_REPLACEMENTS = {
       '7. Push to the fork and open a pull request targeting `main`.',
     ],
     [
-      '| Pull request targeting `staging` | Fast validation: CI plus unit tests, ending in `Validation / Gate` |\n',
-      '',
+      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Pull request targeting `staging`                   | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Ordinary pull request targeting `main`             | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate`                         |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
+      '| Event | Expected automation |\n|------------------------------------------------------------------------------------------------------------------------------------------------|\n| Pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate` |\n| Scheduled or manual validation | Full audit tier |\n| Push to a working branch | Draft PR workflow |\n| Push to `main` | Release workflow; canonical validation already ran on the merged PR |',
     ],
     [
-      '| Ordinary pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |',
-      '| Pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |',
-    ],
-    [
-      '| Push to `staging` | Promotion PR workflow; canonical validation waits for the PR event |\n',
-      '',
-    ],
-    [
-      '| Working branch    | `staging` | Squash                                                  | All applicable required checks pass                       |',
-      '| Working branch    | `main`    | Squash                                                  | All applicable required checks pass                       |',
-    ],
-    [
-      '| `staging` → `main` promotion | `main` | Rebase (`merge_strategy`)                   | Current staging checks, release review, and rollout notes |\n',
-      '',
+      '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
+      '| Change | Target | Merge method | Merge gate |\n|----------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| Working branch | `main` | Squash | All applicable required checks pass |\n| Release Please version PR | `main` | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass |',
     ],
     [
       '1. Create a focused branch from `staging`.',
