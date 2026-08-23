@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.1...v0.37.2) (2026-08-23)
+
+
+### Bug Fixes
+
+* **ci:** stabilize runners and release reconciliation ([#387](https://github.com/0xPlayerOne/code-foundry/issues/387)) ([ea2c503](https://github.com/0xPlayerOne/code-foundry/commit/ea2c503cb6ea9b944ffa5b70ff7fbfc3d56d3a10))
+
 ## [0.37.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.0...v0.37.1) (2026-08-08)
 
 
