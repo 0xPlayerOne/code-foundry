@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.2...v0.37.3) (2026-08-23)
+
+
+### Bug Fixes
+
+* release-required-check-discovery ([#392](https://github.com/0xPlayerOne/code-foundry/issues/392)) ([d086cb5](https://github.com/0xPlayerOne/code-foundry/commit/d086cb5b6d1dc25eb28b6551ae56467887637296))
+
 ## [0.37.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.1...v0.37.2) (2026-08-23)
 
 
