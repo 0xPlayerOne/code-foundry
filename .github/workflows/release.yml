@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: v0.31.12
+      billing-pause-bypass:
+        description: Allow this explicitly dispatched release to run while other CI remains paused.
+        required: false
+        type: boolean
+        default: false
     secrets:
       CODE_FOUNDRY_TOKEN:
         required: false
@@ -45,7 +50,7 @@ env:
 jobs:
   release:
     name: Version
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     concurrency:
@@ -314,7 +319,7 @@ jobs:
     # creating a release. Reconciliation is only meaningful after a release
     # commit/tag is actually created; otherwise the promotion's source changes
     # are incorrectly rejected as non-metadata commits.
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.release.result == 'success' && needs.release.outputs.release_created == 'true'
+    if: (vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true) && needs.release.result == 'success' && needs.release.outputs.release_created == 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     permissions:
@@ -402,7 +407,7 @@ jobs:
   post-release:
     name: Post Hook
     needs: release
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.release.outputs.release_created == 'true'
+    if: (vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true) && needs.release.outputs.release_created == 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     concurrency:
@@ -461,7 +466,7 @@ jobs:
   npm:
     name: Publish npm
     needs: release
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.release.outputs.release_created == 'true' && needs.release.outputs.npm_publish == 'true'
+    if: (vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true) && needs.release.outputs.release_created == 'true' && needs.release.outputs.npm_publish == 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     permissions:
