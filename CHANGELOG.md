@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.38.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.5...v0.38.0) (2026-08-24)
+
+
+### Features
+
+* **ci:** add reversible billing pause ([#402](https://github.com/0xPlayerOne/code-foundry/issues/402)) ([aa17b11](https://github.com/0xPlayerOne/code-foundry/commit/aa17b11037dccced17dd1173d9d788ac83ba50b5))
+
+
+### Bug Fixes
+
+* **ci:** guard every workflow during billing pause ([#405](https://github.com/0xPlayerOne/code-foundry/issues/405)) ([fc3930f](https://github.com/0xPlayerOne/code-foundry/commit/fc3930fcb50e9182bb0f5e97ea523a6805f3fa95))
+* **release:** allow explicit release while CI is paused ([#407](https://github.com/0xPlayerOne/code-foundry/issues/407)) ([3d31cf1](https://github.com/0xPlayerOne/code-foundry/commit/3d31cf154255225ecdd9bca94f8620ad8c2b3473))
+
 ## [0.37.5](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.4...v0.37.5) (2026-08-23)
 
 
