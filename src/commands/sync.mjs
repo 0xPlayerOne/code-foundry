@@ -365,7 +365,7 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     // reusable-workflow input. Keep it on the configured default runner so
     // consumers that cannot use ubuntu-slim do not fail before validation.
     if (config.runner) {
-      rendered = rendered.replace(/^  mode:\n    name: Mode\n    runs-on:\s+.*$/m, `  mode:\n    name: Mode\n    runs-on: ${config.runner}`)
+      rendered = rendered.replace(/^(\s+runs-on:)\s+.*$/m, `$1 ${config.runner}`)
     }
     /** @type {Record<string, string|undefined>} */
     const runnerInputs = {

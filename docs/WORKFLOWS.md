@@ -26,6 +26,28 @@ automation listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should keep their own triggers and permissions.
 
+## Billing pause
+
+Code Foundry consumers can stop all generated jobs from allocating GitHub-hosted
+runners during a billing outage:
+
+```bash
+npx code-foundry ci pause
+npx code-foundry ci status
+npx code-foundry ci resume
+```
+
+The commands use the repository variable `CI_BILLING_PAUSED`. `pause` also
+backs up and removes only `Validation / Gate` from active branch rulesets so
+pull requests do not wait forever for a deliberately disabled workflow.
+`resume` restores that exact check before re-enabling jobs. Pull-request,
+deletion, non-fast-forward, review, and other ruleset protections remain active.
+The operation fails closed when the gate or its backup is ambiguous.
+
+Custom workflows are repository-owned and are not rewritten by sync. Add
+`if: vars.CI_BILLING_PAUSED != 'true'` to each custom root job that should
+honor the shared billing pause.
+
 ## Standard workflow responsibilities
 
 | Workflow | Responsibility |

@@ -8,10 +8,11 @@ import { doctor } from './commands/doctor.mjs'
 import { dispatchPostReleaseHook, reconcileRelease, releaseRecoveryPlan, validateReleasePullRequestDiffs } from './commands/release.mjs'
 import { discoverRepositories, upgradeFleet } from './commands/fleet.mjs'
 import { syncRepository } from './commands/sync.mjs'
+import { manageCiBilling } from './commands/ci.mjs'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** @typedef {{ target: string, root: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, releaseSubcommand?: string, fleetSubcommand?: string }} Options */
+/** @typedef {{ target: string, root: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, releaseSubcommand?: string, fleetSubcommand?: string, ciSubcommand?: 'pause'|'resume'|'status' }} Options */
 /** @typedef {{ command: string, options: Options }} ParsedArgs */
 
 const usage = `code-foundry — initialize and maintain agent-ready repositories
@@ -20,6 +21,7 @@ Usage:
   npx code-foundry init [--target PATH]
   npx code-foundry sync [--target PATH]
   npx code-foundry doctor [--target PATH]
+  npx code-foundry ci pause|resume|status [--target PATH]
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW
   npx code-foundry fleet status [--root PATH]
@@ -68,6 +70,10 @@ function parseArgs(argv) {
     const subcommand = argv.shift() ?? ''
     if (subcommand !== 'status' && subcommand !== 'upgrade') fail(`unknown fleet command: ${subcommand ?? '(missing)'}; use fleet status or fleet upgrade`)
     options.fleetSubcommand = subcommand
+  } else if (command === 'ci') {
+    const subcommand = argv.shift() ?? ''
+    if (!['pause', 'resume', 'status'].includes(subcommand)) fail(`unknown ci command: ${subcommand || '(missing)'}; use ci pause, ci resume, or ci status`)
+    options.ciSubcommand = /** @type {'pause'|'resume'|'status'} */ (subcommand)
   }
 
   while (argv.length) {
@@ -135,6 +141,12 @@ function main() {
       const root = resolve(options.root)
       if (options.fleetSubcommand === 'status') console.log(JSON.stringify(discoverRepositories(root), null, 2))
       else upgradeFleet(root, packageRoot, { createPr: options.createPr, dryRun: options.dryRun, force: options.force, version: options.version, exclude: options.exclude })
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
+  } else if (command === 'ci') {
+    try {
+      manageCiBilling(target, /** @type {'pause'|'resume'|'status'} */ (options.ciSubcommand))
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }

@@ -25,6 +25,7 @@ import { doctor } from '../src/commands/doctor.mjs'
 import { doctorGithub } from '../src/lib/github-doctor.mjs'
 import { reconcileRelease } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
+import { buildPausedRuleset, buildResumedRuleset, CI_BILLING_REQUIRED_CHECK } from '../src/commands/ci.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
@@ -421,6 +422,101 @@ describe('code-foundry CLI', () => {
     assert.match(result.stderr, /unknown command: unknown-command/)
   })
 
+  it('removes and restores only the managed CI gate in a ruleset', () => {
+    const ruleset = {
+      id: 42,
+      name: 'code-foundry-main',
+      rules: [
+        { type: 'deletion' },
+        {
+          type: 'required_status_checks',
+          parameters: {
+            strict_required_status_checks_policy: false,
+            do_not_enforce_on_create: false,
+            required_status_checks: [
+              { context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 },
+              { context: 'Deploy / Preview', integration_id: 15368 },
+            ],
+          },
+        },
+        { type: 'non_fast_forward' },
+      ],
+    }
+
+    const paused = buildPausedRuleset(ruleset)
+    assert.deepEqual(
+      paused.ruleset.rules.find((rule) => rule.type === 'required_status_checks').parameters.required_status_checks,
+      [{ context: 'Deploy / Preview', integration_id: 15368 }],
+    )
+    assert.deepEqual(paused.backup.checks, [{ context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 }])
+    assert.deepEqual(paused.ruleset.rules.filter((rule) => rule.type !== 'required_status_checks'), [
+      { type: 'deletion' },
+      { type: 'non_fast_forward' },
+    ])
+
+    const resumed = buildResumedRuleset(paused.ruleset, paused.backup)
+    assert.equal(resumed.changed, true)
+    assert.deepEqual(
+      resumed.ruleset.rules.find((rule) => rule.type === 'required_status_checks').parameters.required_status_checks,
+      [
+        { context: 'Deploy / Preview', integration_id: 15368 },
+        { context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 },
+      ],
+    )
+  })
+
+  it('removes the status-check rule when the managed gate is its only check', () => {
+    const ruleset = {
+      id: 42,
+      name: 'code-foundry-main',
+      rules: [
+        { type: 'pull_request', parameters: { required_approving_review_count: 0 } },
+        {
+          type: 'required_status_checks',
+          parameters: {
+            strict_required_status_checks_policy: true,
+            do_not_enforce_on_create: false,
+            required_status_checks: [{ context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 }],
+          },
+        },
+      ],
+    }
+
+    const paused = buildPausedRuleset(ruleset)
+    assert.deepEqual(paused.ruleset.rules, [
+      { type: 'pull_request', parameters: { required_approving_review_count: 0 } },
+    ])
+    const resumed = buildResumedRuleset(paused.ruleset, paused.backup)
+    assert.deepEqual(resumed.ruleset.rules[1], {
+      type: 'required_status_checks',
+      parameters: {
+        strict_required_status_checks_policy: true,
+        do_not_enforce_on_create: false,
+        required_status_checks: [{ context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 }],
+      },
+    })
+  })
+
+  it('renders the shared billing guard into every generated workflow job', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-ci-billing-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nopencode_security: true\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n',
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    for (const file of ['draft-pr', 'opencode-security', 'release-pr', 'release', 'validation']) {
+      const workflow = readFileSync(join(root, `.github/workflows/${file}.yml`), 'utf8')
+      const jobs = workflow.slice(workflow.indexOf('\njobs:\n'))
+      const jobCount = [...jobs.matchAll(/^  [a-z][a-z0-9-]*:\s*$/gm)].length
+      const guardCount = [...jobs.matchAll(/CI_BILLING_PAUSED/g)].length
+      assert.ok(jobCount > 0, `${file} has root jobs`)
+      assert.ok(guardCount >= jobCount, `${file} guards all ${jobCount} root jobs`)
+    }
+  })
+
   it('keeps paid GitHub security features opt-in for private repositories', () => {
     const result = spawnSync(process.execPath, [runtime, 'codeql'], {
       encoding: 'utf8',
@@ -622,7 +718,7 @@ describe('code-foundry CLI', () => {
 
     syncRepository({ target: root, source: process.cwd() })
     const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
-    assert.match(workflow, /^  mode:\n    name: Mode\n    runs-on: ubuntu-latest$/m)
+    assert.match(workflow, /^  mode:\n(?:    .*\n)*?    runs-on: ubuntu-latest$/m)
   })
 
   it('migrates generated legacy callers and preserves custom workflows byte-for-byte', () => {

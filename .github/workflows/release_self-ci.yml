@@ -15,6 +15,7 @@ permissions:
 jobs:
   release:
     name: Release
+    if: vars.CI_BILLING_PAUSED != 'true'
     uses: ./.github/workflows/release.yml
     with:
       runner: ubuntu-slim
