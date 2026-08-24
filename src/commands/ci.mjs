@@ -45,7 +45,8 @@ export function manageCiBilling(root, action) {
     }
     if (!candidates.length) {
       if (paused && backup) {
-        const result = { repository, paused: true, changed: false, rulesets: backup.rulesets.map((/** @type {any} */ ruleset) => ruleset.rulesetName) }
+        const cancelledRuns = cancelActiveRuns(repository)
+        const result = { repository, paused: true, changed: false, cancelledRuns, rulesets: backup.rulesets.map((/** @type {any} */ ruleset) => ruleset.rulesetName) }
         console.log(JSON.stringify(result, null, 2))
         return result
       }
@@ -62,8 +63,9 @@ export function manageCiBilling(root, action) {
     const nextBackup = backup ?? { version: 1, rulesets: changes.map((change) => change.backup) }
     setVariable(repository, CI_BILLING_BACKUP_VARIABLE, JSON.stringify(nextBackup))
     setVariable(repository, CI_BILLING_PAUSED_VARIABLE, 'true')
+    const cancelledRuns = cancelActiveRuns(repository)
     for (const change of changes) updateRuleset(repository, change.ruleset)
-    const result = { repository, paused: true, changed: true, rulesets: changes.map((change) => change.ruleset.name) }
+    const result = { repository, paused: true, changed: true, cancelledRuns, rulesets: changes.map((change) => change.ruleset.name) }
     console.log(JSON.stringify(result, null, 2))
     return result
   }
@@ -203,6 +205,24 @@ function updateRuleset(repository, ruleset) {
     input: JSON.stringify(payload),
   })
   if (result.status !== 0) throw new Error(`Unable to update ruleset ${ruleset.name}: ${result.stderr.trim() || 'GitHub API request failed'}`)
+}
+
+/** @param {string} repository @returns {number[]} */
+function cancelActiveRuns(repository) {
+  const ids = new Set()
+  for (const status of ['queued', 'in_progress', 'requested', 'waiting', 'pending']) {
+    const response = apiJson(repository, `repos/${repository}/actions/runs?status=${status}&per_page=100`)
+    for (const run of response?.workflow_runs ?? []) {
+      if (Number.isInteger(run?.id)) ids.add(run.id)
+    }
+  }
+  for (const id of ids) {
+    const result = spawnSync('gh', ['api', '--method', 'POST', `repos/${repository}/actions/runs/${id}/cancel`], { encoding: 'utf8' })
+    if (result.status !== 0 && !/409|cannot be cancelled/i.test(result.stderr)) {
+      throw new Error(`Unable to cancel workflow run ${id}: ${result.stderr.trim() || 'GitHub API request failed'}`)
+    }
+  }
+  return [...ids]
 }
 
 /** @param {string} repository @param {string} name @returns {string|null} */

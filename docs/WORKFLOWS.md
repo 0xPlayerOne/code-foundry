@@ -39,7 +39,9 @@ npx code-foundry ci resume
 
 The commands use the repository variable `CI_BILLING_PAUSED`. `pause` also
 backs up and removes only `Validation / Gate` from active branch rulesets so
-pull requests do not wait forever for a deliberately disabled workflow.
+pull requests do not wait forever for a deliberately disabled workflow, and
+cancels queued or in-progress workflow runs that were created before the flag
+changed.
 `resume` restores that exact check before re-enabling jobs. Pull-request,
 deletion, non-fast-forward, review, and other ruleset protections remain active.
 The operation fails closed when the gate or its backup is ambiguous.

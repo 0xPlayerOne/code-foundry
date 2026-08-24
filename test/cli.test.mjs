@@ -422,6 +422,13 @@ describe('code-foundry CLI', () => {
     assert.match(result.stderr, /unknown command: unknown-command/)
   })
 
+  it('rejects unknown CI billing subcommands', () => {
+    const result = run('ci', 'disable')
+
+    assert.equal(result.status, 2)
+    assert.match(result.stderr, /use ci pause, ci resume, or ci status/)
+  })
+
   it('removes and restores only the managed CI gate in a ruleset', () => {
     const ruleset = {
       id: 42,
