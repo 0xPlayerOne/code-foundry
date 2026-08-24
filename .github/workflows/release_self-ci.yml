@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release-while-paused:
+        description: Run only the release pipeline while the shared CI billing pause remains active.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: write
@@ -15,9 +21,10 @@ permissions:
 jobs:
   release:
     name: Release
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)
     uses: ./.github/workflows/release.yml
     with:
+      billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
       runner: ubuntu-slim
       runtime-repository: 0xPlayerOne/code-foundry
       runtime-ref: ${{ github.sha }}

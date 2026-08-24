@@ -524,6 +524,28 @@ describe('code-foundry CLI', () => {
     }
   })
 
+  it('allows only an explicit manual release to bypass the billing pause', () => {
+    const caller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
+    const release = readFileSync('.github/workflows/release.yml', 'utf8')
+
+    assert.match(caller, /release-while-paused:\n\s+description:/)
+    assert.match(caller, /release-while-paused:[\s\S]*?type: boolean[\s\S]*?default: false/)
+    assert.match(caller, /if: vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)/)
+    assert.match(caller, /billing-pause-bypass: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true \}\}/)
+
+    assert.match(release, /billing-pause-bypass:\n\s+description:/)
+    assert.match(release, /billing-pause-bypass:[\s\S]*?type: boolean[\s\S]*?default: false/)
+    for (const job of ['release', 'reconcile', 'post-release', 'npm']) {
+      const block = release.match(new RegExp(`^  ${job}:\\n([\\s\\S]*?)(?=^  [A-Za-z0-9_-]+:|(?![\\s\\S]))`, 'm'))?.[1] ?? ''
+      assert.match(block, /vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true/)
+    }
+
+    for (const file of ['draft-pr_self-ci.yml', 'opencode-security_self-ci.yml', 'release-pr_self-ci.yml', 'validation_self-ci.yml']) {
+      const workflow = readFileSync(`.github/workflows/${file}`, 'utf8')
+      assert.doesNotMatch(workflow, /release-while-paused|billing-pause-bypass/)
+    }
+  })
+
   it('keeps paid GitHub security features opt-in for private repositories', () => {
     const result = spawnSync(process.execPath, [runtime, 'codeql'], {
       encoding: 'utf8',
@@ -971,7 +993,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /--match-head-commit \"\$release_head\"/)
     assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
     assert.match(workflow, /name: Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/)
-    assert.match(workflow, /if: vars\.CI_BILLING_PAUSED != 'true' && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
+    assert.match(workflow, /if: \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
     assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
