@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release-pr:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: vars.CI_BILLING_PAUSED != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     name: Release PR
     uses: ./.github/workflows/release-pr.yml
     with:
