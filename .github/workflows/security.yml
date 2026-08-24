@@ -36,6 +36,7 @@ concurrency:
 jobs:
   profile:
     name: Profile
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
@@ -102,7 +103,7 @@ jobs:
   dependency-audit-javascript:
     name: Dependency Audit (JavaScript)
     needs: profile
-    if: ${{ needs.profile.result == 'success' && needs.profile.outputs.javascript == 'true' }}
+    if: ${{ vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success' && needs.profile.outputs.javascript == 'true' }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     steps:
@@ -157,7 +158,7 @@ jobs:
   dependency-audit-rust:
     name: Dependency Audit (Rust)
     needs: profile
-    if: ${{ needs.profile.result == 'success' && needs.profile.outputs.rust == 'true' }}
+    if: ${{ vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success' && needs.profile.outputs.rust == 'true' }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     steps:
@@ -226,7 +227,8 @@ jobs:
     name: Dependency Audit (Python) / ${{ matrix.requirement }}
     needs: profile
     if: >-
-      ${{ needs.profile.result == 'success' &&
+      ${{ vars.CI_BILLING_PAUSED != 'true' &&
+      needs.profile.result == 'success' &&
       needs.profile.outputs.python == 'true' &&
       needs.profile.outputs.python_requirements != '["none"]' }}
     strategy:
@@ -285,7 +287,8 @@ jobs:
     name: Dependency Audit (Python)
     needs: [profile, dependency-audit-python]
     if: >-
-      ${{ always() &&
+      ${{ vars.CI_BILLING_PAUSED != 'true' &&
+      always() &&
       needs.profile.result == 'success' &&
       needs.profile.outputs.python == 'true' &&
       needs.profile.outputs.python_requirements != '["none"]' }}
@@ -309,7 +312,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     needs: profile
-    if: ${{ github.event_name == 'pull_request' && needs.profile.outputs.dependency_review == 'true' }}
+    if: ${{ vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request' && needs.profile.outputs.dependency_review == 'true' }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     steps:

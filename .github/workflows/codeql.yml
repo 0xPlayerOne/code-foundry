@@ -52,6 +52,7 @@ concurrency:
 jobs:
   detect:
     name: Detect
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
@@ -130,6 +131,7 @@ jobs:
     name: Analyze (Actions)
     needs: detect
     if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
       needs.detect.outputs.enabled == 'true' &&
       needs.detect.outputs.actions_available == 'true'
     runs-on: ${{ inputs.runner }}
@@ -188,6 +190,7 @@ jobs:
     name: Analyze (TypeScript)
     needs: detect
     if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
       needs.detect.outputs.enabled == 'true' &&
       needs.detect.outputs.javascript_available == 'true'
     runs-on: ${{ inputs.runner }}
@@ -246,6 +249,7 @@ jobs:
     name: Analyze (Python)
     needs: detect
     if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
       needs.detect.outputs.enabled == 'true' &&
       needs.detect.outputs.python_available == 'true'
     runs-on: ${{ inputs.runner }}
@@ -304,6 +308,7 @@ jobs:
     name: Analyze (Rust)
     needs: detect
     if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
       needs.detect.outputs.enabled == 'true' &&
       needs.detect.outputs.rust_available == 'true'
     strategy:
