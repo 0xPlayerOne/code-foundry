@@ -46,6 +46,7 @@ concurrency:
 jobs:
   format:
     name: Format
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Checkout
@@ -89,6 +90,7 @@ jobs:
 
   lint:
     name: Lint
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Checkout
@@ -127,6 +129,7 @@ jobs:
 
   type-check:
     name: Type-Check
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Checkout
@@ -165,6 +168,7 @@ jobs:
 
   build:
     name: Build
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     env:
       # Framework builds may validate server-side configuration at build time.

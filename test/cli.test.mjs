@@ -971,7 +971,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /--match-head-commit \"\$release_head\"/)
     assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
     assert.match(workflow, /name: Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/)
-    assert.match(workflow, /if: needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
+    assert.match(workflow, /if: vars\.CI_BILLING_PAUSED != 'true' && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
     assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
@@ -2764,7 +2764,7 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /^  validation:\n    name: Validation/m)
     assert.match(orchestrator, /^  gate:\n    name: Gate/m)
     assert.match(orchestrator, /needs: \[ci, test, security, codeql, release-policy\]/)
-    assert.match(orchestrator, /if: always\(\)/)
+    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && always\(\)/)
     assert.match(orchestrator, /validation gate/)
     assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
     assert.match(orchestrator, /FOUNDRY_RELEASE_POLICY: \$\{\{ needs\.release-policy\.result \}\}/)
@@ -2776,9 +2776,9 @@ describe('code-foundry CLI', () => {
     for (const job of ['ci', 'test', 'security', 'codeql', 'release-policy']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
-    assert.match(orchestrator, /if: inputs.mode == 'fast' \|\| inputs.mode == 'audit'/)
-    assert.match(orchestrator, /if: inputs.mode == 'audit'/)
-    assert.match(orchestrator, /if: inputs.mode == 'release'/)
+    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/)
+    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'/)
+    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && inputs.mode == 'release'/)
     assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
     assert.match(orchestrator, /validation release_diff/)
     assert.match(orchestrator, /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
@@ -2838,7 +2838,7 @@ describe('code-foundry CLI', () => {
     assert.match(test, /type: boolean/)
     assert.match(test, /default: false/)
     for (const job of ['integration', 'e2e', 'smoke']) {
-      assert.match(test, new RegExp(`^  ${job}:\n    name: [A-Za-z0-9]+\n    if: inputs\\.unit-only != true`, 'm'))
+      assert.match(test, new RegExp(`^  ${job}:\n    name: [A-Za-z0-9]+\n    if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`, 'm'))
     }
     for (const input of ['runtime-repository', 'runtime-ref', 'runner', 'unit-runner']) {
       assert.match(test, new RegExp(`^      ${input}:`, 'm'))
