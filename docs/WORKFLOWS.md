@@ -49,16 +49,21 @@ deletion, non-fast-forward, review, and other ruleset protections remain active.
 The operation fails closed when the gate or its backup is ambiguous.
 
 Release Please and package publication are deliberately included in the pause.
-Changes merged to `main` while paused remain unreleased until CI is resumed and
-the release workflow is dispatched or receives another `main` push. Use the
-following bounded recovery sequence after credits return:
+Changes merged to `main` while paused remain unreleased until the release
+workflow receives a normal run after CI resumes, or a maintainer explicitly
+dispatches its release-only bypass. The bypass does not enable validation,
+security, CodeQL, draft-PR, or promotion jobs:
 
 ```bash
-npx code-foundry ci resume
-gh workflow run release_self-ci.yml --ref main
-# Wait for the release PR, GitHub Release, and package publication to finish.
-npx code-foundry ci pause
+gh workflow run release_self-ci.yml --ref main -f release-while-paused=true
 ```
+
+The first dispatch creates and, when an automation token is available, merges
+the Release Please version PR. After that PR is merged, dispatch the same
+command once more to create the tag, GitHub Release, and configured package
+publication. Without an automation token, review and merge the version PR
+manually between the two dispatches. `CI_BILLING_PAUSED` remains `true`
+throughout the bounded release flow.
 
 Custom workflows are repository-owned and are not rewritten by sync. Add
 `if: vars.CI_BILLING_PAUSED != 'true'` to each custom root job that should
