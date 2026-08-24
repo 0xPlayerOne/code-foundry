@@ -75,7 +75,7 @@ permissions:
 jobs:
   ci:
     name: CI
-    if: inputs.mode == 'fast' || inputs.mode == 'audit'
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
     uses: ./.github/workflows/ci.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -87,7 +87,7 @@ jobs:
 
   test:
     name: Test
-    if: inputs.mode == 'fast' || inputs.mode == 'audit'
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -100,7 +100,7 @@ jobs:
 
   security:
     name: Security
-    if: inputs.mode == 'audit'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
     uses: ./.github/workflows/security.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -109,7 +109,7 @@ jobs:
 
   codeql:
     name: CodeQL
-    if: inputs.mode == 'audit'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
     uses: ./.github/workflows/codeql.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -121,7 +121,7 @@ jobs:
 
   release-policy:
     name: Release Policy
-    if: inputs.mode == 'release'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'release'
     runs-on: ubuntu-slim
     timeout-minutes: 10
     steps:
@@ -156,7 +156,7 @@ jobs:
   gate:
     name: Gate
     needs: [ci, test, security, codeql, release-policy]
-    if: always()
+    if: vars.CI_BILLING_PAUSED != 'true' && always()
     runs-on: ubuntu-slim
     timeout-minutes: 10
     env:
