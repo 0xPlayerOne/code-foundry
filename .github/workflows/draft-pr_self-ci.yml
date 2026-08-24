@@ -18,6 +18,7 @@ permissions:
 jobs:
   draft-pr:
     name: Draft PR
+    if: vars.CI_BILLING_PAUSED != 'true'
     uses: ./.github/workflows/draft-pr.yml
     with:
       runner: ubuntu-slim

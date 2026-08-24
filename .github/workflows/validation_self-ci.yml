@@ -25,6 +25,7 @@ concurrency:
 jobs:
   mode:
     name: Mode
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ubuntu-slim
     timeout-minutes: 10
     permissions:
@@ -57,6 +58,7 @@ jobs:
   validation:
     name: Validation
     needs: mode
+    if: vars.CI_BILLING_PAUSED != 'true'
     # Reusable workflows can only maintain or reduce the caller job's scopes.
     # The audit tier needs security-events: write for CodeQL uploads.
     permissions:
