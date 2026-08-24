@@ -24,6 +24,7 @@ env:
 jobs:
   create-release-pr:
     name: Create
+    if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     concurrency:

@@ -37,14 +37,28 @@ npx code-foundry ci status
 npx code-foundry ci resume
 ```
 
-The commands use the repository variable `CI_BILLING_PAUSED`. `pause` also
-backs up and removes only `Validation / Gate` from active branch rulesets so
-pull requests do not wait forever for a deliberately disabled workflow, and
-cancels queued or in-progress workflow runs that were created before the flag
-changed.
+The commands use the repository variable `CI_BILLING_PAUSED`. Every job in the
+generated callers and reusable workflows checks this variable before GitHub
+allocates a runner, so a direct reusable-workflow call cannot bypass the pause.
+`pause` also backs up and removes only `Validation / Gate` from active branch
+rulesets so pull requests do not wait forever for a deliberately disabled
+workflow, and cancels queued or in-progress workflow runs that were created
+before the flag changed.
 `resume` restores that exact check before re-enabling jobs. Pull-request,
 deletion, non-fast-forward, review, and other ruleset protections remain active.
 The operation fails closed when the gate or its backup is ambiguous.
+
+Release Please and package publication are deliberately included in the pause.
+Changes merged to `main` while paused remain unreleased until CI is resumed and
+the release workflow is dispatched or receives another `main` push. Use the
+following bounded recovery sequence after credits return:
+
+```bash
+npx code-foundry ci resume
+gh workflow run release_self-ci.yml --ref main
+# Wait for the release PR, GitHub Release, and package publication to finish.
+npx code-foundry ci pause
+```
 
 Custom workflows are repository-owned and are not rewritten by sync. Add
 `if: vars.CI_BILLING_PAUSED != 'true'` to each custom root job that should
