@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/0xPlayerOne/code-foundry/issues"
   },
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.0",
   "bin": {
     "code-foundry": "src/cli.mjs"
   },
