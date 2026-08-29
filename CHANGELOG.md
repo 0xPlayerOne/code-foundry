@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.3...v0.39.4) (2026-08-29)
+
+
+### Bug Fixes
+
+* **security:** pin authoritative scan resealing ([6885fea](https://github.com/0xPlayerOne/code-foundry/commit/6885fea2848ec13ae6a8fc6c3f378c7b98a46a9f))
+
 ## [0.39.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.2...v0.39.3) (2026-08-29)
 
 
