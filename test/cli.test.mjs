@@ -2300,13 +2300,18 @@ describe('code-foundry CLI', () => {
     // The existing-promotion-PR lookup must use authenticated REST, not
     // `gh pr list` (GraphQL): NiftyLeague's long-lived fine-grained token
     // policy rejects the GraphQL query. The REST query keeps the exact
-    // base/head/state filter and the per_page=1 cap (existing is 0 or 1),
-    // and the step stays fail-closed via set -euo pipefail.
+    // base/head/state filter, qualifies head as owner:branch so GitHub does
+    // not ignore it, and caps per_page at 1 (existing is 0 or 1). The step
+    // stays fail-closed via set -euo pipefail.
     const checkStart = workflow.indexOf('- name: Check\n')
     const checkEnd = workflow.indexOf('- name: ', checkStart + 1)
     assert.ok(checkStart !== -1 && checkEnd !== -1, 'workflow has a Check step')
     const checkStep = workflow.slice(checkStart, checkEnd)
-    assert.match(checkStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=\$\{PROMOTION_BRANCH\}&state=open&per_page=1"/)
+    assert.match(checkStep, /gh api --method GET \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
+    assert.match(checkStep, /--field base=main/)
+    assert.match(checkStep, /--field head="\$\{GITHUB_REPOSITORY_OWNER\}:\$\{PROMOTION_BRANCH\}"/)
+    assert.match(checkStep, /--field state=open/)
+    assert.match(checkStep, /--field per_page=1/)
     assert.match(checkStep, /--jq 'length'/)
     assert.match(checkStep, /set -euo pipefail/)
     // Comment lines may explain why gh pr list is not used; the invocation
@@ -2340,7 +2345,8 @@ describe('code-foundry CLI', () => {
     const nextStep = workflow.indexOf('- name: ', createStart + 1)
     assert.ok(createStart !== -1, 'workflow has a Create step')
     const createStep = nextStep === -1 ? workflow.slice(createStart) : workflow.slice(createStart, nextStep)
-    assert.match(createStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=\$\{PROMOTION_BRANCH\}&state=open&per_page=1"/)
+    assert.match(createStep, /gh api --method GET \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
+    assert.match(createStep, /--field head="\$\{GITHUB_REPOSITORY_OWNER\}:\$\{PROMOTION_BRANCH\}"/)
     assert.match(createStep, /--jq '\.\[0\]\.number \/\/ empty'/)
     assert.match(createStep, /Pull request creation failed and no existing promotion PR was found\./)
     const createCommands = createStep
@@ -2440,7 +2446,7 @@ describe('code-foundry CLI', () => {
     // short-lived workflow token so it cannot be rejected by the automation
     // token policy, and it must come after the retry so a successful retry
     // skips the lookup.
-    const fallback = 'GH_TOKEN="${{ github.token }}" gh api \\'
+    const fallback = 'GH_TOKEN="${{ github.token }}" gh api --method GET \\'
     const fallbackIndex = createStep.indexOf(fallback)
     assert.ok(fallbackIndex !== -1 && fallbackIndex > retryIndex, 'the create-race lookup uses github.token after the retry')
 
