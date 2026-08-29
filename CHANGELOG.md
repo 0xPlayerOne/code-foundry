@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.2...v0.39.3) (2026-08-29)
+
+
+### Bug Fixes
+
+* **security:** pin scanner target normalization ([f03ddb0](https://github.com/0xPlayerOne/code-foundry/commit/f03ddb07d9bc6c06d9a94962f475ec157e5d194e))
+
 ## [0.39.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.1...v0.39.2) (2026-08-29)
 
 
