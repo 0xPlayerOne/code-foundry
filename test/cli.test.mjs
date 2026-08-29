@@ -2312,6 +2312,8 @@ describe('code-foundry CLI', () => {
     const prepareStep = workflow.slice(prepareStart, prepareEnd)
     assert.match(prepareStep, /MAIN_SHA=\$\(git rev-parse origin\/main\)/)
     assert.match(prepareStep, /STAGING_TREE=\$\(git rev-parse 'origin\/staging\^\{tree\}'\)/)
+    assert.match(prepareStep, /STAGING_SUBJECT=\$\(git log -1 --format=%s origin\/staging\)/)
+    assert.match(prepareStep, /message: `\$\{subject\}\\n\\nPromoted from staging snapshot/)
     assert.match(prepareStep, /parents: \[main\]/)
     assert.match(prepareStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/git\/commits"/)
     assert.match(prepareStep, /refs\/heads\/\$\{PROMOTION_BRANCH\}/)
