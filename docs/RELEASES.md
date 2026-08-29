@@ -76,8 +76,17 @@ as aligned. When `staging` has pending commits that are not yet represented on
 detached worktree rooted at `main`, and then updates `staging` with an exact
 `--force-with-lease` to prevent
 unintended branch rewrites. There is no unconditional mirror force-push and no
-fallback synchronization commit path. Indeterminate history, replay conflicts,
-and stale leases fail closed. `direct` repositories skip this step entirely.
+unreviewed fallback synchronization commit path. Indeterminate history, replay
+conflicts, and stale leases fail closed. `direct` repositories skip this step
+entirely.
+
+When branch policy requires reconciliation through a pull request, Code
+Foundry creates a deterministic one-commit delivery head instead of pointing
+the pull request branch at the divergent `main` or replay history. Its parent
+is the current protected `staging` tip and its tree is the exact reconciled
+target tree. This keeps the review limited to release metadata and any genuine
+replayed staging work, while preserving exact-lease updates and idempotent PR
+reuse.
 
 `auto` selects a supported manifest. Use `simple` with `version.txt` for a
 repository without a package manifest and `none` for a repository that should
