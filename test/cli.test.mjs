@@ -332,7 +332,7 @@ if (args[0] === 'pr' && args[1] === 'list') {
 }
 if (args[0] === 'pr' && args[1] === 'create') {
   if (process.env.FAKE_GH_FAIL_CREATE) {
-    process.stderr.write('gh: pr create failed\\n')
+    process.stderr.write(process.env.FAKE_GH_FAIL_CREATE_MESSAGE || 'gh: pr create failed\\n')
     process.exit(1)
   }
   const head = read('--head')
@@ -367,7 +367,7 @@ process.stdout.write('{}\\n')
  * Run fn with a fake gh CLI that records calls and manages seeded open pull
  * requests, mirroring gh pr list/create/edit behavior for the reconciliation
  * pull request fallback.
- * @param {{ prs?: Array<Record<string, unknown>>, failList?: boolean, failCreate?: boolean }} seed
+ * @param {{ prs?: Array<Record<string, unknown>>, failList?: boolean, failCreate?: boolean, failCreateMessage?: string }} seed
  * @param {Function} fn
  * @returns {{ result: unknown, log: string, state: { prs: Array<Record<string, unknown>>, nextNumber: number } }}
  */
@@ -378,6 +378,7 @@ function withReconcileGh(seed, fn) {
   const stateFile = join(dir, 'state.json')
   const logFile = join(dir, 'calls.log')
   writeFileSync(stateFile, JSON.stringify({ prs: seed.prs ?? [], nextNumber: seed.nextNumber ?? 42 }))
+  writeFileSync(logFile, '')
   writeFileSync(script, fakeReconcileGhSource)
   chmodSync(script, 0o755)
   process.env.FAKE_GH_STATE = stateFile
@@ -385,6 +386,7 @@ function withReconcileGh(seed, fn) {
   process.env.FAKE_GH_REPO = 'owner/repo'
   if (seed.failList) process.env.FAKE_GH_FAIL_LIST = '1'
   if (seed.failCreate) process.env.FAKE_GH_FAIL_CREATE = '1'
+  if (seed.failCreateMessage) process.env.FAKE_GH_FAIL_CREATE_MESSAGE = seed.failCreateMessage
   process.env.PATH = `${dir}:${oldPath}`
   try {
     return {
@@ -399,6 +401,7 @@ function withReconcileGh(seed, fn) {
     delete process.env.FAKE_GH_REPO
     delete process.env.FAKE_GH_FAIL_LIST
     delete process.env.FAKE_GH_FAIL_CREATE
+    delete process.env.FAKE_GH_FAIL_CREATE_MESSAGE
     rmSync(dir, { recursive: true, force: true })
   }
 }
@@ -2132,6 +2135,13 @@ describe('code-foundry CLI', () => {
     assert.throws(() => withReconcileGh({ failList: true }, execute), /Failed to list open pull requests/)
     // gh pr create failure with no reusable PR: fail closed.
     assert.throws(() => withReconcileGh({ failCreate: true }, execute), /gh pr create failed/)
+    assert.throws(
+      () => withReconcileGh({
+        failCreate: true,
+        failCreateMessage: 'GraphQL: GitHub Actions is not permitted to create or approve pull requests.\\n',
+      }, execute),
+      /Settings > Actions > General > Workflow permissions/,
+    )
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
   })
@@ -2179,6 +2189,50 @@ describe('code-foundry CLI', () => {
     assert.equal(secondPlan.action, 'aligned')
     assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
     assert.equal(remoteHeadSha(root, 'staging'), remoteHeadSha(root, 'main'))
+    rmSync(root, { recursive: true, force: true })
+    rmSync(remote, { recursive: true, force: true })
+  })
+
+  it('does not open a misleading pull request when policy blocks history-only alignment', () => {
+    const { root, remote, run } = createReconcileWorkspace()
+    const commit = (message) => {
+      const result = run(['commit', '-m', message])
+      assert.equal(result.status, 0, result.stderr)
+      return run(['rev-parse', 'HEAD']).stdout.trim()
+    }
+
+    writeFileSync(join(root, 'src.txt'), 'base\n')
+    run(['add', 'src.txt'])
+    commit('chore: initial')
+    run(['branch', '-M', 'main'])
+    run(['checkout', '-q', '-b', 'staging'])
+    run(['checkout', '-q', 'main'])
+    writeFileSync(join(root, 'src.txt'), 'released\n')
+    run(['add', 'src.txt'])
+    const mainCommit = commit('chore(main): release patch')
+    run(['checkout', '-q', 'staging'])
+    writeFileSync(join(root, 'src.txt'), 'released\n')
+    run(['add', 'src.txt'])
+    commit(`chore(staging): apply ${mainCommit.slice(0, 8)}`)
+    run(['push', '-u', 'origin', 'main'])
+    run(['push', '-u', 'origin', 'staging'])
+
+    const stagingBefore = remoteHeadSha(root, 'staging')
+    assert.notEqual(remoteHeadSha(root, 'main'), stagingBefore)
+    const execute = () => withFakeStagingPolicyPushFailure(
+      () => withGitHubEnv({
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
+      POLICY_PUSH_FAILURE,
+    )
+    const { result, log, state } = withReconcileGh({}, execute)
+
+    assert.equal(result.action, 'aligned')
+    assert.equal(result.synchronization, 'content-aligned')
+    assert.equal(remoteHeadSha(root, 'staging'), stagingBefore)
+    assert.equal(state.prs.length, 0)
+    assert.doesNotMatch(log, /pr create/)
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
   })
