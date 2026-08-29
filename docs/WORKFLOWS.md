@@ -136,7 +136,9 @@ so repositories without a Deploy Key ruleset bypass still reconcile successfully
 
 When the protected `staging` branch rejects the exact-lease reconcile push with
 a branch-policy/ruleset/required-PR error, the reconcile job does not fail:
-it opens (or reuses) a generated `code-foundry/reconcile/main-to-staging`
+if the branch trees are already identical, it reports a content-aligned no-op
+because a normal pull request cannot safely represent a history-only ref move.
+Otherwise, it opens (or reuses) a generated `code-foundry/reconcile/main-to-staging`
 pull request whose head contains the exact target tip (the `main` tip for a
 fast-forward, the replay tip when staging-only commits are replayed) and whose
 body documents the reconciliation. Reruns reuse the open pull request instead
@@ -145,6 +147,11 @@ back into `staging`; unpromoted staging commits are replayed on top. Indetermina
 history, replay conflicts, authentication errors, and ambiguous or stale pull
 request state still fail the job closed, and exact-lease protection stays in
 place for every direct push.
+
+Repositories using the generated pull request fallback must enable
+**Settings > Actions > General > Workflow permissions > Allow GitHub Actions
+to create and approve pull requests**. Code Foundry reports this exact setting
+when GitHub rejects pull request creation through the Actions integration.
 
 For this reconciliation path, maintainer PATs and administrator roles are not
 authorized bypasses; the job deliberately authenticates with `github.token`,
