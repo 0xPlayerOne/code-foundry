@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.38.0...v0.38.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **release:** avoid unsafe history-only reconciliation PRs ([#412](https://github.com/0xPlayerOne/code-foundry/issues/412)) ([941f08b](https://github.com/0xPlayerOne/code-foundry/commit/941f08ba7e830ec3ab0ae9c6b937e488c621b95e))
+
 ## [0.38.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.37.5...v0.38.0) (2026-08-24)
 
 
