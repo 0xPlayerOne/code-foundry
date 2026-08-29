@@ -388,6 +388,10 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/m, `$1 '${rustCodeql.threads}'`)
     rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/m, `$1 ${rustCodeql.maxParallel}`)
   }
+  if (workflow === 'opencode-security') {
+    const model = configured(config.opencode_security_model, '').trim()
+    if (model) rendered = rendered.replace(/^(\s+model:)\s+.*$/m, `$1 ${model}`)
+  }
   return rendered
 }
 
@@ -645,7 +649,7 @@ function createDefaultConfig(root, source) {
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
-    opencode_security: 'false',
+    opencode_security: 'false', opencode_security_model: '',
     sync_mode: 'overlay', custom_workflows: 'preserve',
     license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'direct', merge_strategy: 'rebase', release_merge_strategy: 'rebase',
   }
