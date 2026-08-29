@@ -2472,7 +2472,7 @@ describe('code-foundry CLI', () => {
     }
 
     const scanner = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
-    assert.match(scanner, /source_ref: b3dce823322672b285fbe99b870ea984c01826cb/)
+    assert.match(scanner, /source_ref: 6d7ce2fbb2c2a171b4ca2d4193abd82e0fda584b/)
     assert.doesNotMatch(scanner, /source_ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.ref/)
   })
 
@@ -2931,7 +2931,7 @@ describe('code-foundry CLI', () => {
       'googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7',
       'taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8',
       'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294',
-      '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@b3dce823322672b285fbe99b870ea984c01826cb',
+      '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@6d7ce2fbb2c2a171b4ca2d4193abd82e0fda584b',
     ])
 
     const externalPins = workflows.match(/^\s*uses:\s+(?!\.\/)(\S+@\S+)(?:\s+#\s+\S+)?\s*$/gm) ?? []
