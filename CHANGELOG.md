@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.1...v0.39.2) (2026-08-29)
+
+
+### Bug Fixes
+
+* **release:** qualify promotion PR head filters ([75a0985](https://github.com/0xPlayerOne/code-foundry/commit/75a09856d764aafc1cd301ae68121e187c43e2d1))
+
 ## [0.39.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.0...v0.39.1) (2026-08-29)
 
 
