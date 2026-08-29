@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.39.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.38.2...v0.39.0) (2026-08-29)
+
+
+### Features
+
+* code-foundry 0.38.3 — direct workflow default, muse spark model, opencode_security_model override ([436da59](https://github.com/0xPlayerOne/code-foundry/commit/436da5947098039642cb961987e962cd88960db8))
+
+
+### Bug Fixes
+
+* draft-pr base main for direct workflow (staging deleted) ([b1c063f](https://github.com/0xPlayerOne/code-foundry/commit/b1c063fa8e967800b85ffb9ae42df5d62e9a4e1e))
+
 ## [0.38.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.38.1...v0.38.2) (2026-08-29)
 
 
