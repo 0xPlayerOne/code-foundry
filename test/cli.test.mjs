@@ -1860,6 +1860,7 @@ describe('code-foundry CLI', () => {
       mainSha: 'main-tip',
       stagingSha: 'staging-tip',
       targetSha: 'main-tip',
+      deliverySha: 'delivery-tip',
       action: 'fast-forward',
       pushError: 'remote: error: GH007: rejected by a repository rule',
     })
@@ -1868,8 +1869,8 @@ describe('code-foundry CLI', () => {
     // The body names the protected PR base (staging) and the source (main).
     assert.match(body, /- Base `staging`: `staging-tip`/)
     assert.match(body, /- `main` tip: `main-tip`/)
-    assert.match(body, /main-tip/)
-    assert.match(body, /staging-tip/)
+    assert.match(body, /- Reconciled target snapshot: `main-tip`/)
+    assert.match(body, /- Exact-tree pull request head: `delivery-tip`/)
     assert.match(body, /GH007: rejected by a repository rule/)
     assert.match(body, /fail the release job closed/)
     assert.match(body, /updated instead of duplicated/)
@@ -1965,15 +1966,20 @@ describe('code-foundry CLI', () => {
     assert.equal(result.pullRequest.title, 'chore(staging): reconcile release metadata from main')
     assert.match(result.pullRequest.body, /## Automated release reconciliation/)
     assert.match(result.pullRequest.body, /GH007/)
-    assert.match(result.pullRequest.body, new RegExp(`Target tip in this branch: \`${mainSha}\``))
+    const deliverySha = remoteHeadSha(root, branch)
+    assert.match(result.pullRequest.body, new RegExp(`Reconciled target snapshot: \`${mainSha}\``))
+    assert.match(result.pullRequest.body, new RegExp(`Exact-tree pull request head: \`${deliverySha}\``))
     // The PR targets the protected head branch while the body names the
     // release source (main) explicitly.
     assert.match(result.pullRequest.body, /- Base `staging`: `/)
     assert.match(result.pullRequest.body, /- `main` tip: `/)
     assert.doesNotMatch(result.pullRequest.body, /- Base `main`: /)
-    // Staging is untouched while the head branch carries the exact main tip.
+    // Staging is untouched while the generated head is parented at staging
+    // and carries the exact reconciled main tree.
     assert.equal(remoteHeadSha(root, 'staging'), stagingBefore)
-    assert.equal(remoteHeadSha(root, branch), mainSha)
+    assert.notEqual(deliverySha, mainSha)
+    assert.equal(readRef(`${deliverySha}^`), stagingBefore)
+    assert.equal(readRef(`${deliverySha}^{tree}`), readRef(`${mainSha}^{tree}`))
     // Exactly one create with the generated metadata; no edit or duplicate.
     assert.match(log, new RegExp(`pr create --repo owner/repo --base staging --head ${branch} --title chore\\(staging\\): reconcile release metadata from main --body`))
     assert.doesNotMatch(log, /pr edit/)
@@ -2000,11 +2006,8 @@ describe('code-foundry CLI', () => {
   })
 
   it('reuses the open reconciliation pull request on reruns without duplicating it', () => {
-    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace()
+    const { root, remote } = createPolicyBlockedReconcileWorkspace()
     const branch = reconciliationPullRequestBranch('main', 'staging')
-    const mainSha = readRef('main')
-    // A previous run already delivered the exact main tip and left the PR open.
-    run(['push', 'origin', `main:refs/heads/${branch}`])
     const execute = () => withFakeStagingPolicyPushFailure(
       () => withGitHubEnv({
         GITHUB_REPOSITORY: 'owner/repo',
@@ -2012,6 +2015,11 @@ describe('code-foundry CLI', () => {
       }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
       POLICY_PUSH_FAILURE,
     )
+
+    // A previous run already delivered the deterministic exact-tree head and
+    // left its pull request open.
+    withReconcileGh({}, execute)
+    const deliverySha = remoteHeadSha(root, branch)
 
     const { result, log, state } = withReconcileGh({
       prs: [{
@@ -2027,7 +2035,7 @@ describe('code-foundry CLI', () => {
     assert.equal(result.pullRequest.base, 'staging')
     assert.equal(result.pullRequest.head, branch)
     assert.equal(result.pullRequest.number, 17)
-    assert.equal(remoteHeadSha(root, branch), mainSha)
+    assert.equal(remoteHeadSha(root, branch), deliverySha)
     assert.doesNotMatch(log, /pr create/)
     assert.doesNotMatch(log, /pr edit/)
     assert.equal(state.prs.length, 1)
@@ -2035,7 +2043,7 @@ describe('code-foundry CLI', () => {
     rmSync(remote, { recursive: true, force: true })
   })
 
-  it('refreshes a stale reconciliation pull request head and body to the exact target tip', () => {
+  it('refreshes a stale reconciliation pull request head and body to the exact reconciled tree', () => {
     const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace()
     const branch = reconciliationPullRequestBranch('main', 'staging')
     const mainSha = readRef('main')
@@ -2066,11 +2074,15 @@ describe('code-foundry CLI', () => {
     assert.equal(result.pullRequest.number, 23)
     assert.notEqual(staleSha, mainSha)
     // The branch is refreshed under the exact lease and the body is updated.
-    assert.equal(remoteHeadSha(root, branch), mainSha)
+    const deliverySha = remoteHeadSha(root, branch)
+    assert.notEqual(deliverySha, mainSha)
+    assert.equal(readRef(`${deliverySha}^`), staleSha)
+    assert.equal(readRef(`${deliverySha}^{tree}`), readRef(`${mainSha}^{tree}`))
     assert.doesNotMatch(log, /pr create/)
     assert.match(log, /pr edit 23/)
     assert.equal(state.prs.length, 1)
-    assert.match(state.prs[0].body, new RegExp(`Target tip in this branch: \`${mainSha}\``))
+    assert.match(state.prs[0].body, new RegExp(`Reconciled target snapshot: \`${mainSha}\``))
+    assert.match(state.prs[0].body, new RegExp(`Exact-tree pull request head: \`${deliverySha}\``))
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
   })
@@ -2094,11 +2106,13 @@ describe('code-foundry CLI', () => {
     assert.equal(result.synchronization, 'pull-request')
     assert.ok(result.replaySha)
     const headTip = remoteHeadSha(root, branch)
-    assert.equal(headTip, result.replaySha)
+    assert.notEqual(headTip, result.replaySha)
     assert.notEqual(headTip, mainSha)
     assert.equal(remoteHeadSha(root, 'staging'), stagingBefore)
-    // The replay tip is based on the current main tip and keeps the pending work.
-    assert.equal(run(['merge-base', '--is-ancestor', 'origin/main', `origin/${branch}`]).status, 0)
+    // The delivery commit is based on staging while its tree exactly matches
+    // the replayed target, including the pending staging work.
+    assert.equal(readRef(`${headTip}^`), stagingBefore)
+    assert.equal(readRef(`${headTip}^{tree}`), readRef(`${result.replaySha}^{tree}`))
     assert.equal(run(['show', `${headTip}:src/feature-pending.ts`]).status, 0)
     assert.match(state.prs[0].body, /rebase-staging/)
     assert.match(log, /pr create/)

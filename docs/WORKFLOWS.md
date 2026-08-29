@@ -139,11 +139,14 @@ a branch-policy/ruleset/required-PR error, the reconcile job does not fail:
 if the branch trees are already identical, it reports a content-aligned no-op
 because a normal pull request cannot safely represent a history-only ref move.
 Otherwise, it opens (or reuses) a generated `code-foundry/reconcile/main-to-staging`
-pull request whose head contains the exact target tip (the `main` tip for a
-fast-forward, the replay tip when staging-only commits are replayed) and whose
-body documents the reconciliation. Reruns reuse the open pull request instead
-of duplicating it. Validated changes that landed directly on `main` are synced
-back into `staging`; unpromoted staging commits are replayed on top. Indeterminate
+pull request whose deterministic one-commit head is parented at the current
+`staging` tip and contains the exact reconciled target tree (the `main` tree for
+a fast-forward, the replay tree when staging-only commits are replayed). This
+avoids exposing divergent squash/rebase ancestry as an enormous PR diff. The
+body documents both the target snapshot and exact-tree delivery head. Reruns
+reuse the open pull request instead of duplicating it. Validated changes that
+landed directly on `main` are synced back into `staging`; unpromoted staging
+commits are replayed on top. Indeterminate
 history, replay conflicts, authentication errors, and ambiguous or stale pull
 request state still fail the job closed, and exact-lease protection stays in
 place for every direct push.

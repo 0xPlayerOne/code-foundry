@@ -247,12 +247,18 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
   const prBase = head
   const branch = reconciliationPullRequestBranch(base, head)
   const title = reconciliationPullRequestTitle({ targetHead: head, sourceBase: base })
+  const prepared = prepareExactTreeReconciliationHead(target, state.stagingSha, targetSha, title)
+  if (prepared.status !== 0 || !prepared.sha) {
+    return failResult(`Failed to prepare the exact-tree reconciliation head ${branch}: ${prepared.message}`)
+  }
+  const deliverySha = prepared.sha
   const body = buildReconciliationPullRequestBody({
     sourceBase: base,
     targetHead: head,
     mainSha: state.mainSha,
     stagingSha: state.stagingSha,
     targetSha,
+    deliverySha,
     action: state.plan.action,
     pushError,
   })
@@ -263,9 +269,9 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
   if (selection.error) return failResult(selection.error)
   if (!selection.create) {
     if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch}.`)
-    return reuseReconciliationPullRequest(target, repository, selection.reuse, targetSha, body)
+    return reuseReconciliationPullRequest(target, repository, selection.reuse, deliverySha, body)
   }
-  const pushed = pushReconciliationHead(target, branch, targetSha)
+  const pushed = pushReconciliationHead(target, branch, deliverySha)
   if (pushed.status !== 0) {
     const classification = classifyPushFailure(branch, pushed.message)
     if (classification.category === 'authentication') {
@@ -279,7 +285,7 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
   if (selection.error) return failResult(selection.error)
   if (!selection.create) {
     if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch} after pushing its head.`)
-    return reuseReconciliationPullRequest(target, repository, selection.reuse, targetSha, body)
+    return reuseReconciliationPullRequest(target, repository, selection.reuse, deliverySha, body)
   }
   const created = ghSpawn(target, ['pr', 'create', '--repo', repository, '--base', prBase, '--head', branch, '--title', title, '--body', body])
   if (created.status !== 0) {
@@ -293,7 +299,7 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
       return failResult(reconciliationPullRequestCreateError(branch, created.stderr))
     }
     if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch} after gh pr create failed.`)
-    return reuseReconciliationPullRequest(target, repository, selection.reuse, targetSha, body)
+    return reuseReconciliationPullRequest(target, repository, selection.reuse, deliverySha, body)
   }
   const number = parsePullRequestNumber(created.stdout)
   if (!number) return failResult(`Created the reconciliation pull request for ${branch} but could not parse its number.`)
@@ -308,6 +314,46 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
   }
 }
 
+/**
+ * Build a deterministic single-commit delivery head whose parent is the
+ * protected staging tip and whose tree is the fully reconciled target tree.
+ * GitHub therefore reviews only the real content delta even when main and
+ * staging have divergent squash/rebase ancestry.
+ * @param {string} target
+ * @param {string} stagingSha
+ * @param {string} targetSha
+ * @param {string} title
+ * @returns {{ status: number | null, sha: string, message: string }}
+ */
+function prepareExactTreeReconciliationHead(target, stagingSha, targetSha, title) {
+  const tree = git(target, ['rev-parse', `${targetSha}^{tree}`])
+  const timestamp = git(target, ['show', '-s', '--format=%cI', targetSha])
+  if (!tree || !timestamp) {
+    return { status: 1, sha: '', message: `could not resolve target tree or timestamp for ${targetSha}.` }
+  }
+  const message = `${title}\n\nReconciled from target snapshot ${targetSha.slice(0, 12)}.`
+  const result = spawnSync('git', ['commit-tree', tree, '-p', stagingSha, '-m', message], {
+    cwd: target,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'github-actions[bot]',
+      GIT_AUTHOR_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
+      GIT_AUTHOR_DATE: timestamp,
+      GIT_COMMITTER_NAME: 'github-actions[bot]',
+      GIT_COMMITTER_EMAIL: '41898282+github-actions[bot]@users.noreply.github.com',
+      GIT_COMMITTER_DATE: timestamp,
+    },
+  })
+  const sha = result.status === 0 ? result.stdout.trim() : ''
+  const detail = `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim()
+  return {
+    status: result.status,
+    sha,
+    message: result.status === 0 && sha ? '' : sanitizeReconcileOutput(detail) || 'git commit-tree failed.',
+  }
+}
+
 /** @param {string} branch @param {string} stderr */
 function reconciliationPullRequestCreateError(branch, stderr) {
   const detail = sanitizeReconcileOutput(stderr) || 'unknown error'
@@ -318,22 +364,22 @@ function reconciliationPullRequestCreateError(branch, stderr) {
 }
 
 /**
- * Refresh an existing reconciliation pull request to the exact target tip and
- * body. The head branch is pushed under an exact lease when its tip is stale,
+ * Refresh an existing reconciliation pull request to the exact-tree delivery
+ * head and body. The head branch is pushed under an exact lease when stale,
  * so a concurrent move fails closed instead of being clobbered.
  * @param {string} target
  * @param {string} repository
  * @param {{number?: number, title?: string, headRefName?: string, headRefOid?: string, baseRefName?: string, url?: string}} pr
- * @param {string} targetSha
+ * @param {string} deliverySha
  * @param {string} body
  * @returns {{ success: false, retry: false, error: string } | { success: true, result: ReconciliationMutationResult }}
  */
-function reuseReconciliationPullRequest(target, repository, pr, targetSha, body) {
+function reuseReconciliationPullRequest(target, repository, pr, deliverySha, body) {
   const number = Number(pr.number)
-  if (String(pr.headRefOid ?? '') !== targetSha) {
-    const pushed = pushReconciliationHead(target, /** @type {string} */ (pr.headRefName), targetSha)
+  if (String(pr.headRefOid ?? '') !== deliverySha) {
+    const pushed = pushReconciliationHead(target, /** @type {string} */ (pr.headRefName), deliverySha)
     if (pushed.status !== 0) {
-      return failResult(`Failed to refresh the reconciliation branch ${pr.headRefName} to the target tip: ${sanitizeReconcileOutput(pushed.message)}`)
+      return failResult(`Failed to refresh the reconciliation branch ${pr.headRefName} to the exact-tree delivery head: ${sanitizeReconcileOutput(pushed.message)}`)
     }
     const edited = ghSpawn(target, ['pr', 'edit', String(number), '--repo', repository, '--body', body])
     if (edited.status !== 0) {
@@ -358,20 +404,21 @@ function reuseReconciliationPullRequest(target, repository, pr, targetSha, body)
 }
 
 /**
- * Push the exact target tip to the deterministic reconciliation head branch,
- * creating it when absent and refreshing it under an exact lease otherwise.
- * @param {string} target @param {string} branch @param {string} targetSha
+ * Push the exact-tree delivery commit to the deterministic reconciliation
+ * head branch, creating it when absent and refreshing it under an exact lease
+ * otherwise.
+ * @param {string} target @param {string} branch @param {string} deliverySha
  */
-function pushReconciliationHead(target, branch, targetSha) {
+function pushReconciliationHead(target, branch, deliverySha) {
   const existingTip = remoteRefSha(target, branch)
   if (existingTip === null) return { status: 1, message: `could not resolve the remote reconciliation branch ${branch} before pushing.` }
-  if (existingTip === targetSha) return { status: 0, message: '' }
+  if (existingTip === deliverySha) return { status: 0, message: '' }
   if (!existingTip) {
-    const result = spawnSync('git', ['push', 'origin', `${targetSha}:refs/heads/${branch}`], { cwd: target, encoding: 'utf8' })
+    const result = spawnSync('git', ['push', 'origin', `${deliverySha}:refs/heads/${branch}`], { cwd: target, encoding: 'utf8' })
     const message = `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim() || `failed to create reconciliation branch ${branch}.`
     return { status: result.status, message: sanitizeReconcileOutput(message) }
   }
-  return pushWithLease(target, branch, existingTip, targetSha)
+  return pushWithLease(target, branch, existingTip, deliverySha)
 }
 
 /**
