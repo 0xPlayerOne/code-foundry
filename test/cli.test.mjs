@@ -937,6 +937,7 @@ describe('code-foundry CLI', () => {
 
     const releaseCaller = readFileSync('.github/workflows/release-pr_self-ci.yml', 'utf8')
     assert.match(releaseCaller, /on:\n\s+push:\n\s+branches: \[staging\]/)
+    assert.match(releaseCaller, /permissions:\n\s+contents: write\n\s+pull-requests: write/)
     assert.match(releaseCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
     assert.match(releaseCaller, /RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
 
@@ -2279,6 +2280,8 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
     assert.match(workflow, /merge_strategy.*rebase/)
     assert.match(workflow, /never merge a promotion PR with a merge commit/)
+    assert.match(workflow, /permissions:\n  contents: write\n  pull-requests: write/)
+    assert.match(workflow, /PROMOTION_BRANCH: code-foundry\/promote\/staging-to-main/)
 
     // The existing-promotion-PR lookup must use authenticated REST, not
     // `gh pr list` (GraphQL): NiftyLeague's long-lived fine-grained token
@@ -2289,7 +2292,7 @@ describe('code-foundry CLI', () => {
     const checkEnd = workflow.indexOf('- name: ', checkStart + 1)
     assert.ok(checkStart !== -1 && checkEnd !== -1, 'workflow has a Check step')
     const checkStep = workflow.slice(checkStart, checkEnd)
-    assert.match(checkStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=staging&state=open&per_page=1"/)
+    assert.match(checkStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=\$\{PROMOTION_BRANCH\}&state=open&per_page=1"/)
     assert.match(checkStep, /--jq 'length'/)
     assert.match(checkStep, /set -euo pipefail/)
     // Comment lines may explain why gh pr list is not used; the invocation
@@ -2300,6 +2303,20 @@ describe('code-foundry CLI', () => {
       .join('\n')
     assert.doesNotMatch(checkCommands, /gh pr list/)
 
+    // Promotion review must be based on main while carrying the exact
+    // validated staging tree. Direct staging heads expose rebased or squashed
+    // ancestry as a misleading whole-repository diff.
+    const prepareStart = workflow.indexOf('- name: Prepare exact-tree promotion head\n')
+    const prepareEnd = workflow.indexOf('- name: ', prepareStart + 1)
+    assert.ok(prepareStart !== -1 && prepareEnd !== -1, 'workflow prepares an exact-tree promotion head')
+    const prepareStep = workflow.slice(prepareStart, prepareEnd)
+    assert.match(prepareStep, /MAIN_SHA=\$\(git rev-parse origin\/main\)/)
+    assert.match(prepareStep, /STAGING_TREE=\$\(git rev-parse 'origin\/staging\^\{tree\}'\)/)
+    assert.match(prepareStep, /parents: \[main\]/)
+    assert.match(prepareStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/git\/commits"/)
+    assert.match(prepareStep, /refs\/heads\/\$\{PROMOTION_BRANCH\}/)
+    assert.match(prepareStep, /--field force=true/)
+
     // The create-race fallback after a failed creation POST must use the
     // same authenticated REST query as the Check step, extracting the first
     // open PR's number and failing closed when none exists.
@@ -2307,7 +2324,7 @@ describe('code-foundry CLI', () => {
     const nextStep = workflow.indexOf('- name: ', createStart + 1)
     assert.ok(createStart !== -1, 'workflow has a Create step')
     const createStep = nextStep === -1 ? workflow.slice(createStart) : workflow.slice(createStart, nextStep)
-    assert.match(createStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=staging&state=open&per_page=1"/)
+    assert.match(createStep, /gh api \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls\?base=main&head=\$\{PROMOTION_BRANCH\}&state=open&per_page=1"/)
     assert.match(createStep, /--jq '\.\[0\]\.number \/\/ empty'/)
     assert.match(createStep, /Pull request creation failed and no existing promotion PR was found\./)
     const createCommands = createStep
@@ -2325,7 +2342,7 @@ describe('code-foundry CLI', () => {
     assert.match(createStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
     assert.match(createStep, /--method POST/)
     assert.match(createStep, /--field base=main/)
-    assert.match(createStep, /--field head=staging/)
+    assert.match(createStep, /--field head="\$PROMOTION_BRANCH"/)
     assert.match(createStep, /--field title="Promote staging -> main \(\$DATE\)"/)
     assert.match(createStep, /--field body=@"\$BODY_FILE"/)
     assert.match(createStep, /if gh api "\$\{CREATE_ARGS\[\@\]\}"; then/)
@@ -2378,6 +2395,12 @@ describe('code-foundry CLI', () => {
     const checkStep = stepSlice('Check')
     assert.match(checkStep, /GH_TOKEN: \$\{\{ github\.token \}\}/)
     assert.doesNotMatch(checkStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
+
+    const prepareStep = stepSlice('Prepare exact-tree promotion head')
+    assert.match(prepareStep, /GH_TOKEN: \$\{\{ github\.token \}\}/)
+    assert.match(prepareStep, /AUTOMATION_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \}\}/)
+    assert.match(prepareStep, /GH_TOKEN="\$AUTOMATION_TOKEN" gh api --method PATCH/)
+    assert.match(prepareStep, /Promotion token fallback/)
 
     // Writes keep the configured automation token when present and fall back
     // to github.token only when no automation token is configured.

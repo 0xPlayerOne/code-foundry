@@ -15,11 +15,12 @@ on:
         required: false
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 env:
   HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
+  PROMOTION_BRANCH: code-foundry/promote/staging-to-main
 
 jobs:
   create-release-pr:
@@ -44,8 +45,11 @@ jobs:
         # persist-credentials disabled, git has no auth for that fetch; configure
         # the credential helper with the short-lived workflow token. NiftyLeague
         # rejects long-lived fine-grained automation tokens with HTTP 403 even
-        # on REST, so all read-only operations use github.token; it is scoped
-        # to contents: read, so this never enables write credentials.
+        # on REST, so all read-only operations use github.token. It is used
+        # only for GitHub operations owned by this workflow. The job's
+        # contents: write permission is required later for the isolated,
+        # deterministic promotion ref; protected main and staging are never
+        # written by this workflow.
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh auth setup-git
@@ -65,7 +69,7 @@ jobs:
           # REST query keeps the exact base/head/state filter and the per_page=1
           # cap (existing is 0 or 1) and fails closed on any API error.
           EXISTING=$(gh api \
-            "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=staging&state=open&per_page=1" \
+            "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=${PROMOTION_BRANCH}&state=open&per_page=1" \
             --jq 'length')
           MAIN_TREE=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.commit.tree.sha')
           STAGING_TREE=$(gh api "repos/${GITHUB_REPOSITORY}/commits/staging" --jq '.commit.tree.sha')
@@ -144,6 +148,50 @@ jobs:
             echo 'staging is already aligned with main; no promotion PR is needed.'
           fi
 
+      - name: Prepare exact-tree promotion head
+        if: steps.check-pr.outputs.commits != '0' && steps.check-pr.outputs.tree_equal != 'true' && steps.check-pr.outputs.release_only != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          MAIN_SHA=$(git rev-parse origin/main)
+          STAGING_SHA=$(git rev-parse origin/staging)
+          STAGING_TREE=$(git rev-parse 'origin/staging^{tree}')
+          COMMIT_FILE="$RUNNER_TEMP/promotion-commit.json"
+          node - "$MAIN_SHA" "$STAGING_SHA" "$STAGING_TREE" <<'NODE' > "$COMMIT_FILE"
+          const [main, staging, tree] = process.argv.slice(2)
+          process.stdout.write(JSON.stringify({
+            message: `chore: promote staging snapshot ${staging.slice(0, 12)}`,
+            tree,
+            parents: [main],
+          }))
+          NODE
+          PROMOTION_SHA=$(gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/git/commits" \
+            --input "$COMMIT_FILE" \
+            --jq '.sha')
+          REF_ENDPOINT="repos/${GITHUB_REPOSITORY}/git/refs/heads/${PROMOTION_BRANCH}"
+          if gh api "$REF_ENDPOINT" >/dev/null 2>&1; then
+            UPDATED=false
+            if [ "$HAS_AUTOMATION_TOKEN" = true ] && GH_TOKEN="$AUTOMATION_TOKEN" gh api --method PATCH "$REF_ENDPOINT" --field sha="$PROMOTION_SHA" --field force=true >/dev/null; then
+              UPDATED=true
+            fi
+            if [ "$UPDATED" != true ]; then
+              if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
+                echo "::warning title=Promotion token fallback::Automation token could not refresh the promotion ref; using the workflow token. GitHub may require a manual check rerun for an already-open pull request."
+              fi
+              gh api --method PATCH "$REF_ENDPOINT" --field sha="$PROMOTION_SHA" --field force=true >/dev/null
+            fi
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/git/refs" \
+              --field ref="refs/heads/${PROMOTION_BRANCH}" \
+              --field sha="$PROMOTION_SHA" >/dev/null
+          fi
+          echo "Prepared ${PROMOTION_BRANCH} at ${PROMOTION_SHA} with parent ${MAIN_SHA} and the exact staging tree ${STAGING_TREE}."
+
       - name: Create
         if: steps.check-pr.outputs.existing == '0' && steps.check-pr.outputs.commits != '0' && steps.check-pr.outputs.tree_equal != 'true' && steps.check-pr.outputs.release_only != 'true'
         env:
@@ -203,7 +251,7 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/pulls"
             --method POST
             --field base=main
-            --field head=staging
+            --field head="$PROMOTION_BRANCH"
             --field title="Promote staging -> main ($DATE)"
             --field body=@"$BODY_FILE"
           )
@@ -237,7 +285,7 @@ jobs:
             # the short-lived workflow token; gh pr list issues a GraphQL query
             # that NiftyLeague's long-lived fine-grained token policy rejects.
             EXISTING_NUMBER=$(GH_TOKEN="${{ github.token }}" gh api \
-              "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=staging&state=open&per_page=1" \
+              "repos/${GITHUB_REPOSITORY}/pulls?base=main&head=${PROMOTION_BRANCH}&state=open&per_page=1" \
               --jq '.[0].number // empty')
             if [ -z "$EXISTING_NUMBER" ]; then
               echo 'Pull request creation failed and no existing promotion PR was found.' >&2
