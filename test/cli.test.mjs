@@ -937,6 +937,7 @@ describe('code-foundry CLI', () => {
 
     const releaseCaller = readFileSync('.github/workflows/release-pr_self-ci.yml', 'utf8')
     assert.match(releaseCaller, /on:\n\s+push:\n\s+branches: \[staging\]/)
+    assert.match(releaseCaller, /permissions:\n\s+contents: write\n\s+pull-requests: write/)
     assert.match(releaseCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
     assert.match(releaseCaller, /RELEASE_PLEASE_TOKEN: \$\{\{ secrets\.RELEASE_PLEASE_TOKEN \}\}/)
 
