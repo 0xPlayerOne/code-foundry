@@ -95,7 +95,7 @@ workflow refuses to run unless its strategy is exactly `rebase`.
 | --- | --- | --- |
 | Feature/fix PR into `main` (direct topology) | Squash | Contribution policy; see `CONTRIBUTING.md` |
 | Feature/fix PR into `staging` (staging-release topology) | Squash | Contribution policy; see `CONTRIBUTING.md` |
-| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`) | `merge_strategy` must be `rebase` when `git_workflow: staging-release`; merge commits are rejected |
+| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`) | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
 | Release Please version PR into `main` | Rebase (`release_merge_strategy: rebase`) | Release automation fails closed unless `rebase`; never defaults to `merge`, never uses `--admin` |
 
 The promotion rows above apply only to `staging-release`; `direct`

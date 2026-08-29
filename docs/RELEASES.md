@@ -61,6 +61,12 @@ possible. The final branch trees are inspected before mutation; validated
 main-only changes are inherited by `staging`, while unpromoted staging work is
 replayed on top of `main`.
 
+Promotion never opens a pull request directly from a divergent `staging`
+history. The workflow creates or refreshes a deterministic promotion branch
+whose single commit has the current `main` tip as its parent and the exact
+validated `staging` tree. This keeps the review diff limited to the actual
+environment delta even after squash or rebase merges have changed ancestry.
+
 The `staging` → `main` reconciliation exists only in the `staging-release`
 topology. Patch-equivalent divergence between `main` and `staging` is treated
 as aligned. When `staging` has pending commits that are not yet represented on
