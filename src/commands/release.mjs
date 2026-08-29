@@ -197,6 +197,14 @@ function executeReconciliationMutation(target, base, head, state) {
     }
   }
   if (classification.category === 'policy') {
+    // A normal pull request cannot faithfully represent a history-only ref
+    // alignment. GitHub compares the divergent ancestry and can render a
+    // large, misleading content diff even though both branch trees are
+    // already identical. Preserve the protected branch and report the
+    // content-aligned state instead of opening an unsafe synchronization PR.
+    if (state.plan.action === 'aligned') {
+      return { success: true, result: { synchronization: 'content-aligned' } }
+    }
     return deliverReconciliationPullRequest(target, base, head, state, targetSha, {}, classification.message)
   }
   return { success: false, retry: true, error: `${head} synchronization failed with lease: ${classification.message}` }
@@ -282,7 +290,7 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
     selection = selectReconciliationPullRequest(prs, expected)
     if (selection.error) return failResult(selection.error)
     if (selection.create) {
-      return failResult(`gh pr create failed for ${branch}: ${sanitizeReconcileOutput(created.stderr) || 'unknown error'}`)
+      return failResult(reconciliationPullRequestCreateError(branch, created.stderr))
     }
     if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch} after gh pr create failed.`)
     return reuseReconciliationPullRequest(target, repository, selection.reuse, targetSha, body)
@@ -298,6 +306,15 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
       pullRequest: { number, url, base: prBase, head: branch, branch, title, body },
     },
   }
+}
+
+/** @param {string} branch @param {string} stderr */
+function reconciliationPullRequestCreateError(branch, stderr) {
+  const detail = sanitizeReconcileOutput(stderr) || 'unknown error'
+  const permissionHint = /github actions is not permitted to create or approve pull requests|resource not accessible by integration/i.test(detail)
+    ? ' Enable Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests, then rerun the workflow.'
+    : ''
+  return `gh pr create failed for ${branch}: ${detail}${permissionHint}`
 }
 
 /**
