@@ -66,6 +66,8 @@ history. The workflow creates or refreshes a deterministic promotion branch
 whose single commit has the current `main` tip as its parent and the exact
 validated `staging` tree. This keeps the review diff limited to the actual
 environment delta even after squash or rebase merges have changed ancestry.
+The generated commit preserves the staged tip's conventional subject so
+Release Please still detects the appropriate release type after promotion.
 
 The `staging` → `main` reconciliation exists only in the `staging-release`
 topology. Patch-equivalent divergence between `main` and `staging` is treated

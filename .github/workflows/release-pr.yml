@@ -158,11 +158,12 @@ jobs:
           MAIN_SHA=$(git rev-parse origin/main)
           STAGING_SHA=$(git rev-parse origin/staging)
           STAGING_TREE=$(git rev-parse 'origin/staging^{tree}')
+          STAGING_SUBJECT=$(git log -1 --format=%s origin/staging)
           COMMIT_FILE="$RUNNER_TEMP/promotion-commit.json"
-          node - "$MAIN_SHA" "$STAGING_SHA" "$STAGING_TREE" <<'NODE' > "$COMMIT_FILE"
-          const [main, staging, tree] = process.argv.slice(2)
+          node - "$MAIN_SHA" "$STAGING_SHA" "$STAGING_TREE" "$STAGING_SUBJECT" <<'NODE' > "$COMMIT_FILE"
+          const [main, staging, tree, subject] = process.argv.slice(2)
           process.stdout.write(JSON.stringify({
-            message: `chore: promote staging snapshot ${staging.slice(0, 12)}`,
+            message: `${subject}\n\nPromoted from staging snapshot ${staging.slice(0, 12)}.`,
             tree,
             parents: [main],
           }))
