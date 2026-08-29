@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.38.1...v0.38.2) (2026-08-29)
+
+
+### Bug Fixes
+
+* **release:** preserve promotion release semantics ([#418](https://github.com/0xPlayerOne/code-foundry/issues/418)) ([b1702a7](https://github.com/0xPlayerOne/code-foundry/commit/b1702a756cc6d7297f98b529b0bca178a1cdc3d1))
+
 ## [0.38.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.38.0...v0.38.1) (2026-08-29)
 
 
