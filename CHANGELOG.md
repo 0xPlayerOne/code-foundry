@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.0...v0.39.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **release:** build exact-tree reconciliation heads ([33b0151](https://github.com/0xPlayerOne/code-foundry/commit/33b015102f07ca03ffb677fe4b9f5e67bbf9a485))
+
 ## [0.39.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.38.2...v0.39.0) (2026-08-29)
 
 
