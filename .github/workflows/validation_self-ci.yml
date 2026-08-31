@@ -33,6 +33,12 @@ jobs:
     outputs:
       mode: ${{ steps.classify.outputs.mode }}
     steps:
+      # The runtime classifies policy from the consumer repository's config.
+      # Keep this checkout before the isolated runtime checkout below.
+      - name: Checkout consumer repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Checkout runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

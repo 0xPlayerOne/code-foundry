@@ -2854,6 +2854,7 @@ describe('code-foundry CLI', () => {
 
   it('classifies the validation mode through the pinned runtime in the caller', () => {
     const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    assert.match(caller, /- name: Checkout consumer repository\n\s+uses: actions\/checkout@[^\n]+\n\s+with:\n\s+persist-credentials: false\n\s+- name: Checkout runtime/)
     assert.match(caller, /FOUNDRY_EVENT_NAME: \$\{\{ github\.event_name \}\}/)
     assert.match(caller, /FOUNDRY_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/)
     assert.match(caller, /FOUNDRY_HEAD_REF: \$\{\{ github\.event\.pull_request\.head\.ref \}\}/)
