@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.0...v0.40.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **validation:** load consumer audit policy ([8d13173](https://github.com/0xPlayerOne/code-foundry/commit/8d13173a36849528335f87a550072e08137f4473))
+
 ## [0.40.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.4...v0.40.0) (2026-08-31)
 
 
