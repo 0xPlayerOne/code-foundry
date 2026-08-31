@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.4...v0.40.0) (2026-08-31)
+
+
+### Features
+
+* **validation:** allow audit mode on staging PRs ([0d95123](https://github.com/0xPlayerOne/code-foundry/commit/0d951230b9095d3b875db44ae8287335152eee60))
+
 ## [0.39.4](https://github.com/0xPlayerOne/code-foundry/compare/v0.39.3...v0.39.4) (2026-08-29)
 
 
