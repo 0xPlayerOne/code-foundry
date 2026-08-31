@@ -100,6 +100,12 @@ export function syncRepository(options) {
   if (!['direct', 'staging-release'].includes(workflow)) {
     throw new Error(`Unsupported git_workflow: ${workflow}; use direct or staging-release.`)
   }
+  const stagingValidationMode = configured(config.staging_validation_mode, 'fast')
+  if (!['fast', 'audit'].includes(stagingValidationMode)) {
+    throw new Error(
+      `Unsupported staging_validation_mode: ${stagingValidationMode}; use fast or audit.`
+    )
+  }
   const mergeStrategy = configured(config.merge_strategy, 'rebase')
   if (workflow === 'staging-release' && mergeStrategy !== 'rebase') {
     throw new Error(`Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`)
@@ -429,7 +435,13 @@ function renderDependabot(content, config, languages) {
  * @returns {string}
  */
 export function renderContributionDocs(content, file, config) {
-  if (isStagingRelease(config.git_workflow)) return content
+  if (isStagingRelease(config.git_workflow)) {
+    if (configured(config.staging_validation_mode, 'fast') !== 'audit') return content
+    return content.replace(
+      'Fast validation: CI plus unit tests, ending in `Validation / Gate`',
+      'Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`'
+    )
+  }
   const replacements = DIRECT_DOC_REPLACEMENTS[file]
   if (!replacements) return content
   let rendered = content
@@ -645,7 +657,7 @@ function createDefaultConfig(root, source) {
     codeql_rust_shards: '["all"]', codeql_rust_threads: '1', codeql_rust_max_parallel: '1',
     runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
     ...runners,
-    toolchain: 'auto',
+    toolchain: 'auto', staging_validation_mode: 'fast',
     prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
     post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
