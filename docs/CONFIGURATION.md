@@ -35,6 +35,7 @@ repository manifests and source
 | `languages` | detected list | TypeScript, Rust, Python, Solidity |
 | `package_manager` | `bun`, `pnpm`, `yarn`, `npm`, `none` | JavaScript setup |
 | `toolchain` | `auto`, `native`, `mise` | Environment setup policy; defaults to `auto` |
+| `staging_validation_mode` | `fast`, `audit` | Validation tier for pull requests targeting `staging`; defaults to `fast` |
 | `features` | `all` or a list | Standard workflow callers |
 | `codeql` | `auto`, `true`, `false` | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled |
 | `codeql_rust_shards` | JSON array of paths | Rust scan scopes; `["all"]` keeps the safe single full scan |

@@ -1174,6 +1174,45 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('renders and preserves the audit policy for staging pull requests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-staging-audit-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: typescript',
+        'package_manager: bun',
+        'git_workflow: staging-release',
+        'staging_validation_mode: audit',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+    assert.match(
+      contributing,
+      /Pull request targeting `staging`\s+\| Audit validation: CI, full tests, Security, and CodeQL/
+    )
+    assert.doesNotMatch(contributing, /Pull request targeting `staging`\s+\| Fast validation/)
+    assert.deepEqual(syncRepository({ target: root, source: process.cwd() }).changed, [])
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('rejects unsupported staging validation policy during sync', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-staging-policy-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nstaging_validation_mode: release\n'
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported staging_validation_mode: release/
+    )
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('renders Cargo Dependabot updates only for Rust repositories', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-rust-dependabot-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
@@ -2618,6 +2657,35 @@ describe('code-foundry CLI', () => {
   it('classifies pull requests to staging as fast regardless of head shape', () => {
     for (const head of ['feature/foo', 'staging', 'main', RELEASE_PLEASE_PREFIX, `${RELEASE_PLEASE_PREFIX}--v1.2.3`]) {
       assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'staging', headRef: head }), 'fast')
+    }
+  })
+
+  it('lets repositories require the audit tier for staging pull requests', () => {
+    for (const head of ['feature/foo', 'staging', 'main', RELEASE_PLEASE_PREFIX]) {
+      assert.equal(
+        classifyValidationMode({
+          eventName: 'pull_request',
+          baseRef: 'staging',
+          headRef: head,
+          stagingMode: 'audit',
+        }),
+        'audit'
+      )
+    }
+  })
+
+  it('rejects invalid staging validation modes instead of falling back', () => {
+    for (const stagingMode of ['release', 'full', 'true', '']) {
+      assert.throws(
+        () =>
+          classifyValidationMode({
+            eventName: 'pull_request',
+            baseRef: 'staging',
+            headRef: 'feature/foo',
+            stagingMode,
+          }),
+        /Unsupported staging validation mode/
+      )
     }
   })
 

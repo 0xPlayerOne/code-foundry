@@ -40,18 +40,18 @@ export function isReleasePleaseHead(headRef) {
 
 /**
  * Classify an event into exactly one validation mode, failing closed:
- * - fast: pull_request targeting staging
+ * - fast or audit: pull_request targeting staging, according to the repository policy
  * - release: pull_request targeting main whose head is the exact approved
  *   Release Please prefix
  * - audit: every other pull_request targeting main, plus schedule and
  *   workflow_dispatch
  * Unsupported events (for example push) and unsupported base branches are
  * rejected so canonical validation can never silently run or silently skip.
- * @param {{ eventName: string, baseRef?: string, headRef?: string }} input
+ * @param {{ eventName: string, baseRef?: string, headRef?: string, stagingMode?: string }} input
  * @returns {'fast'|'audit'|'release'}
  */
 export function classifyValidationMode(input) {
-  const { eventName, baseRef, headRef } = input
+  const { eventName, baseRef, headRef, stagingMode = 'fast' } = input
   if (typeof eventName !== 'string' || !VALIDATION_EVENTS.includes(eventName)) {
     throw new Error(
       `Unsupported validation event: ${eventName ?? '(missing)'}; canonical validation must not run on this event.`
@@ -64,7 +64,14 @@ export function classifyValidationMode(input) {
   if (typeof headRef !== 'string' || headRef.length === 0) {
     throw new Error('pull_request classification requires head_ref.')
   }
-  if (baseRef === 'staging') return 'fast'
+  if (baseRef === 'staging') {
+    if (stagingMode !== 'fast' && stagingMode !== 'audit') {
+      throw new Error(
+        `Unsupported staging validation mode: ${stagingMode || '(missing)'}; expected fast or audit.`
+      )
+    }
+    return stagingMode
+  }
   if (baseRef === 'main') return isReleasePleaseHead(headRef) ? 'release' : 'audit'
   throw new Error(`Unsupported pull_request base branch: ${baseRef}; expected staging or main.`)
 }

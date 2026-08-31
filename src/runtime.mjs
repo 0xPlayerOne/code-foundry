@@ -53,6 +53,7 @@ function validation(task) {
       eventName: process.env.FOUNDRY_EVENT_NAME ?? '',
       baseRef: process.env.FOUNDRY_BASE_REF ?? '',
       headRef: process.env.FOUNDRY_HEAD_REF ?? '',
+      stagingMode: config.staging_validation_mode,
     }))
     return
   }
