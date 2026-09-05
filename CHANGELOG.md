@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.1...v0.40.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **validation:** skip eslint fallback without repo setup and ignore overlaid actions ([bb4756c](https://github.com/0xPlayerOne/code-foundry/commit/bb4756cb8a40199f4d0b6bdb47020f0bc7283de1))
+
 ## [0.40.1](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.0...v0.40.1) (2026-08-31)
 
 
