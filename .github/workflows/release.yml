@@ -489,6 +489,17 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      - name: Install dependencies
+        # npm publish runs prepublishOnly (usually a build), which needs
+        # devDependencies present. Install with the project's own manager.
+        run: |
+          set -euo pipefail
+          if [ -f bun.lock ] || [ -f bun.lockb ]; then bun install --frozen-lockfile
+          elif [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile
+          elif [ -f yarn.lock ]; then yarn install --immutable
+          elif [ -f package-lock.json ]; then npm ci --no-audit --fund=false
+          elif [ -f package.json ]; then npm install --no-audit --fund=false --package-lock=false
+          fi
       - name: Publish npm with token
         if: env.NPM_TOKEN != ''
         env:
