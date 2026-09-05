@@ -816,6 +816,7 @@ describe('code-foundry CLI', () => {
     assert.ok(first.changed.includes('.prettierignore'))
     assert.match(merged, /^# Generated release metadata is intentionally managed by Release Please\.\nCHANGELOG\.md/m)
     assert.match(merged, /^\.github\/\.code-foundry$/m)
+    assert.match(merged, /^\.github\/actions\/$/m)
     assert.equal((merged.match(/# Repository-specific rules/g) ?? []).length, 1)
     assert.match(merged, /# Repository-specific rules\n# Local build output\ndist\/\ncoverage\/$/m)
 

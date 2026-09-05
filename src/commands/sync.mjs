@@ -243,8 +243,10 @@ export function syncRepository(options) {
   }
   if (includesValue(languages, 'typescript') && existsSync(join(target, '.prettierignore'))) {
     const prettierIgnore = readFileSync(join(target, '.prettierignore'), 'utf8')
-    if (!prettierIgnore.split(/\r?\n/).includes('.github/.code-foundry')) {
-      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n.github/.code-foundry\n`, dryRun)
+    const present = new Set(prettierIgnore.split(/\r?\n/).map((line) => line.trim()))
+    const missing = ['.github/.code-foundry', '.github/actions/'].filter((entry) => !present.has(entry))
+    if (missing.length) {
+      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n${missing.join('\n')}\n`, dryRun)
       changed.push('.prettierignore')
     }
   }
