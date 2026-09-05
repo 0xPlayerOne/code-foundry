@@ -1107,6 +1107,8 @@ describe('code-foundry CLI', () => {
     assert.match(dependabot, /target-branch: main/)
     assert.doesNotMatch(dependabot, /target-branch: staging/)
     assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
+    assert.match(dependabot, /dependency-name: 'typescript'\n\s+versions: \['>=7\.0\.0'\]/)
+    assert.match(dependabot, /dependency-name: '@types\/node'\n\s+versions: \['>=23'\]/)
 
     // No promotion caller and no promotion prose in the direct topology.
     assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must not emit release-pr.yml')
