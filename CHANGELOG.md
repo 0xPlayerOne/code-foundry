@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.3...v1.0.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* automation now reads CODE_FOUNDRY_TOKEN only. Repos still carrying just RELEASE_PLEASE_TOKEN fall back to the short-lived workflow token (manual merges) until they set CODE_FOUNDRY_TOKEN.
+
+### Features
+
+* remove RELEASE_PLEASE_TOKEN fallback in favor of CODE_FOUNDRY_TOKEN ([3f6ba1c](https://github.com/0xPlayerOne/code-foundry/commit/3f6ba1c3cb0db698a7c75485b9e4201720e930d7))
+
 ## [0.40.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.2...v0.40.3) (2026-09-05)
 
 
