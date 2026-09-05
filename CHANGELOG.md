@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.1...v1.0.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** provision bun and corepack before publish install ([32f9b15](https://github.com/0xPlayerOne/code-foundry/commit/32f9b153cdc96cf3c38b379eada41853116e9200))
+
 ## [1.0.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.0...v1.0.1) (2026-09-05)
 
 
