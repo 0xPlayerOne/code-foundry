@@ -254,6 +254,28 @@ function hasDependencyManifest(ecosystem) {
   return false
 }
 
+/**
+ * Detect repository-owned ESLint setup: a lint script, an eslint dependency
+ * (or script reference), or a tracked flat/legacy config file. Repositories
+ * without any of these have nothing for the fallback runner to enforce, so
+ * lint skips instead of forcing a network fetch of ESLint in CI.
+ * @returns {boolean}
+ */
+function hasEslintSetup() {
+  const pkg = readPackage() ?? {}
+  const scripts = pkg.scripts ?? {}
+  if (scripts.lint) return true
+  const dependencies = {
+    ...(pkg.dependencies ?? {}),
+    ...(pkg.devDependencies ?? {}),
+    ...(pkg.optionalDependencies ?? {}),
+    ...(pkg.peerDependencies ?? {}),
+  }
+  if (dependencies.eslint) return true
+  if (Object.values(scripts).some((value) => /\beslint\b/.test(String(value)))) return true
+  return repositoryTestFiles().some((file) => /(^|\/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$/.test(file))
+}
+
 /** @param {string} task */
 function ci(task) {
   if (task === 'install') return install()
@@ -274,7 +296,7 @@ function ci(task) {
   }
   if (task === 'lint') {
     const scripted = runScript(['lint'])
-    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject()) runTool('eslint', ['.'])
+    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject() && hasEslintSetup()) runTool('eslint', ['.'])
     if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['check', '.'])
     if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
     return
