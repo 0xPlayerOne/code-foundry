@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.3](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.2...v0.40.3) (2026-09-05)
+
+
+### Bug Fixes
+
+* **sync:** hold TypeScript toolchain below v7 in consumer dependabot config ([e3c91e1](https://github.com/0xPlayerOne/code-foundry/commit/e3c91e1079bfcd69d174d3ede6d20674eb8fd37b))
+
 ## [0.40.2](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.1...v0.40.2) (2026-09-05)
 
 
