@@ -1885,6 +1885,17 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /^  release:\n    name: Release\n/m)
   })
 
+  it('provisions every lockfile manager before the publish install step', () => {
+    const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+    const publish = workflow.slice(workflow.indexOf('  npm:\n'))
+    const installAt = publish.indexOf('- name: Install dependencies')
+    assert.ok(installAt !== -1, 'publish job installs dependencies')
+    const setupBun = publish.indexOf('oven-sh/setup-bun@')
+    const corepack = publish.indexOf('corepack enable')
+    assert.ok(setupBun !== -1 && setupBun < installAt, 'bun is set up before install')
+    assert.ok(corepack !== -1 && corepack < installAt, 'corepack is enabled before install')
+  })
+
   it('keeps reconciliation pull request metadata deterministic and reuse-safe', () => {
     assert.equal(reconciliationPullRequestBranch('main', 'staging'), 'code-foundry/reconcile/main-to-staging')
     assert.equal(reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }), 'chore(staging): reconcile release metadata from main')
@@ -2993,6 +3004,7 @@ describe('code-foundry CLI', () => {
       'github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3',
       'github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3',
       'googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7',
+      'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6',
       'taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8',
       'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294',
       '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@137698ef3545204af8fad00fc8bd64d663c8122e',
@@ -3012,6 +3024,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflows, /uses: actions\/upload-artifact@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: github\/codeql-action\/(init|analyze)@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: googleapis\/release-please-action@v[0-9]+/)
+    assert.doesNotMatch(workflows, /uses: oven-sh\/setup-bun@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: taiki-e\/install-action@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: actions\/dependency-review-action@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: 0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@main/)

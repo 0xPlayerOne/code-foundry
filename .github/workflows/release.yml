@@ -489,6 +489,16 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      - name: Setup Bun (lockfile managers)
+        # The install step below dispatches on lockfile: bun, pnpm, yarn, or
+        # npm. Stock runners only provide Node, so provision Bun (oven-sh)
+        # and Corepack (pnpm/yarn) explicitly; otherwise bun.lock projects
+        # fail with `bun: command not found` before publish.
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+      - name: Enable Corepack (pnpm/yarn managers)
+        run: corepack enable
       - name: Install dependencies
         # npm publish runs prepublishOnly (usually a build), which needs
         # devDependencies present. Install with the project's own manager.
