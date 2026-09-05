@@ -11,15 +11,13 @@ on:
     secrets:
       CODE_FOUNDRY_TOKEN:
         required: false
-      RELEASE_PLEASE_TOKEN:
-        required: false
 
 permissions:
   contents: write
   pull-requests: write
 
 env:
-  HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
+  HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' }}
   PROMOTION_BRANCH: code-foundry/promote/staging-to-main
 
 jobs:
@@ -158,7 +156,7 @@ jobs:
         if: steps.check-pr.outputs.commits != '0' && steps.check-pr.outputs.tree_equal != 'true' && steps.check-pr.outputs.release_only != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+          AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
         run: |
           set -euo pipefail
           MAIN_SHA=$(git rev-parse origin/main)
@@ -202,7 +200,7 @@ jobs:
       - name: Create
         if: steps.check-pr.outputs.existing == '0' && steps.check-pr.outputs.commits != '0' && steps.check-pr.outputs.tree_equal != 'true' && steps.check-pr.outputs.release_only != 'true'
         env:
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || github.token }}
         run: |
           DATE=$(date +%Y-%m-%d)
           BODY_FILE="$RUNNER_TEMP/release-pr.md"
@@ -264,7 +262,7 @@ jobs:
           )
           if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
             CREATE_ARGS+=(--field draft=true)
-            echo "::notice title=Manual PR readiness required::Created draft promotion PR because no automation token is configured. Configure CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN, or mark this PR ready manually to trigger validation."
+            echo "::notice title=Manual PR readiness required::Created draft promotion PR because no automation token is configured. Configure CODE_FOUNDRY_TOKEN, or mark this PR ready manually to trigger validation."
           fi
 
           # Prefer the configured automation token for the write, but

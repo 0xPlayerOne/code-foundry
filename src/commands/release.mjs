@@ -533,7 +533,7 @@ export function dispatchPostReleaseHook(root, options) {
   const repository = process.env.GITHUB_REPOSITORY
   if (!repository) throw new Error('GITHUB_REPOSITORY is required for post-release hooks.')
   if (!options.tag) throw new Error('--tag is required for post-release hooks.')
-  const decision = selectHookDelivery({ mode: options.mode, tokenPresent: Boolean(process.env.RELEASE_PLEASE_TOKEN) })
+  const decision = selectHookDelivery({ mode: options.mode, tokenPresent: Boolean(process.env.CODE_FOUNDRY_TOKEN) })
   console.log(JSON.stringify({ repository, tag: options.tag, workflow: options.workflow, ...decision }, null, 2))
   if (decision.delivery === 'disabled' || decision.delivery === 'release-event') return decision
   if (decision.delivery === 'unavailable') throw new Error(decision.reason)
@@ -551,7 +551,7 @@ export function dispatchPostReleaseHook(root, options) {
     '--ref', options.tag,
     '--field', `release-tag=${options.tag}`,
     '--field', `delivery-key=${key}`,
-  ], { cwd: resolve(root), stdio: 'inherit', env: { ...process.env, GH_TOKEN: process.env.RELEASE_PLEASE_TOKEN } })
+  ], { cwd: resolve(root), stdio: 'inherit', env: { ...process.env, GH_TOKEN: process.env.CODE_FOUNDRY_TOKEN } })
   if (result.status !== 0) throw new Error(`Failed to dispatch post-release workflow ${options.workflow}.`)
   return { ...decision, deliveryKey: key, dispatched: true }
 }
@@ -648,7 +648,7 @@ function treeChangedPaths(root, from, to) {
 
 /** @param {string} root @param {string[]} args @returns {{ status: number | null, stdout: string, stderr: string }} */
 function ghSpawn(root, args) {
-  const token = process.env.RELEASE_PLEASE_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+  const token = process.env.CODE_FOUNDRY_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   return spawnSync('gh', args, { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, ...(token ? { GH_TOKEN: token } : {}) } })
 }
 

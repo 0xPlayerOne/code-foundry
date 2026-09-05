@@ -16,8 +16,6 @@ on:
     secrets:
       CODE_FOUNDRY_TOKEN:
         required: false
-      RELEASE_PLEASE_TOKEN:
-        required: false
 
 permissions:
   contents: read
@@ -46,7 +44,7 @@ jobs:
       - name: Create
         if: steps.check-pr.outputs.existing == '0'
         env:
-          AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+          AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           HEAD_REF: ${{ github.ref_name }}
         run: |
