@@ -104,7 +104,7 @@ its manifest.
 ## Pull request permissions
 
 The release job validates the configured automation token
-(`CODE_FOUNDRY_TOKEN`, falling back to `RELEASE_PLEASE_TOKEN`) against the
+(`CODE_FOUNDRY_TOKEN`) against the
 current repository with an authenticated REST probe before any write. When no
 automation token is configured, or the configured token is rejected by GitHub
 (observed with long-lived fine-grained tokens that GitHub rejects with HTTP
@@ -116,8 +116,8 @@ successfully. The token value is never printed or written to step outputs.
 Guarded automatic merging and the downstream workflows triggered by the
 resulting release are enabled only when the configured automation token was
 validated successfully; a rejected token never falls through to any write.
-Configure a valid, narrowly scoped `CODE_FOUNDRY_TOKEN` or
-`RELEASE_PLEASE_TOKEN` repository or organization secret to enable guarded
+Configure a valid, narrowly scoped `CODE_FOUNDRY_TOKEN`
+repository or organization secret to enable guarded
 automatic merging and downstream workflows triggered by the resulting
 release. The token needs `contents`, `issues`, and `pull-requests` write
 permissions. Code Foundry validates every changed path in the generated

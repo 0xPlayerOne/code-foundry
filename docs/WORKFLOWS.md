@@ -158,7 +158,7 @@ when GitHub rejects pull request creation through the Actions integration.
 
 For this reconciliation path, maintainer PATs and administrator roles are not
 authorized bypasses; the job deliberately authenticates with `github.token`,
-not `CODE_FOUNDRY_TOKEN` or `RELEASE_PLEASE_TOKEN`.
+not `CODE_FOUNDRY_TOKEN`.
 
 ## GitHub Stacks
 

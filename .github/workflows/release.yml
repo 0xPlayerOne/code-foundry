@@ -26,8 +26,6 @@ on:
     secrets:
       CODE_FOUNDRY_TOKEN:
         required: false
-      RELEASE_PLEASE_TOKEN:
-        required: false
       STAGING_DEPLOY_KEY:
         required: false
       NPM_TOKEN:
@@ -123,8 +121,8 @@ jobs:
       - name: Detect release credentials
         id: credentials
         env:
-          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' || secrets.RELEASE_PLEASE_TOKEN != '' }}
-          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+          HAS_AUTOMATION_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN != '' }}
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
         run: |
           set -euo pipefail
           # NiftyLeague rejects long-lived fine-grained automation tokens with
@@ -141,7 +139,7 @@ jobs:
             echo "auto_merge=false" >> "$GITHUB_OUTPUT"
             echo "token_source=fallback" >> "$GITHUB_OUTPUT"
             if [ "$HAS_AUTOMATION_TOKEN" = true ]; then
-              echo "::warning title=Release token fallback::The configured CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN was rejected by GitHub; failing over to the short-lived workflow token. The version pull request will be left for manual merge."
+              echo "::warning title=Release token fallback::The configured CODE_FOUNDRY_TOKEN was rejected by GitHub; failing over to the short-lived workflow token. The version pull request will be left for manual merge."
             fi
           fi
       - name: Release Please (automation token)
@@ -149,7 +147,7 @@ jobs:
         if: steps.profile.outputs.release_type != 'none' && steps.credentials.outputs.token_source == 'configured'
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
-          token: ${{ secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ secrets.CODE_FOUNDRY_TOKEN }}
           config-file: release-please-config.json
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
       - name: Release Please (workflow token)
@@ -197,7 +195,7 @@ jobs:
           # when it validated, github.token after fallback. The token value
           # lives only in this masked env expression, never in step outputs.
           AUTO_MERGE: ${{ steps.credentials.outputs.auto_merge }}
-          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
+          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
         run: |
           set -euo pipefail
           mapfile -t release_prs < <(
@@ -229,12 +227,12 @@ jobs:
       - name: Leave release pull request for manual merge
         if: steps.release.outputs.prs_created == 'true' && steps.credentials.outputs.auto_merge != 'true'
         run: |
-          echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. Configure a valid CODE_FOUNDRY_TOKEN or RELEASE_PLEASE_TOKEN to enable guarded auto-merge when downstream release workflows require it."
+          echo "::notice title=Manual release merge required::Release Please created or updated a version pull request. Configure a valid CODE_FOUNDRY_TOKEN to enable guarded auto-merge when downstream release workflows require it."
 
       - name: Merge generated version pull requests
         if: steps.credentials.outputs.auto_merge == 'true'
         env:
-          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
+          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
         run: |
           set -euo pipefail
           mapfile -t release_prs < <(
@@ -420,8 +418,8 @@ jobs:
       # The release job validates the configured automation token and exposes
       # the selection; the post hook reuses the same selected credential so a
       # rejected long-lived token is never used after fallback.
-      RELEASE_PLEASE_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
-      GH_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN || secrets.RELEASE_PLEASE_TOKEN) || github.token }}
+      CODE_FOUNDRY_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
+      GH_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
