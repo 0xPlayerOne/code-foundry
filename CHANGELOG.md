@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.0...v1.0.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** install dependencies before npm publish ([8e03535](https://github.com/0xPlayerOne/code-foundry/commit/8e0353549c42b982e84c28db94351d752a28d60e))
+
 ## [1.0.0](https://github.com/0xPlayerOne/code-foundry/compare/v0.40.3...v1.0.0) (2026-09-05)
 
 
