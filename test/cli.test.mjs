@@ -1251,6 +1251,13 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.matrix/)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.rust_matrix/)
     assert.match(workflow, /max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}/)
+    // The Rust job keeps a static check name (the pre-matrix name) so skipped
+    // runs on non-Rust repositories render cleanly instead of leaking a raw
+    // matrix expression; per-shard detail stays in SARIF categories and logs.
+    // Only the main language matrix keeps a dynamic name (it never skips
+    // while analysis is enabled — an empty matrix fails closed instead).
+    assert.match(workflow, /^    name: Analyze \(Rust\)$/m)
+    assert.strictEqual(workflow.split('name: Analyze (${{ matrix.entry.display }})').length - 1, 1)
     // An empty matrix while analysis is enabled fails closed instead of
     // silently skipping every analyzer.
     assert.match(workflow, /matrix is empty while analysis is enabled/)
