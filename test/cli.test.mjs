@@ -1260,6 +1260,52 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /matrix is empty while analysis is enabled/)
   })
 
+  it('keeps CodeQL SARIF categories byte-identical to the pre-matrix baseline', () => {
+    // GitHub keys code-scanning baselines by category string. A rename
+    // orphans the main-branch configurations and breaks alert comparison on
+    // every pull request, so the matrix builder output is executed against
+    // fixtures and its categories asserted exactly.
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/codeql.yml'), 'utf8')
+    const script = workflow.split("node -e '")[1].split("\n          '")[0]
+    // The builder runs through node -e '...' shell quoting: a single quote
+    // anywhere inside would terminate the script early in CI (local file
+    // execution would not catch it).
+    assert.doesNotMatch(script, /'/)
+    const runner = join(mkdtempSync(join(tmpdir(), 'code-foundry-matrix-')), 'matrix.cjs')
+    writeFileSync(runner, script)
+    const build = (languages, shards = ['all']) => {
+      const output = join(mkdtempSync(join(tmpdir(), 'code-foundry-matrix-out-')), 'github_output')
+      const result = spawnSync(process.execPath, [runner], {
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_OUTPUT: output, MATRIX_ENABLED: 'true', MATRIX_LANGUAGES: JSON.stringify(languages), MATRIX_SHARDS: JSON.stringify(shards) },
+      })
+      assert.equal(result.status, 0, result.stderr)
+      const values = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map((line) => {
+        const index = line.indexOf('=')
+        return [line.slice(0, index), JSON.parse(line.slice(index + 1))]
+      }))
+      return values.matrix
+    }
+    const entry = (language) => ({ language, 'build-mode': 'none', changed: true })
+    assert.deepEqual(
+      build([entry('actions'), entry('javascript-typescript')]).map((item) => item.category),
+      ['/language:actions', '/language:javascript-typescript'],
+    )
+    assert.deepEqual(
+      build([entry('actions'), entry('python')]).map((item) => item.category),
+      ['/language:actions', '/language:python'],
+    )
+    const rust = build([entry('actions'), entry('rust')])
+    assert.deepEqual(rust.map((item) => item.display), ['Actions', 'Rust'])
+    assert.equal(rust[1].language, 'rust')
+    assert.equal(rust[1].shard, 'all')
+    const sharded = build([entry('rust')], ['crates/api', 'crates/worker'])
+    assert.deepEqual(sharded.map((item) => item.display), ['Rust (crates/api)', 'Rust (crates/worker)'])
+    // The Rust SARIF category keeps its scope suffix at upload time.
+    assert.match(workflow, /category: \/language:rust\/\$\{\{ steps\.scope\.outputs\.scope_id \}\}/)
+    rmSync(join(runner, '..'), { recursive: true, force: true })
+  })
+
   it('scopes security audits to detected languages through one matrix', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/security.yml'), 'utf8')
     // One matrix job; no static per-language jobs and no python fan-out gate.
