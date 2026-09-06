@@ -25,9 +25,13 @@ outputs:
 runs:
   using: composite
   steps:
+    # Caches are restored on every event but saved on push only: scheduled
+    # and dispatched runs share the default branch with untrusted
+    # runtime-ref checkouts, so letting them save would allow cache
+    # poisoning. Push events require write access and stay trusted.
     - name: Restore cache
       id: restore
-      if: inputs.save != 'true'
+      if: inputs.save != 'true' || github.event_name != 'push'
       uses: actions/cache/restore@v5
       with:
         path: ${{ inputs.path }}
@@ -35,7 +39,7 @@ runs:
         restore-keys: ${{ inputs.restore-keys }}
     - name: Restore and save cache
       id: cache
-      if: inputs.save == 'true'
+      if: inputs.save == 'true' && github.event_name == 'push'
       uses: actions/cache@v5
       with:
         path: ${{ inputs.path }}
