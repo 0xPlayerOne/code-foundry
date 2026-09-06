@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.2.0...v1.2.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* restore pre-matrix CodeQL SARIF category strings ([#468](https://github.com/0xPlayerOne/code-foundry/issues/468)) ([8c51892](https://github.com/0xPlayerOne/code-foundry/commit/8c518921bf3632ba5b8ee4ca757efe3bc302739a))
+
 ## [1.2.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.1.1...v1.2.0) (2026-09-06)
 
 
