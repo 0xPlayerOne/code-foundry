@@ -37,3 +37,5 @@ post_release_mode: auto
 opencode_security: false
 sync_mode: overlay
 custom_workflows: preserve
+staging_validation_mode: fast
+opencode_security_model:
