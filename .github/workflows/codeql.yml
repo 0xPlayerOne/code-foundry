@@ -216,8 +216,11 @@ jobs:
         if: ${{ matrix.entry.changed != true }}
         run: echo "CodeQL ${{ matrix.entry.display }} analysis is not applicable to this change."
 
+  # Rust keeps its own job so shard fan-out stays behind the
+  # rust-max-parallel throttle. The static name matches the pre-matrix check
+  # name; per-shard detail stays in the SARIF category and step logs.
   analyze-rust:
-    name: Analyze (${{ matrix.entry.display }})
+    name: Analyze (Rust)
     needs: detect
     if: vars.CI_BILLING_PAUSED != 'true' && needs.detect.outputs.enabled == 'true' && needs.detect.outputs.rust_available == 'true'
     strategy:
@@ -316,4 +319,4 @@ jobs:
           wait-for-processing: false
       - name: Not applicable
         if: ${{ matrix.entry.changed != true }}
-        run: echo "CodeQL ${{ matrix.entry.display }} analysis is not applicable to this change."
+        run: echo "CodeQL Rust analysis is not applicable to this change."
