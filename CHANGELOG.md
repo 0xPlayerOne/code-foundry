@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.6...v1.1.0) (2026-09-06)
+
+
+### Features
+
+* scope per-language checks to detected languages via matrix ([#459](https://github.com/0xPlayerOne/code-foundry/issues/459)) ([71f8985](https://github.com/0xPlayerOne/code-foundry/commit/71f8985b9732d39b7b68df40a4c8cbe5a90175fe))
+
 ## [1.0.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.5...v1.0.6) (2026-09-06)
 
 
