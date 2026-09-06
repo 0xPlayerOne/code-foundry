@@ -82,13 +82,15 @@ honor the shared billing pause.
 | Release | Release Please, GitHub release, and optional npm publication |
 
 Use concise job names such as `CI / Format`, `Test / Unit`, and
-`CodeQL / Analyze (Python)`. Per-language CodeQL analyzers and security
-audits run through a detection-built matrix, so a repository only ever shows
-checks for languages it actually uses; inapplicable languages produce no
-checks instead of skipped rows. Required checks should match the jobs
-actually enabled for the repository profile — in practice, require only the
-aggregate `Validation / Gate`, which fails closed unless every generated
-check succeeds.
+`CodeQL / Analyze (Python)`. Per-language CodeQL analyzers (Rust shards
+included) and security audits run through a detection-built matrix, so a
+repository only ever shows checks for languages it actually uses — never
+skipped rows for other languages. The release tier validates the generated
+diff as a step inside the gate rather than a separate job, for the same
+reason. Required checks should match the jobs actually enabled for the
+repository profile — in practice, require only the aggregate
+`Validation / Gate`, which fails closed unless every generated check
+succeeds.
 
 ## Merge methods
 

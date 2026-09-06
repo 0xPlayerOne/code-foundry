@@ -66,7 +66,6 @@ function validation(task) {
         test: process.env.FOUNDRY_TEST,
         security: process.env.FOUNDRY_SECURITY,
         codeql: process.env.FOUNDRY_CODEQL,
-        'release-policy': process.env.FOUNDRY_RELEASE_POLICY,
       },
     })
     if (gate.valid) {

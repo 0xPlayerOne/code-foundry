@@ -1241,23 +1241,20 @@ describe('code-foundry CLI', () => {
 
   it('scopes CodeQL analysis to detected languages through one matrix', () => {
     const workflow = readFileSync(join(process.cwd(), '.github/workflows/codeql.yml'), 'utf8')
-    // One matrix job per concern; no static per-language jobs that would
-    // render skipped checks for languages a repository does not use.
+    // One matrix job for every analyzer, Rust shards included: no static
+    // per-language jobs that would render skipped checks for languages a
+    // repository does not use.
     assert.match(workflow, /^  analyze:\s*$/m)
-    assert.match(workflow, /^  analyze-rust:\s*$/m)
     assert.doesNotMatch(workflow, /^  analyze-actions:\s*$/m)
     assert.doesNotMatch(workflow, /^  analyze-typescript:\s*$/m)
     assert.doesNotMatch(workflow, /^  analyze-python:\s*$/m)
+    assert.doesNotMatch(workflow, /^  analyze-rust:\s*$/m)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.matrix/)
-    assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.rust_matrix/)
-    assert.match(workflow, /max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}/)
-    // The Rust job keeps a static check name (the pre-matrix name) so skipped
-    // runs on non-Rust repositories render cleanly instead of leaking a raw
-    // matrix expression; per-shard detail stays in SARIF categories and logs.
-    // Only the main language matrix keeps a dynamic name (it never skips
-    // while analysis is enabled — an empty matrix fails closed instead).
-    assert.match(workflow, /^    name: Analyze \(Rust\)$/m)
-    assert.strictEqual(workflow.split('name: Analyze (${{ matrix.entry.display }})').length - 1, 1)
+    assert.doesNotMatch(workflow, /rust_matrix/)
+    // Rust shard fan-out lives in the shared matrix; the dedicated throttle
+    // input stays declared for caller compatibility.
+    assert.match(workflow, /for \(const shard of rust \? shards : \[\]\)/)
+    assert.match(workflow, /sha256.*slice\(0, 12\)/)
     // An empty matrix while analysis is enabled fails closed instead of
     // silently skipping every analyzer.
     assert.match(workflow, /matrix is empty while analysis is enabled/)
@@ -1274,6 +1271,17 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /python-gate/)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
     assert.match(workflow, /^  dependency-review:\s*$/m)
+  })
+
+  it('keeps the OpenCode scan to a single job with one skipped row', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/opencode-security_self-ci.yml'), 'utf8')
+    // One job: the release-please branch gate stays at the job level so
+    // ordinary pull requests render a single skipped check instead of two.
+    assert.match(workflow, /^  scan:\n    name: OpenCode Security \/ Scan/m)
+    assert.doesNotMatch(workflow, /^  detect:/m)
+    assert.match(workflow, /vars\.CI_BILLING_PAUSED != 'true'/)
+    assert.match(workflow, /startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/)
+    assert.match(workflow, /0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@137698ef3545204af8fad00fc8bd64d663c8122e/)
   })
 
   it('rejects an unknown git_workflow and prunes a stale promotion caller on flip to direct', () => {
@@ -2833,10 +2841,10 @@ describe('code-foundry CLI', () => {
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
     assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql'])
-    assert.deepEqual(requiredValidationJobs('release'), ['release-policy'])
+    assert.deepEqual(requiredValidationJobs('release'), [])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
-    assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql', 'release-policy'])
+    assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql'])
     assert.equal(AGGREGATE_CHECK_NAME, 'Validation / Gate')
     assert.throws(() => requiredValidationJobs('unknown'), /Unknown validation mode/)
     assert.throws(() => requiredValidationJobs(), /Unknown validation mode/)
@@ -2854,17 +2862,20 @@ describe('code-foundry CLI', () => {
       required: ['ci', 'test', 'security', 'codeql'],
       failures: [],
     })
-    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { 'release-policy': 'success' } }), {
+    // The release tier requires no suite jobs: the generated release diff
+    // check runs as a conditional step inside the gate itself, so the gate
+    // passes vacuously here and the step outcome decides the job.
+    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: {} }), {
       valid: true,
-      required: ['release-policy'],
+      required: [],
       failures: [],
     })
   })
 
   it('lets expected skips of non-required jobs pass the gate', () => {
-    assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'skipped', 'release-policy': 'skipped' } }).valid, true)
-    assert.equal(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'success', 'release-policy': 'skipped' } }).valid, true)
-    assert.equal(evaluateValidationGate({ mode: 'release', results: { 'release-policy': 'success', ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'skipped' } }).valid, true)
+    assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'skipped' } }).valid, true)
+    assert.equal(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' } }).valid, true)
+    assert.equal(evaluateValidationGate({ mode: 'release', results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'skipped' } }).valid, true)
     // Non-required jobs never influence the gate, even when they fail.
     assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', codeql: 'failure' } }).valid, true)
     assert.equal(evaluateValidationGate({ mode: 'fast', results: {} }).valid, false)
@@ -2879,9 +2890,13 @@ describe('code-foundry CLI', () => {
     assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'cancelled' } }).failures, [
       { job: 'codeql', result: 'cancelled' },
     ])
-    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { 'release-policy': 'skipped' } }).failures, [
-      { job: 'release-policy', result: 'skipped' },
-    ])
+    // Release mode has no required suite jobs; unexpected results there are
+    // irrelevant because the in-gate release diff step carries the policy.
+    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { ci: 'failure', codeql: 'skipped' } }), {
+      valid: true,
+      required: [],
+      failures: [],
+    })
     assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'weird' } }).failures, [
       { job: 'test', result: 'weird' },
     ])
@@ -3016,22 +3031,27 @@ describe('code-foundry CLI', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     assert.match(caller, /^  validation:\n    name: Validation/m)
     assert.match(orchestrator, /^  gate:\n    name: Gate/m)
-    assert.match(orchestrator, /needs: \[ci, test, security, codeql, release-policy\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, codeql\]/)
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && always\(\)/)
     assert.match(orchestrator, /validation gate/)
     assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
-    assert.match(orchestrator, /FOUNDRY_RELEASE_POLICY: \$\{\{ needs\.release-policy\.result \}\}/)
+    assert.doesNotMatch(orchestrator, /release-policy:/)
+    assert.doesNotMatch(orchestrator, /FOUNDRY_RELEASE_POLICY/)
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
   })
 
   it('runs only the mode-required tier jobs in the orchestrator', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
-    for (const job of ['ci', 'test', 'security', 'codeql', 'release-policy']) {
+    for (const job of ['ci', 'test', 'security', 'codeql']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
+    // No release-policy job exists: the release tier validates the generated
+    // diff as a conditional step inside the gate, so ordinary pull requests
+    // render no skipped release row.
+    assert.doesNotMatch(orchestrator, /^  release-policy:/m)
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/)
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'/)
-    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && inputs.mode == 'release'/)
+    assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
     assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
     assert.match(orchestrator, /validation release_diff/)
     assert.match(orchestrator, /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
@@ -3121,20 +3141,20 @@ describe('code-foundry CLI', () => {
       encoding: 'utf8',
       env: { ...testEnv, ...env },
     })
-    const audit = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    const audit = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success' })
     assert.equal(audit.status, 0)
     assert.match(audit.stdout, /gate passed/)
-    const fast = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    const fast = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped' })
     assert.equal(fast.status, 0)
-    const release = run({ FOUNDRY_MODE: 'release', FOUNDRY_CI: 'skipped', FOUNDRY_TEST: 'skipped', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped', FOUNDRY_RELEASE_POLICY: 'success' })
+    const release = run({ FOUNDRY_MODE: 'release', FOUNDRY_CI: 'skipped', FOUNDRY_TEST: 'skipped', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped' })
     assert.equal(release.status, 0)
-    const failed = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'failure', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    const failed = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'failure', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped' })
     assert.notEqual(failed.status, 0)
     assert.match(failed.stderr, /::error::ci: failure/)
-    const cancelled = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'cancelled', FOUNDRY_RELEASE_POLICY: 'skipped' })
+    const cancelled = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'cancelled' })
     assert.notEqual(cancelled.status, 0)
     assert.match(cancelled.stderr, /::error::codeql: cancelled/)
-    const unknown = run({ FOUNDRY_MODE: 'bogus', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success', FOUNDRY_RELEASE_POLICY: 'success' })
+    const unknown = run({ FOUNDRY_MODE: 'bogus', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success' })
     assert.notEqual(unknown.status, 0)
     assert.match(unknown.stderr, /Unknown validation mode/)
   })
