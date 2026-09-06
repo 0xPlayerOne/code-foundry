@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.1.0...v1.1.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* keep a static check name for the Rust CodeQL job ([#462](https://github.com/0xPlayerOne/code-foundry/issues/462)) ([c8c4a36](https://github.com/0xPlayerOne/code-foundry/commit/c8c4a364a7f77e404159fbe7c08ee695f78c8b61))
+
 ## [1.1.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.6...v1.1.0) (2026-09-06)
 
 
