@@ -1099,8 +1099,9 @@ describe('code-foundry CLI', () => {
     assert.match(dependabot, /target-branch: main/)
     assert.doesNotMatch(dependabot, /target-branch: staging/)
     assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
-    assert.match(dependabot, /dependency-name: 'typescript'\n\s+versions: \['>=7\.0\.0'\]/)
-    assert.match(dependabot, /dependency-name: '@types\/node'\n\s+versions: \['>=23'\]/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: pip/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: npm/)
+    assert.match(dependabot, /package-ecosystem: github-actions/)
 
     // No promotion caller and no promotion prose in the direct topology.
     assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must not emit release-pr.yml')
@@ -1161,6 +1162,10 @@ describe('code-foundry CLI', () => {
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
     assert.match(dependabot, /target-branch: staging/)
     assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: pip/)
+    assert.match(dependabot, /package-ecosystem: npm/)
+    assert.match(dependabot, /dependency-name: 'typescript'\n\s+versions: \['>=7\.0\.0'\]/)
+    assert.match(dependabot, /dependency-name: '@types\/node'\n\s+versions: \['>=23'\]/)
 
     // The promotion caller and staging contribution policy are kept.
     assert.ok(existsSync(join(root, '.github/workflows/release-pr.yml')), 'staging-release sync must emit release-pr.yml')
@@ -1216,6 +1221,21 @@ describe('code-foundry CLI', () => {
 
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
     assert.match(dependabot, /package-ecosystem: cargo/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: npm/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: pip/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('renders pip Dependabot updates only for Python repositories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-python-dependabot-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: python\npackage_manager: none\n')
+    syncRepository({ target: root, source: process.cwd() })
+
+    const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
+    assert.match(dependabot, /package-ecosystem: pip/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: npm/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
     rmSync(root, { recursive: true, force: true })
   })
 
