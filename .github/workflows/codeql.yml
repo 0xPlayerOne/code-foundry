@@ -39,7 +39,9 @@ permissions:
   packages: read
   security-events: write
 
-# Every analyzer emits a successful check, including when its language is not applicable.
+# Analyzers run only for detected languages: the analysis matrix is built from
+# detection, so repositories never see skipped checks for languages they do
+# not use. An empty matrix while analysis is enabled fails the build closed.
 env:
   REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
   REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
@@ -58,6 +60,8 @@ jobs:
     outputs:
       languages: ${{ steps.languages.outputs.languages }}
       enabled: ${{ steps.languages.outputs.enabled }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      rust_matrix: ${{ steps.matrix.outputs.rust_matrix }}
       code_security: ${{ steps.security.outputs.status }}
       actions_available: ${{ steps.languages.outputs.actions_available }}
       actions_changed: ${{ steps.languages.outputs.actions_changed }}
@@ -126,30 +130,65 @@ jobs:
           REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
           REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs codeql
+      - id: matrix
+        name: Build analysis matrix
+        env:
+          MATRIX_ENABLED: ${{ steps.languages.outputs.enabled }}
+          MATRIX_LANGUAGES: ${{ steps.languages.outputs.languages }}
+          MATRIX_SHARDS: ${{ inputs.rust-shards }}
+        run: |
+          node -e '
+          const fs = require("node:fs");
+          const out = process.env.GITHUB_OUTPUT;
+          function append(name, value) { fs.appendFileSync(out, name + "=" + value + "\n"); }
+          const enabled = process.env.MATRIX_ENABLED === "true";
+          if (!enabled) {
+            append("matrix", "[]");
+            append("rust_matrix", "[]");
+          } else {
+            const languages = JSON.parse(process.env.MATRIX_LANGUAGES || "[]");
+            const shards = JSON.parse(process.env.MATRIX_SHARDS || "[\"all\"]");
+            const display = { actions: "Actions", "javascript-typescript": "TypeScript", python: "Python" };
+            const matrix = languages
+              .filter((entry) => entry.language !== "rust")
+              .map((entry) => ({
+                display: display[entry.language] || entry.language,
+                language: entry.language,
+                category: "/language/" + entry.language,
+                build_mode: entry["build-mode"] || "none",
+                changed: entry.changed === true,
+              }));
+            const rust = languages.find((entry) => entry.language === "rust");
+            const rustMatrix = rust
+              ? shards.map((shard) => ({ display: "Rust (" + shard + ")", shard: String(shard), changed: rust.changed === true }))
+              : [];
+            if (!matrix.length && !rustMatrix.length) {
+              console.error("CodeQL analysis matrix is empty while analysis is enabled.");
+              process.exit(1);
+            }
+            append("matrix", JSON.stringify(matrix));
+            append("rust_matrix", JSON.stringify(rustMatrix));
+          }
+          '
 
-  analyze-actions:
-    name: Analyze (Actions)
+  analyze:
+    name: Analyze (${{ matrix.entry.display }})
     needs: detect
-    if: >-
-      vars.CI_BILLING_PAUSED != 'true' &&
-      needs.detect.outputs.enabled == 'true' &&
-      needs.detect.outputs.actions_available == 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && needs.detect.outputs.enabled == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        entry: ${{ fromJson(needs.detect.outputs.matrix || '[]') }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.actions_available == 'true' &&
-          needs.detect.outputs.actions_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.actions_available == 'true' &&
-          needs.detect.outputs.actions_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -161,177 +200,41 @@ jobs:
             src/lib
             src/runtime.mjs
       - name: Install runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.actions_available == 'true' &&
-          needs.detect.outputs.actions_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         run: |
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Analyze
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.actions_available == 'true' &&
-          needs.detect.outputs.actions_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: ./.github/actions/codeql
         with:
-          language: actions
-          build-mode: ${{ needs.detect.outputs.actions_build_mode }}
-          category: /language:actions
+          language: ${{ matrix.entry.language }}
+          build-mode: ${{ matrix.entry.build_mode }}
+          category: ${{ matrix.entry.category }}
       - name: Not applicable
-        if: >-
-          needs.detect.outputs.enabled != 'true' ||
-          needs.detect.outputs.actions_available != 'true' ||
-          needs.detect.outputs.actions_changed != 'true'
-        run: echo "CodeQL Actions analysis is not applicable to this change."
-
-  analyze-typescript:
-    name: Analyze (TypeScript)
-    needs: detect
-    if: >-
-      vars.CI_BILLING_PAUSED != 'true' &&
-      needs.detect.outputs.enabled == 'true' &&
-      needs.detect.outputs.javascript_available == 'true'
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.javascript_available == 'true' &&
-          needs.detect.outputs.javascript_changed == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.javascript_available == 'true' &&
-          needs.detect.outputs.javascript_changed == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            .github/actions
-            src/lib
-            src/runtime.mjs
-      - name: Install runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.javascript_available == 'true' &&
-          needs.detect.outputs.javascript_changed == 'true'
-        run: |
-          mkdir -p .github/actions
-          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
-      - name: Analyze
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.javascript_available == 'true' &&
-          needs.detect.outputs.javascript_changed == 'true'
-        uses: ./.github/actions/codeql
-        with:
-          language: javascript-typescript
-          build-mode: ${{ needs.detect.outputs.javascript_build_mode }}
-          category: /language:javascript-typescript
-      - name: Not applicable
-        if: >-
-          needs.detect.outputs.enabled != 'true' ||
-          needs.detect.outputs.javascript_available != 'true' ||
-          needs.detect.outputs.javascript_changed != 'true'
-        run: echo "CodeQL TypeScript analysis is not applicable to this change."
-
-  analyze-python:
-    name: Analyze (Python)
-    needs: detect
-    if: >-
-      vars.CI_BILLING_PAUSED != 'true' &&
-      needs.detect.outputs.enabled == 'true' &&
-      needs.detect.outputs.python_available == 'true'
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.python_available == 'true' &&
-          needs.detect.outputs.python_changed == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.python_available == 'true' &&
-          needs.detect.outputs.python_changed == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            .github/actions
-            src/lib
-            src/runtime.mjs
-      - name: Install runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.python_available == 'true' &&
-          needs.detect.outputs.python_changed == 'true'
-        run: |
-          mkdir -p .github/actions
-          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
-      - name: Analyze
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.python_available == 'true' &&
-          needs.detect.outputs.python_changed == 'true'
-        uses: ./.github/actions/codeql
-        with:
-          language: python
-          build-mode: ${{ needs.detect.outputs.python_build_mode }}
-          category: /language:python
-      - name: Not applicable
-        if: >-
-          needs.detect.outputs.enabled != 'true' ||
-          needs.detect.outputs.python_available != 'true' ||
-          needs.detect.outputs.python_changed != 'true'
-        run: echo "CodeQL Python analysis is not applicable to this change."
+        if: ${{ matrix.entry.changed != true }}
+        run: echo "CodeQL ${{ matrix.entry.display }} analysis is not applicable to this change."
 
   analyze-rust:
-    name: Analyze (Rust)
+    name: Analyze (${{ matrix.entry.display }})
     needs: detect
-    if: >-
-      vars.CI_BILLING_PAUSED != 'true' &&
-      needs.detect.outputs.enabled == 'true' &&
-      needs.detect.outputs.rust_available == 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && needs.detect.outputs.enabled == 'true' && needs.detect.outputs.rust_available == 'true'
     strategy:
       fail-fast: false
       max-parallel: ${{ inputs.rust-max-parallel }}
       matrix:
-        shard: ${{ fromJson(inputs.rust-shards) }}
+        entry: ${{ fromJson(needs.detect.outputs.rust_matrix || '[]') }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.rust_available == 'true' &&
-          needs.detect.outputs.rust_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.rust_available == 'true' &&
-          needs.detect.outputs.rust_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -343,22 +246,16 @@ jobs:
             src/lib
             src/runtime.mjs
       - name: Install runtime
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.rust_available == 'true' &&
-          needs.detect.outputs.rust_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         run: |
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Configure Rust scope
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.rust_available == 'true' &&
-          needs.detect.outputs.rust_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         id: scope
         env:
-          RUST_SCOPE: ${{ matrix.shard }}
+          RUST_SCOPE: ${{ matrix.entry.shard }}
         run: |
           set -euo pipefail
           scope="$RUST_SCOPE"
@@ -403,10 +300,7 @@ jobs:
           echo "config_file=$config_file" >> "$GITHUB_OUTPUT"
           echo "scope_id=$scope_id" >> "$GITHUB_OUTPUT"
       - name: Initialize
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.rust_available == 'true' &&
-          needs.detect.outputs.rust_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           languages: rust
@@ -414,18 +308,12 @@ jobs:
           config-file: ${{ steps.scope.outputs.config_file }}
           threads: ${{ inputs.rust-threads }}
       - name: Analyze
-        if: >-
-          needs.detect.outputs.enabled == 'true' &&
-          needs.detect.outputs.rust_available == 'true' &&
-          needs.detect.outputs.rust_changed == 'true'
+        if: ${{ matrix.entry.changed == true }}
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           category: /language:rust/${{ steps.scope.outputs.scope_id }}
           upload-database: false
           wait-for-processing: false
       - name: Not applicable
-        if: >-
-          needs.detect.outputs.enabled != 'true' ||
-          needs.detect.outputs.rust_available != 'true' ||
-          needs.detect.outputs.rust_changed != 'true'
-        run: echo "CodeQL Rust analysis is not applicable to this change."
+        if: ${{ matrix.entry.changed != true }}
+        run: echo "CodeQL ${{ matrix.entry.display }} analysis is not applicable to this change."
