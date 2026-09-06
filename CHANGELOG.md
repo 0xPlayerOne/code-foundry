@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.4...v1.0.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* default runtime-ref inputs to the current runtime release ([#454](https://github.com/0xPlayerOne/code-foundry/issues/454)) ([6d77025](https://github.com/0xPlayerOne/code-foundry/commit/6d77025511ca641e98a17c4eed63a24285a48169))
+
 ## [1.0.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.3...v1.0.4) (2026-09-06)
 
 
