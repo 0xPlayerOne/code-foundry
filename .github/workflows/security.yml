@@ -150,7 +150,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           mise-scope: javascript
-          cache-save: ${{ github.event_name != 'pull_request' }}
+          cache-save: ${{ github.event_name == 'push' }}
       - name: Audit dependencies
         if: steps.applicability.outputs.applicable == 'true'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit javascript
@@ -213,7 +213,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           mise-scope: rust
-          cache-save: ${{ github.event_name != 'pull_request' }}
+          cache-save: ${{ github.event_name == 'push' }}
       - name: Install cargo-audit
         if: steps.applicability.outputs.applicable == 'true'
         uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
@@ -279,7 +279,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           mise-scope: python
-          cache-save: ${{ github.event_name != 'pull_request' }}
+          cache-save: ${{ github.event_name == 'push' }}
       - name: Audit dependencies
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit python
 
