@@ -17,7 +17,7 @@ on:
         description: Code Foundry runtime tag or ref.
         required: false
         type: string
-        default: v0.31.12
+        default: v1.0.5
       billing-pause-bypass:
         description: Allow this explicitly dispatched release to run while other CI remains paused.
         required: false
