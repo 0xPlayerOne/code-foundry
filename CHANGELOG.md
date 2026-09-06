@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.3...v1.0.4) (2026-09-06)
+
+
+### Bug Fixes
+
+* **security:** only save caches on push in security workflow ([fff3e25](https://github.com/0xPlayerOne/code-foundry/commit/fff3e251f13e2f3954a20be8da30d4f274f36eba))
+
 ## [1.0.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.2...v1.0.3) (2026-09-06)
 
 
