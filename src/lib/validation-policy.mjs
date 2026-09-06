@@ -19,8 +19,10 @@ export const RELEASE_PLEASE_PREFIX = 'release-please--branches--main'
 
 /** Stable aggregate check name emitted by the validation orchestrator's gate job. */
 export const AGGREGATE_CHECK_NAME = 'Validation / Gate'
-/** Job ids owned by the validation orchestrator. */
-export const VALIDATION_JOBS = ['ci', 'test', 'security', 'codeql', 'release-policy']
+/** Job ids owned by the validation orchestrator. The release tier runs no
+ * suite jobs: its policy executes as a conditional step inside the gate, so
+ * no release-policy job id exists. */
+export const VALIDATION_JOBS = ['ci', 'test', 'security', 'codeql']
 
 /** Events that may trigger canonical validation. */
 export const VALIDATION_EVENTS = ['pull_request', 'schedule', 'workflow_dispatch']
@@ -80,7 +82,10 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql'],
-  release: ['release-policy'],
+  // The release tier requires no suite jobs: the generated release diff
+  // check runs as a conditional step inside the gate itself, so an empty
+  // requirement list is complete and any suite result is irrelevant.
+  release: [],
 }
 
 /**

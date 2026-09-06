@@ -119,43 +119,14 @@ jobs:
       rust-threads: ${{ inputs.rust-threads }}
       rust-max-parallel: ${{ inputs.rust-max-parallel }}
 
-  release-policy:
-    name: Release Policy
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'release'
-    runs-on: ubuntu-slim
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      - name: Checkout runtime
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            src/lib
-            src/runtime.mjs
-      - name: Install runtime
-        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-      - name: Validate generated release diff
-        env:
-          FOUNDRY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          FOUNDRY_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          FOUNDRY_REPOSITORY: ${{ github.repository }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
-
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
+  # The release tier runs no suite jobs: its policy (generated release diff
+  # validation) executes as a conditional step below, so no separate
+  # release-policy job renders skipped checks on ordinary pull requests.
   gate:
     name: Gate
-    needs: [ci, test, security, codeql, release-policy]
+    needs: [ci, test, security, codeql]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
     runs-on: ubuntu-slim
     timeout-minutes: 10
@@ -165,7 +136,6 @@ jobs:
       FOUNDRY_TEST: ${{ needs.test.result }}
       FOUNDRY_SECURITY: ${{ needs.security.result }}
       FOUNDRY_CODEQL: ${{ needs.codeql.result }}
-      FOUNDRY_RELEASE_POLICY: ${{ needs.release-policy.result }}
     steps:
       - name: Checkout runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -179,5 +149,20 @@ jobs:
             src/runtime.mjs
       - name: Install runtime
         run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Checkout consumer repository
+        if: ${{ inputs.mode == 'release' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+      - name: Validate generated release diff
+        if: ${{ inputs.mode == 'release' }}
+        env:
+          FOUNDRY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FOUNDRY_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          FOUNDRY_REPOSITORY: ${{ github.repository }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
       - name: Evaluate aggregate gate
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation gate

@@ -33,15 +33,18 @@ on:
         required: false
         type: number
         default: 1
+        # Retained for caller compatibility. Rust shards share the single
+        # analysis matrix, so no separate throttle applies.
 permissions:
   actions: read
   contents: read
   packages: read
   security-events: write
 
-# Analyzers run only for detected languages: the analysis matrix is built from
-# detection, so repositories never see skipped checks for languages they do
-# not use. An empty matrix while analysis is enabled fails the build closed.
+# Analyzers run only for detected languages: a single analysis matrix is
+# built from detection (Rust shards expand inline), so repositories never
+# see checks — not even skipped ones — for languages they do not use. An
+# empty matrix while analysis is enabled fails the build closed.
 env:
   REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
   REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
@@ -61,7 +64,6 @@ jobs:
       languages: ${{ steps.languages.outputs.languages }}
       enabled: ${{ steps.languages.outputs.enabled }}
       matrix: ${{ steps.matrix.outputs.matrix }}
-      rust_matrix: ${{ steps.matrix.outputs.rust_matrix }}
       code_security: ${{ steps.security.outputs.status }}
       actions_available: ${{ steps.languages.outputs.actions_available }}
       actions_changed: ${{ steps.languages.outputs.actions_changed }}
@@ -144,7 +146,6 @@ jobs:
           const enabled = process.env.MATRIX_ENABLED === "true";
           if (!enabled) {
             append("matrix", "[]");
-            append("rust_matrix", "[]");
           } else {
             const languages = JSON.parse(process.env.MATRIX_LANGUAGES || "[]");
             const shards = JSON.parse(process.env.MATRIX_SHARDS || "[\"all\"]");
@@ -159,15 +160,21 @@ jobs:
                 changed: entry.changed === true,
               }));
             const rust = languages.find((entry) => entry.language === "rust");
-            const rustMatrix = rust
-              ? shards.map((shard) => ({ display: "Rust (" + shard + ")", shard: String(shard), changed: rust.changed === true }))
-              : [];
-            if (!matrix.length && !rustMatrix.length) {
+            for (const shard of rust ? shards : []) {
+              matrix.push({
+                display: String(shard) === "all" ? "Rust" : "Rust (" + shard + ")",
+                language: "rust",
+                category: "/language/rust",
+                build_mode: "none",
+                changed: rust.changed === true,
+                shard: String(shard),
+              });
+            }
+            if (!matrix.length) {
               console.error("CodeQL analysis matrix is empty while analysis is enabled.");
               process.exit(1);
             }
             append("matrix", JSON.stringify(matrix));
-            append("rust_matrix", JSON.stringify(rustMatrix));
           }
           '
 
@@ -206,56 +213,14 @@ jobs:
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Analyze
-        if: ${{ matrix.entry.changed == true }}
+        if: ${{ matrix.entry.changed == true && matrix.entry.language != 'rust' }}
         uses: ./.github/actions/codeql
         with:
           language: ${{ matrix.entry.language }}
           build-mode: ${{ matrix.entry.build_mode }}
           category: ${{ matrix.entry.category }}
-      - name: Not applicable
-        if: ${{ matrix.entry.changed != true }}
-        run: echo "CodeQL ${{ matrix.entry.display }} analysis is not applicable to this change."
-
-  # Rust keeps its own job so shard fan-out stays behind the
-  # rust-max-parallel throttle. The static name matches the pre-matrix check
-  # name; per-shard detail stays in the SARIF category and step logs.
-  analyze-rust:
-    name: Analyze (Rust)
-    needs: detect
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.detect.outputs.enabled == 'true' && needs.detect.outputs.rust_available == 'true'
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ inputs.rust-max-parallel }}
-      matrix:
-        entry: ${{ fromJson(needs.detect.outputs.rust_matrix || '[]') }}
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        if: ${{ matrix.entry.changed == true }}
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Runtime
-        if: ${{ matrix.entry.changed == true }}
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            .github/actions
-            src/lib
-            src/runtime.mjs
-      - name: Install runtime
-        if: ${{ matrix.entry.changed == true }}
-        run: |
-          mkdir -p .github/actions
-          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Configure Rust scope
-        if: ${{ matrix.entry.changed == true }}
+        if: ${{ matrix.entry.changed == true && matrix.entry.language == 'rust' }}
         id: scope
         env:
           RUST_SCOPE: ${{ matrix.entry.shard }}
@@ -303,15 +268,15 @@ jobs:
           echo "config_file=$config_file" >> "$GITHUB_OUTPUT"
           echo "scope_id=$scope_id" >> "$GITHUB_OUTPUT"
       - name: Initialize
-        if: ${{ matrix.entry.changed == true }}
+        if: ${{ matrix.entry.changed == true && matrix.entry.language == 'rust' }}
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           languages: rust
           build-mode: ${{ needs.detect.outputs.rust_build_mode }}
           config-file: ${{ steps.scope.outputs.config_file }}
           threads: ${{ inputs.rust-threads }}
-      - name: Analyze
-        if: ${{ matrix.entry.changed == true }}
+      - name: Analyze Rust
+        if: ${{ matrix.entry.changed == true && matrix.entry.language == 'rust' }}
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           category: /language:rust/${{ steps.scope.outputs.scope_id }}
@@ -319,4 +284,4 @@ jobs:
           wait-for-processing: false
       - name: Not applicable
         if: ${{ matrix.entry.changed != true }}
-        run: echo "CodeQL Rust analysis is not applicable to this change."
+        run: echo "CodeQL ${{ matrix.entry.display }} analysis is not applicable to this change."
