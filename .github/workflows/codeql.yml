@@ -150,12 +150,17 @@ jobs:
             const languages = JSON.parse(process.env.MATRIX_LANGUAGES || "[]");
             const shards = JSON.parse(process.env.MATRIX_SHARDS || "[\"all\"]");
             const display = { actions: "Actions", "javascript-typescript": "TypeScript", python: "Python" };
+            // SARIF categories are the code-scanning baseline keys: they must
+            // stay byte-identical to the pre-matrix values (/language:actions,
+            // /language:javascript-typescript, /language:python,
+            // /language:rust/<scope>). Any rename orphans the main-branch
+            // baseline and breaks alert comparison on every pull request.
             const matrix = languages
               .filter((entry) => entry.language !== "rust")
               .map((entry) => ({
                 display: display[entry.language] || entry.language,
                 language: entry.language,
-                category: "/language/" + entry.language,
+                category: "/language:" + entry.language,
                 build_mode: entry["build-mode"] || "none",
                 changed: entry.changed === true,
               }));
@@ -164,7 +169,7 @@ jobs:
               matrix.push({
                 display: String(shard) === "all" ? "Rust" : "Rust (" + shard + ")",
                 language: "rust",
-                category: "/language/rust",
+                category: "/language:rust",
                 build_mode: "none",
                 changed: rust.changed === true,
                 shard: String(shard),
