@@ -405,8 +405,11 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
 
 /**
  * Dependabot updates land on the repository's integration branch. Direct
- * repositories have no staging branch, so every update targets main. Cargo
- * updates are emitted only when Rust is part of the configured language set.
+ * repositories have no staging branch, so every update targets main. Cargo,
+ * npm, and pip updates are emitted only when Rust, TypeScript, or Python is
+ * part of the configured language set, respectively; weekly updater runs
+ * fail when an ecosystem has no manifests to read, so unconfigured
+ * ecosystems are dropped instead of left to error.
  * @param {string} content
  * @param {Record<string,string>} config
  * @param {string} languages
@@ -415,13 +418,31 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
 function renderDependabot(content, config, languages) {
   let rendered = content
   if (!includesValue(languages, 'rust')) {
-    rendered = rendered
-      .split(/(?=^  - package-ecosystem: )/m)
-      .filter((block) => !block.startsWith('  - package-ecosystem: cargo\n'))
-      .join('')
+    rendered = stripDependabotEcosystem(rendered, 'cargo')
+  }
+  if (!includesValue(languages, 'typescript')) {
+    rendered = stripDependabotEcosystem(rendered, 'npm')
+  }
+  if (!includesValue(languages, 'python')) {
+    rendered = stripDependabotEcosystem(rendered, 'pip')
   }
   if (isStagingRelease(config.git_workflow)) return rendered
   return rendered.replaceAll('target-branch: staging', 'target-branch: main')
+}
+
+/**
+ * Remove one package-ecosystem update block from a dependabot template.
+ * Blocks are split on their leading list marker so removal never disturbs
+ * neighboring ecosystems or the file header.
+ * @param {string} content
+ * @param {string} ecosystem
+ * @returns {string}
+ */
+function stripDependabotEcosystem(content, ecosystem) {
+  return content
+    .split(/(?=^  - package-ecosystem: )/m)
+    .filter((block) => !block.startsWith(`  - package-ecosystem: ${ecosystem}\n`))
+    .join('')
 }
 
 /**
