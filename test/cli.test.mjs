@@ -1239,6 +1239,36 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('scopes CodeQL analysis to detected languages through one matrix', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/codeql.yml'), 'utf8')
+    // One matrix job per concern; no static per-language jobs that would
+    // render skipped checks for languages a repository does not use.
+    assert.match(workflow, /^  analyze:\s*$/m)
+    assert.match(workflow, /^  analyze-rust:\s*$/m)
+    assert.doesNotMatch(workflow, /^  analyze-actions:\s*$/m)
+    assert.doesNotMatch(workflow, /^  analyze-typescript:\s*$/m)
+    assert.doesNotMatch(workflow, /^  analyze-python:\s*$/m)
+    assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.matrix/)
+    assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.rust_matrix/)
+    assert.match(workflow, /max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}/)
+    // An empty matrix while analysis is enabled fails closed instead of
+    // silently skipping every analyzer.
+    assert.match(workflow, /matrix is empty while analysis is enabled/)
+  })
+
+  it('scopes security audits to detected languages through one matrix', () => {
+    const workflow = readFileSync(join(process.cwd(), '.github/workflows/security.yml'), 'utf8')
+    // One matrix job; no static per-language jobs and no python fan-out gate.
+    // The tiered Validation / Gate remains the only aggregate check.
+    assert.match(workflow, /^  dependency-audit:\s*$/m)
+    assert.doesNotMatch(workflow, /^  dependency-audit-javascript:\s*$/m)
+    assert.doesNotMatch(workflow, /^  dependency-audit-rust:\s*$/m)
+    assert.doesNotMatch(workflow, /^  dependency-audit-python:\s*$/m)
+    assert.doesNotMatch(workflow, /python-gate/)
+    assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
+    assert.match(workflow, /^  dependency-review:\s*$/m)
+  })
+
   it('rejects an unknown git_workflow and prunes a stale promotion caller on flip to direct', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-gitflow-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })

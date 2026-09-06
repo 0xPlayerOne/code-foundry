@@ -82,8 +82,13 @@ honor the shared billing pause.
 | Release | Release Please, GitHub release, and optional npm publication |
 
 Use concise job names such as `CI / Format`, `Test / Unit`, and
-`CodeQL / Analyze (Python)`. Required checks should match the jobs actually
-enabled for the repository profile.
+`CodeQL / Analyze (Python)`. Per-language CodeQL analyzers and security
+audits run through a detection-built matrix, so a repository only ever shows
+checks for languages it actually uses; inapplicable languages produce no
+checks instead of skipped rows. Required checks should match the jobs
+actually enabled for the repository profile — in practice, require only the
+aggregate `Validation / Gate`, which fails closed unless every generated
+check succeeds.
 
 ## Merge methods
 
@@ -178,9 +183,13 @@ validation gate. Land changes through the standard `direct` or
 - Solidity: preserve the repository's native Hardhat, Foundry, or specialized
   test/security workflows.
 
-Jobs detect applicability before installing tools. Empty language or test
-surfaces remain successful and visible, so branch protection does not become
-ambiguous for mixed-language repositories.
+Jobs detect applicability before installing tools. Per-language CodeQL and
+security-audit jobs are generated from detection, so empty language surfaces
+produce no checks at all instead of skipped rows; the aggregate
+`Validation / Gate` keeps branch protection unambiguous for mixed-language
+repositories by failing closed unless every generated check succeeds. An
+empty analysis matrix while analysis is enabled fails the build instead of
+silently skipping every analyzer.
 
 ## Security behavior
 

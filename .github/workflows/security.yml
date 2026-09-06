@@ -45,6 +45,7 @@ jobs:
       python: ${{ steps.profile.outputs.python }}
       python_requirements: ${{ steps.profile.outputs.python_requirements }}
       dependency_review: ${{ steps.profile.outputs.dependency_review }}
+      audit_matrix: ${{ steps.matrix.outputs.audit_matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -99,15 +100,49 @@ jobs:
           REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
           REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security profile >> "$GITHUB_OUTPUT"
+      - id: matrix
+        name: Build audit matrix
+        env:
+          MATRIX_JAVASCRIPT: ${{ steps.profile.outputs.javascript }}
+          MATRIX_RUST: ${{ steps.profile.outputs.rust }}
+          MATRIX_PYTHON: ${{ steps.profile.outputs.python }}
+          MATRIX_REQUIREMENTS: ${{ steps.profile.outputs.python_requirements }}
+        run: |
+          node -e '
+          const fs = require("node:fs");
+          const env = process.env;
+          const entries = [];
+          if (env.MATRIX_JAVASCRIPT === "true") entries.push({ display: "JavaScript", language: "javascript" });
+          if (env.MATRIX_RUST === "true") entries.push({ display: "Rust", language: "rust" });
+          if (env.MATRIX_PYTHON === "true") {
+            let requirements = [];
+            try { requirements = JSON.parse(env.MATRIX_REQUIREMENTS || "[]"); } catch (error) { requirements = []; }
+            for (const requirement of requirements.filter((item) => item && item !== "none")) {
+              entries.push({ display: "Python / " + requirement, language: "python", requirement: requirement });
+            }
+          }
+          fs.appendFileSync(env.GITHUB_OUTPUT, "audit_matrix=" + JSON.stringify(entries) + "\n");
+          '
 
-  dependency-audit-javascript:
-    name: Dependency Audit (JavaScript)
+  # Audits run only for detected languages: the audit matrix is built from the
+  # profile, so repositories never see skipped checks for ecosystems they do
+  # not use. An empty matrix skips this job with no per-language rows.
+  dependency-audit:
+    name: Dependency Audit (${{ matrix.entry.display }})
     needs: profile
-    if: ${{ vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success' && needs.profile.outputs.javascript == 'true' }}
+    if: vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        entry: ${{ fromJson(needs.profile.outputs.audit_matrix || '[]') }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
+    env:
+      REPO_FOUNDRY_PYTHON_REQUIREMENT: ${{ matrix.entry.requirement }}
     steps:
-      - name: Checkout
+      - name: Checkout JavaScript
+        if: matrix.entry.language == 'javascript'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -126,43 +161,8 @@ jobs:
             **/yarn.lock
             **/package-lock.json
           sparse-checkout-cone-mode: false
-      - name: Runtime
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            .github/actions
-            src/lib
-            src/runtime.mjs
-      - name: Install runtime
-        run: |
-          mkdir -p .github/actions
-          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
-      - name: Detect
-        id: applicability
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run javascript >> "$GITHUB_OUTPUT"
-      - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
-        uses: ./.github/actions/setup
-        with:
-          mise-scope: javascript
-          cache-save: ${{ github.event_name == 'push' }}
-      - name: Audit dependencies
-        if: steps.applicability.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit javascript
-
-  dependency-audit-rust:
-    name: Dependency Audit (Rust)
-    needs: profile
-    if: ${{ vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success' && needs.profile.outputs.rust == 'true' }}
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
+      - name: Checkout Rust
+        if: matrix.entry.language == 'rust'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -175,73 +175,8 @@ jobs:
             **/Cargo.lock
             **/.cargo/**
           sparse-checkout-cone-mode: false
-      - name: Runtime
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            .github/actions
-            src/lib
-            src/runtime.mjs
-      - name: Install runtime
-        run: |
-          mkdir -p .github/actions
-          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
-      - name: Detect
-        id: applicability
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run rust >> "$GITHUB_OUTPUT"
-      - name: Check Rust
-        id: system-rust
-        if: steps.applicability.outputs.applicable == 'true'
-        shell: bash
-        run: |
-          if command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
-            cargo --version
-            rustc --version
-            echo 'available=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'available=false' >> "$GITHUB_OUTPUT"
-          fi
-      - name: Setup
-        if: >-
-          steps.applicability.outputs.applicable == 'true' &&
-          steps.system-rust.outputs.available != 'true'
-        uses: ./.github/actions/setup
-        with:
-          mise-scope: rust
-          cache-save: ${{ github.event_name == 'push' }}
-      - name: Install cargo-audit
-        if: steps.applicability.outputs.applicable == 'true'
-        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
-        with:
-          tool: cargo-audit
-      - name: Audit dependencies
-        if: steps.applicability.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit rust
-
-  dependency-audit-python:
-    name: Dependency Audit (Python) / ${{ matrix.requirement }}
-    needs: profile
-    if: >-
-      ${{ vars.CI_BILLING_PAUSED != 'true' &&
-      needs.profile.result == 'success' &&
-      needs.profile.outputs.python == 'true' &&
-      needs.profile.outputs.python_requirements != '["none"]' }}
-    strategy:
-      fail-fast: false
-      max-parallel: 8
-      matrix:
-        requirement: ${{ fromJSON(needs.profile.outputs.python_requirements) }}
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 20
-    env:
-      REPO_FOUNDRY_PYTHON_REQUIREMENT: ${{ matrix.requirement }}
-    steps:
-      - name: Checkout
+      - name: Checkout Python
+        if: matrix.entry.language == 'python'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -275,39 +210,71 @@ jobs:
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
-      - name: Setup
+      - name: Detect JavaScript
+        id: applicability-javascript
+        if: matrix.entry.language == 'javascript'
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run javascript >> "$GITHUB_OUTPUT"
+      - name: Detect Rust
+        id: applicability-rust
+        if: matrix.entry.language == 'rust'
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run rust >> "$GITHUB_OUTPUT"
+      - name: Setup JavaScript
+        if: >-
+          matrix.entry.language == 'javascript' &&
+          steps.applicability-javascript.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          mise-scope: javascript
+          cache-save: ${{ github.event_name == 'push' }}
+      - name: Audit JavaScript dependencies
+        if: >-
+          matrix.entry.language == 'javascript' &&
+          steps.applicability-javascript.outputs.applicable == 'true'
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit javascript
+      - name: Check Rust
+        id: system-rust
+        if: >-
+          matrix.entry.language == 'rust' &&
+          steps.applicability-rust.outputs.applicable == 'true'
+        shell: bash
+        run: |
+          if command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
+            cargo --version
+            rustc --version
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup Rust
+        if: >-
+          matrix.entry.language == 'rust' &&
+          steps.applicability-rust.outputs.applicable == 'true' &&
+          steps.system-rust.outputs.available != 'true'
+        uses: ./.github/actions/setup
+        with:
+          mise-scope: rust
+          cache-save: ${{ github.event_name == 'push' }}
+      - name: Install cargo-audit
+        if: >-
+          matrix.entry.language == 'rust' &&
+          steps.applicability-rust.outputs.applicable == 'true'
+        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
+        with:
+          tool: cargo-audit
+      - name: Audit Rust dependencies
+        if: >-
+          matrix.entry.language == 'rust' &&
+          steps.applicability-rust.outputs.applicable == 'true'
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit rust
+      - name: Setup Python
+        if: matrix.entry.language == 'python'
         uses: ./.github/actions/setup
         with:
           mise-scope: python
           cache-save: ${{ github.event_name == 'push' }}
-      - name: Audit dependencies
+      - name: Audit Python dependencies
+        if: matrix.entry.language == 'python'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit python
-
-  dependency-audit-python-gate:
-    name: Dependency Audit (Python)
-    needs: [profile, dependency-audit-python]
-    if: >-
-      ${{ vars.CI_BILLING_PAUSED != 'true' &&
-      always() &&
-      needs.profile.result == 'success' &&
-      needs.profile.outputs.python == 'true' &&
-      needs.profile.outputs.python_requirements != '["none"]' }}
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 5
-    steps:
-      - name: Gate
-        env:
-          PROFILE_RESULT: ${{ needs.profile.result }}
-          AUDIT_RESULT: ${{ needs.dependency-audit-python.result }}
-        run: |
-          if [ "$PROFILE_RESULT" != success ]; then
-            echo "Python audit profile failed: $PROFILE_RESULT" >&2
-            exit 1
-          fi
-          case "$AUDIT_RESULT" in
-            success|skipped) exit 0 ;;
-            *) echo "Python dependency audit failed: $AUDIT_RESULT" >&2; exit 1 ;;
-          esac
 
   dependency-review:
     name: Dependency Review
