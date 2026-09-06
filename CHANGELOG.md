@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.1.1...v1.2.0) (2026-09-06)
+
+
+### Features
+
+* eliminate skipped checks with unified matrices and an in-gate release check ([#465](https://github.com/0xPlayerOne/code-foundry/issues/465)) ([55c3dca](https://github.com/0xPlayerOne/code-foundry/commit/55c3dca7a7d1460830464ec61f9b083d1350e3dd))
+
 ## [1.1.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.1.0...v1.1.1) (2026-09-06)
 
 
