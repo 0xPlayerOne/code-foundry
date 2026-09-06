@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.5...v1.0.6) (2026-09-06)
+
+
+### Bug Fixes
+
+* scope dependabot ecosystems to configured languages ([#457](https://github.com/0xPlayerOne/code-foundry/issues/457)) ([2bb9121](https://github.com/0xPlayerOne/code-foundry/commit/2bb91215de662dfa7a38d0c13cc7af1b5b07d798))
+
 ## [1.0.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.0.4...v1.0.5) (2026-09-06)
 
 
