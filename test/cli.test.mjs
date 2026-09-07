@@ -1646,6 +1646,17 @@ describe('code-foundry CLI', () => {
     // input stays declared for caller compatibility.
     assert.match(workflow, /for \(const shard of rust \? shards : \[\]\)/)
     assert.match(workflow, /sha256.*slice\(0, 12\)/)
+    assert.match(
+      workflow,
+      /ref: \$\{\{ github\.event_name == 'pull_request' && format\('refs\/pull\/\{0\}\/head', github\.event\.pull_request\.number\) \|\| github\.ref \}\}/
+    )
+    assert.match(
+      workflow,
+      /sha: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/
+    )
+    const action = readFileSync(join(process.cwd(), '.github/actions/codeql/action.yml'), 'utf8')
+    assert.match(action, /ref: \$\{\{ github\.event_name == 'pull_request'/)
+    assert.match(action, /sha: \$\{\{ github\.event_name == 'pull_request'/)
     // An empty matrix while analysis is enabled fails closed instead of
     // silently skipping every analyzer.
     assert.match(workflow, /matrix is empty while analysis is enabled/)

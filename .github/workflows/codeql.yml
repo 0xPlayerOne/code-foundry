@@ -285,6 +285,10 @@ jobs:
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           category: /language:rust/${{ steps.scope.outputs.scope_id }}
+          # Keep uploads attached to the PR head rather than the mutable
+          # merge ref used by GitHub's pull_request event.
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
+          sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           upload-database: false
           wait-for-processing: false
       - name: Not applicable
