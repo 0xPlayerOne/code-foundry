@@ -1018,6 +1018,38 @@ describe('code-foundry CLI', () => {
     assert.deepEqual(afterSecond.ignorePatterns, merged.ignorePatterns)
   })
 
+  it('preserves JSONC Oxc configs and consumer category overrides across syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxlint-jsonc-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    const oxlint = `{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "off"
+  },
+  // Repository-owned rules remain active after a baseline sync.
+  "rules": {
+    "typescript/no-explicit-any": "error"
+  },
+  "ignorePatterns": ["node_modules/**", "vendor/**",],
+}
+`
+    writeFileSync(join(root, '.oxlintrc.json'), oxlint)
+
+    const first = syncRepository({ target: root, source: process.cwd() })
+
+    // The baseline is semantically covered by the JSONC consumer config, so
+    // sync preserves its comments and formatter-specific bytes.
+    assert.ok(!first.changed.includes('.oxlintrc.json'))
+    assert.equal(readFileSync(join(root, '.oxlintrc.json'), 'utf8'), oxlint)
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.deepEqual(second.changed, [])
+  })
+
   it('keeps oxfmt-formatted Oxc configs byte-identical across syncs', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxfmt-stable-'))
     mkdirSync(join(root, '.github'), { recursive: true })

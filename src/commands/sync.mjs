@@ -835,6 +835,103 @@ function mergeGitignore(baseline, existing) {
     : baseline
 }
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isJsonObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** @param {string} source @returns {string} */
+function stripJsonComments(source) {
+  const output = []
+  let inString = false
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    const next = source[index + 1]
+    if (inString) {
+      output.push(char)
+      if (char === '\\' && next !== undefined) {
+        output.push(next)
+        index += 1
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      output.push(char)
+      continue
+    }
+    if (char === '/' && next === '/') {
+      output.push(' ', ' ')
+      index += 2
+      while (index < source.length && source[index] !== '\n' && source[index] !== '\r') {
+        output.push(' ')
+        index += 1
+      }
+      index -= 1
+      continue
+    }
+    if (char === '/' && next === '*') {
+      output.push(' ', ' ')
+      index += 2
+      while (index < source.length) {
+        const commentChar = source[index]
+        const commentNext = source[index + 1]
+        if (commentChar === '*' && commentNext === '/') {
+          output.push(' ', ' ')
+          index += 1
+          break
+        }
+        output.push(commentChar === '\n' || commentChar === '\r' ? commentChar : ' ')
+        index += 1
+      }
+      continue
+    }
+    output.push(char)
+  }
+  return output.join('')
+}
+
+/** @param {string} source @returns {string} */
+function stripJsonTrailingCommas(source) {
+  const output = []
+  let inString = false
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (inString) {
+      output.push(char)
+      if (char === '\\') {
+        const escaped = source[index + 1]
+        if (escaped !== undefined) {
+          output.push(escaped)
+          index += 1
+        }
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      output.push(char)
+      continue
+    }
+    if (char === ',') {
+      let nextIndex = index + 1
+      while (/\s/.test(source[nextIndex] ?? '')) nextIndex += 1
+      if (source[nextIndex] === '}' || source[nextIndex] === ']') continue
+    }
+    output.push(char)
+  }
+  return output.join('')
+}
+
+/** @param {string} source @returns {unknown} */
+function parseJsonc(source) {
+  return JSON.parse(stripJsonTrailingCommas(stripJsonComments(source)))
+}
+
 /**
  * Merge a baseline Oxc config (.oxfmtrc.json / .oxlintrc.json) with the
  * consumer's current config. The baseline owns every key it defines, except
@@ -842,7 +939,9 @@ function mergeGitignore(baseline, existing) {
  * migrations or by the repository) are preserved so repeated syncs never
  * churn them. Keys the baseline does not define (e.g. a repository-owned
  * `overrides` block) belong to the consumer and are preserved as well, so
- * a sync never silently drops repository-owned configuration.
+ * a sync never silently drops repository-owned configuration. Consumer
+ * category values are merged last so explicit category overrides survive the
+ * baseline's default category levels.
  *
  * When the merged semantics already match the consumer file, the exact
  * existing bytes are returned untouched: rewriting canonical JSON here
@@ -854,23 +953,28 @@ function mergeIgnorePatternsConfig(baseline, existing) {
   /** @type {Record<string, any>} */
   let consumer = {}
   try {
-    consumer = JSON.parse(existing)
-    if (consumer === null || typeof consumer !== 'object' || Array.isArray(consumer))
-      return baseline
+    const parsed = parseJsonc(existing)
+    if (!isJsonObject(parsed)) return baseline
+    consumer = parsed
   } catch {
     return baseline
   }
   /** @type {Record<string, any>} */
   let config = {}
   try {
-    config = JSON.parse(baseline)
-    if (config === null || typeof config !== 'object' || Array.isArray(config)) return baseline
+    const parsed = parseJsonc(baseline)
+    if (!isJsonObject(parsed)) return baseline
+    config = parsed
   } catch {
     return baseline
   }
   /** @type {Record<string, any>} */
   const merged = { ...config }
   for (const [key, value] of Object.entries(consumer)) {
+    if (key === 'categories' && isJsonObject(merged.categories) && isJsonObject(value)) {
+      merged.categories = { ...merged.categories, ...value }
+      continue
+    }
     if (!(key in merged)) merged[key] = value
   }
   const extra = Array.isArray(consumer.ignorePatterns) ? consumer.ignorePatterns : []
