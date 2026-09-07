@@ -82,10 +82,12 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql'],
-  // The release tier requires no suite jobs: the generated release diff
-  // check runs as a conditional step inside the gate itself, so an empty
-  // requirement list is complete and any suite result is irrelevant.
-  release: [],
+  // The release tier skips the CI/test/security suites (the generated release
+  // diff check runs as a conditional step inside the gate itself) but still
+  // runs CodeQL: repository rulesets that require code scanning results need
+  // a CodeQL analysis of the release pull request's commit, and Release
+  // Please pull requests must not deadlock against that requirement.
+  release: ['codeql'],
 }
 
 /**
