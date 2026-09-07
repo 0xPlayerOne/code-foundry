@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { syncRepository } from './sync.mjs'
+import { readPackageVersion, syncRepository } from './sync.mjs'
 
 /** @typedef {{ path: string, repository: string, runtimeRef: string, dirty: boolean, configured: boolean, gitWorkflow: string }} FleetRepository */
 
@@ -32,6 +32,13 @@ export function discoverRepositories(root) {
 
 /** @param {string} root @param {string} source @param {{ createPr?: boolean, dryRun?: boolean, force?: boolean, version: string, exclude?: string[] }} options */
 export function upgradeFleet(root, source, options) {
+  const sourceVersion = `v${readPackageVersion(source)}`
+  const version = options.version ?? sourceVersion
+  if (options.version && options.version !== sourceVersion) {
+    throw new Error(
+      `fleet upgrade target ${options.version} does not match the runtime source checkout (${sourceVersion}); refresh the code-foundry checkout to ${options.version} before upgrading so the rendered callers and the declared runtime agree.`
+    )
+  }
   const repositories = discoverRepositories(root)
   const report = []
   for (const repository of repositories) {
@@ -80,7 +87,7 @@ export function upgradeFleet(root, source, options) {
       })
       continue
     }
-    report.push(upgradeRepository(repository, source, options.version))
+    report.push(upgradeRepository(repository, source, version))
   }
   console.log(JSON.stringify(report, null, 2))
   return report
@@ -121,7 +128,12 @@ function upgradeRepository(repository, source, version) {
         status: 'skipped',
         reason: add.stderr.trim() || 'unable to create isolated worktree',
       }
-    const result = syncRepository({ target: temporary, source, force: false })
+    const result = syncRepository({
+      target: temporary,
+      source,
+      force: false,
+      runtimeRef: version,
+    })
     const configFile = join(temporary, '.github/code-foundry.yml')
     if (existsSync(configFile)) {
       const current = readFileSync(configFile, 'utf8')

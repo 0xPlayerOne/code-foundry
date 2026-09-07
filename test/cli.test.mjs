@@ -575,6 +575,50 @@ describe('code-foundry CLI', () => {
     }
   })
 
+  it('pins rendered callers and the config to an explicit runtime ref', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-runtime-ref-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: v1.3.2\ngit_workflow: direct\nrelease_merge_strategy: rebase\n'
+    )
+
+    const result = syncRepository({
+      target: root,
+      source: process.cwd(),
+      runtimeRef: 'v1.4.1',
+    })
+    assert.ok(result.changed.includes('.github/code-foundry.yml'))
+    const config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
+    assert.match(config, /^runtime_ref: v1\.4\.1$/m)
+    const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(caller, /validation\.yml@v1\.4\.1/)
+    assert.match(caller, /runtime-ref: v1\.4\.1/)
+    assert.match(caller, /^\s+ref: v1\.4\.1$/m)
+    const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(release, /release\.yml@v1\.4\.1/)
+    assert.doesNotMatch(caller, /v1\.3\.2/)
+  })
+
+  it('preserves intentional non-semver runtime refs during plain syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-runtime-ref-keep-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: main\ngit_workflow: direct\nrelease_merge_strategy: rebase\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /^runtime_ref: main$/m
+    )
+    const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.doesNotMatch(caller, /validation\.yml@v\d+\.\d+\.\d+/)
+  })
+
   it('allows only an explicit manual release to bypass the billing pause', () => {
     const caller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
     const release = readFileSync('.github/workflows/release.yml', 'utf8')

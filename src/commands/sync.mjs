@@ -137,7 +137,11 @@ export function syncRepository(options) {
   const features = configured(config.features, 'all')
   const runtimeRepository = configured(config.runtime_repository, '0xPlayerOne/code-foundry')
   const sourceRuntimeRef = `v${readPackageVersion(source)}`
-  let runtimeRef = configured(config.runtime_ref, sourceRuntimeRef)
+  // An explicit runtime ref (fleet upgrade) is authoritative: the rendered
+  // callers and the config pin must agree with it, otherwise an upgrade would
+  // declare one runtime while shipping another.
+  const targetRuntimeRef = options.runtimeRef ?? sourceRuntimeRef
+  let runtimeRef = options.runtimeRef ?? configured(config.runtime_ref, sourceRuntimeRef)
   const toolchain = configured(config.toolchain, 'auto')
   const overlays = overlayPolicy(target, config)
   const rustCodeql = validateRustCodeqlConfig(config)
@@ -177,15 +181,17 @@ export function syncRepository(options) {
   const changed = []
 
   // Keep normal semver pins current during sync while preserving intentional
-  // refs such as `main`, `staging`, or a custom immutable SHA.
+  // refs such as `main`, `staging`, or a custom immutable SHA. An explicit
+  // runtime ref (fleet upgrade) is authoritative and overrides even those so
+  // the rendered callers and the config pin land on the same runtime.
   if (
     existingConfig.runtime_ref &&
-    /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref) &&
-    existingConfig.runtime_ref !== sourceRuntimeRef
+    existingConfig.runtime_ref !== targetRuntimeRef &&
+    (options.runtimeRef !== undefined || /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref))
   ) {
-    runtimeRef = sourceRuntimeRef
+    runtimeRef = targetRuntimeRef
     const current = readFileSync(configPath, 'utf8')
-    const updated = current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${sourceRuntimeRef}`)
+    const updated = current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${targetRuntimeRef}`)
     if (updated !== current) {
       changed.push('.github/code-foundry.yml')
       writeOrReport(configPath, updated, dryRun)
@@ -1014,7 +1020,7 @@ function renderConfigLine(key, value) {
   return needsQuotes ? `${key}: '${value.replace(/'/g, "''")}'` : `${key}: ${value}`
 }
 /** @param {string} root */
-function readPackageVersion(root) {
+export function readPackageVersion(root) {
   try {
     return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0'
   } catch {
