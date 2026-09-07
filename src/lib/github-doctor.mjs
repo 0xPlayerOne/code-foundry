@@ -109,6 +109,12 @@ export function doctorGithub(root) {
     warnings.push(
       'opencode_security is enabled but OPENCODE_API_KEY is not configured; the optional scan will be skipped.'
     )
+  if (['true', 'auto'].includes(config.opencode_security ?? 'false'))
+    details.credentials.opencodeSecurityConfigured = true
+  details.credentials.opencodeSecurityVariable =
+    ghJson(['variable', 'list', '--repo', repository, '--json', 'name'])?.some(
+      /** @param {{ name?: string }} variable */ (variable) => variable.name === 'OPENCODE_SECURITY'
+    ) ?? false
 
   const prs = ghJson([
     'pr',
