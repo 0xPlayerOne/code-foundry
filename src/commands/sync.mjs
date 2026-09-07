@@ -96,7 +96,7 @@ const legacyFiles = [
   '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
-/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean }} SyncOptions */
+/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean, runtimeRef?: string }} SyncOptions */
 
 /** @param {SyncOptions} options */
 export function syncRepository(options) {
