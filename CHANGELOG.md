@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.3.0...v1.3.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* restore job-level OpenCode scanner call; preserve consumer oxlint ignores on sync ([#473](https://github.com/0xPlayerOne/code-foundry/issues/473)) ([171ac3d](https://github.com/0xPlayerOne/code-foundry/commit/171ac3dc57368a6ad1e21d8b439a34cbbe2eca58))
+
 ## [1.3.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.2.1...v1.3.0) (2026-09-07)
 
 
