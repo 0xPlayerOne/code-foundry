@@ -986,7 +986,7 @@ describe('code-foundry CLI', () => {
     syncRepository({ target: root, source: process.cwd() })
     writeFileSync(
       join(root, '.oxlintrc.json'),
-      '{\n  "$schema": "./node_modules/oxlint/configuration_schema.json",\n  "categories": { "correctness": "error" },\n  "ignorePatterns": ["node_modules/**"]\n}\n'
+      '{\n  "$schema": "./node_modules/oxlint/configuration_schema.json",\n  "categories": { "correctness": "error", "suspicious": "warn" },\n  "ignorePatterns": ["node_modules/**"]\n}\n'
     )
 
     const second = syncRepository({ target: root, source: process.cwd() })
@@ -3865,7 +3865,7 @@ describe('code-foundry CLI', () => {
   it('requires persist-credentials: false for every external checkout action in workflow YAML', () => {
     const workflowFiles = readdirSync('.github/workflows')
       .filter((file) => file.endsWith('.yml'))
-      .sort()
+      .toSorted()
 
     const violations = workflowFiles.flatMap((workflow) => {
       const path = `.github/workflows/${workflow}`

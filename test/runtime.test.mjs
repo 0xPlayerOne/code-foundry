@@ -135,8 +135,8 @@ test('lint prefers the oxlint fallback when an oxlint setup exists', () => {
   assert.doesNotMatch(calls, /eslint/)
 })
 
-test('lint falls back to eslint when only an eslint setup exists', () => {
-  const { root, log } = npmFixture('code-foundry-eslint-fallback-')
+test('lint never invokes eslint even when only an eslint setup exists', () => {
+  const { root, log } = npmFixture('code-foundry-eslint-unsupported-')
   writeFileSync(
     join(root, 'package.json'),
     '{"name":"fixture","private":true,"devDependencies":{"eslint":"^9.0.0"}}\n'
@@ -144,9 +144,24 @@ test('lint falls back to eslint when only an eslint setup exists', () => {
   execFileSync('git', ['add', '.'], { cwd: root })
   const result = runCi(root, 'lint', log)
   assert.equal(result.status ?? 0, 0)
-  const calls = readFileSync(log, 'utf8')
-  assert.match(calls, /--no-install\neslint/)
+  const calls = existsSync(log) ? readFileSync(log, 'utf8') : ''
+  assert.doesNotMatch(calls, /eslint/)
   assert.doesNotMatch(calls, /oxlint/)
+})
+
+test('lint falls back to the repository lint script when oxlint is absent', () => {
+  const { root, log } = npmFixture('code-foundry-script-fallback-')
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"scripts":{"lint":"touch consumer-lint-ran"}}\n'
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+  const result = runCi(root, 'lint', log)
+  assert.equal(result.status ?? 0, 0)
+  assert.equal(existsSync(join(root, 'consumer-lint-ran')), true, 'consumer lint script must run')
+  const calls = existsSync(log) ? readFileSync(log, 'utf8') : ''
+  assert.doesNotMatch(calls, /oxlint/)
+  assert.doesNotMatch(calls, /eslint/)
 })
 
 test('format prefers the oxfmt fallback when an oxfmt setup exists', () => {
@@ -163,8 +178,8 @@ test('format prefers the oxfmt fallback when an oxfmt setup exists', () => {
   assert.doesNotMatch(calls, /prettier/)
 })
 
-test('format falls back to prettier when only prettier is configured', () => {
-  const { root, log } = npmFixture('code-foundry-prettier-fallback-')
+test('format never invokes prettier even when only prettier is configured', () => {
+  const { root, log } = npmFixture('code-foundry-prettier-unsupported-')
   writeFileSync(
     join(root, 'package.json'),
     '{"name":"fixture","private":true,"devDependencies":{"prettier":"^3.9.6"}}\n'
@@ -172,7 +187,7 @@ test('format falls back to prettier when only prettier is configured', () => {
   execFileSync('git', ['add', '.'], { cwd: root })
   const result = runCi(root, 'format', log)
   assert.equal(result.status ?? 0, 0)
-  const calls = readFileSync(log, 'utf8')
-  assert.match(calls, /--no-install\nprettier/)
+  const calls = existsSync(log) ? readFileSync(log, 'utf8') : ''
+  assert.doesNotMatch(calls, /prettier/)
   assert.doesNotMatch(calls, /oxfmt/)
 })

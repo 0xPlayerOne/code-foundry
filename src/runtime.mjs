@@ -328,33 +328,10 @@ function hasDependencyManifest(ecosystem) {
 }
 
 /**
- * Detect repository-owned ESLint setup: an eslint dependency (or script
- * reference), or a tracked flat/legacy config file. Repositories without any
- * of these have nothing for the fallback runner to enforce, so lint skips
- * instead of forcing a network fetch of ESLint in CI.
- * @returns {boolean}
- */
-function hasEslintSetup() {
-  const pkg = readPackage() ?? {}
-  const scripts = pkg.scripts ?? {}
-  const dependencies = {
-    ...pkg.dependencies,
-    ...pkg.devDependencies,
-    ...pkg.optionalDependencies,
-    ...pkg.peerDependencies,
-  }
-  if (dependencies.eslint) return true
-  if (Object.values(scripts).some((value) => /\beslint\b/.test(String(value)))) return true
-  return repositoryTestFiles().some((file) =>
-    /(^|\/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$/.test(file)
-  )
-}
-
-/**
  * Detect repository-owned Oxlint setup: an oxlint dependency (or script
  * reference) or a tracked `.oxlintrc.json` / `oxlint.config.*` file. Oxlint
- * is the baseline's preferred JavaScript linter; the ESLint fallback only
- * runs when no Oxlint setup exists.
+ * is the baseline's preferred JavaScript linter; repositories without one
+ * fall back to their own `lint` script if defined.
  * @returns {boolean}
  */
 function hasOxlintSetup() {
@@ -376,8 +353,8 @@ function hasOxlintSetup() {
 /**
  * Detect repository-owned Oxfmt setup: an oxfmt dependency (or script
  * reference) or a tracked `.oxfmtrc.json` / `oxfmt.config.*` file. Oxfmt is
- * the baseline's preferred JavaScript formatter; the Prettier fallback only
- * runs when no Oxfmt setup exists.
+ * the baseline's formatter; repositories using a different formatter opt out
+ * through their own `format`/`fmt` scripts, which the script fallback honors.
  * @returns {boolean}
  */
 function hasOxfmtSetup() {
@@ -415,12 +392,13 @@ function ci(task) {
     if (
       !scripted &&
       (hasLanguage('typescript') || hasLanguage('javascript')) &&
-      hasRootJavascriptProject()
+      hasRootJavascriptProject() &&
+      hasOxfmtSetup()
     ) {
-      // Oxfmt is the preferred formatter; Prettier remains the fallback for
-      // repositories that have not migrated.
-      if (hasOxfmtSetup()) runTool('oxfmt', ['--check', '.'])
-      else runTool('prettier', ['--check', '.'])
+      // Oxfmt is the baseline's formatter. Repositories that use a different
+      // formatter keep full control through their own `format`/`fmt` scripts,
+      // which the runScript fallback above already honors.
+      runTool('oxfmt', ['--check', '.'])
     }
     if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['format', '--check', '.'])
     if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['fmt', '--check'])
@@ -431,12 +409,13 @@ function ci(task) {
     if (
       !scripted &&
       (hasLanguage('typescript') || hasLanguage('javascript')) &&
-      hasRootJavascriptProject()
+      hasRootJavascriptProject() &&
+      hasOxlintSetup()
     ) {
-      // Oxlint is the preferred linter; ESLint remains the fallback for
-      // repositories that have not migrated.
-      if (hasOxlintSetup()) runTool('oxlint', [])
-      else if (hasEslintSetup()) runTool('eslint', ['.'])
+      // Oxlint is the baseline's linter. Repositories that use a different
+      // linter keep full control through their own `lint` script, which the
+      // runScript fallback above already honors.
+      runTool('oxlint', [])
     }
     if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['check', '.'])
     if (hasLanguage('rust') && hasRootRustProject())

@@ -161,10 +161,17 @@ export function syncRepository(options) {
     )
   }
   const releaseMergeStrategy = configured(config.release_merge_strategy, '')
-  if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
-    throw new Error(
-      `Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase for Release Please version pull requests and never defaults to merge.`
-    )
+  if (includesValue(features, 'release')) {
+    // Staging-release reconciliations depend on rebase promotions and rebase
+    // release commits; the direct topology has no reconciliation step, so it
+    // may also squash Release Please version PRs (a single-commit release PR
+    // squashes to the identical tree, and release-please recommends squash).
+    const allowedReleaseStrategies = workflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
+    if (!allowedReleaseStrategies.includes(releaseMergeStrategy)) {
+      throw new Error(
+        `Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase (or squash in the direct topology) for Release Please version pull requests and never defaults to merge.`
+      )
+    }
   }
   const changed = []
 
@@ -643,7 +650,7 @@ const DIRECT_DOC_REPLACEMENTS = {
     ],
     [
       'This repository uses the `staging-release` workflow: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `staging` with squash merges; promotion and release PRs land on `main` with rebase merges. Re-align `staging` with `main` after a release when needed.',
-      'This repository uses the `direct` workflow: topic branches **squash** directly into `main`, and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `main` with squash merges; release PRs land on `main` with rebase merges. No integration branch exists; all pull requests target `main`.',
+      'This repository uses the `direct` workflow: topic branches **squash** directly into `main`, and the Release Please version PR lands on `main` with the configured `release_merge_strategy` (rebase by default, or squash when opted in). Feature PRs land on `main` with squash merges. No integration branch exists; all pull requests target `main`.',
     ],
   ],
   '.github/CONTRIBUTING.md': [
@@ -661,7 +668,7 @@ const DIRECT_DOC_REPLACEMENTS = {
     ],
     [
       'The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.',
-      'The Git workflow is `direct`: topic branches **squash** directly into `main`, and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other release merge strategy. Feature branches never touch `staging`; repositories with a preview/staging environment opt into `git_workflow: staging-release` explicitly.',
+      'The Git workflow is `direct`: topic branches **squash** directly into `main`, and the Release Please version PR lands on `main` with the configured `release_merge_strategy` (rebase by default, or squash when opted in). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other release merge strategy. Feature branches never touch `staging`; repositories with a preview/staging environment opt into `git_workflow: staging-release` explicitly.',
     ],
     [
       'git switch staging\ngit pull --ff-only origin staging',
@@ -687,7 +694,7 @@ const DIRECT_DOC_REPLACEMENTS = {
     ],
     [
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
-      '| Change | Target | Merge method | Merge gate |\n|----------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| Working branch | `main` | Squash | All applicable required checks pass |\n| Release Please version PR | `main` | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass |',
+      '| Change | Target | Merge method | Merge gate |\n|----------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| Working branch | `main` | Squash | All applicable required checks pass |\n| Release Please version PR | `main` | Configured `release_merge_strategy` (rebase default, or squash in the direct topology) | Validation gate and release policy pass |',
     ],
     ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],
