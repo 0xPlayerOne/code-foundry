@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.4.1...v1.5.0) (2026-09-07)
+
+
+### Features
+
+* **release:** squash release merges, Cloudflare deploy workflow, tooling neutrality ([6a847eb](https://github.com/0xPlayerOne/code-foundry/commit/6a847eb0a3f78dbd343b7b189f32543d621b4b8a))
+
 ## [1.4.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.4.0...v1.4.1) (2026-09-07)
 
 
