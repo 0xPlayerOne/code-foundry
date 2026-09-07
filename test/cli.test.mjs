@@ -931,6 +931,43 @@ describe('code-foundry CLI', () => {
     assert.deepEqual(afterSecond.ignorePatterns, oxfmtConfig.ignorePatterns)
   })
 
+  it('preserves consumer-only oxlint keys across syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxlint-keys-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    writeFileSync(
+      join(root, '.oxlintrc.json'),
+      JSON.stringify(
+        {
+          categories: { correctness: 'error' },
+          ignorePatterns: ['node_modules/**', 'vendor/**'],
+          overrides: [{ files: ['src/**/*.ts'], rules: { 'triple-slash-reference': 'off' } }],
+        },
+        null,
+        2
+      ) + '\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+
+    // The repository-owned overrides block survives the baseline merge.
+    const merged = JSON.parse(readFileSync(join(root, '.oxlintrc.json'), 'utf8'))
+    assert.deepEqual(merged.overrides, [
+      { files: ['src/**/*.ts'], rules: { 'triple-slash-reference': 'off' } },
+    ])
+    assert.ok(merged.ignorePatterns.includes('vendor/**'))
+
+    // Idempotent: a second sync keeps the keys without reporting churn.
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.ok(!second.changed.includes('.oxlintrc.json'), second.changed.join(', '))
+    const afterSecond = JSON.parse(readFileSync(join(root, '.oxlintrc.json'), 'utf8'))
+    assert.deepEqual(afterSecond.overrides, merged.overrides)
+    assert.deepEqual(afterSecond.ignorePatterns, merged.ignorePatterns)
+  })
+
   it('previews legacy caller removal in dry-run without writing files', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-dryrun-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })

@@ -782,32 +782,44 @@ function mergeGitignore(baseline, existing) {
 
 /**
  * Merge a baseline Oxc config (.oxfmtrc.json / .oxlintrc.json) with the
- * consumer's current config. The baseline owns every key except
+ * consumer's current config. The baseline owns every key it defines, except
  * `ignorePatterns`, where consumer-specific patterns (added by sync
  * migrations or by the repository) are preserved so repeated syncs never
- * churn them.
+ * churn them. Keys the baseline does not define (e.g. a repository-owned
+ * `overrides` block) belong to the consumer and are preserved as well, so
+ * a sync never silently drops repository-owned configuration.
  * @param {string} baseline @param {string} existing @returns {string}
  */
 function mergeIgnorePatternsConfig(baseline, existing) {
-  /** @type {string[]} */
-  let extra = []
+  /** @type {Record<string, any>} */
+  let consumer = {}
   try {
-    const parsed = JSON.parse(existing)
-    if (Array.isArray(parsed.ignorePatterns)) extra = parsed.ignorePatterns
+    consumer = JSON.parse(existing)
+    if (consumer === null || typeof consumer !== 'object' || Array.isArray(consumer))
+      return baseline
   } catch {
     return baseline
   }
-  if (extra.length === 0) return baseline
-  let config
+  /** @type {Record<string, any>} */
+  let config = {}
   try {
     config = JSON.parse(baseline)
+    if (config === null || typeof config !== 'object' || Array.isArray(config)) return baseline
   } catch {
     return baseline
   }
+  let preserved = false
+  for (const [key, value] of Object.entries(consumer)) {
+    if (!(key in config)) {
+      config[key] = value
+      preserved = true
+    }
+  }
+  const extra = Array.isArray(consumer.ignorePatterns) ? consumer.ignorePatterns : []
   const base = Array.isArray(config.ignorePatterns) ? config.ignorePatterns : []
   const missing = extra.filter((pattern) => !base.includes(pattern))
-  if (missing.length === 0) return baseline
-  config.ignorePatterns = [...base, ...missing]
+  if (missing.length) config.ignorePatterns = [...base, ...missing]
+  if (!preserved && !missing.length) return baseline
   return `${JSON.stringify(config, null, 2)}\n`
 }
 
