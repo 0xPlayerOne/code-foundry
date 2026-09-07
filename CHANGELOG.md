@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.4.0...v1.4.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **validation:** run CodeQL on the release tier ([e93c36c](https://github.com/0xPlayerOne/code-foundry/commit/e93c36c4be11611117a13aa88212f16b6129f464))
+
 ## [1.4.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.3.2...v1.4.0) (2026-09-07)
 
 
