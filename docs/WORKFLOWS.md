@@ -132,9 +132,11 @@ or replay `staging` safely. `direct` repositories have no reconciliation step:
 releases merge straight into `main` with the configured
 `release_merge_strategy`.
 
-Protect `main` with the aggregate `Validation / Gate` and squash-only pull
-requests. In the `staging-release` topology, protect `staging` the same way
-with a single GitHub Actions integration path. That path uses the
+Protect `main` with the aggregate `Validation / Gate`. Require squash for
+feature/fix pull requests and permit the configured Release Please method:
+rebase in `staging-release`, or rebase/squash in `direct`. In the
+`staging-release` topology, protect `staging` the same way with a single GitHub
+Actions integration path. That path uses the
 GitHub Actions integration token by default, and optionally an SSH deploy key
 when `STAGING_DEPLOY_KEY` is configured. The deploy key is required only when
 a personal-repository ruleset for `staging` enforces a Deploy Key bypass for
