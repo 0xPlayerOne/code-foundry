@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.3.1...v1.3.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* preserve consumer-only Oxc config keys across syncs ([#476](https://github.com/0xPlayerOne/code-foundry/issues/476)) ([07aee3a](https://github.com/0xPlayerOne/code-foundry/commit/07aee3aed2aadeccf9740e1966941281e3f031f4))
+
 ## [1.3.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.3.0...v1.3.1) (2026-09-07)
 
 
