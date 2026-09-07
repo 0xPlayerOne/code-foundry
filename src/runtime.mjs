@@ -28,9 +28,11 @@ function hasRootJavascriptProject() {
 }
 
 function hasRootPythonProject() {
-  return existsSync(resolve(root, 'pyproject.toml')) ||
+  return (
+    existsSync(resolve(root, 'pyproject.toml')) ||
     existsSync(resolve(root, 'uv.lock')) ||
     capture('git', ['ls-files', '*requirements*.txt']) !== ''
+  )
 }
 
 function hasRootRustProject() {
@@ -43,18 +45,25 @@ function hasScript(name) {
 }
 
 function readPackage() {
-  try { return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) } catch { return null }
+  try {
+    return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  } catch {
+    return null
+  }
 }
 
 /** @param {string} task */
 function validation(task) {
   if (task === 'mode') {
-    writeOutput('mode', classifyValidationMode({
-      eventName: process.env.FOUNDRY_EVENT_NAME ?? '',
-      baseRef: process.env.FOUNDRY_BASE_REF ?? '',
-      headRef: process.env.FOUNDRY_HEAD_REF ?? '',
-      stagingMode: config.staging_validation_mode,
-    }))
+    writeOutput(
+      'mode',
+      classifyValidationMode({
+        eventName: process.env.FOUNDRY_EVENT_NAME ?? '',
+        baseRef: process.env.FOUNDRY_BASE_REF ?? '',
+        headRef: process.env.FOUNDRY_HEAD_REF ?? '',
+        stagingMode: config.staging_validation_mode,
+      })
+    )
     return
   }
   if (task === 'gate') {
@@ -78,7 +87,9 @@ function validation(task) {
   }
   if (task === 'release_diff') {
     const baseSha = process.env.FOUNDRY_BASE_SHA ?? ''
-    const changedPaths = baseSha ? capture('git', ['diff', '--name-only', `${baseSha}...HEAD`]).split(/\r?\n/) : []
+    const changedPaths = baseSha
+      ? capture('git', ['diff', '--name-only', `${baseSha}...HEAD`]).split(/\r?\n/)
+      : []
     const result = validateGeneratedReleaseDiff({
       headRef: process.env.FOUNDRY_HEAD_REF ?? '',
       headRepo: process.env.FOUNDRY_HEAD_REPO ?? '',
@@ -117,7 +128,12 @@ function commandExists(command) {
 
 /** @param {string} command @param {string[]} [args] @param {Record<string, unknown>} [options] */
 function run(command, args = [], options = {}) {
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', env: process.env, ...options })
+  const result = spawnSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+    ...options,
+  })
   if (result.error) throw result.error
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
@@ -144,11 +160,16 @@ function taskTestFiles(task) {
 /** @param {string[]} args @returns {[string|null, string[]]} */
 function packageCommand(args) {
   switch (packageManager) {
-    case 'bun': return ['bun', args]
-    case 'pnpm': return ['pnpm', args]
-    case 'yarn': return ['yarn', args]
-    case 'npm': return ['npm', args]
-    default: return [null, args]
+    case 'bun':
+      return ['bun', args]
+    case 'pnpm':
+      return ['pnpm', args]
+    case 'yarn':
+      return ['yarn', args]
+    case 'npm':
+      return ['npm', args]
+    default:
+      return [null, args]
   }
 }
 
@@ -178,11 +199,21 @@ function runTool(tool, args = []) {
 
 function install() {
   if (existsSync(resolve(root, 'package.json'))) {
-    const lock = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].find((file) => existsSync(resolve(root, file)))
+    const lock = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].find(
+      (file) => existsSync(resolve(root, file))
+    )
     if (lock) {
       /** @type {Record<string, [string, string[]]>} */
       const commands = {
-        bun: ['bun', ['install', '--frozen-lockfile', '--ignore-scripts', ...(readPackage()?.workspaces ? ['--force', '--linker=hoisted'] : [])]],
+        bun: [
+          'bun',
+          [
+            'install',
+            '--frozen-lockfile',
+            '--ignore-scripts',
+            ...(readPackage()?.workspaces ? ['--force', '--linker=hoisted'] : []),
+          ],
+        ],
         pnpm: ['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']],
         yarn: ['yarn', ['install', '--immutable']],
         npm: ['npm', ['ci', '--prefer-offline', '--no-audit', '--fund=false']],
@@ -192,7 +223,10 @@ function install() {
       if (packageManager === 'bun') runScript(['prepare', 'postinstall'])
     }
   }
-  if (hasLanguage('python') && (existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'requirements.txt')))) {
+  if (
+    hasLanguage('python') &&
+    (existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'requirements.txt')))
+  ) {
     if (commandExists('uv') && existsSync(resolve(root, 'uv.lock'))) run('uv', ['sync', '--frozen'])
     else {
       if (!existsSync(resolve(root, '.venv'))) run('python', ['-m', 'venv', '.venv'])
@@ -200,8 +234,24 @@ function install() {
       if (spawnSync(python, ['-m', 'pip', '--version'], { stdio: 'ignore' }).status !== 0) {
         run(python, ['-m', 'ensurepip', '--upgrade'])
       }
-      if (existsSync(resolve(root, 'requirements.txt'))) run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements.txt'])
-      if (existsSync(resolve(root, 'requirements-dev.txt'))) run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements-dev.txt'])
+      if (existsSync(resolve(root, 'requirements.txt')))
+        run(python, [
+          '-m',
+          'pip',
+          'install',
+          '--disable-pip-version-check',
+          '-r',
+          'requirements.txt',
+        ])
+      if (existsSync(resolve(root, 'requirements-dev.txt')))
+        run(python, [
+          '-m',
+          'pip',
+          'install',
+          '--disable-pip-version-check',
+          '-r',
+          'requirements-dev.txt',
+        ])
     }
   }
   if (hasLanguage('rust') && existsSync(resolve(root, 'Cargo.toml'))) run('cargo', ['fetch'])
@@ -222,19 +272,29 @@ function relevant(task) {
     e2e: ['test:e2e', 'e2e'],
     smoke: ['test:smoke', 'smoke'],
   }[task]
-  if (scripted && scripted.some((candidate) => hasScript(candidate))) return packageManager !== 'none'
+  if (scripted && scripted.some((candidate) => hasScript(candidate)))
+    return packageManager !== 'none'
   if (task === 'format' || task === 'lint' || task === 'type_check' || task === 'build') {
-    return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) || (rust && hasRootRustProject())
+    return (
+      (js && hasRootJavascriptProject()) ||
+      (python && hasRootPythonProject()) ||
+      (rust && hasRootRustProject())
+    )
   }
   if (['unit', 'integration', 'e2e', 'smoke'].includes(task)) {
-    if (taskTestFiles(/** @type {'unit'|'integration'|'e2e'|'smoke'} */ (task)).length > 0) return true
+    if (taskTestFiles(/** @type {'unit'|'integration'|'e2e'|'smoke'} */ (task)).length > 0)
+      return true
     // A project with inline Rust/Python/JavaScript unit tests is still a unit
     // test target even when it has no conventional test file path. Other
     // categories must have an explicit script or discoverable test files so
     // their workflow jobs become skipped instead of successful no-ops.
     if (task === 'unit') {
-      return (js && hasRootJavascriptProject()) || (python && hasRootPythonProject()) ||
-        (rust && hasRootRustProject()) || (hasLanguage('solidity') && hasRootJavascriptProject())
+      return (
+        (js && hasRootJavascriptProject()) ||
+        (python && hasRootPythonProject()) ||
+        (rust && hasRootRustProject()) ||
+        (hasLanguage('solidity') && hasRootJavascriptProject())
+      )
     }
     return false
   }
@@ -245,34 +305,95 @@ function relevant(task) {
 function hasDependencyManifest(ecosystem) {
   if (ecosystem === 'javascript') {
     const packageJson = readPackage()
-    return ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].some((file) => existsSync(resolve(root, file))) ||
-      Boolean(packageJson && ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].some((group) => Object.keys(packageJson[group] ?? {}).length))
+    return (
+      ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].some((file) =>
+        existsSync(resolve(root, file))
+      ) ||
+      Boolean(
+        packageJson &&
+        ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].some(
+          (group) => Object.keys(packageJson[group] ?? {}).length
+        )
+      )
+    )
   }
   if (ecosystem === 'rust') return existsSync(resolve(root, 'Cargo.toml'))
-  if (ecosystem === 'python') return existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'uv.lock')) || capture('git', ['ls-files', '*requirements*.txt']) !== ''
+  if (ecosystem === 'python')
+    return (
+      existsSync(resolve(root, 'pyproject.toml')) ||
+      existsSync(resolve(root, 'uv.lock')) ||
+      capture('git', ['ls-files', '*requirements*.txt']) !== ''
+    )
   return false
 }
 
 /**
- * Detect repository-owned ESLint setup: a lint script, an eslint dependency
- * (or script reference), or a tracked flat/legacy config file. Repositories
- * without any of these have nothing for the fallback runner to enforce, so
- * lint skips instead of forcing a network fetch of ESLint in CI.
+ * Detect repository-owned ESLint setup: an eslint dependency (or script
+ * reference), or a tracked flat/legacy config file. Repositories without any
+ * of these have nothing for the fallback runner to enforce, so lint skips
+ * instead of forcing a network fetch of ESLint in CI.
  * @returns {boolean}
  */
 function hasEslintSetup() {
   const pkg = readPackage() ?? {}
   const scripts = pkg.scripts ?? {}
-  if (scripts.lint) return true
   const dependencies = {
-    ...(pkg.dependencies ?? {}),
-    ...(pkg.devDependencies ?? {}),
-    ...(pkg.optionalDependencies ?? {}),
-    ...(pkg.peerDependencies ?? {}),
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+    ...pkg.optionalDependencies,
+    ...pkg.peerDependencies,
   }
   if (dependencies.eslint) return true
   if (Object.values(scripts).some((value) => /\beslint\b/.test(String(value)))) return true
-  return repositoryTestFiles().some((file) => /(^|\/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$/.test(file))
+  return repositoryTestFiles().some((file) =>
+    /(^|\/)(\.eslintrc[^/]*|eslint\.config\.[^/]*)$/.test(file)
+  )
+}
+
+/**
+ * Detect repository-owned Oxlint setup: an oxlint dependency (or script
+ * reference) or a tracked `.oxlintrc.json` / `oxlint.config.*` file. Oxlint
+ * is the baseline's preferred JavaScript linter; the ESLint fallback only
+ * runs when no Oxlint setup exists.
+ * @returns {boolean}
+ */
+function hasOxlintSetup() {
+  const pkg = readPackage() ?? {}
+  const scripts = pkg.scripts ?? {}
+  const dependencies = {
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+    ...pkg.optionalDependencies,
+    ...pkg.peerDependencies,
+  }
+  if (dependencies.oxlint) return true
+  if (Object.values(scripts).some((value) => /\boxlint\b/.test(String(value)))) return true
+  return repositoryTestFiles().some((file) =>
+    /(^|\/)(\.oxlintrc\.json|oxlint\.config\.[^/]*)$/.test(file)
+  )
+}
+
+/**
+ * Detect repository-owned Oxfmt setup: an oxfmt dependency (or script
+ * reference) or a tracked `.oxfmtrc.json` / `oxfmt.config.*` file. Oxfmt is
+ * the baseline's preferred JavaScript formatter; the Prettier fallback only
+ * runs when no Oxfmt setup exists.
+ * @returns {boolean}
+ */
+function hasOxfmtSetup() {
+  const pkg = readPackage() ?? {}
+  const scripts = pkg.scripts ?? {}
+  const dependencies = {
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+    ...pkg.optionalDependencies,
+    ...pkg.peerDependencies,
+  }
+  if (dependencies.oxfmt) return true
+  if (Object.values(scripts).some((value) => /\boxfmt\b/.test(String(value)))) return true
+  return repositoryTestFiles().some((file) =>
+    /(^|\/)(\.oxfmtrc\.json|oxfmt\.config\.[^/]*)$/.test(file)
+  )
 }
 
 /** @param {string} task */
@@ -281,23 +402,45 @@ function ci(task) {
   if (task === 'should_run' || task === 'task_profile') {
     const selected = process.argv[4]
     writeOutput('applicable', relevant(selected) ? 'true' : 'false')
-    writeOutput('javascript', (hasLanguage('typescript') || hasLanguage('javascript')) ? 'true' : 'false')
+    writeOutput(
+      'javascript',
+      hasLanguage('typescript') || hasLanguage('javascript') ? 'true' : 'false'
+    )
     writeOutput('python', hasLanguage('python') ? 'true' : 'false')
     writeOutput('rust', hasLanguage('rust') ? 'true' : 'false')
     return
   }
   if (task === 'format') {
     const scripted = runScript(['format:check', 'format', 'fmt'])
-    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject()) runTool('prettier', ['--check', '.'])
+    if (
+      !scripted &&
+      (hasLanguage('typescript') || hasLanguage('javascript')) &&
+      hasRootJavascriptProject()
+    ) {
+      // Oxfmt is the preferred formatter; Prettier remains the fallback for
+      // repositories that have not migrated.
+      if (hasOxfmtSetup()) runTool('oxfmt', ['--check', '.'])
+      else runTool('prettier', ['--check', '.'])
+    }
     if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['format', '--check', '.'])
     if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['fmt', '--check'])
     return
   }
   if (task === 'lint') {
     const scripted = runScript(['lint'])
-    if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject() && hasEslintSetup()) runTool('eslint', ['.'])
+    if (
+      !scripted &&
+      (hasLanguage('typescript') || hasLanguage('javascript')) &&
+      hasRootJavascriptProject()
+    ) {
+      // Oxlint is the preferred linter; ESLint remains the fallback for
+      // repositories that have not migrated.
+      if (hasOxlintSetup()) runTool('oxlint', [])
+      else if (hasEslintSetup()) runTool('eslint', ['.'])
+    }
     if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['check', '.'])
-    if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
+    if (hasLanguage('rust') && hasRootRustProject())
+      run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
     return
   }
   if (task === 'type_check') {
@@ -308,7 +451,8 @@ function ci(task) {
   }
   if (task === 'build') {
     const scripted = runScript(['build'])
-    if (!scripted && hasLanguage('rust') && hasRootRustProject()) run('cargo', ['build', '--all-targets'])
+    if (!scripted && hasLanguage('rust') && hasRootRustProject())
+      run('cargo', ['build', '--all-targets'])
     return
   }
   /** @type {Record<string, string[]>} */
@@ -329,12 +473,18 @@ function ci(task) {
   // use Bun's native runner with only the discovered files for the requested
   // category; this prevents smoke/integration files from being re-run as unit
   // tests and avoids no-op category jobs.
-  if (!scripted && (hasLanguage('typescript') || hasLanguage('javascript') || hasLanguage('solidity')) && hasRootJavascriptProject()) {
+  if (
+    !scripted &&
+    (hasLanguage('typescript') || hasLanguage('javascript') || hasLanguage('solidity')) &&
+    hasRootJavascriptProject()
+  ) {
     if (javascriptTests.length > 0 || task === 'unit') run('bun', ['test', ...javascriptTests])
   }
 
   if (hasLanguage('python') && hasRootPythonProject()) {
-    const python = existsSync(resolve(root, '.venv/bin/python')) ? resolve(root, '.venv/bin/python') : 'python'
+    const python = existsSync(resolve(root, '.venv/bin/python'))
+      ? resolve(root, '.venv/bin/python')
+      : 'python'
     if (pythonTests.length > 0 || task === 'unit') run(python, ['-m', 'pytest', ...pythonTests])
   }
 
@@ -342,7 +492,8 @@ function ci(task) {
     if (task === 'unit') {
       if (existsSync(resolve(root, 'src/lib.rs'))) run('cargo', ['test', '--lib'])
       if (existsSync(resolve(root, 'src/main.rs'))) run('cargo', ['test', '--bin', packageName()])
-      if (!existsSync(resolve(root, 'src/lib.rs')) && !existsSync(resolve(root, 'src/main.rs'))) run('cargo', ['test'])
+      if (!existsSync(resolve(root, 'src/lib.rs')) && !existsSync(resolve(root, 'src/main.rs')))
+        run('cargo', ['test'])
     } else {
       for (const file of rustTests) {
         const match = file.match(/^tests\/(.+)\.rs$/)
@@ -359,7 +510,11 @@ function packageName() {
 
 /** @param {string} file */
 function readFileSafe(file) {
-  try { return readFileSync(file, 'utf8') } catch { return null }
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
 }
 
 /** @param {string} task @param {string} ecosystem */
@@ -368,8 +523,17 @@ function security(task, ecosystem) {
     writeOutput('javascript', hasDependencyManifest('javascript') ? 'true' : 'false')
     writeOutput('rust', hasDependencyManifest('rust') ? 'true' : 'false')
     writeOutput('python', hasDependencyManifest('python') ? 'true' : 'false')
-    const requirements = capture('git', ['ls-files', '*requirements*.txt']).split('\n').filter(Boolean)
-    writeOutput('python_requirements', hasDependencyManifest('python') ? (requirements.length ? requirements : ['project']) : ['none'])
+    const requirements = capture('git', ['ls-files', '*requirements*.txt'])
+      .split('\n')
+      .filter(Boolean)
+    writeOutput(
+      'python_requirements',
+      hasDependencyManifest('python')
+        ? requirements.length
+          ? requirements
+          : ['project']
+        : ['none']
+    )
     writeOutput('dependency_review', featureEnabled('dependency_review') ? 'true' : 'false')
     return
   }
@@ -379,11 +543,16 @@ function security(task, ecosystem) {
   }
   if (ecosystem === 'javascript' && existsSync(resolve(root, 'package.json'))) {
     const ignores = existsSync(resolve(root, '.github/security-audit-allowlist.txt'))
-      ? readFileSync(resolve(root, '.github/security-audit-allowlist.txt'), 'utf8').split(/\r?\n/).filter((line) => line && !line.startsWith('#'))
+      ? readFileSync(resolve(root, '.github/security-audit-allowlist.txt'), 'utf8')
+          .split(/\r?\n/)
+          .filter((line) => line && !line.startsWith('#'))
       : []
     /** @type {Record<string, [string, string[]]>} */
     const commands = {
-      bun: ['bun', ['audit', '--audit-level=high', ...ignores.flatMap((advisory) => ['--ignore', advisory])]],
+      bun: [
+        'bun',
+        ['audit', '--audit-level=high', ...ignores.flatMap((advisory) => ['--ignore', advisory])],
+      ],
       pnpm: ['pnpm', ['audit', '--audit-level', 'high']],
       yarn: ['yarn', ['npm', 'audit', '--all', '--recursive']],
       npm: ['npm', ['audit', '--audit-level=high']],
@@ -391,12 +560,15 @@ function security(task, ecosystem) {
     const command = commands[packageManager]
     if (command) run(command[0], command[1])
   } else if (ecosystem === 'rust' && existsSync(resolve(root, 'Cargo.toml'))) {
-    if (!commandExists('cargo-audit')) run('cargo', ['install', 'cargo-audit', '--locked', '--quiet'])
+    if (!commandExists('cargo-audit'))
+      run('cargo', ['install', 'cargo-audit', '--locked', '--quiet'])
     run('cargo', ['audit'])
   } else if (ecosystem === 'python' && hasDependencyManifest('python')) {
     const requirement = process.env.REPO_FOUNDRY_PYTHON_REQUIREMENT
-    const auditArgs = requirement && !['project', 'none'].includes(requirement) ? ['-r', requirement] : []
-    if (commandExists('uv')) run('uv', ['tool', 'run', '--from', 'pip-audit==2.10.1', 'pip-audit', ...auditArgs])
+    const auditArgs =
+      requirement && !['project', 'none'].includes(requirement) ? ['-r', requirement] : []
+    if (commandExists('uv'))
+      run('uv', ['tool', 'run', '--from', 'pip-audit==2.10.1', 'pip-audit', ...auditArgs])
     else {
       run('python', ['-m', 'pip', 'install', '--quiet', 'pip-audit==2.10.1'])
       run('python', ['-m', 'pip_audit', ...auditArgs])
@@ -418,7 +590,8 @@ function isPublicRepository() {
 }
 
 function codeql() {
-  const enabled = featureEnabled('codeql') &&
+  const enabled =
+    featureEnabled('codeql') &&
     (isPublicRepository() || process.env.REPO_FOUNDRY_CODE_SECURITY === 'enabled')
   writeOutput('enabled', enabled ? 'true' : 'false')
   if (!enabled) {
@@ -432,12 +605,21 @@ function codeql() {
   }
   const available = []
   if (existsSync(resolve(root, '.github/workflows'))) available.push('actions')
-  if (hasLanguage('typescript') || hasLanguage('javascript')) available.push('javascript-typescript')
+  if (hasLanguage('typescript') || hasLanguage('javascript'))
+    available.push('javascript-typescript')
   if (hasLanguage('python')) available.push('python')
   if (hasLanguage('rust')) available.push('rust')
   // Upload every configured language on every analysis run so GitHub can
   // compare pull requests against the base branch's code-scanning config.
-  const languagesJson = available.map((language) => ({ language, name: language === 'javascript-typescript' ? 'TypeScript' : language[0].toUpperCase() + language.slice(1), 'build-mode': 'none', changed: true }))
+  const languagesJson = available.map((language) => ({
+    language,
+    name:
+      language === 'javascript-typescript'
+        ? 'TypeScript'
+        : language[0].toUpperCase() + language.slice(1),
+    'build-mode': 'none',
+    changed: true,
+  }))
   writeOutput('languages', languagesJson)
   for (const language of ['actions', 'javascript-typescript', 'python', 'rust']) {
     const entry = languagesJson.find((item) => item.language === language)
@@ -452,7 +634,14 @@ function codeql() {
 function printProfile(command) {
   if (command === 'get') {
     const key = process.argv[4]
-    console.log(config[key] ?? (key === 'languages' ? languages.join(',') : key === 'package_manager' ? packageManager : ''))
+    console.log(
+      config[key] ??
+        (key === 'languages'
+          ? languages.join(',')
+          : key === 'package_manager'
+            ? packageManager
+            : '')
+    )
     return
   }
   writeOutput('languages', languages.join(','))
@@ -466,9 +655,18 @@ function preCommit() {
   if (!changed) return
   const check = spawnSync('git', ['diff', '--cached', '--check'], { cwd: root, stdio: 'inherit' })
   if (check.status !== 0) process.exit(check.status ?? 1)
-  if (/\.(js|jsx|ts|tsx|json|md|mdx|yml|yaml)$/.test(changed)) { ci('format'); ci('lint') }
-  if (/\.rs$|(^|\/)Cargo\.toml$/.test(changed)) { run('cargo', ['fmt', '--check']); run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings']) }
-  if (/\.py$|(^|\/)(pyproject\.toml|requirements[^/]*\.txt)$/.test(changed)) { runTool('ruff', ['format', '--check', '.']); runTool('ruff', ['check', '.']) }
+  if (/\.(js|jsx|ts|tsx|json|md|mdx|yml|yaml)$/.test(changed)) {
+    ci('format')
+    ci('lint')
+  }
+  if (/\.rs$|(^|\/)Cargo\.toml$/.test(changed)) {
+    run('cargo', ['fmt', '--check'])
+    run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
+  }
+  if (/\.py$|(^|\/)(pyproject\.toml|requirements[^/]*\.txt)$/.test(changed)) {
+    runTool('ruff', ['format', '--check', '.'])
+    runTool('ruff', ['check', '.'])
+  }
 }
 
 const [area, task, ecosystem] = process.argv.slice(2)

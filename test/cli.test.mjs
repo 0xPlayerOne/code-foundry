@@ -2,13 +2,42 @@ import { strict as assert } from 'node:assert'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
-import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { detectLanguages, recommendRunners, resolveProfile } from '../src/lib/profile.mjs'
-import { approvedReleaseFiles, buildReconciliationPullRequestBody, buildReleaseRecoveryPlan, classifyPromotion, classifyReconciliation, reconciliationPullRequestBranch, reconciliationPullRequestTitle, selectGeneratedReleasePrs, selectReconciliationPullRequest, selectReleaseCredential, validateReleasePullRequests } from '../src/lib/release-policy.mjs'
-import { validateCargoLockVersions, validateGeneratedReleaseDiff } from '../src/lib/release-policy.mjs'
-import { buildReleaseConfig, buildReleaseManifest, detectReleasePackages, validateReleaseConfig } from '../src/lib/release-manifest.mjs'
+import {
+  approvedReleaseFiles,
+  buildReconciliationPullRequestBody,
+  buildReleaseRecoveryPlan,
+  classifyPromotion,
+  classifyReconciliation,
+  reconciliationPullRequestBranch,
+  reconciliationPullRequestTitle,
+  selectReconciliationPullRequest,
+  selectReleaseCredential,
+  validateReleasePullRequests,
+} from '../src/lib/release-policy.mjs'
+import {
+  validateCargoLockVersions,
+  validateGeneratedReleaseDiff,
+} from '../src/lib/release-policy.mjs'
+import {
+  buildReleaseConfig,
+  buildReleaseManifest,
+  detectReleasePackages,
+  validateReleaseConfig,
+} from '../src/lib/release-manifest.mjs'
 import {
   AGGREGATE_CHECK_NAME,
   RELEASE_PLEASE_PREFIX,
@@ -20,12 +49,20 @@ import {
   isReleasePleaseHead,
   requiredValidationJobs,
 } from '../src/lib/validation-policy.mjs'
-import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../src/lib/release-hook.mjs'
+import {
+  hasDeliveredHook,
+  releaseDeliveryKey,
+  selectHookDelivery,
+} from '../src/lib/release-hook.mjs'
 import { doctor } from '../src/commands/doctor.mjs'
 import { doctorGithub } from '../src/lib/github-doctor.mjs'
 import { reconcileRelease } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
-import { buildPausedRuleset, buildResumedRuleset, CI_BILLING_REQUIRED_CHECK } from '../src/commands/ci.mjs'
+import {
+  buildPausedRuleset,
+  buildResumedRuleset,
+  CI_BILLING_REQUIRED_CHECK,
+} from '../src/commands/ci.mjs'
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
@@ -106,23 +143,26 @@ function withFakeGh(secretNames, fn) {
   const oldPath = process.env.PATH
   const dir = mkdtempSync(join(tmpdir(), 'code-foundry-gh-'))
   const script = join(dir, 'gh')
-  const payload = secretNames.map((name) => ({ name })).map((entry) => JSON.stringify(entry)).join(',\n')
+  const payload = secretNames
+    .map((name) => ({ name }))
+    .map((entry) => JSON.stringify(entry))
+    .join(',\n')
   writeFileSync(
     script,
     `#!/usr/bin/env bash
 set -euo pipefail
-if [ \"$1\" = \"--version\" ]; then
+if [ "$1" = "--version" ]; then
   echo 'gh version 2.55.0'
   exit 0
 fi
-if [ \"$1\" = \"secret\" ] && [ \"$2\" = \"list\" ]; then
+if [ "$1" = "secret" ] && [ "$2" = "list" ]; then
   cat <<'JSON'
 [${payload}]
 JSON
   exit 0
 fi
-if [ \"$1\" = \"api\" ]; then
-  case \"$2\" in
+if [ "$1" = "api" ]; then
+  case "$2" in
     repos/*/rulesets)
       echo '[]'
       ;;
@@ -144,16 +184,16 @@ if [ \"$1\" = \"api\" ]; then
   esac
   exit 0
 fi
-if [ \"$1\" = \"variable\" ] && [ \"$2\" = \"list\" ]; then
+if [ "$1" = "variable" ] && [ "$2" = "list" ]; then
   echo '[]'
   exit 0
 fi
-if [ \"$1\" = \"pr\" ] && [ \"$2\" = \"list\" ]; then
+if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
   echo '[]'
   exit 0
 fi
 echo '{}'
-`,
+`
   )
   chmodSync(script, 0o755)
   process.env.PATH = `${dir}:${oldPath}`
@@ -225,7 +265,8 @@ function createPolicyBlockedReconcileWorkspace({ withStagingCommit = false } = {
   return { root, remote, run, readRef, commit }
 }
 
-const POLICY_PUSH_FAILURE = 'remote: error: GH007: Your push was rejected by a repository rule.\nremote: error: protected branch hook declined.\nTo github.com/owner/repo.git\n ! [remote rejected] staging -> staging (push declined by rule)'
+const POLICY_PUSH_FAILURE =
+  'remote: error: GH007: Your push was rejected by a repository rule.\nremote: error: protected branch hook declined.\nTo github.com/owner/repo.git\n ! [remote rejected] staging -> staging (push declined by rule)'
 
 /**
  * @param {(git: string) => void} fn
@@ -244,7 +285,7 @@ if [ "$1" = "push" ] && [ "$2" = "origin" ]; then
   exit 1
 fi
 exec ${originalGit} "$@"
-`,
+`
   )
   chmodSync(script, 0o755)
   process.env.PATH = `${toolDir}:${oldPath}`
@@ -279,7 +320,7 @@ for arg in "$@"; do
   esac
 done
 exec ${originalGit} "$@"
-`,
+`
   )
   chmodSync(script, 0o755)
   process.env.PATH = `${toolDir}:${oldPath}`
@@ -377,7 +418,10 @@ function withReconcileGh(seed, fn) {
   const script = join(dir, 'gh')
   const stateFile = join(dir, 'state.json')
   const logFile = join(dir, 'calls.log')
-  writeFileSync(stateFile, JSON.stringify({ prs: seed.prs ?? [], nextNumber: seed.nextNumber ?? 42 }))
+  writeFileSync(
+    stateFile,
+    JSON.stringify({ prs: seed.prs ?? [], nextNumber: seed.nextNumber ?? 42 })
+  )
   writeFileSync(logFile, '')
   writeFileSync(script, fakeReconcileGhSource)
   chmodSync(script, 0o755)
@@ -455,23 +499,27 @@ describe('code-foundry CLI', () => {
 
     const paused = buildPausedRuleset(ruleset)
     assert.deepEqual(
-      paused.ruleset.rules.find((rule) => rule.type === 'required_status_checks').parameters.required_status_checks,
-      [{ context: 'Deploy / Preview', integration_id: 15368 }],
+      paused.ruleset.rules.find((rule) => rule.type === 'required_status_checks').parameters
+        .required_status_checks,
+      [{ context: 'Deploy / Preview', integration_id: 15368 }]
     )
-    assert.deepEqual(paused.backup.checks, [{ context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 }])
-    assert.deepEqual(paused.ruleset.rules.filter((rule) => rule.type !== 'required_status_checks'), [
-      { type: 'deletion' },
-      { type: 'non_fast_forward' },
+    assert.deepEqual(paused.backup.checks, [
+      { context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 },
     ])
+    assert.deepEqual(
+      paused.ruleset.rules.filter((rule) => rule.type !== 'required_status_checks'),
+      [{ type: 'deletion' }, { type: 'non_fast_forward' }]
+    )
 
     const resumed = buildResumedRuleset(paused.ruleset, paused.backup)
     assert.equal(resumed.changed, true)
     assert.deepEqual(
-      resumed.ruleset.rules.find((rule) => rule.type === 'required_status_checks').parameters.required_status_checks,
+      resumed.ruleset.rules.find((rule) => rule.type === 'required_status_checks').parameters
+        .required_status_checks,
       [
         { context: 'Deploy / Preview', integration_id: 15368 },
         { context: CI_BILLING_REQUIRED_CHECK, integration_id: 15368 },
-      ],
+      ]
     )
   })
 
@@ -513,7 +561,7 @@ describe('code-foundry CLI', () => {
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\nfeatures: all\nopencode_security: true\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n',
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nopencode_security: true\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n'
     )
 
     syncRepository({ target: root, source: process.cwd() })
@@ -533,17 +581,34 @@ describe('code-foundry CLI', () => {
 
     assert.match(caller, /release-while-paused:\n\s+description:/)
     assert.match(caller, /release-while-paused:[\s\S]*?type: boolean[\s\S]*?default: false/)
-    assert.match(caller, /if: vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)/)
-    assert.match(caller, /billing-pause-bypass: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true \}\}/)
+    assert.match(
+      caller,
+      /if: vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)/
+    )
+    assert.match(
+      caller,
+      /billing-pause-bypass: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true \}\}/
+    )
 
     assert.match(release, /billing-pause-bypass:\n\s+description:/)
     assert.match(release, /billing-pause-bypass:[\s\S]*?type: boolean[\s\S]*?default: false/)
     for (const job of ['release', 'reconcile', 'post-release', 'npm']) {
-      const block = release.match(new RegExp(`^  ${job}:\\n([\\s\\S]*?)(?=^  [A-Za-z0-9_-]+:|(?![\\s\\S]))`, 'm'))?.[1] ?? ''
-      assert.match(block, /vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true/)
+      const block =
+        release.match(
+          new RegExp(`^  ${job}:\\n([\\s\\S]*?)(?=^  [A-Za-z0-9_-]+:|(?![\\s\\S]))`, 'm')
+        )?.[1] ?? ''
+      assert.match(
+        block,
+        /vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true/
+      )
     }
 
-    for (const file of ['draft-pr_self-ci.yml', 'opencode-security_self-ci.yml', 'release-pr_self-ci.yml', 'validation_self-ci.yml']) {
+    for (const file of [
+      'draft-pr_self-ci.yml',
+      'opencode-security_self-ci.yml',
+      'release-pr_self-ci.yml',
+      'validation_self-ci.yml',
+    ]) {
       const workflow = readFileSync(`.github/workflows/${file}`, 'utf8')
       assert.doesNotMatch(workflow, /release-while-paused|billing-pause-bypass/)
     }
@@ -588,9 +653,21 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, 'scripts'), { recursive: true })
     writeFileSync(join(root, 'sdk/typescript/index.ts'), 'export const value = 1\n')
     writeFileSync(join(root, 'scripts/tool.py'), 'print("tool")\n')
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript,python\npackage_manager: none\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript,python\npackage_manager: none\n'
+    )
 
-    for (const task of ['format', 'lint', 'type_check', 'build', 'unit', 'integration', 'e2e', 'smoke']) {
+    for (const task of [
+      'format',
+      'lint',
+      'type_check',
+      'build',
+      'unit',
+      'integration',
+      'e2e',
+      'smoke',
+    ]) {
       const result = spawnSync(process.execPath, [runtime, 'ci', 'should_run', task], {
         cwd: root,
         encoding: 'utf8',
@@ -609,12 +686,25 @@ describe('code-foundry CLI', () => {
 
     assert.equal(resolveProfile(root).languages, 'none')
     assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /toolchain: auto/)
-    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /codeql_rust_shards: '\["all"\]'/)
-    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /codeql_rust_threads: 1/)
-    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /codeql_rust_max_parallel: 1/)
-    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /post_release_workflow:\n/)
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /codeql_rust_shards: '\["all"\]'/
+    )
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /codeql_rust_threads: 1/
+    )
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /codeql_rust_max_parallel: 1/
+    )
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /post_release_workflow:\n/
+    )
     assert.equal(exists(join(root, 'ruff.toml')), false)
-    assert.equal(exists(join(root, '.prettierrc')), false)
+    assert.equal(exists(join(root, '.oxfmtrc.json')), false)
+    assert.equal(exists(join(root, '.oxlintrc.json')), false)
     assert.match(readFileSync(join(root, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/)
     const validationCaller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     assert.match(validationCaller, /code-foundry\/\.github\/workflows\/validation\.yml@v/)
@@ -635,12 +725,7 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      [
-        'languages: none',
-        'package_manager: none',
-        'license: apache-2.0',
-        '',
-      ].join('\n')
+      ['languages: none', 'package_manager: none', 'license: apache-2.0', ''].join('\n')
     )
 
     syncRepository({ target: root, source: process.cwd() })
@@ -649,7 +734,10 @@ describe('code-foundry CLI', () => {
     assert.match(license, /Version 2\.0, January 2004/)
     assert.match(license, /TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION/)
     assert.doesNotMatch(license, /GNU/)
-    assert.match(readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'), /license: apache-2\.0/)
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /license: apache-2\.0/
+    )
   })
 
   it('rejects unsupported license policies with the supported list', () => {
@@ -657,12 +745,7 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      [
-        'languages: none',
-        'package_manager: none',
-        'license: bsd-3-clause',
-        '',
-      ].join('\n')
+      ['languages: none', 'package_manager: none', 'license: bsd-3-clause', ''].join('\n')
     )
 
     assert.throws(
@@ -684,7 +767,7 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      "languages: rust\npackage_manager: none\ncodeql_rust_shards: '[\"../outside\"]'\n"
+      'languages: rust\npackage_manager: none\ncodeql_rust_shards: \'["../outside"]\'\n'
     )
 
     assert.throws(
@@ -701,7 +784,7 @@ describe('code-foundry CLI', () => {
       [
         'languages: rust',
         'package_manager: none',
-        "codeql_rust_shards: '[\"crates/api\",\"crates/worker\"]'",
+        'codeql_rust_shards: \'["crates/api","crates/worker"]\'',
         'codeql_rust_threads: 4',
         'codeql_rust_max_parallel: 2',
         '',
@@ -740,12 +823,7 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      [
-        'languages: typescript',
-        'package_manager: bun',
-        'runner: ubuntu-latest',
-        '',
-      ].join('\n')
+      ['languages: typescript', 'package_manager: bun', 'runner: ubuntu-latest', ''].join('\n')
     )
 
     syncRepository({ target: root, source: process.cwd() })
@@ -756,11 +834,15 @@ describe('code-foundry CLI', () => {
   it('migrates generated legacy callers and preserves custom workflows byte-for-byte', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-migrate-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
     for (const stem of ['ci', 'test', 'security', 'codeql']) {
       writeFileSync(join(root, `.github/workflows/${stem}.yml`), legacyCaller(stem))
     }
-    const custom = 'name: Deploy\n\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n'
+    const custom =
+      'name: Deploy\n\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n'
     writeFileSync(join(root, '.github/workflows/deploy.yml'), custom)
 
     const result = syncRepository({ target: root, source: process.cwd() })
@@ -780,8 +862,12 @@ describe('code-foundry CLI', () => {
   it('preserves unrecognized legacy-named callers as repository-owned workflows', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-preserve-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
-    const custom = 'name: Custom CI\n\non:\n  pull_request:\n\npermissions:\n  contents: read\n\njobs:\n  ci:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo custom\n'
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    const custom =
+      'name: Custom CI\n\non:\n  pull_request:\n\npermissions:\n  contents: read\n\njobs:\n  ci:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo custom\n'
     writeFileSync(join(root, '.github/workflows/ci.yml'), custom)
 
     syncRepository({ target: root, source: process.cwd() })
@@ -801,37 +887,50 @@ describe('code-foundry CLI', () => {
     assert.equal(readFileSync(join(root, '.github/workflows/deploy.yml'), 'utf8'), 'name: Deploy\n')
   })
 
-  it('keeps repository-owned .prettierignore entries stable across repeated syncs', () => {
-    const root = mkdtempSync(join(tmpdir(), 'code-foundry-prettierignore-idempotent-'))
+  it('migrates prettier configs to oxfmt and preserves repository-owned ignores', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxfmt-migration-'))
     mkdirSync(join(root, '.github'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    writeFileSync(join(root, '.prettierrc'), '{ "semi": false, "printWidth": 100 }\n')
     writeFileSync(
       join(root, '.prettierignore'),
       ['# Local build output', 'dist/', 'coverage/', ''].join('\n')
     )
 
     const first = syncRepository({ target: root, source: process.cwd() })
-    const merged = readFileSync(join(root, '.prettierignore'), 'utf8')
 
+    // Superseded prettier files are removed; the Oxfmt baseline lands.
+    assert.ok(first.changed.includes('.prettierrc'))
     assert.ok(first.changed.includes('.prettierignore'))
-    assert.match(merged, /^# Generated release metadata is intentionally managed by Release Please\.\nCHANGELOG\.md/m)
-    assert.match(merged, /^\.github\/\.code-foundry$/m)
-    assert.match(merged, /^\.github\/actions\/$/m)
-    assert.equal((merged.match(/# Repository-specific rules/g) ?? []).length, 1)
-    assert.match(merged, /# Repository-specific rules\n# Local build output\ndist\/\ncoverage\/$/m)
+    assert.equal(exists(join(root, '.prettierrc')), false)
+    assert.equal(exists(join(root, '.prettierignore')), false)
+    assert.equal(exists(join(root, '.oxfmtrc.json')), true)
+    assert.equal(exists(join(root, '.oxlintrc.json')), true)
 
+    // Repository-owned ignore entries survive inside ignorePatterns.
+    const oxfmtConfig = JSON.parse(readFileSync(join(root, '.oxfmtrc.json'), 'utf8'))
+    assert.ok(oxfmtConfig.ignorePatterns.includes('.github/.code-foundry'))
+    assert.ok(oxfmtConfig.ignorePatterns.includes('.github/actions/'))
+    assert.ok(oxfmtConfig.ignorePatterns.includes('dist/'))
+    assert.ok(oxfmtConfig.ignorePatterns.includes('coverage/'))
+
+    // Idempotent: a second sync must not churn the migrated config.
     const second = syncRepository({ target: root, source: process.cwd() })
-    const afterSecond = readFileSync(join(root, '.prettierignore'), 'utf8')
-
-    assert.ok(!second.changed.includes('.prettierignore'), second.changed.join(', '))
-    assert.equal(afterSecond, merged)
-    assert.equal((afterSecond.match(/# Repository-specific rules/g) ?? []).length, 1)
+    assert.ok(!second.changed.includes('.oxfmtrc.json'), second.changed.join(', '))
+    const afterSecond = JSON.parse(readFileSync(join(root, '.oxfmtrc.json'), 'utf8'))
+    assert.deepEqual(afterSecond.ignorePatterns, oxfmtConfig.ignorePatterns)
   })
 
   it('previews legacy caller removal in dry-run without writing files', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-dryrun-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
     writeFileSync(join(root, '.github/workflows/ci.yml'), legacyCaller('ci'))
 
     const preview = syncRepository({ target: root, source: process.cwd(), dryRun: true })
@@ -848,7 +947,10 @@ describe('code-foundry CLI', () => {
   it('doctor flags stale legacy callers and unpinned or mismatched runtime refs', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-doctor-validation-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
     syncRepository({ target: root, source: process.cwd() })
     const callerPath = join(root, '.github/workflows/validation.yml')
     const captureWarnings = (fn) => {
@@ -856,7 +958,11 @@ describe('code-foundry CLI', () => {
       const warnings = []
       const original = console.warn
       console.warn = (message) => warnings.push(String(message))
-      try { fn() } finally { console.warn = original }
+      try {
+        fn()
+      } finally {
+        console.warn = original
+      }
       return warnings
     }
     const captureErrors = (fn) => {
@@ -864,24 +970,42 @@ describe('code-foundry CLI', () => {
       const errors = []
       const original = console.error
       console.error = (message) => errors.push(String(message))
-      try { fn() } catch { /* doctor throws only a summary; details are in errors */ } finally { console.error = original }
+      try {
+        fn()
+      } catch {
+        /* doctor throws only a summary; details are in errors */
+      } finally {
+        console.error = original
+      }
       return errors
     }
     writeFileSync(join(root, '.github/workflows/ci.yml'), legacyCaller('ci'))
     const stale = captureWarnings(() => doctor(root))
-    assert.ok(stale.some((message) => /stale generated legacy caller ci\.yml/.test(message)), stale.join('\n'))
+    assert.ok(
+      stale.some((message) => /stale generated legacy caller ci\.yml/.test(message)),
+      stale.join('\n')
+    )
 
-    const mismatched = readFileSync(callerPath, 'utf8').replace(/^(\s+)ref: v\d+\.\d+\.\d+$/m, '$1ref: v0.31.0')
+    const mismatched = readFileSync(callerPath, 'utf8').replace(
+      /^(\s+)ref: v\d+\.\d+\.\d+$/m,
+      '$1ref: v0.31.0'
+    )
     writeFileSync(callerPath, mismatched)
     const mismatchErrors = captureErrors(() => doctor(root))
-    assert.ok(mismatchErrors.some((message) => /mismatched runtime refs/.test(message)), mismatchErrors.join('\n'))
+    assert.ok(
+      mismatchErrors.some((message) => /mismatched runtime refs/.test(message)),
+      mismatchErrors.join('\n')
+    )
 
     const unpinned = readFileSync(callerPath, 'utf8')
       .replace(/runtime-ref: v\d+\.\d+\.\d+/, 'runtime-ref: main')
       .replace(/^(\s+)ref: v\d+\.\d+\.\d+$/m, '$1ref: main')
     writeFileSync(callerPath, unpinned)
     const warning = captureWarnings(() => doctor(root))
-    assert.ok(warning.some((message) => /not a released tag/.test(message)), warning.join('\n'))
+    assert.ok(
+      warning.some((message) => /not a released tag/.test(message)),
+      warning.join('\n')
+    )
   })
 
   it('reports CODE_FOUNDRY_TOKEN state in the github doctor', () => {
@@ -925,20 +1049,29 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(draftCallee, /gh pr create/)
 
     const draftCaller = readFileSync('.github/workflows/draft-pr_self-ci.yml', 'utf8')
-    assert.match(draftCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
+    assert.match(
+      draftCaller,
+      /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/
+    )
     assert.doesNotMatch(draftCaller, /RELEASE_PLEASE_TOKEN/)
 
     const releaseCaller = readFileSync('.github/workflows/release-pr_self-ci.yml', 'utf8')
     assert.match(releaseCaller, /on:\n\s+push:\n\s+branches: \[staging\]/)
     assert.match(releaseCaller, /permissions:\n\s+contents: write\n\s+pull-requests: write/)
-    assert.match(releaseCaller, /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
+    assert.match(
+      releaseCaller,
+      /secrets:\n\s+CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/
+    )
     assert.doesNotMatch(releaseCaller, /RELEASE_PLEASE_TOKEN/)
 
     const releaseMainCaller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
     assert.match(releaseMainCaller, /STAGING_DEPLOY_KEY: \$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
 
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
-    assert.match(validationCaller, /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/)
+    assert.match(
+      validationCaller,
+      /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/
+    )
   })
   it('creates draft PRs through REST and falls back from rejected automation tokens', () => {
     const workflow = readFileSync('.github/workflows/draft-pr.yml', 'utf8')
@@ -986,11 +1119,20 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /\|\| 'merge'/)
     assert.match(workflow, /release_merge_strategy=\$\{releaseMergeStrategy\}/)
     assert.match(workflow, /\$\{\{\s*steps\.profile\.outputs\.release_merge_strategy\s*\}\}/)
-    assert.match(workflow, /release_head=\$\(gh pr view \"\$pr\"[\s\S]*--json headRefOid[\s\S]*--jq '\.headRefOid'\)/)
-    assert.match(workflow, /--match-head-commit \"\$release_head\"/)
-    assert.match(workflow, /if \[ -z \"\$release_head\" \]/)
-    assert.match(workflow, /name: Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/)
-    assert.match(workflow, /if: \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/)
+    assert.match(
+      workflow,
+      /release_head=\$\(gh pr view "\$pr"[\s\S]*--json headRefOid[\s\S]*--jq '\.headRefOid'\)/
+    )
+    assert.match(workflow, /--match-head-commit "\$release_head"/)
+    assert.match(workflow, /if \[ -z "\$release_head" \]/)
+    assert.match(
+      workflow,
+      /name: Reconcile\n\s+needs: release\n\s+# A normal promotion push can successfully run Release Please without/
+    )
+    assert.match(
+      workflow,
+      /if: \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/
+    )
     assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
@@ -1006,8 +1148,14 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /gh pr checks "\$pr"[\s\S]*--required/)
     assert.match(workflow, /authoritative required-check gate/)
     assert.match(workflow, /case "\$merge_state" in/)
-    assert.match(workflow, /CLEAN\|UNSTABLE\)\n\s+if \[ "\$mergeable" = MERGEABLE \]; then\n\s+break/)
-    assert.match(workflow, /DIRTY\)\n\s+echo "Release PR #\$pr is not mergeable \(mergeStateStatus=\$merge_state\)/)
+    assert.match(
+      workflow,
+      /CLEAN\|UNSTABLE\)\n\s+if \[ "\$mergeable" = MERGEABLE \]; then\n\s+break/
+    )
+    assert.match(
+      workflow,
+      /DIRTY\)\n\s+echo "Release PR #\$pr is not mergeable \(mergeStateStatus=\$merge_state\)/
+    )
     assert.match(workflow, /\[ "\$mergeable" = CONFLICTING \]/)
     assert.match(workflow, /resolve conflicts before retrying the release/)
     assert.match(workflow, /merge_state=UNKNOWN\n\s+mergeable=UNKNOWN/)
@@ -1015,7 +1163,10 @@ describe('code-foundry CLI', () => {
     // Non-required checks do not block the merge: UNSTABLE with mergeable
     // MERGEABLE is accepted immediately, while BLOCKED, BEHIND, and UNKNOWN
     // keep the guard polling.
-    assert.match(workflow, /\{ \[ "\$merge_state" != CLEAN \] && \[ "\$merge_state" != UNSTABLE \]; \} \|\| \[ "\$mergeable" != MERGEABLE \]/)
+    assert.match(
+      workflow,
+      /\{ \[ "\$merge_state" != CLEAN \] && \[ "\$merge_state" != UNSTABLE \]; \} \|\| \[ "\$mergeable" != MERGEABLE \]/
+    )
 
     // The guard must be bounded: 30 attempts at a 10 second interval, and a
     // useful fail-closed error when the PR never reaches an accepted state.
@@ -1023,7 +1174,10 @@ describe('code-foundry CLI', () => {
     // to empty.
     assert.match(workflow, /for attempt in \$\(seq 1 30\)/)
     assert.match(workflow, /sleep 10/)
-    assert.match(workflow, /did not become mergeable within the mergeability window \(last mergeStateStatus=\$merge_state, mergeable=\$mergeable\)/)
+    assert.match(
+      workflow,
+      /did not become mergeable within the mergeability window \(last mergeStateStatus=\$merge_state, mergeable=\$mergeable\)/
+    )
     assert.match(workflow, /Required checks may still be pending or branch policy blocks the merge/)
     assert.match(workflow, /treat the state as unknown and keep polling/)
 
@@ -1034,7 +1188,10 @@ describe('code-foundry CLI', () => {
     const mergeIndex = workflow.indexOf('gh pr merge "$pr"')
     assert.ok(guardIndex !== -1 && timeoutIndex !== -1 && mergeIndex !== -1)
     assert.ok(guardIndex < timeoutIndex && timeoutIndex < mergeIndex)
-    assert.match(workflow, /gh pr merge "\$pr"[\s\S]*--match-head-commit "\$release_head"[\s\S]*--delete-branch/)
+    assert.match(
+      workflow,
+      /gh pr merge "\$pr"[\s\S]*--match-head-commit "\$release_head"[\s\S]*--delete-branch/
+    )
     assert.doesNotMatch(workflow, /--admin/)
   })
 
@@ -1046,33 +1203,69 @@ describe('code-foundry CLI', () => {
       const errors = []
       const original = console.error
       console.error = (message) => errors.push(String(message))
-      try { fn() } catch { /* doctor throws only a summary; details are in errors */ } finally { console.error = original }
+      try {
+        fn()
+      } catch {
+        /* doctor throws only a summary; details are in errors */
+      } finally {
+        console.error = original
+      }
       return errors
     }
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n'
+    )
     syncRepository({ target: root, source: process.cwd() })
     assert.doesNotThrow(() => doctor(root))
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: merge\nrelease_merge_strategy: merge\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: merge\nrelease_merge_strategy: merge\n'
+    )
     const promotion = captureErrors(() => doctor(root))
-    assert.ok(promotion.some((message) => /merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
-    assert.ok(promotion.some((message) => /release_merge_strategy must be "rebase"/.test(message)), promotion.join('\n'))
-    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported merge_strategy: merge/)
+    assert.ok(
+      promotion.some((message) => /merge_strategy must be "rebase"/.test(message)),
+      promotion.join('\n')
+    )
+    assert.ok(
+      promotion.some((message) => /release_merge_strategy must be "rebase"/.test(message)),
+      promotion.join('\n')
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported merge_strategy: merge/
+    )
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n'
+    )
     const release = captureErrors(() => doctor(root))
-    assert.ok(release.some((message) => /release_merge_strategy must be "rebase"/.test(message)), release.join('\n'))
-    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported release_merge_strategy: squash/)
+    assert.ok(
+      release.some((message) => /release_merge_strategy must be "rebase"/.test(message)),
+      release.join('\n')
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported release_merge_strategy: squash/
+    )
 
     // Release automation is the only consumer of release_merge_strategy;
     // a profile without the release feature never needs the key. merge_strategy
     // is likewise only enforced by the staging-release topology: a direct
     // repository may carry any value (or none) because no promotion exists.
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nfeatures: ci,test\ngit_workflow: staging-release\nmerge_strategy: rebase\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: ci,test\ngit_workflow: staging-release\nmerge_strategy: rebase\n'
+    )
     assert.doesNotThrow(() => syncRepository({ target: root, source: process.cwd() }))
 
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\n'
+    )
     assert.doesNotThrow(() => syncRepository({ target: root, source: process.cwd() }))
     assert.doesNotThrow(() => doctor(root))
     rmSync(root, { recursive: true, force: true })
@@ -1104,7 +1297,10 @@ describe('code-foundry CLI', () => {
     assert.match(dependabot, /package-ecosystem: github-actions/)
 
     // No promotion caller and no promotion prose in the direct topology.
-    assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must not emit release-pr.yml')
+    assert.ok(
+      !existsSync(join(root, '.github/workflows/release-pr.yml')),
+      'direct sync must not emit release-pr.yml'
+    )
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
     assert.doesNotMatch(contributing, /Branch from `staging`/)
@@ -1123,21 +1319,31 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('renders prettier-canonical CONTRIBUTING.md tables for both topologies', () => {
+  it('renders formatter-canonical CONTRIBUTING.md tables for both topologies', () => {
     // Regression: the runtime template and every DIRECT_DOC_REPLACEMENTS
-    // variant must render tables prettier@3.9.6-canonical, otherwise the
-    // fleet Format check fails on the synced document.
-    const content = readFileSync(join(process.cwd(), '.github/CONTRIBUTING.md'), 'utf8')
+    // variant must render tables in the canonical padded form the fleet
+    // formatter produces, otherwise the Format check fails on the synced
+    // document.
     for (const wf of ['staging-release', 'direct']) {
       const root = mkdtempSync(join(tmpdir(), 'code-foundry-canon-'))
       mkdirSync(join(root, '.github/workflows'), { recursive: true })
-      writeFileSync(join(root, '.github/code-foundry.yml'), `languages: typescript\npackage_manager: bun\ngit_workflow: ${wf}\n`)
+      writeFileSync(
+        join(root, '.github/code-foundry.yml'),
+        `languages: typescript\npackage_manager: bun\ngit_workflow: ${wf}\n`
+      )
       syncRepository({ target: root, source: process.cwd() })
       const rendered = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
       // The replacement must actually fire: staging keeps the staging row,
       // direct drops it.
-      assert.strictEqual(rendered.includes('Pull request targeting `staging`'), wf === 'staging-release')
-      assert.strictEqual(rendered.includes('Working branch               | `staging`') || rendered.includes('Working branch | `staging`'), wf === 'staging-release')
+      assert.strictEqual(
+        rendered.includes('Pull request targeting `staging`'),
+        wf === 'staging-release'
+      )
+      assert.strictEqual(
+        rendered.includes('Working branch               | `staging`') ||
+          rendered.includes('Working branch | `staging`'),
+        wf === 'staging-release'
+      )
       // No unpadded separator line may survive: prettier pads markdown tables.
       assert.doesNotMatch(rendered, /\| --- \|/)
       // Idempotent sync must not churn the canonical document.
@@ -1150,7 +1356,10 @@ describe('code-foundry CLI', () => {
   it('renders the staging-release topology when configured', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-staging-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\n'
+    )
     syncRepository({ target: root, source: process.cwd() })
 
     const validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
@@ -1168,7 +1377,10 @@ describe('code-foundry CLI', () => {
     assert.match(dependabot, /dependency-name: '@types\/node'\n\s+versions: \['>=23'\]/)
 
     // The promotion caller and staging contribution policy are kept.
-    assert.ok(existsSync(join(root, '.github/workflows/release-pr.yml')), 'staging-release sync must emit release-pr.yml')
+    assert.ok(
+      existsSync(join(root, '.github/workflows/release-pr.yml')),
+      'staging-release sync must emit release-pr.yml'
+    )
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `staging` and target pull requests at `staging`/)
     rmSync(root, { recursive: true, force: true })
@@ -1216,7 +1428,10 @@ describe('code-foundry CLI', () => {
   it('renders Cargo Dependabot updates only for Rust repositories', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-rust-dependabot-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: rust\npackage_manager: none\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: rust\npackage_manager: none\n'
+    )
     syncRepository({ target: root, source: process.cwd() })
 
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
@@ -1229,7 +1444,10 @@ describe('code-foundry CLI', () => {
   it('renders pip Dependabot updates only for Python repositories', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-python-dependabot-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: python\npackage_manager: none\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: python\npackage_manager: none\n'
+    )
     syncRepository({ target: root, source: process.cwd() })
 
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
@@ -1277,30 +1495,47 @@ describe('code-foundry CLI', () => {
       const output = join(mkdtempSync(join(tmpdir(), 'code-foundry-matrix-out-')), 'github_output')
       const result = spawnSync(process.execPath, [runner], {
         encoding: 'utf8',
-        env: { ...process.env, GITHUB_OUTPUT: output, MATRIX_ENABLED: 'true', MATRIX_LANGUAGES: JSON.stringify(languages), MATRIX_SHARDS: JSON.stringify(shards) },
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: output,
+          MATRIX_ENABLED: 'true',
+          MATRIX_LANGUAGES: JSON.stringify(languages),
+          MATRIX_SHARDS: JSON.stringify(shards),
+        },
       })
       assert.equal(result.status, 0, result.stderr)
-      const values = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map((line) => {
-        const index = line.indexOf('=')
-        return [line.slice(0, index), JSON.parse(line.slice(index + 1))]
-      }))
+      const values = Object.fromEntries(
+        readFileSync(output, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => {
+            const index = line.indexOf('=')
+            return [line.slice(0, index), JSON.parse(line.slice(index + 1))]
+          })
+      )
       return values.matrix
     }
     const entry = (language) => ({ language, 'build-mode': 'none', changed: true })
     assert.deepEqual(
       build([entry('actions'), entry('javascript-typescript')]).map((item) => item.category),
-      ['/language:actions', '/language:javascript-typescript'],
+      ['/language:actions', '/language:javascript-typescript']
     )
     assert.deepEqual(
       build([entry('actions'), entry('python')]).map((item) => item.category),
-      ['/language:actions', '/language:python'],
+      ['/language:actions', '/language:python']
     )
     const rust = build([entry('actions'), entry('rust')])
-    assert.deepEqual(rust.map((item) => item.display), ['Actions', 'Rust'])
+    assert.deepEqual(
+      rust.map((item) => item.display),
+      ['Actions', 'Rust']
+    )
     assert.equal(rust[1].language, 'rust')
     assert.equal(rust[1].shard, 'all')
     const sharded = build([entry('rust')], ['crates/api', 'crates/worker'])
-    assert.deepEqual(sharded.map((item) => item.display), ['Rust (crates/api)', 'Rust (crates/worker)'])
+    assert.deepEqual(
+      sharded.map((item) => item.display),
+      ['Rust (crates/api)', 'Rust (crates/worker)']
+    )
     // The Rust SARIF category keeps its scope suffix at upload time.
     assert.match(workflow, /category: \/language:rust\/\$\{\{ steps\.scope\.outputs\.scope_id \}\}/)
     rmSync(join(runner, '..'), { recursive: true, force: true })
@@ -1320,28 +1555,52 @@ describe('code-foundry CLI', () => {
   })
 
   it('keeps the OpenCode scan to a single job with one skipped row', () => {
-    const workflow = readFileSync(join(process.cwd(), '.github/workflows/opencode-security_self-ci.yml'), 'utf8')
+    const workflow = readFileSync(
+      join(process.cwd(), '.github/workflows/opencode-security_self-ci.yml'),
+      'utf8'
+    )
     // One job: the release-please branch gate stays at the job level so
     // ordinary pull requests render a single skipped check instead of two.
     assert.match(workflow, /^  scan:\n    name: OpenCode Security \/ Scan/m)
     assert.doesNotMatch(workflow, /^  detect:/m)
     assert.match(workflow, /vars\.CI_BILLING_PAUSED != 'true'/)
-    assert.match(workflow, /startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/)
-    assert.match(workflow, /0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@137698ef3545204af8fad00fc8bd64d663c8122e/)
+    assert.match(
+      workflow,
+      /startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
+    )
+    assert.match(
+      workflow,
+      /0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@137698ef3545204af8fad00fc8bd64d663c8122e/
+    )
   })
 
   it('rejects an unknown git_workflow and prunes a stale promotion caller on flip to direct', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-gitflow-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\ngit_workflow: nonsense\n')
-    assert.throws(() => syncRepository({ target: root, source: process.cwd() }), /Unsupported git_workflow: nonsense/)
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: nonsense\n'
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported git_workflow: nonsense/
+    )
 
     // A repository that already carries a generated promotion caller flips to
     // direct: sync must remove the caller so it cannot linger dormant.
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\n')
-    writeFileSync(join(root, '.github/workflows/release-pr.yml'), 'name: Code Foundry\non:\n  push:\n    branches: [staging]\npermissions:\n  contents: write\njobs:\n  release-pr:\n    name: Release PR\n    uses: 0xPlayerOne/code-foundry/.github/workflows/release-pr.yml@v1.2.3\n    with:\n      runtime-repository: 0xPlayerOne/code-foundry\n      runtime-ref: v1.2.3\n    secrets:\n      CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    writeFileSync(
+      join(root, '.github/workflows/release-pr.yml'),
+      'name: Code Foundry\non:\n  push:\n    branches: [staging]\npermissions:\n  contents: write\njobs:\n  release-pr:\n    name: Release PR\n    uses: 0xPlayerOne/code-foundry/.github/workflows/release-pr.yml@v1.2.3\n    with:\n      runtime-repository: 0xPlayerOne/code-foundry\n      runtime-ref: v1.2.3\n    secrets:\n      CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}\n'
+    )
     syncRepository({ target: root, source: process.cwd() })
-    assert.ok(!existsSync(join(root, '.github/workflows/release-pr.yml')), 'direct sync must prune a stale generated promotion caller')
+    assert.ok(
+      !existsSync(join(root, '.github/workflows/release-pr.yml')),
+      'direct sync must prune a stale generated promotion caller'
+    )
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -1359,12 +1618,21 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /auto_merge=false/)
     assert.match(workflow, /name: Normalize generated release PR draft state/)
     assert.match(workflow, /gh pr ready --undo/)
-    assert.match(workflow, /No valid automation token is available \(absent or rejected by GitHub\)/)
+    assert.match(
+      workflow,
+      /No valid automation token is available \(absent or rejected by GitHub\)/
+    )
     assert.match(workflow, /name: Leave release pull request for manual merge/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge != 'true'/)
     assert.match(workflow, /steps\.credentials\.outputs\.auto_merge == 'true'/)
-    assert.match(workflow, /CODE_FOUNDRY_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/)
-    assert.match(workflow, /GH_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/)
+    assert.match(
+      workflow,
+      /CODE_FOUNDRY_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/
+    )
+    assert.match(
+      workflow,
+      /GH_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/
+    )
   })
   it('validates release automation credentials and fails over to the workflow token', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
@@ -1382,7 +1650,10 @@ describe('code-foundry CLI', () => {
     // body is discarded and only the exit status selects the credential.
     const credentialsStep = stepSlice('Detect release credentials')
     assert.match(credentialsStep, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
-    assert.match(credentialsStep, /if \[ "\$HAS_AUTOMATION_TOKEN" = true \] && gh api "repos\/\$\{GITHUB_REPOSITORY\}" --jq '\.full_name' >\/dev\/null 2>&1/)
+    assert.match(
+      credentialsStep,
+      /if \[ "\$HAS_AUTOMATION_TOKEN" = true \] && gh api "repos\/\$\{GITHUB_REPOSITORY\}" --jq '\.full_name' >\/dev\/null 2>&1/
+    )
     assert.match(credentialsStep, /token_source=configured/)
     assert.match(credentialsStep, /token_source=fallback/)
     assert.match(credentialsStep, /::warning title=Release token fallback::/)
@@ -1395,8 +1666,17 @@ describe('code-foundry CLI', () => {
     const configured = credentialsStep.indexOf('token_source=configured')
     const fallback = credentialsStep.indexOf('token_source=fallback')
     const autoMergeFalse = credentialsStep.indexOf('echo "auto_merge=false"')
-    assert.ok(ghProbe !== -1 && autoMergeTrue !== -1 && configured !== -1 && fallback !== -1 && autoMergeFalse !== -1)
-    assert.ok(ghProbe < autoMergeTrue && autoMergeTrue < configured, 'auto_merge=true must follow a successful gh api validation')
+    assert.ok(
+      ghProbe !== -1 &&
+        autoMergeTrue !== -1 &&
+        configured !== -1 &&
+        fallback !== -1 &&
+        autoMergeFalse !== -1
+    )
+    assert.ok(
+      ghProbe < autoMergeTrue && autoMergeTrue < configured,
+      'auto_merge=true must follow a successful gh api validation'
+    )
     assert.ok(autoMergeFalse < fallback, 'fallback selection must follow auto_merge=false')
 
     // The token value must never be echoed, exported to outputs, or otherwise
@@ -1412,19 +1692,31 @@ describe('code-foundry CLI', () => {
     // shell-selected secret, so the selection happens in the if conditions.
     const automationStep = stepSlice('Release Please (automation token)')
     assert.match(automationStep, /id: release_automation/)
-    assert.match(automationStep, /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source == 'configured'/)
+    assert.match(
+      automationStep,
+      /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source == 'configured'/
+    )
     assert.match(automationStep, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
     assert.match(automationStep, /config-file: release-please-config\.json/)
-    assert.match(automationStep, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
+    assert.match(
+      automationStep,
+      /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/
+    )
     assert.doesNotMatch(automationStep, /github\.token/)
 
     const workflowStep = stepSlice('Release Please (workflow token)')
     assert.match(workflowStep, /id: release_workflow/)
-    assert.match(workflowStep, /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source != 'configured'/)
+    assert.match(
+      workflowStep,
+      /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source != 'configured'/
+    )
     assert.match(workflowStep, /token: \$\{\{ github\.token \}\}/)
     assert.match(workflowStep, /config-file: release-please-config\.json/)
     assert.doesNotMatch(workflowStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
-    assert.doesNotMatch(workflow, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/)
+    assert.doesNotMatch(
+      workflow,
+      /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| secrets\.RELEASE_PLEASE_TOKEN \|\| github\.token \}\}/
+    )
 
     // The normalize step keeps the stable release id so job outputs and
     // downstream jobs keep reading steps.release.outputs.* unchanged, and it
@@ -1432,15 +1724,34 @@ describe('code-foundry CLI', () => {
     // the two action steps ran.
     const normalizeStep = stepSlice('Normalize Release Please outputs')
     assert.match(normalizeStep, /id: release/)
-    for (const [source, prefix] of [['release_automation', 'AUTOMATION'], ['release_workflow', 'WORKFLOW']]) {
-      assert.match(normalizeStep, new RegExp(`${prefix}_RELEASE_CREATED: \\$\\{\\{ steps\\.${source}\\.outputs\\.release_created \\}\\}`))
-      assert.match(normalizeStep, new RegExp(`${prefix}_TAG_NAME: \\$\\{\\{ steps\\.${source}\\.outputs\\.tag_name \\}\\}`))
-      assert.match(normalizeStep, new RegExp(`${prefix}_PRS_CREATED: \\$\\{\\{ steps\\.${source}\\.outputs\\.prs_created \\}\\}`))
+    for (const [source, prefix] of [
+      ['release_automation', 'AUTOMATION'],
+      ['release_workflow', 'WORKFLOW'],
+    ]) {
+      assert.match(
+        normalizeStep,
+        new RegExp(
+          `${prefix}_RELEASE_CREATED: \\$\\{\\{ steps\\.${source}\\.outputs\\.release_created \\}\\}`
+        )
+      )
+      assert.match(
+        normalizeStep,
+        new RegExp(`${prefix}_TAG_NAME: \\$\\{\\{ steps\\.${source}\\.outputs\\.tag_name \\}\\}`)
+      )
+      assert.match(
+        normalizeStep,
+        new RegExp(
+          `${prefix}_PRS_CREATED: \\$\\{\\{ steps\\.${source}\\.outputs\\.prs_created \\}\\}`
+        )
+      )
       assert.match(normalizeStep, new RegExp(`release_created=\\$${prefix}_RELEASE_CREATED`))
       assert.match(normalizeStep, new RegExp(`tag_name=\\$${prefix}_TAG_NAME`))
       assert.match(normalizeStep, new RegExp(`prs_created=\\$${prefix}_PRS_CREATED`))
     }
-    assert.match(workflow, /release_created: \$\{\{ steps\.release\.outputs\.release_created \|\| 'false' \}\}/)
+    assert.match(
+      workflow,
+      /release_created: \$\{\{ steps\.release\.outputs\.release_created \|\| 'false' \}\}/
+    )
     assert.match(workflow, /tag_name: \$\{\{ steps\.release\.outputs\.tag_name \}\}/)
     assert.match(workflow, /token_source: \$\{\{ steps\.credentials\.outputs\.token_source \}\}/)
 
@@ -1448,21 +1759,35 @@ describe('code-foundry CLI', () => {
     // edits, validates, and merges generated release PRs: the draft-state step
     // and the merge step must use the identical selection expression, and the
     // post-release job must reuse the release job's token_source output.
-    const selected = /steps\.credentials\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token/
+    const selected =
+      /steps\.credentials\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token/
     const draftStep = stepSlice('Normalize generated release PR draft state')
     const mergeStep = stepSlice('Merge generated version pull requests')
     assert.match(draftStep, new RegExp(`GH_TOKEN: \\$\\{\\{ ${selected.source} \\}\\}`))
     assert.match(mergeStep, new RegExp(`GH_TOKEN: \\$\\{\\{ ${selected.source} \\}\\}`))
     const draftLine = draftStep.split('\n').find((line) => line.includes('GH_TOKEN:'))
     const mergeLine = mergeStep.split('\n').find((line) => line.includes('GH_TOKEN:'))
-    assert.equal(draftLine, mergeLine, 'draft and merge steps must use the same selected credential')
+    assert.equal(
+      draftLine,
+      mergeLine,
+      'draft and merge steps must use the same selected credential'
+    )
     assert.match(draftStep, /AUTO_MERGE: \$\{\{ steps\.credentials\.outputs\.auto_merge \}\}/)
     assert.match(draftStep, /if \[ "\$AUTO_MERGE" = true \]/)
-    assert.doesNotMatch(workflow, /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| github\.token \}\}/)
+    assert.doesNotMatch(
+      workflow,
+      /GH_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \|\| github\.token \}\}/
+    )
 
     const postReleaseEnv = workflow.slice(workflow.indexOf('post-release:\n'))
-    assert.match(postReleaseEnv, /CODE_FOUNDRY_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/)
-    assert.match(postReleaseEnv, /GH_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/)
+    assert.match(
+      postReleaseEnv,
+      /CODE_FOUNDRY_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/
+    )
+    assert.match(
+      postReleaseEnv,
+      /GH_TOKEN: \$\{\{ needs\.release\.outputs\.token_source == 'configured' && \(secrets\.CODE_FOUNDRY_TOKEN\) \|\| github\.token \}\}/
+    )
   })
   it('allows only release metadata during post-release reconciliation', () => {
     const allowed = approvedReleaseFiles({
@@ -1477,7 +1802,11 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed,
       }),
-      { action: 'fast-forward', targetSha: 'main', reason: 'main only added approved release metadata.' },
+      {
+        action: 'fast-forward',
+        targetSha: 'main',
+        reason: 'main only added approved release metadata.',
+      }
     )
     assert.equal(
       classifyReconciliation({
@@ -1487,7 +1816,7 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed,
       }).action,
-      'fail',
+      'fail'
     )
     assert.deepEqual(
       classifyReconciliation({
@@ -1497,7 +1826,11 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed,
       }),
-      { action: 'aligned', targetSha: 'main', reason: 'Branches have different history but identical content.' },
+      {
+        action: 'aligned',
+        targetSha: 'main',
+        reason: 'Branches have different history but identical content.',
+      }
     )
   })
 
@@ -1507,11 +1840,19 @@ describe('code-foundry CLI', () => {
         mainSha: 'main',
         stagingSha: 'staging',
         directChangedPaths: ['CHANGELOG.md', 'Cargo.toml', 'Cargo.lock'],
-        mainOnlyCommits: [{ sha: 'workflow-main', changedPaths: ['.github/workflows/release.yml'] }],
-        stagingOnlyCommits: [{ sha: 'workflow-staging', changedPaths: ['.github/workflows/release.yml'] }],
+        mainOnlyCommits: [
+          { sha: 'workflow-main', changedPaths: ['.github/workflows/release.yml'] },
+        ],
+        stagingOnlyCommits: [
+          { sha: 'workflow-staging', changedPaths: ['.github/workflows/release.yml'] },
+        ],
         allowed: approvedReleaseFiles(),
       }),
-      { action: 'fast-forward', targetSha: 'main', reason: 'Branches differ only by approved release metadata.' },
+      {
+        action: 'fast-forward',
+        targetSha: 'main',
+        reason: 'Branches differ only by approved release metadata.',
+      }
     )
   })
 
@@ -1529,7 +1870,7 @@ describe('code-foundry CLI', () => {
         action: 'fast-forward',
         targetSha: 'main',
         reason: 'main contains validated changes that staging must inherit.',
-      },
+      }
     )
   })
 
@@ -1549,7 +1890,7 @@ describe('code-foundry CLI', () => {
         mainOnly: ['r1'],
         stagingOnly: ['s1'],
         reason: 'staging contains unpromoted commits; replay them onto main.',
-      },
+      }
     )
   })
 
@@ -1563,7 +1904,7 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed,
       }).action,
-      'fail',
+      'fail'
     )
     assert.equal(
       classifyReconciliation({
@@ -1573,7 +1914,7 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [{ sha: 'staging-commit', changedPaths: ['src/feature.ts'] }],
         allowed,
       }).action,
-      'fail',
+      'fail'
     )
   })
 
@@ -1597,7 +1938,7 @@ describe('code-foundry CLI', () => {
         mainOnly: ['release-commit', 'historical-workflow'],
         stagingOnly: ['staging-feature'],
         reason: 'staging contains unpromoted commits; replay them onto main.',
-      },
+      }
     )
   })
 
@@ -1620,7 +1961,7 @@ describe('code-foundry CLI', () => {
         mainOnly: ['main-workflow'],
         stagingOnly: ['staging-feature'],
         reason: 'staging contains unpromoted commits; replay them onto main.',
-      },
+      }
     )
   })
 
@@ -1636,7 +1977,7 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [{ sha: 'staging-feature', changedPaths: ['src/index.ts'] }],
         allowed,
       }).action,
-      'fail',
+      'fail'
     )
   })
 
@@ -1667,7 +2008,7 @@ describe('code-foundry CLI', () => {
         action: 'fast-forward',
         targetSha: run(['rev-parse', 'main']).stdout.trim(),
         reason: 'main contains validated changes that staging must inherit.',
-      },
+      }
     )
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
@@ -1683,7 +2024,7 @@ describe('code-foundry CLI', () => {
         stagingOnlyCommits: [],
         allowed,
       }).action,
-      'fail',
+      'fail'
     )
   })
 
@@ -1739,7 +2080,12 @@ describe('code-foundry CLI', () => {
 
     const beforeMain = readRef('main')
     const beforeStaging = readRef('staging')
-    const plan = reconcileRelease(root, { github: false, dryRun: true, base: 'main', head: 'staging' })
+    const plan = reconcileRelease(root, {
+      github: false,
+      dryRun: true,
+      base: 'main',
+      head: 'staging',
+    })
     assert.equal(plan.action, 'rebase-staging')
     assert.deepEqual(plan.mainOnly, [releaseCommitSha])
     assert.equal(plan.stagingOnly.length, 1)
@@ -1786,10 +2132,13 @@ describe('code-foundry CLI', () => {
     run(['push', '-u', 'origin', 'staging'])
 
     const before = remoteHeadSha(root, 'staging')
-    const plan = withGitHubEnv({
-      GITHUB_REPOSITORY: 'owner/repo',
-      GH_TOKEN: 'token',
-    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    const plan = withGitHubEnv(
+      {
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      },
+      () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+    )
     const after = remoteHeadSha(root, 'staging')
 
     assert.equal(plan.action, 'rebase-staging')
@@ -1839,10 +2188,14 @@ describe('code-foundry CLI', () => {
     run(['push', '-u', 'origin', 'staging'])
 
     const before = remoteHeadSha(root, 'staging')
-    const runReconcile = () => withGitHubEnv({
-      GITHUB_REPOSITORY: 'owner/repo',
-      GH_TOKEN: 'token',
-    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    const runReconcile = () =>
+      withGitHubEnv(
+        {
+          GITHUB_REPOSITORY: 'owner/repo',
+          GH_TOKEN: 'token',
+        },
+        () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+      )
     assert.throws(runReconcile, /conflict|Cherry-pick|replay/)
     const after = remoteHeadSha(root, 'staging')
     assert.equal(before, after)
@@ -1887,9 +2240,14 @@ describe('code-foundry CLI', () => {
     const toolDir = mkdtempSync(join(tmpdir(), 'code-foundry-git-wrapper-'))
     const wrapperScript = join(toolDir, 'git')
     const originalPath = process.env.PATH
-    const originalGitPath = spawnSync('sh', ['-lc', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+    const originalGitPath = spawnSync('sh', ['-lc', 'command -v git'], {
+      encoding: 'utf8',
+    }).stdout.trim()
     const triggerFile = join(toolDir, 'triggered')
-    writeFileSync(wrapperScript, `#!/bin/sh\nif [ \"$1\" = \"push\" ] && [ \"$2\" = \"origin\" ] && [ ! -f \"$TRIGGER_FILE\" ]; then\n  printf 1 > \"$TRIGGER_FILE\"\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" checkout -q staging\n  printf 'export const concurrent = true\\n' > \"$REPO_ROOT/src/concurrent.ts\"\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" add src/concurrent.ts\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" commit -m 'chore: concurrent staging update'\n  \"$ORIGINAL_GIT\" -C \"$REPO_ROOT\" push -q origin staging\nfi\nexec \"$ORIGINAL_GIT\" \"$@\"\n`)
+    writeFileSync(
+      wrapperScript,
+      `#!/bin/sh\nif [ "$1" = "push" ] && [ "$2" = "origin" ] && [ ! -f "$TRIGGER_FILE" ]; then\n  printf 1 > "$TRIGGER_FILE"\n  "$ORIGINAL_GIT" -C "$REPO_ROOT" checkout -q staging\n  printf 'export const concurrent = true\\n' > "$REPO_ROOT/src/concurrent.ts"\n  "$ORIGINAL_GIT" -C "$REPO_ROOT" add src/concurrent.ts\n  "$ORIGINAL_GIT" -C "$REPO_ROOT" commit -m 'chore: concurrent staging update'\n  "$ORIGINAL_GIT" -C "$REPO_ROOT" push -q origin staging\nfi\nexec "$ORIGINAL_GIT" "$@"\n`
+    )
     chmodSync(wrapperScript, 0o755)
     process.env.TRIGGER_FILE = triggerFile
     process.env.ORIGINAL_GIT = originalGitPath
@@ -1899,10 +2257,13 @@ describe('code-foundry CLI', () => {
     const before = remoteHeadSha(root, 'staging')
     let plan
     try {
-      plan = withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+      plan = withGitHubEnv(
+        {
+          GITHUB_REPOSITORY: 'owner/repo',
+          GH_TOKEN: 'token',
+        },
+        () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+      )
     } finally {
       process.env.PATH = originalPath
       delete process.env.TRIGGER_FILE
@@ -1950,17 +2311,21 @@ describe('code-foundry CLI', () => {
     run(['checkout', '-q', 'staging'])
     run(['push', '-u', 'origin', 'staging'])
 
-    const failure = 'fatal: Authentication failed for https://abc123:secrets@github.com/owner/repo.git/'
-    const runReconcile = () => withFakeGitPushFailure(
-      () => withGitHubEnv(
-        {
-          GITHUB_REPOSITORY: 'owner/repo',
-          GH_TOKEN: 'token',
-        },
-        () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }),
-      ),
-      failure,
-    )
+    const failure =
+      'fatal: Authentication failed for https://abc123:secrets@github.com/owner/repo.git/'
+    const runReconcile = () =>
+      withFakeGitPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        failure
+      )
 
     let caught
     try {
@@ -2008,8 +2373,14 @@ describe('code-foundry CLI', () => {
   })
 
   it('keeps reconciliation pull request metadata deterministic and reuse-safe', () => {
-    assert.equal(reconciliationPullRequestBranch('main', 'staging'), 'code-foundry/reconcile/main-to-staging')
-    assert.equal(reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }), 'chore(staging): reconcile release metadata from main')
+    assert.equal(
+      reconciliationPullRequestBranch('main', 'staging'),
+      'code-foundry/reconcile/main-to-staging'
+    )
+    assert.equal(
+      reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
+      'chore(staging): reconcile release metadata from main'
+    )
     const body = buildReconciliationPullRequestBody({
       sourceBase: 'main',
       targetHead: 'staging',
@@ -2033,16 +2404,43 @@ describe('code-foundry CLI', () => {
 
     const branch = reconciliationPullRequestBranch('main', 'staging')
     const title = reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' })
-    assert.deepEqual(selectReconciliationPullRequest([], { targetBase: 'staging', branch, title }), { create: true })
-    const ours = { number: 5, title, headRefName: branch, baseRefName: 'staging', url: 'https://github.com/owner/repo/pull/5' }
-    assert.deepEqual(selectReconciliationPullRequest([ours], { targetBase: 'staging', branch, title }), { create: false, reuse: ours })
-    const renamed = { number: 6, title: 'chore: user edited title', headRefName: branch, baseRefName: 'staging' }
-    assert.match(selectReconciliationPullRequest([renamed], { targetBase: 'staging', branch, title }).error, /unexpected base or title/)
-    const wrongBase = { number: 7, title, headRefName: branch, baseRefName: 'main' }
-    assert.match(selectReconciliationPullRequest([wrongBase], { targetBase: 'staging', branch, title }).error, /unexpected base or title/)
+    assert.deepEqual(
+      selectReconciliationPullRequest([], { targetBase: 'staging', branch, title }),
+      { create: true }
+    )
+    const ours = {
+      number: 5,
+      title,
+      headRefName: branch,
+      baseRefName: 'staging',
+      url: 'https://github.com/owner/repo/pull/5',
+    }
+    assert.deepEqual(
+      selectReconciliationPullRequest([ours], { targetBase: 'staging', branch, title }),
+      { create: false, reuse: ours }
+    )
+    const renamed = {
+      number: 6,
+      title: 'chore: user edited title',
+      headRefName: branch,
+      baseRefName: 'staging',
+    }
     assert.match(
-      selectReconciliationPullRequest([ours, { ...ours, number: 8 }], { targetBase: 'staging', branch, title }).error,
-      /Multiple open pull requests/,
+      selectReconciliationPullRequest([renamed], { targetBase: 'staging', branch, title }).error,
+      /unexpected base or title/
+    )
+    const wrongBase = { number: 7, title, headRefName: branch, baseRefName: 'main' }
+    assert.match(
+      selectReconciliationPullRequest([wrongBase], { targetBase: 'staging', branch, title }).error,
+      /unexpected base or title/
+    )
+    assert.match(
+      selectReconciliationPullRequest([ours, { ...ours, number: 8 }], {
+        targetBase: 'staging',
+        branch,
+        title,
+      }).error,
+      /Multiple open pull requests/
     )
   })
 
@@ -2082,11 +2480,16 @@ describe('code-foundry CLI', () => {
     let caught
     try {
       withFakeGitPushFailure(
-        () => withGitHubEnv({
-          GITHUB_REPOSITORY: 'owner/repo',
-          GH_TOKEN: 'token',
-        }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-        failure,
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        failure
       )
     } catch (error) {
       caught = error
@@ -2103,13 +2506,19 @@ describe('code-foundry CLI', () => {
     const branch = reconciliationPullRequestBranch('main', 'staging')
     const mainSha = readRef('main')
     const stagingBefore = remoteHeadSha(root, 'staging')
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      POLICY_PUSH_FAILURE,
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        POLICY_PUSH_FAILURE
+      )
 
     const { result, log, state } = withReconcileGh({}, execute)
 
@@ -2124,7 +2533,10 @@ describe('code-foundry CLI', () => {
     assert.match(result.pullRequest.body, /GH007/)
     const deliverySha = remoteHeadSha(root, branch)
     assert.match(result.pullRequest.body, new RegExp(`Reconciled target snapshot: \`${mainSha}\``))
-    assert.match(result.pullRequest.body, new RegExp(`Exact-tree pull request head: \`${deliverySha}\``))
+    assert.match(
+      result.pullRequest.body,
+      new RegExp(`Exact-tree pull request head: \`${deliverySha}\``)
+    )
     // The PR targets the protected head branch while the body names the
     // release source (main) explicitly.
     assert.match(result.pullRequest.body, /- Base `staging`: `/)
@@ -2137,7 +2549,12 @@ describe('code-foundry CLI', () => {
     assert.equal(readRef(`${deliverySha}^`), stagingBefore)
     assert.equal(readRef(`${deliverySha}^{tree}`), readRef(`${mainSha}^{tree}`))
     // Exactly one create with the generated metadata; no edit or duplicate.
-    assert.match(log, new RegExp(`pr create --repo owner/repo --base staging --head ${branch} --title chore\\(staging\\): reconcile release metadata from main --body`))
+    assert.match(
+      log,
+      new RegExp(
+        `pr create --repo owner/repo --base staging --head ${branch} --title chore\\(staging\\): reconcile release metadata from main --body`
+      )
+    )
     assert.doesNotMatch(log, /pr edit/)
     assert.equal(state.prs.length, 1)
     assert.equal(state.prs[0].baseRefName, 'staging')
@@ -2148,13 +2565,19 @@ describe('code-foundry CLI', () => {
 
   it('does not convert generic remote errors into reconciliation pull requests', () => {
     const { root, remote } = createPolicyBlockedReconcileWorkspace()
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      'remote: error: temporary GitHub server failure',
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        'remote: error: temporary GitHub server failure'
+      )
 
     assert.throws(execute, /rejected by an exact lease/i)
     rmSync(root, { recursive: true, force: true })
@@ -2164,28 +2587,39 @@ describe('code-foundry CLI', () => {
   it('reuses the open reconciliation pull request on reruns without duplicating it', () => {
     const { root, remote } = createPolicyBlockedReconcileWorkspace()
     const branch = reconciliationPullRequestBranch('main', 'staging')
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      POLICY_PUSH_FAILURE,
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        POLICY_PUSH_FAILURE
+      )
 
     // A previous run already delivered the deterministic exact-tree head and
     // left its pull request open.
     withReconcileGh({}, execute)
     const deliverySha = remoteHeadSha(root, branch)
 
-    const { result, log, state } = withReconcileGh({
-      prs: [{
-        number: 17,
-        title: reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
-        headRefName: branch,
-        baseRefName: 'staging',
-        url: 'https://github.com/owner/repo/pull/17',
-      }],
-    }, execute)
+    const { result, log, state } = withReconcileGh(
+      {
+        prs: [
+          {
+            number: 17,
+            title: reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
+            headRefName: branch,
+            baseRefName: 'staging',
+            url: 'https://github.com/owner/repo/pull/17',
+          },
+        ],
+      },
+      execute
+    )
 
     assert.equal(result.synchronization, 'pull-request')
     assert.equal(result.pullRequest.base, 'staging')
@@ -2206,23 +2640,34 @@ describe('code-foundry CLI', () => {
     const staleSha = readRef('staging')
     // The previous run predates the latest release: branch and PR head are stale.
     run(['push', 'origin', `staging:refs/heads/${branch}`])
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      POLICY_PUSH_FAILURE,
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        POLICY_PUSH_FAILURE
+      )
 
-    const { result, log, state } = withReconcileGh({
-      prs: [{
-        number: 23,
-        title: reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
-        headRefName: branch,
-        baseRefName: 'staging',
-        url: 'https://github.com/owner/repo/pull/23',
-      }],
-    }, execute)
+    const { result, log, state } = withReconcileGh(
+      {
+        prs: [
+          {
+            number: 23,
+            title: reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' }),
+            headRefName: branch,
+            baseRefName: 'staging',
+            url: 'https://github.com/owner/repo/pull/23',
+          },
+        ],
+      },
+      execute
+    )
 
     assert.equal(result.synchronization, 'pull-request')
     assert.equal(result.pullRequest.base, 'staging')
@@ -2244,17 +2689,25 @@ describe('code-foundry CLI', () => {
   })
 
   it('replays staging-only commits into the reconciliation pull request head', () => {
-    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace({ withStagingCommit: true })
+    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace({
+      withStagingCommit: true,
+    })
     const branch = reconciliationPullRequestBranch('main', 'staging')
     const mainSha = readRef('main')
     const stagingBefore = remoteHeadSha(root, 'staging')
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      POLICY_PUSH_FAILURE,
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        POLICY_PUSH_FAILURE
+      )
 
     const { result, log, state } = withReconcileGh({}, execute)
 
@@ -2280,13 +2733,19 @@ describe('code-foundry CLI', () => {
     const { root, remote } = createPolicyBlockedReconcileWorkspace()
     const branch = reconciliationPullRequestBranch('main', 'staging')
     const title = reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' })
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      POLICY_PUSH_FAILURE,
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        POLICY_PUSH_FAILURE
+      )
     const seeded = (number, overrides = {}) => ({
       number,
       title,
@@ -2297,21 +2756,38 @@ describe('code-foundry CLI', () => {
     })
 
     // Two open PRs claim the deterministic branch: ambiguous, fail closed.
-    assert.throws(() => withReconcileGh({ prs: [seeded(1), seeded(2)] }, execute), /Multiple open pull requests/)
+    assert.throws(
+      () => withReconcileGh({ prs: [seeded(1), seeded(2)] }, execute),
+      /Multiple open pull requests/
+    )
     // A foreign title on the deterministic branch: fail closed before pushing.
-    assert.throws(() => withReconcileGh({ prs: [seeded(3, { title: 'chore: user edited title' })] }, execute), /unexpected base or title/)
+    assert.throws(
+      () => withReconcileGh({ prs: [seeded(3, { title: 'chore: user edited title' })] }, execute),
+      /unexpected base or title/
+    )
     // A pull request from the branch into another base: fail closed.
-    assert.throws(() => withReconcileGh({ prs: [seeded(4, { baseRefName: 'main' })] }, execute), /unexpected base or title/)
+    assert.throws(
+      () => withReconcileGh({ prs: [seeded(4, { baseRefName: 'main' })] }, execute),
+      /unexpected base or title/
+    )
     // gh pr list failure: fail closed.
-    assert.throws(() => withReconcileGh({ failList: true }, execute), /Failed to list open pull requests/)
+    assert.throws(
+      () => withReconcileGh({ failList: true }, execute),
+      /Failed to list open pull requests/
+    )
     // gh pr create failure with no reusable PR: fail closed.
     assert.throws(() => withReconcileGh({ failCreate: true }, execute), /gh pr create failed/)
     assert.throws(
-      () => withReconcileGh({
-        failCreate: true,
-        failCreateMessage: 'GraphQL: GitHub Actions is not permitted to create or approve pull requests.\\n',
-      }, execute),
-      /Settings > Actions > General > Workflow permissions/,
+      () =>
+        withReconcileGh(
+          {
+            failCreate: true,
+            failCreateMessage:
+              'GraphQL: GitHub Actions is not permitted to create or approve pull requests.\\n',
+          },
+          execute
+        ),
+      /Settings > Actions > General > Workflow permissions/
     )
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
@@ -2346,17 +2822,23 @@ describe('code-foundry CLI', () => {
     run(['push', '-u', 'origin', 'main'])
     run(['push', '-u', 'origin', 'staging'])
 
-    const firstPlan = withGitHubEnv({
-      GITHUB_REPOSITORY: 'owner/repo',
-      GH_TOKEN: 'token',
-    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    const firstPlan = withGitHubEnv(
+      {
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      },
+      () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+    )
     assert.equal(firstPlan.action, 'aligned')
     assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
 
-    const secondPlan = withGitHubEnv({
-      GITHUB_REPOSITORY: 'owner/repo',
-      GH_TOKEN: 'token',
-    }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' }))
+    const secondPlan = withGitHubEnv(
+      {
+        GITHUB_REPOSITORY: 'owner/repo',
+        GH_TOKEN: 'token',
+      },
+      () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+    )
     assert.equal(secondPlan.action, 'aligned')
     assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
     assert.equal(remoteHeadSha(root, 'staging'), remoteHeadSha(root, 'main'))
@@ -2390,13 +2872,19 @@ describe('code-foundry CLI', () => {
 
     const stagingBefore = remoteHeadSha(root, 'staging')
     assert.notEqual(remoteHeadSha(root, 'main'), stagingBefore)
-    const execute = () => withFakeStagingPolicyPushFailure(
-      () => withGitHubEnv({
-        GITHUB_REPOSITORY: 'owner/repo',
-        GH_TOKEN: 'token',
-      }, () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })),
-      POLICY_PUSH_FAILURE,
-    )
+    const execute = () =>
+      withFakeStagingPolicyPushFailure(
+        () =>
+          withGitHubEnv(
+            {
+              GITHUB_REPOSITORY: 'owner/repo',
+              GH_TOKEN: 'token',
+            },
+            () =>
+              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
+          ),
+        POLICY_PUSH_FAILURE
+      )
     const { result, log, state } = withReconcileGh({}, execute)
 
     assert.equal(result.action, 'aligned')
@@ -2418,7 +2906,7 @@ describe('code-foundry CLI', () => {
         directChangedPaths: ['CHANGELOG.md', 'package.json', 'web/src/version.ts'],
         allowed,
       }),
-      { releaseOnly: true, unexpected: [] },
+      { releaseOnly: true, unexpected: [] }
     )
     assert.equal(
       classifyPromotion({
@@ -2426,7 +2914,7 @@ describe('code-foundry CLI', () => {
         directChangedPaths: ['CHANGELOG.md'],
         allowed,
       }).releaseOnly,
-      false,
+      false
     )
     assert.deepEqual(
       classifyPromotion({
@@ -2434,7 +2922,7 @@ describe('code-foundry CLI', () => {
         directChangedPaths: ['CHANGELOG.md', 'src/index.ts'],
         allowed,
       }),
-      { releaseOnly: false, unexpected: ['src/index.ts'] },
+      { releaseOnly: false, unexpected: ['src/index.ts'] }
     )
   })
 
@@ -2483,7 +2971,10 @@ describe('code-foundry CLI', () => {
     // ancestry as a misleading whole-repository diff.
     const prepareStart = workflow.indexOf('- name: Prepare exact-tree promotion head\n')
     const prepareEnd = workflow.indexOf('- name: ', prepareStart + 1)
-    assert.ok(prepareStart !== -1 && prepareEnd !== -1, 'workflow prepares an exact-tree promotion head')
+    assert.ok(
+      prepareStart !== -1 && prepareEnd !== -1,
+      'workflow prepares an exact-tree promotion head'
+    )
     const prepareStep = workflow.slice(prepareStart, prepareEnd)
     assert.match(prepareStep, /MAIN_SHA=\$\(git rev-parse origin\/main\)/)
     assert.match(prepareStep, /STAGING_TREE=\$\(git rev-parse 'origin\/staging\^\{tree\}'\)/)
@@ -2500,11 +2991,15 @@ describe('code-foundry CLI', () => {
     const createStart = workflow.indexOf('- name: Create\n')
     const nextStep = workflow.indexOf('- name: ', createStart + 1)
     assert.ok(createStart !== -1, 'workflow has a Create step')
-    const createStep = nextStep === -1 ? workflow.slice(createStart) : workflow.slice(createStart, nextStep)
+    const createStep =
+      nextStep === -1 ? workflow.slice(createStart) : workflow.slice(createStart, nextStep)
     assert.match(createStep, /gh api --method GET \\\n\s+"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
     assert.match(createStep, /--field head="\$\{GITHUB_REPOSITORY_OWNER\}:\$\{PROMOTION_BRANCH\}"/)
     assert.match(createStep, /--jq '\.\[0\]\.number \/\/ empty'/)
-    assert.match(createStep, /Pull request creation failed and no existing promotion PR was found\./)
+    assert.match(
+      createStep,
+      /Pull request creation failed and no existing promotion PR was found\./
+    )
     const createCommands = createStep
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('#'))
@@ -2523,12 +3018,15 @@ describe('code-foundry CLI', () => {
     assert.match(createStep, /--field head="\$PROMOTION_BRANCH"/)
     assert.match(createStep, /--field title="Promote staging -> main \(\$DATE\)"/)
     assert.match(createStep, /--field body=@"\$BODY_FILE"/)
-    assert.match(createStep, /if gh api "\$\{CREATE_ARGS\[\@\]\}"; then/)
+    assert.match(createStep, /if gh api "\$\{CREATE_ARGS\[@\]\}"; then/)
     assert.match(createStep, /--field draft=true/)
     const draftCondition = createStep.indexOf('HAS_AUTOMATION_TOKEN" != true')
     const draftField = createStep.indexOf('--field draft=true')
     assert.ok(draftCondition !== -1 && draftField !== -1)
-    assert.ok(draftCondition < draftField, 'draft=true must be added only when no automation token is configured')
+    assert.ok(
+      draftCondition < draftField,
+      'draft=true must be added only when no automation token is configured'
+    )
     assert.doesNotMatch(createCommands, /gh pr create/)
 
     // No `gh pr list` or `gh pr create` invocation may remain anywhere in
@@ -2593,7 +3091,10 @@ describe('code-foundry CLI', () => {
     const retryIndex = createStep.indexOf(retry)
     assert.ok(retryIndex !== -1, 'Create step retries the POST with github.token')
     const tokenGuard = createStep.indexOf('[ "$HAS_AUTOMATION_TOKEN" = true ]')
-    assert.ok(tokenGuard !== -1 && tokenGuard < retryIndex, 'the github.token retry is guarded by HAS_AUTOMATION_TOKEN')
+    assert.ok(
+      tokenGuard !== -1 && tokenGuard < retryIndex,
+      'the github.token retry is guarded by HAS_AUTOMATION_TOKEN'
+    )
 
     // The create-race fallback lookup runs only after creation failed: with
     // a configured automation token present but rejected (and its github.token
@@ -2604,7 +3105,10 @@ describe('code-foundry CLI', () => {
     // skips the lookup.
     const fallback = 'GH_TOKEN="${{ github.token }}" gh api --method GET \\'
     const fallbackIndex = createStep.indexOf(fallback)
-    assert.ok(fallbackIndex !== -1 && fallbackIndex > retryIndex, 'the create-race lookup uses github.token after the retry')
+    assert.ok(
+      fallbackIndex !== -1 && fallbackIndex > retryIndex,
+      'the create-race lookup uses github.token after the retry'
+    )
 
     const createCommands = createStep
       .split('\n')
@@ -2617,7 +3121,10 @@ describe('code-foundry CLI', () => {
   it('keys runtime concurrency by event so promotion PRs do not cancel push checks', () => {
     for (const workflow of ['ci', 'codeql', 'security', 'test']) {
       const runtime = readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')
-      assert.match(runtime, /code-foundry-\w+-\$\{\{ github\.event_name \}\}-\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \|\| github\.repository \}\}/)
+      assert.match(
+        runtime,
+        /code-foundry-\w+-\$\{\{ github\.event_name \}\}-\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \|\| github\.repository \}\}/
+      )
     }
   })
 
@@ -2635,7 +3142,10 @@ describe('code-foundry CLI', () => {
   it('keeps generated Rust CodeQL configuration inside the workspace', () => {
     const workflow = readFileSync('.github/workflows/codeql.yml', 'utf8')
 
-    assert.match(workflow, /config_file="\$GITHUB_WORKSPACE\/\.github\/codeql-rust-\$scope_id\.yml"/)
+    assert.match(
+      workflow,
+      /config_file="\$GITHUB_WORKSPACE\/\.github\/codeql-rust-\$scope_id\.yml"/
+    )
     assert.doesNotMatch(workflow, /config_file="\$RUNNER_TEMP\/codeql-rust-/)
   })
 
@@ -2654,7 +3164,10 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, 'service'), { recursive: true })
     writeFileSync(join(root, 'web/package.json'), '{"name":"fixture-web","version":"1.2.3"}\n')
     writeFileSync(join(root, 'web/src/version.ts'), 'export const version = "1.2.3"\n')
-    writeFileSync(join(root, 'service/Cargo.toml'), '[package]\nname = "fixture-service"\nversion = "0.4.0"\n')
+    writeFileSync(
+      join(root, 'service/Cargo.toml'),
+      '[package]\nname = "fixture-service"\nversion = "0.4.0"\n'
+    )
 
     assert.deepEqual(buildReleaseManifest(root, { packages: { '.': {}, web: {}, service: {} } }), {
       '.': '0.0.0',
@@ -2670,23 +3183,35 @@ describe('code-foundry CLI', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-sync-manifest-'))
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"2.1.0"}\n')
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nrelease_type: node\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nrelease_type: node\n'
+    )
 
     syncRepository({ target: root, source: process.cwd(), init: true })
-    assert.deepEqual(JSON.parse(readFileSync(join(root, '.release-please-manifest.json'), 'utf8')), { '.': '2.1.0' })
+    assert.deepEqual(
+      JSON.parse(readFileSync(join(root, '.release-please-manifest.json'), 'utf8')),
+      { '.': '2.1.0' }
+    )
 
     // A later sync must not regress a manifest that release-please owns.
     writeFileSync(join(root, '.release-please-manifest.json'), '{\n  ".": "3.0.0"\n}\n')
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"2.1.0"}\n')
     syncRepository({ target: root, source: process.cwd() })
-    assert.deepEqual(JSON.parse(readFileSync(join(root, '.release-please-manifest.json'), 'utf8')), { '.': '3.0.0' })
+    assert.deepEqual(
+      JSON.parse(readFileSync(join(root, '.release-please-manifest.json'), 'utf8')),
+      { '.': '3.0.0' }
+    )
   })
 
   it('reports a missing release manifest during doctor', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-doctor-manifest-'))
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(join(root, 'release-please-config.json'), '{"release-type": "node"}\n')
-    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: typescript\npackage_manager: bun\nrelease_type: node\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nrelease_type: node\n'
+    )
 
     const result = run('doctor', '--target', root)
     assert.equal(result.status, 1)
@@ -2699,16 +3224,27 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, 'service'), { recursive: true })
     writeFileSync(join(root, 'web/package.json'), '{"name":"fixture-web","version":"1.0.0"}\n')
     writeFileSync(join(root, 'web/src/version.ts'), 'export const version = "1.0.0"\n')
-    writeFileSync(join(root, 'service/Cargo.toml'), '[package]\nname = "fixture-service"\nversion = "1.0.0"\n')
-    writeFileSync(join(root, 'pyproject.toml'), '[project]\nname = "fixture-python"\nversion = "1.0.0"\n')
+    writeFileSync(
+      join(root, 'service/Cargo.toml'),
+      '[package]\nname = "fixture-service"\nversion = "1.0.0"\n'
+    )
+    writeFileSync(
+      join(root, 'pyproject.toml'),
+      '[project]\nname = "fixture-python"\nversion = "1.0.0"\n'
+    )
 
     const packages = detectReleasePackages(root)
-    assert.deepEqual(packages.map(({ directory, releaseType }) => [directory, releaseType]), [
-      ['.', 'python'],
-      ['service', 'rust'],
-      ['web', 'node'],
-    ])
-    const config = buildReleaseConfig(root, { 'changelog-sections': [{ type: 'feat', section: 'Features' }] })
+    assert.deepEqual(
+      packages.map(({ directory, releaseType }) => [directory, releaseType]),
+      [
+        ['.', 'python'],
+        ['service', 'rust'],
+        ['web', 'node'],
+      ]
+    )
+    const config = buildReleaseConfig(root, {
+      'changelog-sections': [{ type: 'feat', section: 'Features' }],
+    })
     assert.deepEqual(config['changelog-sections'], [{ type: 'feat', section: 'Features' }])
     assert.equal(config.packages['web']['release-type'], 'node')
     assert.deepEqual(config.packages['web']['extra-files'], ['src/version.ts'])
@@ -2721,7 +3257,10 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, 'third_party/vendor'), { recursive: true })
     writeFileSync(join(root, 'Cargo.toml'), '[package]\nname = "fixture"\nversion = "1.0.0"\n')
     writeFileSync(join(root, 'apps/web/package.json'), '{"name":"fixture-web","version":"1.0.0"}\n')
-    writeFileSync(join(root, 'third_party/vendor/Cargo.toml'), '[package]\nname = "vendor"\nversion = "1.0.0"\n')
+    writeFileSync(
+      join(root, 'third_party/vendor/Cargo.toml'),
+      '[package]\nname = "vendor"\nversion = "1.0.0"\n'
+    )
 
     const explicit = {
       packages: { '.': { 'release-type': 'rust', 'package-name': 'fixture' } },
@@ -2731,8 +3270,14 @@ describe('code-foundry CLI', () => {
   })
 
   it('selects one token-aware post-release delivery and prevents duplicate tags', () => {
-    assert.equal(selectHookDelivery({ mode: 'auto', tokenPresent: true }).delivery, 'workflow-dispatch')
-    assert.equal(selectHookDelivery({ mode: 'auto', tokenPresent: false }).delivery, 'release-event')
+    assert.equal(
+      selectHookDelivery({ mode: 'auto', tokenPresent: true }).delivery,
+      'workflow-dispatch'
+    )
+    assert.equal(
+      selectHookDelivery({ mode: 'auto', tokenPresent: false }).delivery,
+      'release-event'
+    )
     assert.equal(selectHookDelivery({ mode: 'disabled', tokenPresent: true }).delivery, 'disabled')
     const key = releaseDeliveryKey('owner/repo', 'v1.2.3')
     assert.match(key, /^[a-f0-9]{24}$/)
@@ -2741,17 +3286,40 @@ describe('code-foundry CLI', () => {
   })
 
   it('keeps release policy decisions executable and deterministic', () => {
-    assert.equal(selectReleaseCredential({ releasePleaseToken: 'secret', githubToken: 'fallback' }).source, 'release-please-token')
+    assert.equal(
+      selectReleaseCredential({ releasePleaseToken: 'secret', githubToken: 'fallback' }).source,
+      'release-please-token'
+    )
     assert.equal(selectReleaseCredential({ githubToken: 'fallback' }).autoMerge, false)
     assert.equal(selectReleaseCredential({}).source, 'missing')
     const allowed = new Set(['CHANGELOG.md', 'package.json'])
-    const generated = [{ number: 42, title: 'chore(main): release 1.2.3', headRefName: 'release-please--branches--main' }]
-    const valid = validateReleasePullRequests(generated, new Map([[42, ['CHANGELOG.md', 'package.json']]]), allowed)
+    const generated = [
+      {
+        number: 42,
+        title: 'chore(main): release 1.2.3',
+        headRefName: 'release-please--branches--main',
+      },
+    ]
+    const valid = validateReleasePullRequests(
+      generated,
+      new Map([[42, ['CHANGELOG.md', 'package.json']]]),
+      allowed
+    )
     assert.equal(valid.valid, true)
-    assert.equal(validateReleasePullRequests(generated, new Map([[42, ['src/index.ts']]]), allowed).valid, false)
+    assert.equal(
+      validateReleasePullRequests(generated, new Map([[42, ['src/index.ts']]]), allowed).valid,
+      false
+    )
     assert.equal(validateReleasePullRequests(generated, new Map([[42, []]]), allowed).valid, false)
     assert.equal(validateReleasePullRequests([], new Map(), allowed).valid, false)
-    assert.equal(validateReleasePullRequests([{ number: 7, title: 'chore(main): release 1.2.3' }], new Map([[7, ['CHANGELOG.md']]]), allowed).valid, false)
+    assert.equal(
+      validateReleasePullRequests(
+        [{ number: 7, title: 'chore(main): release 1.2.3' }],
+        new Map([[7, ['CHANGELOG.md']]]),
+        allowed
+      ).valid,
+      false
+    )
   })
 
   it('recommends full runners for native-toolchain repositories', () => {
@@ -2766,14 +3334,26 @@ describe('code-foundry CLI', () => {
 
   it('packages the Python formatter baseline for Python consumers', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-python-init-'))
-    writeFileSync(join(root, 'pyproject.toml'), '[project]\nname = "python-fixture"\nversion = "1.0.0"\n')
+    writeFileSync(
+      join(root, 'pyproject.toml'),
+      '[project]\nname = "python-fixture"\nversion = "1.0.0"\n'
+    )
     syncRepository({ target: root, source: process.cwd(), init: true })
     assert.match(readFileSync(join(root, 'ruff.toml'), 'utf8'), /line-length = 100/)
   })
 
   it('classifies pull requests to staging as fast regardless of head shape', () => {
-    for (const head of ['feature/foo', 'staging', 'main', RELEASE_PLEASE_PREFIX, `${RELEASE_PLEASE_PREFIX}--v1.2.3`]) {
-      assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'staging', headRef: head }), 'fast')
+    for (const head of [
+      'feature/foo',
+      'staging',
+      'main',
+      RELEASE_PLEASE_PREFIX,
+      `${RELEASE_PLEASE_PREFIX}--v1.2.3`,
+    ]) {
+      assert.equal(
+        classifyValidationMode({ eventName: 'pull_request', baseRef: 'staging', headRef: head }),
+        'fast'
+      )
     }
   })
 
@@ -2807,10 +3387,38 @@ describe('code-foundry CLI', () => {
   })
 
   it('classifies main pull requests from the exact Release Please prefix as release', () => {
-    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: RELEASE_PLEASE_PREFIX }), 'release')
-    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: `${RELEASE_PLEASE_PREFIX}--v1.2.3` }), 'release')
-    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: `${RELEASE_PLEASE_PREFIX}--v1.2.3--rc.1` }), 'release')
-    assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: `${RELEASE_PLEASE_PREFIX}--` }), 'release')
+    assert.equal(
+      classifyValidationMode({
+        eventName: 'pull_request',
+        baseRef: 'main',
+        headRef: RELEASE_PLEASE_PREFIX,
+      }),
+      'release'
+    )
+    assert.equal(
+      classifyValidationMode({
+        eventName: 'pull_request',
+        baseRef: 'main',
+        headRef: `${RELEASE_PLEASE_PREFIX}--v1.2.3`,
+      }),
+      'release'
+    )
+    assert.equal(
+      classifyValidationMode({
+        eventName: 'pull_request',
+        baseRef: 'main',
+        headRef: `${RELEASE_PLEASE_PREFIX}--v1.2.3--rc.1`,
+      }),
+      'release'
+    )
+    assert.equal(
+      classifyValidationMode({
+        eventName: 'pull_request',
+        baseRef: 'main',
+        headRef: `${RELEASE_PLEASE_PREFIX}--`,
+      }),
+      'release'
+    )
   })
 
   it('rejects malicious lookalikes that miss the exact Release Please prefix boundary', () => {
@@ -2830,13 +3438,27 @@ describe('code-foundry CLI', () => {
     ]
     for (const head of lookalikes) {
       assert.equal(isReleasePleaseHead(head), false, head)
-      assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: head }), 'audit', head)
+      assert.equal(
+        classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: head }),
+        'audit',
+        head
+      )
     }
   })
 
   it('classifies every other main pull request as audit, including promotion PRs', () => {
-    for (const head of ['feature/foo', 'staging', 'main', 'release-please--branches--staging--v1.2.3', 'chore(main): release 1.2.3']) {
-      assert.equal(classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: head }), 'audit', head)
+    for (const head of [
+      'feature/foo',
+      'staging',
+      'main',
+      'release-please--branches--staging--v1.2.3',
+      'chore(main): release 1.2.3',
+    ]) {
+      assert.equal(
+        classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: head }),
+        'audit',
+        head
+      )
     }
   })
 
@@ -2847,22 +3469,52 @@ describe('code-foundry CLI', () => {
 
   it('rejects unsupported events so canonical validation never runs off-trigger', () => {
     for (const eventName of ['push', 'pull_request_target', 'merge_group', 'release', '']) {
-      assert.throws(() => classifyValidationMode({ eventName, baseRef: 'main', headRef: 'staging' }), /Unsupported validation event/, eventName)
+      assert.throws(
+        () => classifyValidationMode({ eventName, baseRef: 'main', headRef: 'staging' }),
+        /Unsupported validation event/,
+        eventName
+      )
     }
     assert.throws(() => classifyValidationMode({}), /Unsupported validation event/)
-    assert.throws(() => classifyValidationMode({ eventName: 'push' }), /Unsupported validation event/)
+    assert.throws(
+      () => classifyValidationMode({ eventName: 'push' }),
+      /Unsupported validation event/
+    )
   })
 
   it('rejects pull_request classification without base or head refs', () => {
-    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', headRef: 'feature/x' }), /requires base_ref/)
-    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef: 'main' }), /requires head_ref/)
-    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef: '', headRef: 'feature/x' }), /requires base_ref/)
-    assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: '' }), /requires head_ref/)
+    assert.throws(
+      () => classifyValidationMode({ eventName: 'pull_request', headRef: 'feature/x' }),
+      /requires base_ref/
+    )
+    assert.throws(
+      () => classifyValidationMode({ eventName: 'pull_request', baseRef: 'main' }),
+      /requires head_ref/
+    )
+    assert.throws(
+      () =>
+        classifyValidationMode({ eventName: 'pull_request', baseRef: '', headRef: 'feature/x' }),
+      /requires base_ref/
+    )
+    assert.throws(
+      () => classifyValidationMode({ eventName: 'pull_request', baseRef: 'main', headRef: '' }),
+      /requires head_ref/
+    )
   })
 
   it('rejects unsupported base branches instead of guessing a mode', () => {
-    for (const baseRef of ['release', 'dev', 'feature/x', 'refs/heads/staging', 'refs/heads/main']) {
-      assert.throws(() => classifyValidationMode({ eventName: 'pull_request', baseRef, headRef: 'feature/x' }), /Unsupported pull_request base branch/, baseRef)
+    for (const baseRef of [
+      'release',
+      'dev',
+      'feature/x',
+      'refs/heads/staging',
+      'refs/heads/main',
+    ]) {
+      assert.throws(
+        () => classifyValidationMode({ eventName: 'pull_request', baseRef, headRef: 'feature/x' }),
+        /Unsupported pull_request base branch/,
+        baseRef
+      )
     }
   })
 
@@ -2872,10 +3524,20 @@ describe('code-foundry CLI', () => {
     assert.equal(isReleasePleaseHead(`${RELEASE_PLEASE_PREFIX}--v1.2.3--rc.1`), true)
     assert.equal(isReleasePleaseHead(`${RELEASE_PLEASE_PREFIX}--`), true)
     for (const head of [
-      `${RELEASE_PLEASE_PREFIX}x`, `${RELEASE_PLEASE_PREFIX}s`, `${RELEASE_PLEASE_PREFIX}-v1.2.3`,
-      `${RELEASE_PLEASE_PREFIX}_v1.2.3`, `${RELEASE_PLEASE_PREFIX}/v1.2.3`, `${RELEASE_PLEASE_PREFIX} `,
-      ' release-please--branches--main', 'Release-please--branches--main', 'release-please--branches--MAIN',
-      'release-please--branches--staging--v1.0.0', 'release-please--branches--mainx', 'main', 'staging', '',
+      `${RELEASE_PLEASE_PREFIX}x`,
+      `${RELEASE_PLEASE_PREFIX}s`,
+      `${RELEASE_PLEASE_PREFIX}-v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX}_v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX}/v1.2.3`,
+      `${RELEASE_PLEASE_PREFIX} `,
+      ' release-please--branches--main',
+      'Release-please--branches--main',
+      'release-please--branches--MAIN',
+      'release-please--branches--staging--v1.0.0',
+      'release-please--branches--mainx',
+      'main',
+      'staging',
+      '',
     ]) {
       assert.equal(isReleasePleaseHead(head), false, head)
     }
@@ -2898,16 +3560,25 @@ describe('code-foundry CLI', () => {
   })
 
   it('passes the gate only when every job required for the mode succeeded', () => {
-    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success' } }), {
-      valid: true,
-      required: ['ci', 'test'],
-      failures: [],
-    })
-    assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' } }), {
-      valid: true,
-      required: ['ci', 'test', 'security', 'codeql'],
-      failures: [],
-    })
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success' } }),
+      {
+        valid: true,
+        required: ['ci', 'test'],
+        failures: [],
+      }
+    )
+    assert.deepEqual(
+      evaluateValidationGate({
+        mode: 'audit',
+        results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' },
+      }),
+      {
+        valid: true,
+        required: ['ci', 'test', 'security', 'codeql'],
+        failures: [],
+      }
+    )
     // The release tier requires no suite jobs: the generated release diff
     // check runs as a conditional step inside the gate itself, so the gate
     // passes vacuously here and the step outcome decides the job.
@@ -2919,45 +3590,90 @@ describe('code-foundry CLI', () => {
   })
 
   it('lets expected skips of non-required jobs pass the gate', () => {
-    assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'skipped' } }).valid, true)
-    assert.equal(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' } }).valid, true)
-    assert.equal(evaluateValidationGate({ mode: 'release', results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'skipped' } }).valid, true)
+    assert.equal(
+      evaluateValidationGate({
+        mode: 'fast',
+        results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'skipped' },
+      }).valid,
+      true
+    )
+    assert.equal(
+      evaluateValidationGate({
+        mode: 'audit',
+        results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' },
+      }).valid,
+      true
+    )
+    assert.equal(
+      evaluateValidationGate({
+        mode: 'release',
+        results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'skipped' },
+      }).valid,
+      true
+    )
     // Non-required jobs never influence the gate, even when they fail.
-    assert.equal(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'success', codeql: 'failure' } }).valid, true)
+    assert.equal(
+      evaluateValidationGate({
+        mode: 'fast',
+        results: { ci: 'success', test: 'success', codeql: 'failure' },
+      }).valid,
+      true
+    )
     assert.equal(evaluateValidationGate({ mode: 'fast', results: {} }).valid, false)
   })
 
   it('fails closed on failure, cancellation, unexpected skip, and unknown results', () => {
-    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'failure', test: 'success' } }), {
-      valid: false,
-      required: ['ci', 'test'],
-      failures: [{ job: 'ci', result: 'failure' }],
-    })
-    assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: { ci: 'success', test: 'success', security: 'success', codeql: 'cancelled' } }).failures, [
-      { job: 'codeql', result: 'cancelled' },
-    ])
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'fast', results: { ci: 'failure', test: 'success' } }),
+      {
+        valid: false,
+        required: ['ci', 'test'],
+        failures: [{ job: 'ci', result: 'failure' }],
+      }
+    )
+    assert.deepEqual(
+      evaluateValidationGate({
+        mode: 'audit',
+        results: { ci: 'success', test: 'success', security: 'success', codeql: 'cancelled' },
+      }).failures,
+      [{ job: 'codeql', result: 'cancelled' }]
+    )
     // Release mode has no required suite jobs; unexpected results there are
     // irrelevant because the in-gate release diff step carries the policy.
-    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { ci: 'failure', codeql: 'skipped' } }), {
-      valid: true,
-      required: [],
-      failures: [],
-    })
-    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'weird' } }).failures, [
-      { job: 'test', result: 'weird' },
-    ])
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'release', results: { ci: 'failure', codeql: 'skipped' } }),
+      {
+        valid: true,
+        required: [],
+        failures: [],
+      }
+    )
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: 'weird' } }).failures,
+      [{ job: 'test', result: 'weird' }]
+    )
   })
 
   it('fails closed on missing results and unknown modes', () => {
-    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success' } }).failures, [{ job: 'test', result: 'missing' }])
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'fast', results: { ci: 'success' } }).failures,
+      [{ job: 'test', result: 'missing' }]
+    )
     assert.deepEqual(evaluateValidationGate({ mode: 'audit', results: {} }).failures, [
       { job: 'ci', result: 'missing' },
       { job: 'test', result: 'missing' },
       { job: 'security', result: 'missing' },
       { job: 'codeql', result: 'missing' },
     ])
-    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: null } }).failures, [{ job: 'test', result: 'missing' }])
-    assert.deepEqual(evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: undefined } }).failures, [{ job: 'test', result: 'missing' }])
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: null } }).failures,
+      [{ job: 'test', result: 'missing' }]
+    )
+    assert.deepEqual(
+      evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: undefined } })
+        .failures,
+      [{ job: 'test', result: 'missing' }]
+    )
     const unknown = evaluateValidationGate({ mode: 'unknown', results: {} })
     assert.equal(unknown.valid, false)
     assert.deepEqual(unknown.required, [])
@@ -2978,14 +3694,20 @@ describe('code-foundry CLI', () => {
 
   it('classifies the validation mode through the pinned runtime in the caller', () => {
     const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
-    assert.match(caller, /- name: Checkout consumer repository\n\s+uses: actions\/checkout@[^\n]+\n\s+with:\n\s+persist-credentials: false\n\s+- name: Checkout runtime/)
+    assert.match(
+      caller,
+      /- name: Checkout consumer repository\n\s+uses: actions\/checkout@[^\n]+\n\s+with:\n\s+persist-credentials: false\n\s+- name: Checkout runtime/
+    )
     assert.match(caller, /FOUNDRY_EVENT_NAME: \$\{\{ github\.event_name \}\}/)
     assert.match(caller, /FOUNDRY_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/)
     assert.match(caller, /FOUNDRY_HEAD_REF: \$\{\{ github\.event\.pull_request\.head\.ref \}\}/)
     assert.match(caller, /validation mode/)
     assert.match(caller, /mode: \$\{\{ needs\.mode\.outputs\.mode \}\}/)
     assert.match(caller, /uses: \.\/\.github\/workflows\/validation\.yml/)
-    assert.match(caller, /secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
+    assert.match(
+      caller,
+      /secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/
+    )
     assert.doesNotMatch(caller, /secrets:\s*inherit/)
     // Least-permission union needed for the CodeQL chain; no extra write scopes.
     assert.match(caller, /security-events: write/)
@@ -3002,32 +3724,59 @@ describe('code-foundry CLI', () => {
     const codeql = readFileSync('.github/workflows/codeql.yml', 'utf8')
 
     assert.match(caller, /uses: \.\/\.github\/workflows\/validation\.yml/)
-    assert.match(caller, /secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
+    assert.match(
+      caller,
+      /secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/
+    )
     assert.doesNotMatch(caller, /secrets:\s*inherit/)
 
-    assert.match(orchestrator, /secrets:\n\s+TURBO_TOKEN:\n\s+required: false\n\s+NEXTAUTH_SECRET:\n\s+required: false/)
-    assert.match(ci, /secrets:\n\s+TURBO_TOKEN:\n\s+required: false\n\s+NEXTAUTH_SECRET:\n\s+required: false/)
+    assert.match(
+      orchestrator,
+      /secrets:\n\s+TURBO_TOKEN:\n\s+required: false\n\s+NEXTAUTH_SECRET:\n\s+required: false/
+    )
+    assert.match(
+      ci,
+      /secrets:\n\s+TURBO_TOKEN:\n\s+required: false\n\s+NEXTAUTH_SECRET:\n\s+required: false/
+    )
     assert.match(test, /secrets:\n\s+TURBO_TOKEN:\n\s+required: false/)
     assert.doesNotMatch(test, /NEXTAUTH_SECRET/)
     assert.doesNotMatch(security, /^    secrets:/m)
     assert.doesNotMatch(codeql, /^    secrets:/m)
 
-    assert.match(orchestrator, /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
-    assert.match(orchestrator, /test:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}/)
-    assert.doesNotMatch(orchestrator, /security:\n[\s\S]*?runner: \$\{\{ inputs\.security-runner \}\}\n\s+secrets:/)
-    assert.doesNotMatch(orchestrator, /codeql:\n[\s\S]*?rust-max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}\n\s+secrets:/)
+    assert.match(
+      orchestrator,
+      /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/
+    )
+    assert.match(
+      orchestrator,
+      /test:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}/
+    )
+    assert.doesNotMatch(
+      orchestrator,
+      /security:\n[\s\S]*?runner: \$\{\{ inputs\.security-runner \}\}\n\s+secrets:/
+    )
+    assert.doesNotMatch(
+      orchestrator,
+      /codeql:\n[\s\S]*?rust-max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}\n\s+secrets:/
+    )
     assert.doesNotMatch(orchestrator, /secrets:\s*inherit/)
   })
 
   it('requires persist-credentials: false for every external checkout action in workflow YAML', () => {
-    const workflowFiles = readdirSync('.github/workflows').filter((file) => file.endsWith('.yml')).sort()
+    const workflowFiles = readdirSync('.github/workflows')
+      .filter((file) => file.endsWith('.yml'))
+      .sort()
 
     const violations = workflowFiles.flatMap((workflow) => {
       const path = `.github/workflows/${workflow}`
       return listCheckoutStepsWithoutPersistCredentialsFalse(path)
     })
 
-    assert.equal(violations.length, 0, `checkout actions missing persist-credentials: false:\n${violations.map((entry) => `${entry.file}:${entry.line}`).join('\n')}`)
+    assert.equal(
+      violations.length,
+      0,
+      `checkout actions missing persist-credentials: false:\n${violations.map((entry) => `${entry.file}:${entry.line}`).join('\n')}`
+    )
   })
 
   it('prepares reconcile transport for staging with optional deploy-key path and fallback auth', () => {
@@ -3035,10 +3784,18 @@ describe('code-foundry CLI', () => {
     assert.match(release, /STAGING_DEPLOY_KEY:\n\s+required: false/)
 
     const releaseLines = release.split(/\r?\n/)
-    const prepareIndex = releaseLines.findIndex((line) => line.includes('name: Configure staging reconcile transport'))
-    const authIndex = releaseLines.findIndex((line) => line.includes('name: Configure git for trusted reconcile'))
-    const reconcileIndex = releaseLines.findIndex((line) => line.includes('name: Reconcile release metadata'))
-    const clearIndex = releaseLines.findIndex((line) => line.includes('name: Clear reconcile SSH material'))
+    const prepareIndex = releaseLines.findIndex((line) =>
+      line.includes('name: Configure staging reconcile transport')
+    )
+    const authIndex = releaseLines.findIndex((line) =>
+      line.includes('name: Configure git for trusted reconcile')
+    )
+    const reconcileIndex = releaseLines.findIndex((line) =>
+      line.includes('name: Reconcile release metadata')
+    )
+    const clearIndex = releaseLines.findIndex((line) =>
+      line.includes('name: Clear reconcile SSH material')
+    )
     const skipIndex = releaseLines.findIndex((line) => line.includes('name: Skip without staging'))
 
     assert.notEqual(prepareIndex, -1)
@@ -3048,12 +3805,21 @@ describe('code-foundry CLI', () => {
     assert.notEqual(skipIndex, -1)
 
     const segment = releaseLines.slice(prepareIndex, reconcileIndex + 1).join('\n')
-    assert.match(segment, /name: Configure staging reconcile transport[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT == 'true'/)
+    assert.match(
+      segment,
+      /name: Configure staging reconcile transport[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT == 'true'/
+    )
     assert.match(segment, /env:\n\s+STAGING_DEPLOY_KEY:\s+\$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
     assert.match(segment, /gh api \/meta/)
     assert.match(segment, /printf '%s\\n' "\$STAGING_DEPLOY_KEY" >/)
-    assert.match(segment, /git remote set-url --push origin "git@github.com:\$\{GITHUB_REPOSITORY\}\.git"/)
-    assert.match(segment, /name: Configure git for trusted reconcile[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT != 'true'/)
+    assert.match(
+      segment,
+      /git remote set-url --push origin "git@github.com:\$\{GITHUB_REPOSITORY\}\.git"/
+    )
+    assert.match(
+      segment,
+      /name: Configure git for trusted reconcile[\s\S]*?if: steps\.staging\.outputs\.exists == 'true' && env\.STAGING_DEPLOY_KEY_PRESENT != 'true'/
+    )
     assert.match(segment, /run: gh auth setup-git/)
 
     assert.equal(clearIndex > reconcileIndex, true)
@@ -3062,14 +3828,25 @@ describe('code-foundry CLI', () => {
     assert.equal(prepareIndex < authIndex, true)
     assert.equal(authIndex < reconcileIndex, true)
 
-    const nextStepAfterAuth = releaseLines.findIndex((line, index) => index > authIndex && /^\s{6}- name: /.test(line))
+    const nextStepAfterAuth = releaseLines.findIndex(
+      (line, index) => index > authIndex && /^\s{6}- name: /.test(line)
+    )
     assert.equal(nextStepAfterAuth, reconcileIndex)
 
     const reconcileSection = releaseLines.slice(reconcileIndex, clearIndex + 1).join('\n')
-    assert.match(reconcileSection, /name: Reconcile release metadata[\s\S]*?GIT_SSH_COMMAND: \$\{\{ steps\.staging-reconcile-ssh\.outputs\.ssh_command \|\| '' \}\}/)
+    assert.match(
+      reconcileSection,
+      /name: Reconcile release metadata[\s\S]*?GIT_SSH_COMMAND: \$\{\{ steps\.staging-reconcile-ssh\.outputs\.ssh_command \|\| '' \}\}/
+    )
     const prepareSection = releaseLines.slice(prepareIndex, authIndex).join('\n')
-    assert.match(prepareSection, /ssh_command=ssh -F \/dev\/null -i \$STAGING_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=\$STAGING_HOSTS -o StrictHostKeyChecking=yes/)
-    assert.match(reconcileSection, /run: node \"\$RUNNER_TEMP\/code-foundry\/src\/cli\.mjs\" release reconcile --github --base main --head staging/)
+    assert.match(
+      prepareSection,
+      /ssh_command=ssh -F \/dev\/null -i \$STAGING_KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=\$STAGING_HOSTS -o StrictHostKeyChecking=yes/
+    )
+    assert.match(
+      reconcileSection,
+      /run: node "\$RUNNER_TEMP\/code-foundry\/src\/cli\.mjs" release reconcile --github --base main --head staging/
+    )
   })
 
   it('exposes exactly one stable Validation / Gate aggregate check that always runs', () => {
@@ -3095,15 +3872,27 @@ describe('code-foundry CLI', () => {
     // diff as a conditional step inside the gate, so ordinary pull requests
     // render no skipped release row.
     assert.doesNotMatch(orchestrator, /^  release-policy:/m)
-    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/)
+    assert.match(
+      orchestrator,
+      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/
+    )
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'/)
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
     assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
     assert.match(orchestrator, /validation release_diff/)
-    assert.match(orchestrator, /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/)
-    assert.match(orchestrator, /test:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}/)
+    assert.match(
+      orchestrator,
+      /ci:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}\n\s+NEXTAUTH_SECRET: \$\{\{ secrets\.NEXTAUTH_SECRET \}\}/
+    )
+    assert.match(
+      orchestrator,
+      /test:\n[\s\S]*?secrets:\n\s+TURBO_TOKEN: \$\{\{ secrets\.TURBO_TOKEN \}\}/
+    )
     assert.doesNotMatch(orchestrator, /secrets:\s*inherit/)
-    assert.match(orchestrator, /FOUNDRY_HEAD_REPO: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/)
+    assert.match(
+      orchestrator,
+      /FOUNDRY_HEAD_REPO: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/
+    )
     assert.match(orchestrator, /FOUNDRY_REPOSITORY: \$\{\{ github\.repository \}\}/)
   })
 
@@ -3150,7 +3939,10 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflows, /uses: oven-sh\/setup-bun@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: taiki-e\/install-action@v[0-9]+/)
     assert.doesNotMatch(workflows, /uses: actions\/dependency-review-action@v[0-9]+/)
-    assert.doesNotMatch(workflows, /uses: 0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@main/)
+    assert.doesNotMatch(
+      workflows,
+      /uses: 0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@main/
+    )
   })
 
   it('keeps the reusable test interface backward compatible with an additive unit-only input', () => {
@@ -3159,7 +3951,13 @@ describe('code-foundry CLI', () => {
     assert.match(test, /type: boolean/)
     assert.match(test, /default: false/)
     for (const job of ['integration', 'e2e', 'smoke']) {
-      assert.match(test, new RegExp(`^  ${job}:\n    name: [A-Za-z0-9]+\n    if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`, 'm'))
+      assert.match(
+        test,
+        new RegExp(
+          `^  ${job}:\n    name: [A-Za-z0-9]+\n    if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`,
+          'm'
+        )
+      )
     }
     for (const input of ['runtime-repository', 'runtime-ref', 'runner', 'unit-runner']) {
       assert.match(test, new RegExp(`^      ${input}:`, 'm'))
@@ -3167,56 +3965,166 @@ describe('code-foundry CLI', () => {
   })
 
   it('classifies real event metadata through the runtime mode task', () => {
-    const run = (env) => spawnSync(process.execPath, [runtime, 'validation', 'mode'], {
-      encoding: 'utf8',
-      env: { ...testEnv, ...env },
-    })
-    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'staging', FOUNDRY_HEAD_REF: 'feature/x' }).stdout, /^mode=fast$/m)
-    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.2.3' }).stdout, /^mode=release$/m)
-    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'staging' }).stdout, /^mode=audit$/m)
-    assert.match(run({ FOUNDRY_EVENT_NAME: 'pull_request', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'feature/x' }).stdout, /^mode=audit$/m)
+    const run = (env) =>
+      spawnSync(process.execPath, [runtime, 'validation', 'mode'], {
+        encoding: 'utf8',
+        env: { ...testEnv, ...env },
+      })
+    assert.match(
+      run({
+        FOUNDRY_EVENT_NAME: 'pull_request',
+        FOUNDRY_BASE_REF: 'staging',
+        FOUNDRY_HEAD_REF: 'feature/x',
+      }).stdout,
+      /^mode=fast$/m
+    )
+    assert.match(
+      run({
+        FOUNDRY_EVENT_NAME: 'pull_request',
+        FOUNDRY_BASE_REF: 'main',
+        FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.2.3',
+      }).stdout,
+      /^mode=release$/m
+    )
+    assert.match(
+      run({
+        FOUNDRY_EVENT_NAME: 'pull_request',
+        FOUNDRY_BASE_REF: 'main',
+        FOUNDRY_HEAD_REF: 'staging',
+      }).stdout,
+      /^mode=audit$/m
+    )
+    assert.match(
+      run({
+        FOUNDRY_EVENT_NAME: 'pull_request',
+        FOUNDRY_BASE_REF: 'main',
+        FOUNDRY_HEAD_REF: 'feature/x',
+      }).stdout,
+      /^mode=audit$/m
+    )
     assert.match(run({ FOUNDRY_EVENT_NAME: 'workflow_dispatch' }).stdout, /^mode=audit$/m)
     assert.match(run({ FOUNDRY_EVENT_NAME: 'schedule' }).stdout, /^mode=audit$/m)
-    const push = run({ FOUNDRY_EVENT_NAME: 'push', FOUNDRY_BASE_REF: 'main', FOUNDRY_HEAD_REF: 'staging' })
+    const push = run({
+      FOUNDRY_EVENT_NAME: 'push',
+      FOUNDRY_BASE_REF: 'main',
+      FOUNDRY_HEAD_REF: 'staging',
+    })
     assert.notEqual(push.status, 0)
     assert.match(push.stderr, /Unsupported validation event/)
   })
 
   it('evaluates the aggregate gate through the runtime gate task', () => {
-    const run = (env) => spawnSync(process.execPath, [runtime, 'validation', 'gate'], {
-      encoding: 'utf8',
-      env: { ...testEnv, ...env },
+    const run = (env) =>
+      spawnSync(process.execPath, [runtime, 'validation', 'gate'], {
+        encoding: 'utf8',
+        env: { ...testEnv, ...env },
+      })
+    const audit = run({
+      FOUNDRY_MODE: 'audit',
+      FOUNDRY_CI: 'success',
+      FOUNDRY_TEST: 'success',
+      FOUNDRY_SECURITY: 'success',
+      FOUNDRY_CODEQL: 'success',
     })
-    const audit = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success' })
     assert.equal(audit.status, 0)
     assert.match(audit.stdout, /gate passed/)
-    const fast = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped' })
+    const fast = run({
+      FOUNDRY_MODE: 'fast',
+      FOUNDRY_CI: 'success',
+      FOUNDRY_TEST: 'success',
+      FOUNDRY_SECURITY: 'skipped',
+      FOUNDRY_CODEQL: 'skipped',
+    })
     assert.equal(fast.status, 0)
-    const release = run({ FOUNDRY_MODE: 'release', FOUNDRY_CI: 'skipped', FOUNDRY_TEST: 'skipped', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped' })
+    const release = run({
+      FOUNDRY_MODE: 'release',
+      FOUNDRY_CI: 'skipped',
+      FOUNDRY_TEST: 'skipped',
+      FOUNDRY_SECURITY: 'skipped',
+      FOUNDRY_CODEQL: 'skipped',
+    })
     assert.equal(release.status, 0)
-    const failed = run({ FOUNDRY_MODE: 'fast', FOUNDRY_CI: 'failure', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'skipped', FOUNDRY_CODEQL: 'skipped' })
+    const failed = run({
+      FOUNDRY_MODE: 'fast',
+      FOUNDRY_CI: 'failure',
+      FOUNDRY_TEST: 'success',
+      FOUNDRY_SECURITY: 'skipped',
+      FOUNDRY_CODEQL: 'skipped',
+    })
     assert.notEqual(failed.status, 0)
     assert.match(failed.stderr, /::error::ci: failure/)
-    const cancelled = run({ FOUNDRY_MODE: 'audit', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'cancelled' })
+    const cancelled = run({
+      FOUNDRY_MODE: 'audit',
+      FOUNDRY_CI: 'success',
+      FOUNDRY_TEST: 'success',
+      FOUNDRY_SECURITY: 'success',
+      FOUNDRY_CODEQL: 'cancelled',
+    })
     assert.notEqual(cancelled.status, 0)
     assert.match(cancelled.stderr, /::error::codeql: cancelled/)
-    const unknown = run({ FOUNDRY_MODE: 'bogus', FOUNDRY_CI: 'success', FOUNDRY_TEST: 'success', FOUNDRY_SECURITY: 'success', FOUNDRY_CODEQL: 'success' })
+    const unknown = run({
+      FOUNDRY_MODE: 'bogus',
+      FOUNDRY_CI: 'success',
+      FOUNDRY_TEST: 'success',
+      FOUNDRY_SECURITY: 'success',
+      FOUNDRY_CODEQL: 'success',
+    })
     assert.notEqual(unknown.status, 0)
     assert.match(unknown.stderr, /Unknown validation mode/)
   })
 
   it('enforces the strict generated-release diff and version policy', () => {
-    const base = { headRef: 'release-please--branches--main--v1.0.0', headRepo: 'owner/repo', repository: 'owner/repo' }
-    assert.equal(validateGeneratedReleaseDiff({ ...base, changedPaths: ['package.json', 'CHANGELOG.md'] }).valid, true)
-    const unexpected = validateGeneratedReleaseDiff({ ...base, changedPaths: ['package.json', 'src/index.ts'] })
+    const base = {
+      headRef: 'release-please--branches--main--v1.0.0',
+      headRepo: 'owner/repo',
+      repository: 'owner/repo',
+    }
+    assert.equal(
+      validateGeneratedReleaseDiff({ ...base, changedPaths: ['package.json', 'CHANGELOG.md'] })
+        .valid,
+      true
+    )
+    const unexpected = validateGeneratedReleaseDiff({
+      ...base,
+      changedPaths: ['package.json', 'src/index.ts'],
+    })
     assert.equal(unexpected.valid, false)
     assert.match(unexpected.errors.join(' '), /unexpected paths: src\/index\.ts/)
-    assert.equal(validateGeneratedReleaseDiff({ ...base, headRef: 'release-please--branches--mainx--v1.0.0', changedPaths: ['package.json'] }).valid, false)
-    assert.equal(validateGeneratedReleaseDiff({ ...base, headRepo: 'evil/fork', changedPaths: ['package.json'] }).valid, false)
+    assert.equal(
+      validateGeneratedReleaseDiff({
+        ...base,
+        headRef: 'release-please--branches--mainx--v1.0.0',
+        changedPaths: ['package.json'],
+      }).valid,
+      false
+    )
+    assert.equal(
+      validateGeneratedReleaseDiff({
+        ...base,
+        headRepo: 'evil/fork',
+        changedPaths: ['package.json'],
+      }).valid,
+      false
+    )
     // Missing repository identity fails closed, not just mismatched identity.
-    assert.equal(validateGeneratedReleaseDiff({ ...base, headRepo: '', changedPaths: ['package.json'] }).valid, false)
-    assert.equal(validateGeneratedReleaseDiff({ ...base, repository: '', changedPaths: ['package.json'] }).valid, false)
-    assert.equal(validateGeneratedReleaseDiff({ ...base, headRepo: undefined, repository: undefined, changedPaths: ['package.json'] }).valid, false)
+    assert.equal(
+      validateGeneratedReleaseDiff({ ...base, headRepo: '', changedPaths: ['package.json'] }).valid,
+      false
+    )
+    assert.equal(
+      validateGeneratedReleaseDiff({ ...base, repository: '', changedPaths: ['package.json'] })
+        .valid,
+      false
+    )
+    assert.equal(
+      validateGeneratedReleaseDiff({
+        ...base,
+        headRepo: undefined,
+        repository: undefined,
+        changedPaths: ['package.json'],
+      }).valid,
+      false
+    )
     assert.equal(validateGeneratedReleaseDiff({ ...base, changedPaths: [] }).valid, false)
     const noBump = validateGeneratedReleaseDiff({ ...base, changedPaths: ['CHANGELOG.md'] })
     assert.equal(noBump.valid, false)
@@ -3234,11 +4142,22 @@ describe('code-foundry CLI', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-cargo-release-'))
     const desktopRoot = join(root, 'apps', 'desktop', 'src-tauri')
     mkdirSync(desktopRoot, { recursive: true })
-    writeFileSync(join(desktopRoot, 'Cargo.toml'), '[package]\nname = "agent-hq-desktop"\nversion = "0.3.2"\n')
-    writeFileSync(join(desktopRoot, 'Cargo.lock'), '# generated\n\n[[package]]\nname = "agent-hq-desktop"\nversion = "0.3.1"\n')
-    const config = { 'extra-files': [{ type: 'generic', path: 'apps/desktop/src-tauri/Cargo.lock' }] }
+    writeFileSync(
+      join(desktopRoot, 'Cargo.toml'),
+      '[package]\nname = "agent-hq-desktop"\nversion = "0.3.2"\n'
+    )
+    writeFileSync(
+      join(desktopRoot, 'Cargo.lock'),
+      '# generated\n\n[[package]]\nname = "agent-hq-desktop"\nversion = "0.3.1"\n'
+    )
+    const config = {
+      'extra-files': [{ type: 'generic', path: 'apps/desktop/src-tauri/Cargo.lock' }],
+    }
     const errors = validateCargoLockVersions(root, config)
-    assert.match(errors.join(' '), /Cargo\.lock version 0\.3\.1 does not match .*Cargo\.toml version 0\.3\.2/)
+    assert.match(
+      errors.join(' '),
+      /Cargo\.lock version 0\.3\.1 does not match .*Cargo\.toml version 0\.3\.2/
+    )
     const result = validateGeneratedReleaseDiff({
       headRef: 'release-please--branches--main--v0.3.2',
       headRepo: 'owner/repo',
@@ -3265,22 +4184,38 @@ describe('code-foundry CLI', () => {
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.1.0"}\n')
     git(['add', '-A'])
     git(['commit', '-q', '-m', 'chore(main): release 1.1.0'])
-    const run = (env) => spawnSync(process.execPath, [runtime, 'validation', 'release_diff'], {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...testEnv, ...env },
+    const run = (env) =>
+      spawnSync(process.execPath, [runtime, 'validation', 'release_diff'], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...testEnv, ...env },
+      })
+    const valid = run({
+      FOUNDRY_BASE_SHA: baseSha,
+      FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0',
+      FOUNDRY_HEAD_REPO: 'owner/repo',
+      FOUNDRY_REPOSITORY: 'owner/repo',
     })
-    const valid = run({ FOUNDRY_BASE_SHA: baseSha, FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0', FOUNDRY_HEAD_REPO: 'owner/repo', FOUNDRY_REPOSITORY: 'owner/repo' })
     assert.equal(valid.status, 0, valid.stderr)
     assert.match(valid.stdout, /Release policy passed/)
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/index.ts'), 'export const value = 1\n')
     git(['add', '-A'])
     git(['commit', '-q', '-m', 'sneak'])
-    const sneaky = run({ FOUNDRY_BASE_SHA: baseSha, FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0', FOUNDRY_HEAD_REPO: 'owner/repo', FOUNDRY_REPOSITORY: 'owner/repo' })
+    const sneaky = run({
+      FOUNDRY_BASE_SHA: baseSha,
+      FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0',
+      FOUNDRY_HEAD_REPO: 'owner/repo',
+      FOUNDRY_REPOSITORY: 'owner/repo',
+    })
     assert.notEqual(sneaky.status, 0)
     assert.match(sneaky.stderr, /unexpected paths: src\/index\.ts/)
-    const fork = run({ FOUNDRY_BASE_SHA: baseSha, FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0', FOUNDRY_HEAD_REPO: 'evil/fork', FOUNDRY_REPOSITORY: 'owner/repo' })
+    const fork = run({
+      FOUNDRY_BASE_SHA: baseSha,
+      FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0',
+      FOUNDRY_HEAD_REPO: 'evil/fork',
+      FOUNDRY_REPOSITORY: 'owner/repo',
+    })
     assert.notEqual(fork.status, 0)
     assert.match(fork.stderr, /same-repository/)
   })
@@ -3293,7 +4228,9 @@ describe('code-foundry CLI', () => {
       packageVersions: ['1.1.0'],
     })
     assert.deepEqual(plan.missingGitHubReleases, ['v1.1.0'])
-    assert.deepEqual(plan.pendingReleasePullRequests, [{ number: 9, title: 'chore(main): release 1.1.0' }])
+    assert.deepEqual(plan.pendingReleasePullRequests, [
+      { number: 9, title: 'chore(main): release 1.1.0' },
+    ])
     assert.equal(plan.packageVersionMismatch, false)
     assert.match(plan.actions[0], /v1\.1\.0/)
   })

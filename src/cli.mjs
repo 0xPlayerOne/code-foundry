@@ -5,7 +5,12 @@ import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { doctor } from './commands/doctor.mjs'
-import { dispatchPostReleaseHook, reconcileRelease, releaseRecoveryPlan, validateReleasePullRequestDiffs } from './commands/release.mjs'
+import {
+  dispatchPostReleaseHook,
+  reconcileRelease,
+  releaseRecoveryPlan,
+  validateReleasePullRequestDiffs,
+} from './commands/release.mjs'
 import { discoverRepositories, upgradeFleet } from './commands/fleet.mjs'
 import { syncRepository } from './commands/sync.mjs'
 import { manageCiBilling } from './commands/ci.mjs'
@@ -60,19 +65,40 @@ function parseArgs(argv) {
   const hasCommand = Boolean(first && !first.startsWith('-'))
   const command = hasCommand ? /** @type {string} */ (argv.shift()) : 'init'
   /** @type {Options} */
-  const options = { target: process.cwd(), root: process.cwd(), dryRun: false, force: false, github: false, createPr: false, exclude: [], base: 'main', head: 'staging', tag: '', workflow: '', mode: 'auto', version: `v${readPackageVersion(packageRoot)}` }
+  const options = {
+    target: process.cwd(),
+    root: process.cwd(),
+    dryRun: false,
+    force: false,
+    github: false,
+    createPr: false,
+    exclude: [],
+    base: 'main',
+    head: 'staging',
+    tag: '',
+    workflow: '',
+    mode: 'auto',
+    version: `v${readPackageVersion(packageRoot)}`,
+  }
 
   if (command === 'release') {
     const subcommand = argv.shift() ?? ''
-    if (!['reconcile', 'hook', 'validate-prs', 'recovery-plan'].includes(subcommand)) fail(`unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, release validate-prs, or release recovery-plan`)
+    if (!['reconcile', 'hook', 'validate-prs', 'recovery-plan'].includes(subcommand))
+      fail(
+        `unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, release validate-prs, or release recovery-plan`
+      )
     options.releaseSubcommand = subcommand
   } else if (command === 'fleet') {
     const subcommand = argv.shift() ?? ''
-    if (subcommand !== 'status' && subcommand !== 'upgrade') fail(`unknown fleet command: ${subcommand ?? '(missing)'}; use fleet status or fleet upgrade`)
+    if (subcommand !== 'status' && subcommand !== 'upgrade')
+      fail(`unknown fleet command: ${subcommand ?? '(missing)'}; use fleet status or fleet upgrade`)
     options.fleetSubcommand = subcommand
   } else if (command === 'ci') {
     const subcommand = argv.shift() ?? ''
-    if (!['pause', 'resume', 'status'].includes(subcommand)) fail(`unknown ci command: ${subcommand || '(missing)'}; use ci pause, ci resume, or ci status`)
+    if (!['pause', 'resume', 'status'].includes(subcommand))
+      fail(
+        `unknown ci command: ${subcommand || '(missing)'}; use ci pause, ci resume, or ci status`
+      )
     options.ciSubcommand = /** @type {'pause'|'resume'|'status'} */ (subcommand)
   }
 
@@ -92,12 +118,15 @@ function parseArgs(argv) {
     else if (arg === '--base') options.base = argv.shift() ?? fail('--base requires a branch')
     else if (arg === '--head') options.head = argv.shift() ?? fail('--head requires a branch')
     else if (arg === '--tag') options.tag = argv.shift() ?? fail('--tag requires a tag')
-    else if (arg === '--workflow') options.workflow = argv.shift() ?? fail('--workflow requires a workflow')
-    else if (arg === '--mode') options.mode = argv.shift() ?? fail('--mode requires a delivery mode')
+    else if (arg === '--workflow')
+      options.workflow = argv.shift() ?? fail('--workflow requires a workflow')
+    else if (arg === '--mode')
+      options.mode = argv.shift() ?? fail('--mode requires a delivery mode')
     else if (arg === '--root') options.root = argv.shift() ?? fail('--root requires a path')
     else if (arg === '--create-pr') options.createPr = true
     else if (arg === '--version') options.version = argv.shift() ?? fail('--version requires a tag')
-    else if (arg === '--exclude') options.exclude.push(argv.shift() ?? fail('--exclude requires a name'))
+    else if (arg === '--exclude')
+      options.exclude.push(argv.shift() ?? fail('--exclude requires a name'))
     else fail(`unknown option: ${arg}; run --help for the supported options`)
   }
 
@@ -110,7 +139,13 @@ function main() {
 
   if (command === 'init') {
     try {
-      syncRepository({ target, source: packageRoot, dryRun: options.dryRun, force: options.force, init: true })
+      syncRepository({
+        target,
+        source: packageRoot,
+        dryRun: options.dryRun,
+        force: options.force,
+        init: true,
+      })
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
@@ -139,8 +174,16 @@ function main() {
   } else if (command === 'fleet') {
     try {
       const root = resolve(options.root)
-      if (options.fleetSubcommand === 'status') console.log(JSON.stringify(discoverRepositories(root), null, 2))
-      else upgradeFleet(root, packageRoot, { createPr: options.createPr, dryRun: options.dryRun, force: options.force, version: options.version, exclude: options.exclude })
+      if (options.fleetSubcommand === 'status')
+        console.log(JSON.stringify(discoverRepositories(root), null, 2))
+      else
+        upgradeFleet(root, packageRoot, {
+          createPr: options.createPr,
+          dryRun: options.dryRun,
+          force: options.force,
+          version: options.version,
+          exclude: options.exclude,
+        })
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
@@ -150,13 +193,16 @@ function main() {
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
-  }
-  else fail(`unknown command: ${command}`)
+  } else fail(`unknown command: ${command}`)
 }
 
 main()
 
 /** @param {string} root @returns {string} */
 function readPackageVersion(root) {
-  try { return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version ?? '0.0.0' } catch { return '0.0.0' }
+  try {
+    return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
 }

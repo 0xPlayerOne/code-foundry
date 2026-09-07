@@ -24,8 +24,11 @@ const DEFAULT_RELEASE_FILES = new Set([
 export function readReleaseConfig(root) {
   const file = join(root, 'release-please-config.json')
   if (!existsSync(file)) return {}
-  try { return JSON.parse(readFileSync(file, 'utf8')) }
-  catch { return {} }
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'))
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -54,7 +57,12 @@ export function approvedReleaseFiles(config = {}) {
 function addExtraFiles(allowed, entries, prefix = '') {
   if (!Array.isArray(entries)) return
   for (const entry of entries) {
-    const path = typeof entry === 'string' ? entry : entry && typeof entry === 'object' && 'path' in entry ? entry.path : ''
+    const path =
+      typeof entry === 'string'
+        ? entry
+        : entry && typeof entry === 'object' && 'path' in entry
+          ? entry.path
+          : ''
     if (typeof path === 'string' && path) addPath(allowed, prefix, path)
   }
 }
@@ -67,8 +75,9 @@ function addPath(allowed, prefix, path) {
 
 /** @param {string[]} paths @param {Set<string>} allowed @returns {string[]} */
 export function unexpectedReleasePaths(paths, allowed) {
-  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))]
-    .filter((path) => !allowed.has(path))
+  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))].filter(
+    (path) => !allowed.has(path)
+  )
 }
 
 /**
@@ -85,7 +94,12 @@ export function validateCargoLockVersions(root, config = {}) {
   const addEntries = (entries, prefix = '') => {
     if (!Array.isArray(entries)) return
     for (const entry of entries) {
-      const value = typeof entry === 'string' ? entry : entry && typeof entry === 'object' && 'path' in entry ? entry.path : ''
+      const value =
+        typeof entry === 'string'
+          ? entry
+          : entry && typeof entry === 'object' && 'path' in entry
+            ? entry.path
+            : ''
       if (typeof value !== 'string' || !value.endsWith('Cargo.lock')) continue
       const clean = value.replace(/^\.\//, '').replace(/\\/g, '/')
       paths.add(prefix ? `${prefix}/${clean}` : clean)
@@ -110,18 +124,25 @@ export function validateCargoLockVersions(root, config = {}) {
     const manifestLines = readFileSync(manifestPath, 'utf8').split(/\r?\n/)
     const packageStart = manifestLines.findIndex((line) => line.trim() === '[package]')
     if (packageStart < 0) continue
-    const nextSection = manifestLines.findIndex((line, index) => index > packageStart && /^\s*\[/.test(line))
-    const packageSection = manifestLines.slice(packageStart + 1, nextSection < 0 ? manifestLines.length : nextSection).join('\n')
+    const nextSection = manifestLines.findIndex(
+      (line, index) => index > packageStart && /^\s*\[/.test(line)
+    )
+    const packageSection = manifestLines
+      .slice(packageStart + 1, nextSection < 0 ? manifestLines.length : nextSection)
+      .join('\n')
     const packageName = packageSection.match(/^name\s*=\s*"([^"]+)"\s*$/m)?.[1]
     const packageVersion = packageSection.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1]
     if (!packageName || !packageVersion) continue
     const lock = readFileSync(lockPath, 'utf8')
-    const lockPackage = [...lock.matchAll(/\[\[package\]\]\s+name\s*=\s*"([^"]+)"\s+version\s*=\s*"([^"]+)"/g)]
-      .find((match) => match[1] === packageName)
+    const lockPackage = [
+      ...lock.matchAll(/\[\[package\]\]\s+name\s*=\s*"([^"]+)"\s+version\s*=\s*"([^"]+)"/g),
+    ].find((match) => match[1] === packageName)
     if (!lockPackage) {
       errors.push(`${relativeLockPath} is missing the ${packageName} package entry.`)
     } else if (lockPackage[2] !== packageVersion) {
-      errors.push(`${relativeLockPath} version ${lockPackage[2]} does not match ${relativeLockPath.replace(/Cargo\.lock$/, 'Cargo.toml')} version ${packageVersion}.`)
+      errors.push(
+        `${relativeLockPath} version ${lockPackage[2]} does not match ${relativeLockPath.replace(/Cargo\.lock$/, 'Cargo.toml')} version ${packageVersion}.`
+      )
     }
   }
   return errors
@@ -134,11 +155,7 @@ export function validateCargoLockVersions(root, config = {}) {
  * @param {{ mainIsAncestor: boolean, directChangedPaths?: string[], allowed?: Set<string> }} input
  */
 export function classifyPromotion(input) {
-  const {
-    mainIsAncestor,
-    directChangedPaths = [],
-    allowed = approvedReleaseFiles(),
-  } = input
+  const { mainIsAncestor, directChangedPaths = [], allowed = approvedReleaseFiles() } = input
   const paths = [...new Set(directChangedPaths.map((path) => path.trim()).filter(Boolean))]
   const unexpected = unexpectedReleasePaths(paths, allowed)
   return {
@@ -149,14 +166,20 @@ export function classifyPromotion(input) {
 
 /** @param {{ releasePleaseToken?: string, githubToken?: string }} input */
 export function selectReleaseCredential(input) {
-  if (input.releasePleaseToken) return { token: input.releasePleaseToken, source: 'release-please-token', autoMerge: true }
-  if (input.githubToken) return { token: input.githubToken, source: 'github-token', autoMerge: false }
+  if (input.releasePleaseToken)
+    return { token: input.releasePleaseToken, source: 'release-please-token', autoMerge: true }
+  if (input.githubToken)
+    return { token: input.githubToken, source: 'github-token', autoMerge: false }
   return { token: '', source: 'missing', autoMerge: false }
 }
 
 /** @param {Array<{number?: number, title?: string, headRefName?: string}>} prs */
 export function selectGeneratedReleasePrs(prs) {
-  return prs.filter((pr) => /^chore\(main\): release /.test(pr.title ?? '') && String(pr.headRefName ?? '').startsWith('release-please--branches--main'))
+  return prs.filter(
+    (pr) =>
+      String(pr.title ?? '').startsWith('chore(main): release ') &&
+      String(pr.headRefName ?? '').startsWith('release-please--branches--main')
+  )
 }
 
 /**
@@ -168,7 +191,8 @@ export function selectGeneratedReleasePrs(prs) {
 export function validateReleasePullRequests(prs, changedPathsByPr, allowed) {
   const errors = []
   const generated = selectGeneratedReleasePrs(prs)
-  if (!generated.length) errors.push('Release Please reported a PR, but no generated release PR was found.')
+  if (!generated.length)
+    errors.push('Release Please reported a PR, but no generated release PR was found.')
   for (const pr of generated) {
     const number = Number(pr.number)
     const paths = changedPathsByPr.get(number)
@@ -177,7 +201,10 @@ export function validateReleasePullRequests(prs, changedPathsByPr, allowed) {
       continue
     }
     const unexpected = unexpectedReleasePaths(paths, allowed)
-    if (unexpected.length) errors.push(`Generated release PR #${number} contains unexpected paths: ${unexpected.join(', ')}`)
+    if (unexpected.length)
+      errors.push(
+        `Generated release PR #${number} contains unexpected paths: ${unexpected.join(', ')}`
+      )
   }
   return { valid: errors.length === 0, generated, errors }
 }
@@ -200,21 +227,35 @@ const VERSION_METADATA_FILES = new Set([
  * @returns {{ valid: boolean, errors: string[], changedPaths: string[] }}
  */
 export function validateGeneratedReleaseDiff(input) {
-  const { headRef = '', headRepo = '', repository = '', changedPaths = [], config = {}, root = process.cwd() } = input
+  const {
+    headRef = '',
+    headRepo = '',
+    repository = '',
+    changedPaths = [],
+    config = {},
+    root = process.cwd(),
+  } = input
   /** @type {string[]} */
   const errors = []
   if (!isReleasePleaseHead(headRef)) {
     errors.push(`Head branch ${headRef || '(missing)'} is not a generated Release Please branch.`)
   }
   if (!repository || !headRepo) {
-    errors.push('Generated release validation requires both the head and base repository identities.')
+    errors.push(
+      'Generated release validation requires both the head and base repository identities.'
+    )
   } else if (headRepo !== repository) {
-    errors.push(`Head repository ${headRepo} is not ${repository}; generated release validation requires a same-repository pull request.`)
+    errors.push(
+      `Head repository ${headRepo} is not ${repository}; generated release validation requires a same-repository pull request.`
+    )
   }
   const paths = [...new Set(changedPaths.map((path) => String(path).trim()).filter(Boolean))]
   if (!paths.length) errors.push('Generated release pull request has no changed files.')
   const unexpected = unexpectedReleasePaths(paths, approvedReleaseFiles(config))
-  if (unexpected.length) errors.push(`Generated release pull request contains unexpected paths: ${unexpected.join(', ')}`)
+  if (unexpected.length)
+    errors.push(
+      `Generated release pull request contains unexpected paths: ${unexpected.join(', ')}`
+    )
   const versionMetadata = new Set(VERSION_METADATA_FILES)
   addExtraFiles(versionMetadata, config['extra-files'])
   const packages = config.packages
@@ -241,11 +282,19 @@ export function validateGeneratedReleaseDiff(input) {
 export function buildReleaseRecoveryPlan(input) {
   const tags = [...new Set(input.tags.filter((tag) => /^v?\d+\.\d+\.\d+/.test(tag)))]
   /** @type {string[]} */
-  const releaseTags = [...new Set(input.releases.map((release) => release.tagName).filter((tag) => typeof tag === 'string'))]
+  const releaseTags = [
+    ...new Set(
+      input.releases.map((release) => release.tagName).filter((tag) => typeof tag === 'string')
+    ),
+  ]
   const tagSet = new Set(tags)
   const releaseSet = new Set(releaseTags)
-  const missingGitHubReleases = tags.filter((tag) => !releaseSet.has(tag) && !releaseSet.has(tag.replace(/^v/, '')))
-  const orphanGitHubReleases = releaseTags.filter((tag) => !tagSet.has(tag) && !tagSet.has(tag.replace(/^v/, '')))
+  const missingGitHubReleases = tags.filter(
+    (tag) => !releaseSet.has(tag) && !releaseSet.has(tag.replace(/^v/, ''))
+  )
+  const orphanGitHubReleases = releaseTags.filter(
+    (tag) => !tagSet.has(tag) && !tagSet.has(tag.replace(/^v/, ''))
+  )
   const latestTag = [...tags].sort(compareVersions).at(-1) ?? ''
   const latestPackageVersion = [...input.packageVersions].sort(compareVersions).at(-1) ?? ''
   return {
@@ -254,22 +303,33 @@ export function buildReleaseRecoveryPlan(input) {
     missingGitHubReleases,
     orphanGitHubReleases,
     pendingReleasePullRequests: input.releasePrs,
-    packageVersionMismatch: Boolean(latestTag && latestPackageVersion && normalizeVersion(latestTag) !== normalizeVersion(latestPackageVersion)),
+    packageVersionMismatch: Boolean(
+      latestTag &&
+      latestPackageVersion &&
+      normalizeVersion(latestTag) !== normalizeVersion(latestPackageVersion)
+    ),
     actions: [
       ...missingGitHubReleases.map((tag) => `create GitHub release metadata for ${tag}`),
-      ...(latestTag && latestPackageVersion && normalizeVersion(latestTag) !== normalizeVersion(latestPackageVersion) ? [`review package/tag mismatch (${latestPackageVersion} vs ${latestTag})`] : []),
+      ...(latestTag &&
+      latestPackageVersion &&
+      normalizeVersion(latestTag) !== normalizeVersion(latestPackageVersion)
+        ? [`review package/tag mismatch (${latestPackageVersion} vs ${latestTag})`]
+        : []),
     ],
   }
 }
 
 /** @param {string} value */
-function normalizeVersion(value) { return value.replace(/^v/, '').split('-')[0] }
+function normalizeVersion(value) {
+  return value.replace(/^v/, '').split('-')[0]
+}
 
 /** @param {string} a @param {string} b */
 function compareVersions(a, b) {
   const left = normalizeVersion(a).split('.').map(Number)
   const right = normalizeVersion(b).split('.').map(Number)
-  for (let index = 0; index < 3; index += 1) if ((left[index] ?? 0) !== (right[index] ?? 0)) return (left[index] ?? 0) - (right[index] ?? 0)
+  for (let index = 0; index < 3; index += 1)
+    if ((left[index] ?? 0) !== (right[index] ?? 0)) return (left[index] ?? 0) - (right[index] ?? 0)
   return a.localeCompare(b)
 }
 
@@ -304,17 +364,24 @@ export function classifyReconciliation(input) {
     allowed = approvedReleaseFiles(),
   } = input
   if (!mainSha || !stagingSha) return { action: 'fail', reason: 'Missing branch SHA.' }
-  if (mainSha === stagingSha) return { action: 'aligned', reason: 'Branches already point at the same commit.' }
-  const hasIndeterminateMainCommit = mainOnlyCommits.some((commit) => typeof commit.sha !== 'string' || !Array.isArray(commit.changedPaths))
-  if (hasIndeterminateMainCommit) return {
-    action: 'fail',
-    reason: 'Unable to inspect main-only commit metadata.',
-  }
-  const hasIndeterminateStagingCommit = stagingOnlyCommits.some((commit) => typeof commit.sha !== 'string' || !Array.isArray(commit.changedPaths))
-  if (hasIndeterminateStagingCommit) return {
-    action: 'fail',
-    reason: 'Unable to inspect staging-only commit metadata.',
-  }
+  if (mainSha === stagingSha)
+    return { action: 'aligned', reason: 'Branches already point at the same commit.' }
+  const hasIndeterminateMainCommit = mainOnlyCommits.some(
+    (commit) => typeof commit.sha !== 'string' || !Array.isArray(commit.changedPaths)
+  )
+  if (hasIndeterminateMainCommit)
+    return {
+      action: 'fail',
+      reason: 'Unable to inspect main-only commit metadata.',
+    }
+  const hasIndeterminateStagingCommit = stagingOnlyCommits.some(
+    (commit) => typeof commit.sha !== 'string' || !Array.isArray(commit.changedPaths)
+  )
+  if (hasIndeterminateStagingCommit)
+    return {
+      action: 'fail',
+      reason: 'Unable to inspect staging-only commit metadata.',
+    }
   if (Array.isArray(directChangedPaths)) {
     const paths = [...new Set(directChangedPaths.map((path) => path.trim()).filter(Boolean))]
     const unexpected = unexpectedReleasePaths(paths, allowed)
@@ -322,11 +389,20 @@ export function classifyReconciliation(input) {
     // --cherry-pick. If the final trees are identical and no non-equivalent
     // commits remain, classify the branches consistently as aligned.
     if (!paths.length && !mainOnlyCommits.length && !stagingOnlyCommits.length) {
-      return { action: 'aligned', targetSha: mainSha, reason: 'Branches have different history but identical content.' }
+      return {
+        action: 'aligned',
+        targetSha: mainSha,
+        reason: 'Branches have different history but identical content.',
+      }
     }
-    const stagingOnlyReleaseOnly = stagingOnlyCommits.length > 0 && stagingOnlyCommits.every((commit) =>
-      Array.isArray(commit.changedPaths) && commit.changedPaths.length > 0 && unexpectedReleasePaths(commit.changedPaths, allowed).length === 0,
-    )
+    const stagingOnlyReleaseOnly =
+      stagingOnlyCommits.length > 0 &&
+      stagingOnlyCommits.every(
+        (commit) =>
+          Array.isArray(commit.changedPaths) &&
+          commit.changedPaths.length > 0 &&
+          unexpectedReleasePaths(commit.changedPaths, allowed).length === 0
+      )
     if (!unexpected.length && !stagingOnlyReleaseOnly) {
       return {
         action: 'fast-forward',
@@ -355,7 +431,7 @@ export function classifyReconciliation(input) {
     : null
   const unexpectedMain = unexpectedReleasePaths(
     [...new Set(mainOnlyCommits.flatMap((commit) => commit.changedPaths || []))],
-    allowed,
+    allowed
   ).filter((path) => directTreePaths === null || directTreePaths.has(path))
   // Without a final-tree comparison, retain the historical fail-closed
   // behavior. When the final delta is known, main is the validated release
@@ -377,8 +453,17 @@ export function classifyReconciliation(input) {
       reason: 'staging contains unpromoted commits; replay them onto main.',
     }
   }
-  if (mainOnlyCommits.length) return { action: 'fast-forward', targetSha: mainSha, reason: 'main only added approved release metadata.' }
-  return { action: 'aligned', targetSha: mainSha, reason: 'Branches have different history but identical content.' }
+  if (mainOnlyCommits.length)
+    return {
+      action: 'fast-forward',
+      targetSha: mainSha,
+      reason: 'main only added approved release metadata.',
+    }
+  return {
+    action: 'aligned',
+    targetSha: mainSha,
+    reason: 'Branches have different history but identical content.',
+  }
 }
 
 export { DEFAULT_RELEASE_FILES }
@@ -418,7 +503,16 @@ export function reconciliationPullRequestTitle({ targetHead, sourceBase }) {
  * }} input
  */
 export function buildReconciliationPullRequestBody(input) {
-  const { sourceBase, targetHead, mainSha, stagingSha, targetSha, deliverySha = '', action, pushError = '' } = input
+  const {
+    sourceBase,
+    targetHead,
+    mainSha,
+    stagingSha,
+    targetSha,
+    deliverySha = '',
+    action,
+    pushError = '',
+  } = input
   const lines = [
     '## Automated release reconciliation',
     '',
@@ -436,7 +530,7 @@ export function buildReconciliationPullRequestBody(input) {
     '',
     `Merging this pull request synchronizes \`${targetHead}\` with the exact reconciled tree above; no unrelated commits are introduced.`,
     '',
-    `Code Foundry treats validated \`${sourceBase}\` as the shipped source of truth and preserves unpromoted \`${targetHead}\` work by replaying it on top. Indeterminate history, replay conflicts, authentication failures, and ambiguous or stale state fail the release job closed and are never pushed around branch protection. Later releases retry the direct push first; when branch policy still rejects it, this pull request is updated instead of duplicated.`,
+    `Code Foundry treats validated \`${sourceBase}\` as the shipped source of truth and preserves unpromoted \`${targetHead}\` work by replaying it on top. Indeterminate history, replay conflicts, authentication failures, and ambiguous or stale state fail the release job closed and are never pushed around branch protection. Later releases retry the direct push first; when branch policy still rejects it, this pull request is updated instead of duplicated.`
   )
   return lines.join('\n')
 }
@@ -457,13 +551,21 @@ export function selectReconciliationPullRequest(prs, input) {
   const { targetBase, branch, title } = input
   const owned = prs.filter((pr) => String(pr.headRefName ?? '') === branch)
   if (!owned.length) return { create: true }
-  const reusable = owned.filter((pr) => String(pr.baseRefName ?? '') === targetBase && String(pr.title ?? '') === title)
+  const reusable = owned.filter(
+    (pr) => String(pr.baseRefName ?? '') === targetBase && String(pr.title ?? '') === title
+  )
   if (reusable.length === 1) return { create: false, reuse: reusable[0] }
   if (reusable.length > 1) {
-    return { create: false, error: `Multiple open pull requests use the reconciliation branch ${branch}; refusing to pick one.` }
+    return {
+      create: false,
+      error: `Multiple open pull requests use the reconciliation branch ${branch}; refusing to pick one.`,
+    }
   }
   const foreign = owned
-    .map((pr) => `#${pr.number ?? '?'} (base ${pr.baseRefName ?? '?'}, title ${JSON.stringify(pr.title ?? '')})`)
+    .map(
+      (pr) =>
+        `#${pr.number ?? '?'} (base ${pr.baseRefName ?? '?'}, title ${JSON.stringify(pr.title ?? '')})`
+    )
     .join(', ')
   return {
     create: false,

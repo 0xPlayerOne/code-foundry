@@ -23,7 +23,11 @@ export function customWorkflowFiles(root, standardFiles) {
 export function overlayPolicy(root, config) {
   const mode = config.sync_mode ?? 'overlay'
   const custom = config.custom_workflows ?? 'preserve'
-  if (!['overlay', 'strict'].includes(mode)) throw new Error(`Unsupported sync_mode: ${mode}; use overlay or strict.`)
-  if (custom !== 'preserve') throw new Error(`Unsupported custom_workflows: ${custom}; custom workflows are always preserved.`)
+  if (!['overlay', 'strict'].includes(mode))
+    throw new Error(`Unsupported sync_mode: ${mode}; use overlay or strict.`)
+  if (custom !== 'preserve')
+    throw new Error(
+      `Unsupported custom_workflows: ${custom}; custom workflows are always preserved.`
+    )
   return { mode, custom_workflows: custom }
 }

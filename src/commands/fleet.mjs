@@ -13,7 +13,7 @@ export function discoverRepositories(root) {
   /** @type {FleetRepository[]} */
   const result = []
   const candidates = [root, ...children(root), ...children(join(root, 'NiftyLeague'))]
-  for (const candidate of [...new Set(candidates)]) {
+  for (const candidate of new Set(candidates)) {
     if (!existsSync(join(candidate, '.git'))) continue
     const configured = existsSync(join(candidate, '.github/code-foundry.yml'))
     const config = readConfig(join(candidate, '.github/code-foundry.yml'))
@@ -35,12 +35,23 @@ export function upgradeFleet(root, source, options) {
   const repositories = discoverRepositories(root)
   const report = []
   for (const repository of repositories) {
-    if ((options.exclude ?? []).some((value) => repository.path === value || repository.repository === value || repository.path.endsWith(`/${value}`))) {
+    if (
+      (options.exclude ?? []).some(
+        (value) =>
+          repository.path === value ||
+          repository.repository === value ||
+          repository.path.endsWith(`/${value}`)
+      )
+    ) {
       report.push({ path: repository.path, status: 'skipped', reason: 'excluded by fleet policy' })
       continue
     }
     if (!repository.configured) {
-      report.push({ path: repository.path, status: 'skipped', reason: 'missing .github/code-foundry.yml' })
+      report.push({
+        path: repository.path,
+        status: 'skipped',
+        reason: 'missing .github/code-foundry.yml',
+      })
       continue
     }
     if (repository.dirty && !options.force) {
@@ -48,12 +59,25 @@ export function upgradeFleet(root, source, options) {
       continue
     }
     if (!options.createPr || options.dryRun) {
-      const result = syncRepository({ target: repository.path, source, dryRun: options.dryRun, force: false })
-      report.push({ path: repository.path, status: options.dryRun ? 'preview' : 'synced', changed: result.changed })
+      const result = syncRepository({
+        target: repository.path,
+        source,
+        dryRun: options.dryRun,
+        force: false,
+      })
+      report.push({
+        path: repository.path,
+        status: options.dryRun ? 'preview' : 'synced',
+        changed: result.changed,
+      })
       continue
     }
     if (!repository.repository) {
-      report.push({ path: repository.path, status: 'skipped', reason: 'origin is not a GitHub remote' })
+      report.push({
+        path: repository.path,
+        status: 'skipped',
+        reason: 'origin is not a GitHub remote',
+      })
       continue
     }
     report.push(upgradeRepository(repository, source, options.version))
@@ -68,12 +92,35 @@ function upgradeRepository(repository, source, version) {
   const base = repository.gitWorkflow === 'staging-release' ? 'staging' : 'main'
   const temporary = mkdtempSync(join(tmpdir(), 'code-foundry-fleet-'))
   try {
-    const fetch = spawnSync('git', ['-C', repository.path, 'fetch', 'origin', base, '--quiet'], { encoding: 'utf8' })
-    if (fetch.status !== 0) return { path: repository.path, status: 'skipped', reason: fetch.stderr.trim() || `unable to refresh ${base} baseline` }
-    const baseline = spawnSync('git', ['-C', repository.path, 'rev-parse', `origin/${base}`], { encoding: 'utf8' })
-    if (baseline.status !== 0) return { path: repository.path, status: 'skipped', reason: `remote ${base} branch is unavailable` }
-    const add = spawnSync('git', ['-C', repository.path, 'worktree', 'add', '-b', branch, temporary, baseline.stdout.trim()], { encoding: 'utf8' })
-    if (add.status !== 0) return { path: repository.path, status: 'skipped', reason: add.stderr.trim() || 'unable to create isolated worktree' }
+    const fetch = spawnSync('git', ['-C', repository.path, 'fetch', 'origin', base, '--quiet'], {
+      encoding: 'utf8',
+    })
+    if (fetch.status !== 0)
+      return {
+        path: repository.path,
+        status: 'skipped',
+        reason: fetch.stderr.trim() || `unable to refresh ${base} baseline`,
+      }
+    const baseline = spawnSync('git', ['-C', repository.path, 'rev-parse', `origin/${base}`], {
+      encoding: 'utf8',
+    })
+    if (baseline.status !== 0)
+      return {
+        path: repository.path,
+        status: 'skipped',
+        reason: `remote ${base} branch is unavailable`,
+      }
+    const add = spawnSync(
+      'git',
+      ['-C', repository.path, 'worktree', 'add', '-b', branch, temporary, baseline.stdout.trim()],
+      { encoding: 'utf8' }
+    )
+    if (add.status !== 0)
+      return {
+        path: repository.path,
+        status: 'skipped',
+        reason: add.stderr.trim() || 'unable to create isolated worktree',
+      }
     const result = syncRepository({ target: temporary, source, force: false })
     const configFile = join(temporary, '.github/code-foundry.yml')
     if (existsSync(configFile)) {
@@ -83,21 +130,62 @@ function upgradeRepository(repository, source, version) {
         : `${current.trimEnd()}\nruntime_ref: ${version}\n`
       if (updated !== current) {
         writeFileSync(configFile, updated)
-        if (!result.changed.includes('.github/code-foundry.yml')) result.changed.push('.github/code-foundry.yml')
+        if (!result.changed.includes('.github/code-foundry.yml'))
+          result.changed.push('.github/code-foundry.yml')
       }
     }
     if (!result.changed.length) return { path: repository.path, status: 'unchanged', branch }
     spawnSync('git', ['-C', temporary, 'add', '-A'], { stdio: 'ignore' })
-    const commit = spawnSync('git', ['-C', temporary, 'commit', '-m', `chore(code-foundry): upgrade runtime to ${version}`], { encoding: 'utf8' })
-    if (commit.status !== 0) return { path: repository.path, status: 'failed', reason: commit.stderr.trim() || 'commit failed' }
-    const push = spawnSync('git', ['-C', temporary, 'push', '-u', 'origin', branch], { encoding: 'utf8' })
-    if (push.status !== 0) return { path: repository.path, status: 'failed', reason: push.stderr.trim() || 'push failed' }
-    const pr = spawnSync('gh', ['pr', 'create', '--repo', repository.repository, '--base', base, '--head', branch, '--title', `chore(code-foundry): upgrade to ${version}`, '--body', `Automated isolated Code Foundry runtime upgrade to ${version}.\n\nThe sync preserved protected repository-owned documents and custom workflows.`], { encoding: 'utf8' })
+    const commit = spawnSync(
+      'git',
+      ['-C', temporary, 'commit', '-m', `chore(code-foundry): upgrade runtime to ${version}`],
+      { encoding: 'utf8' }
+    )
+    if (commit.status !== 0)
+      return {
+        path: repository.path,
+        status: 'failed',
+        reason: commit.stderr.trim() || 'commit failed',
+      }
+    const push = spawnSync('git', ['-C', temporary, 'push', '-u', 'origin', branch], {
+      encoding: 'utf8',
+    })
+    if (push.status !== 0)
+      return {
+        path: repository.path,
+        status: 'failed',
+        reason: push.stderr.trim() || 'push failed',
+      }
+    const pr = spawnSync(
+      'gh',
+      [
+        'pr',
+        'create',
+        '--repo',
+        repository.repository,
+        '--base',
+        base,
+        '--head',
+        branch,
+        '--title',
+        `chore(code-foundry): upgrade to ${version}`,
+        '--body',
+        `Automated isolated Code Foundry runtime upgrade to ${version}.\n\nThe sync preserved protected repository-owned documents and custom workflows.`,
+      ],
+      { encoding: 'utf8' }
+    )
     return pr.status === 0
       ? { path: repository.path, status: 'pr-created', branch, pullRequest: pr.stdout.trim() }
-      : { path: repository.path, status: 'failed', branch, reason: pr.stderr.trim() || 'pull request creation failed' }
+      : {
+          path: repository.path,
+          status: 'failed',
+          branch,
+          reason: pr.stderr.trim() || 'pull request creation failed',
+        }
   } finally {
-    spawnSync('git', ['-C', repository.path, 'worktree', 'remove', '--force', temporary], { stdio: 'ignore' })
+    spawnSync('git', ['-C', repository.path, 'worktree', 'remove', '--force', temporary], {
+      stdio: 'ignore',
+    })
   }
 }
 
@@ -105,19 +193,34 @@ function upgradeRepository(repository, source, version) {
 function children(root) {
   try {
     return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.') && !['node_modules', 'target'].includes(entry.name))
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          !entry.name.startsWith('.') &&
+          !['node_modules', 'target'].includes(entry.name)
+      )
       .map((entry) => join(root, entry.name))
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 /** @param {string} file @returns {Record<string, string>} */
 function readConfig(file) {
   try {
-    return Object.fromEntries(requireText(file).split(/\r?\n/).flatMap((line) => {
-      const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
-      return match ? [[match[1], match[2].replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')]] : []
-    }))
-  } catch { return {} }
+    return Object.fromEntries(
+      requireText(file)
+        .split(/\r?\n/)
+        .flatMap((line) => {
+          const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
+          return match
+            ? [[match[1], match[2].replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')]]
+            : []
+        })
+    )
+  } catch {
+    return {}
+  }
 }
 
 /** @param {string} file */
@@ -126,7 +229,14 @@ function requireText(file) {
 }
 
 /** @param {string} root @param {string[]} args */
-function git(root, args) { return spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout?.trim() ?? '' }
+function git(root, args) {
+  return spawnSync('git', args, { cwd: root, encoding: 'utf8' }).stdout?.trim() ?? ''
+}
 
 /** @param {string} remote */
-function normalizeRemote(remote) { return remote.replace(/^git@github\.com:/, '').replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '') }
+function normalizeRemote(remote) {
+  return remote
+    .replace(/^git@github\.com:/, '')
+    .replace(/^https?:\/\/github\.com\//, '')
+    .replace(/\.git$/, '')
+}

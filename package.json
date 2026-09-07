@@ -2,17 +2,15 @@
   "name": "code-foundry",
   "version": "1.2.1",
   "description": "A fast, language-aware repository factory for agent-ready workflows, testing, security, and release automation.",
-  "type": "module",
+  "homepage": "https://github.com/0xPlayerOne/code-foundry#readme",
+  "bugs": {
+    "url": "https://github.com/0xPlayerOne/code-foundry/issues"
+  },
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://github.com/0xPlayerOne/code-foundry.git"
   },
-  "homepage": "https://github.com/0xPlayerOne/code-foundry#readme",
-  "bugs": {
-    "url": "https://github.com/0xPlayerOne/code-foundry/issues"
-  },
-  "packageManager": "bun@1.4.0",
   "bin": {
     "code-foundry": "src/cli.mjs"
   },
@@ -28,32 +26,37 @@
     "release-please-config.json",
     "ruff.toml",
     ".mise.toml",
-    ".prettierrc",
-    ".prettierignore",
+    ".oxfmtrc.json",
+    ".oxlintrc.json",
     ".env.example",
     "AGENTS.md",
     "LICENSE",
     "NOTICE",
     "README.md"
   ],
-  "engines": {
-    "node": ">=20"
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "node --check src/cli.mjs",
-    "format:check": "node --check src/cli.mjs",
-    "lint": "node --check src/cli.mjs",
+    "format:check": "oxfmt --check .",
+    "fmt": "oxfmt .",
+    "lint": "oxlint",
     "test": "node --test",
     "test:unit": "node --test",
     "type-check": "tsc --project jsconfig.json",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run pack:check"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "devDependencies": {
     "@types/node": "^26.0.0",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
     "typescript": "^7.0.2"
-  }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "bun@1.4.0"
 }

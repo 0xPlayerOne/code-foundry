@@ -4,7 +4,18 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { approvedReleaseFiles, buildReleaseRecoveryPlan, buildReconciliationPullRequestBody, classifyReconciliation, readReleaseConfig, reconciliationPullRequestBranch, reconciliationPullRequestTitle, selectGeneratedReleasePrs, selectReconciliationPullRequest, validateReleasePullRequests } from '../lib/release-policy.mjs'
+import {
+  approvedReleaseFiles,
+  buildReleaseRecoveryPlan,
+  buildReconciliationPullRequestBody,
+  classifyReconciliation,
+  readReleaseConfig,
+  reconciliationPullRequestBranch,
+  reconciliationPullRequestTitle,
+  selectGeneratedReleasePrs,
+  selectReconciliationPullRequest,
+  validateReleasePullRequests,
+} from '../lib/release-policy.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib/release-hook.mjs'
 
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */
@@ -31,9 +42,15 @@ export function reconcileRelease(root, options) {
     throw new Error(formatReconciliationFailure(state.plan))
   }
   console.log(JSON.stringify({ base, head, ...state.plan }, null, 2))
-  if (!['fast-forward', 'rebase-staging', 'aligned'].includes(state.plan.action) || !options.github || options.dryRun) return state.plan
+  if (
+    !['fast-forward', 'rebase-staging', 'aligned'].includes(state.plan.action) ||
+    !options.github ||
+    options.dryRun
+  )
+    return state.plan
   if (state.plan.action === 'aligned' && state.mainSha === state.stagingSha) return state.plan
-  if (!process.env.GITHUB_REPOSITORY) throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
+  if (!process.env.GITHUB_REPOSITORY)
+    throw new Error('GITHUB_REPOSITORY is required for --github reconciliation.')
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
   if (!token) throw new Error('GH_TOKEN or GITHUB_TOKEN is required for --github reconciliation.')
   const maxAttempts = 3
@@ -42,16 +59,20 @@ export function reconcileRelease(root, options) {
     if (state.plan.action === 'fail') throw new Error(formatReconciliationFailure(state.plan))
     if (state.plan.action === 'aligned' && state.mainSha === state.stagingSha) return state.plan
     const mutation = executeReconciliationMutation(target, base, head, state)
-    if (mutation.success === true) return { ...state.plan, ...(mutation.result ?? {}) }
+    if (mutation.success === true) return { ...state.plan, ...mutation.result }
     if (mutation.retry !== true) throw new Error(mutation.error ?? `${head} reconciliation failed.`)
     const remoteSha = remoteRefSha(target, head)
     if (remoteSha === state.stagingSha) {
-      throw new Error(`${head} synchronization was rejected by an exact lease while remote ${head} tip remained ${state.stagingSha}. ` +
-        'Update branch protection or remote policy to permit this mutation, then retry. ' +
-        `Last failure detail: ${mutation.error ?? 'unknown synchronization failure'}`)
+      throw new Error(
+        `${head} synchronization was rejected by an exact lease while remote ${head} tip remained ${state.stagingSha}. ` +
+          'Update branch protection or remote policy to permit this mutation, then retry. ' +
+          `Last failure detail: ${mutation.error ?? 'unknown synchronization failure'}`
+      )
     }
   }
-  throw new Error(`Reconciliation of ${head} was retried but failed while the branch moved concurrently.`)
+  throw new Error(
+    `Reconciliation of ${head} was retried but failed while the branch moved concurrently.`
+  )
 }
 
 /**
@@ -130,13 +151,20 @@ function resolveRef(target, ref, requireRemote) {
 
 /** @param {string} target @param {string} base @param {string} head */
 function refreshRemoteRefs(target, base, head) {
-  const result = spawnSync('git', ['fetch', 'origin', base, head], { cwd: target, encoding: 'utf8' })
-  if (result.status !== 0) throw new Error(`Failed to refresh origin/${base} and origin/${head} before reconciliation.`)
+  const result = spawnSync('git', ['fetch', 'origin', base, head], {
+    cwd: target,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0)
+    throw new Error(`Failed to refresh origin/${base} and origin/${head} before reconciliation.`)
 }
 
 /** @param {string} target @param {string} branch @returns {string | null} */
 function remoteRefSha(target, branch) {
-  const result = spawnSync('git', ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`], { cwd: target, encoding: 'utf8' })
+  const result = spawnSync('git', ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`], {
+    cwd: target,
+    encoding: 'utf8',
+  })
   if (result.status !== 0) return null
   const [sha] = result.stdout.trim().split(/\t/, 1)
   return sha || ''
@@ -157,7 +185,8 @@ function remoteRefSha(target, branch) {
  * @returns {{ success: false, retry: boolean, error: string } | { success: true, result: ReconciliationMutationResult }}
  */
 function executeReconciliationMutation(target, base, head, state) {
-  if (!state.plan.targetSha) return { success: false, retry: false, error: `No target SHA for ${head} reconciliation.` }
+  if (!state.plan.targetSha)
+    return { success: false, retry: false, error: `No target SHA for ${head} reconciliation.` }
   if (state.plan.action === 'rebase-staging') {
     let replaySha
     try {
@@ -171,7 +200,8 @@ function executeReconciliationMutation(target, base, head, state) {
     }
 
     const push = pushWithLease(target, head, state.stagingSha, replaySha)
-    if (push.status === 0) return { success: true, result: { synchronization: 'replay', replaySha } }
+    if (push.status === 0)
+      return { success: true, result: { synchronization: 'replay', replaySha } }
     const classification = classifyPushFailure(head, push.message)
     if (classification.category === 'authentication') {
       return {
@@ -181,13 +211,29 @@ function executeReconciliationMutation(target, base, head, state) {
       }
     }
     if (classification.category === 'policy') {
-      return deliverReconciliationPullRequest(target, base, head, state, replaySha, { synchronization: 'replay', replaySha }, classification.message)
+      return deliverReconciliationPullRequest(
+        target,
+        base,
+        head,
+        state,
+        replaySha,
+        { synchronization: 'replay', replaySha },
+        classification.message
+      )
     }
-    return { success: false, retry: true, error: `${head} synchronization failed with lease: ${classification.message}` }
+    return {
+      success: false,
+      retry: true,
+      error: `${head} synchronization failed with lease: ${classification.message}`,
+    }
   }
   const targetSha = /** @type {string} */ (state.plan.targetSha)
   const leased = pushWithLease(target, head, state.stagingSha, targetSha)
-  if (leased.status === 0) return { success: true, result: { synchronization: state.plan.action === 'aligned' ? 'synced' : 'leased' } }
+  if (leased.status === 0)
+    return {
+      success: true,
+      result: { synchronization: state.plan.action === 'aligned' ? 'synced' : 'leased' },
+    }
   const classification = classifyPushFailure(head, leased.message)
   if (classification.category === 'authentication') {
     return {
@@ -205,9 +251,21 @@ function executeReconciliationMutation(target, base, head, state) {
     if (state.plan.action === 'aligned') {
       return { success: true, result: { synchronization: 'content-aligned' } }
     }
-    return deliverReconciliationPullRequest(target, base, head, state, targetSha, {}, classification.message)
+    return deliverReconciliationPullRequest(
+      target,
+      base,
+      head,
+      state,
+      targetSha,
+      {},
+      classification.message
+    )
   }
-  return { success: false, retry: true, error: `${head} synchronization failed with lease: ${classification.message}` }
+  return {
+    success: false,
+    retry: true,
+    error: `${head} synchronization failed with lease: ${classification.message}`,
+  }
 }
 
 /** @typedef {{ number: number, url: string, base: string, head: string, branch: string, title: string, body: string }} ReconciliationPullRequest */
@@ -239,7 +297,8 @@ function failResult(error) {
  */
 function deliverReconciliationPullRequest(target, base, head, state, targetSha, extra, pushError) {
   const repository = process.env.GITHUB_REPOSITORY
-  if (!repository) return failResult('GITHUB_REPOSITORY is required to open a reconciliation pull request.')
+  if (!repository)
+    return failResult('GITHUB_REPOSITORY is required to open a reconciliation pull request.')
   // base (main) is only the reconciliation source; the generated pull
   // request must target the protected head branch (staging), so the PR base
   // is always the reconcile head. Keep one named source of truth so the gh
@@ -249,7 +308,9 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
   const title = reconciliationPullRequestTitle({ targetHead: head, sourceBase: base })
   const prepared = prepareExactTreeReconciliationHead(target, state.stagingSha, targetSha, title)
   if (prepared.status !== 0 || !prepared.sha) {
-    return failResult(`Failed to prepare the exact-tree reconciliation head ${branch}: ${prepared.message}`)
+    return failResult(
+      `Failed to prepare the exact-tree reconciliation head ${branch}: ${prepared.message}`
+    )
   }
   const deliverySha = prepared.sha
   const body = buildReconciliationPullRequestBody({
@@ -264,45 +325,77 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
   })
   const expected = { targetBase: prBase, branch, title }
   let prs = listOpenHeadPullRequests(target, repository, branch)
-  if (!prs) return failResult(`Failed to list open pull requests for reconciliation branch ${branch}.`)
+  if (!prs)
+    return failResult(`Failed to list open pull requests for reconciliation branch ${branch}.`)
   let selection = selectReconciliationPullRequest(prs, expected)
   if (selection.error) return failResult(selection.error)
   if (!selection.create) {
-    if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch}.`)
+    if (!selection.reuse)
+      return failResult(`No reusable reconciliation pull request for ${branch}.`)
     return reuseReconciliationPullRequest(target, repository, selection.reuse, deliverySha, body)
   }
   const pushed = pushReconciliationHead(target, branch, deliverySha)
   if (pushed.status !== 0) {
     const classification = classifyPushFailure(branch, pushed.message)
     if (classification.category === 'authentication') {
-      return failResult(`${branch} authentication failed while pushing the reconciliation head: ${classification.message}`)
+      return failResult(
+        `${branch} authentication failed while pushing the reconciliation head: ${classification.message}`
+      )
     }
     return failResult(`Failed to push the reconciliation head ${branch}: ${classification.message}`)
   }
   prs = listOpenHeadPullRequests(target, repository, branch)
-  if (!prs) return failResult(`Failed to re-list open pull requests for reconciliation branch ${branch} after pushing its head.`)
+  if (!prs)
+    return failResult(
+      `Failed to re-list open pull requests for reconciliation branch ${branch} after pushing its head.`
+    )
   selection = selectReconciliationPullRequest(prs, expected)
   if (selection.error) return failResult(selection.error)
   if (!selection.create) {
-    if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch} after pushing its head.`)
+    if (!selection.reuse)
+      return failResult(
+        `No reusable reconciliation pull request for ${branch} after pushing its head.`
+      )
     return reuseReconciliationPullRequest(target, repository, selection.reuse, deliverySha, body)
   }
-  const created = ghSpawn(target, ['pr', 'create', '--repo', repository, '--base', prBase, '--head', branch, '--title', title, '--body', body])
+  const created = ghSpawn(target, [
+    'pr',
+    'create',
+    '--repo',
+    repository,
+    '--base',
+    prBase,
+    '--head',
+    branch,
+    '--title',
+    title,
+    '--body',
+    body,
+  ])
   if (created.status !== 0) {
     // A concurrent run may have created the pull request between our list
     // and create; reuse it when it is exactly ours, otherwise fail closed.
     prs = listOpenHeadPullRequests(target, repository, branch)
-    if (!prs) return failResult(`Failed to create the reconciliation pull request and to re-list open pull requests for ${branch}.`)
+    if (!prs)
+      return failResult(
+        `Failed to create the reconciliation pull request and to re-list open pull requests for ${branch}.`
+      )
     selection = selectReconciliationPullRequest(prs, expected)
     if (selection.error) return failResult(selection.error)
     if (selection.create) {
       return failResult(reconciliationPullRequestCreateError(branch, created.stderr))
     }
-    if (!selection.reuse) return failResult(`No reusable reconciliation pull request for ${branch} after gh pr create failed.`)
+    if (!selection.reuse)
+      return failResult(
+        `No reusable reconciliation pull request for ${branch} after gh pr create failed.`
+      )
     return reuseReconciliationPullRequest(target, repository, selection.reuse, deliverySha, body)
   }
   const number = parsePullRequestNumber(created.stdout)
-  if (!number) return failResult(`Created the reconciliation pull request for ${branch} but could not parse its number.`)
+  if (!number)
+    return failResult(
+      `Created the reconciliation pull request for ${branch} but could not parse its number.`
+    )
   const url = created.stdout.trim()
   return {
     success: true,
@@ -329,7 +422,11 @@ function prepareExactTreeReconciliationHead(target, stagingSha, targetSha, title
   const tree = git(target, ['rev-parse', `${targetSha}^{tree}`])
   const timestamp = git(target, ['show', '-s', '--format=%cI', targetSha])
   if (!tree || !timestamp) {
-    return { status: 1, sha: '', message: `could not resolve target tree or timestamp for ${targetSha}.` }
+    return {
+      status: 1,
+      sha: '',
+      message: `could not resolve target tree or timestamp for ${targetSha}.`,
+    }
   }
   const message = `${title}\n\nReconciled from target snapshot ${targetSha.slice(0, 12)}.`
   const result = spawnSync('git', ['commit-tree', tree, '-p', stagingSha, '-m', message], {
@@ -350,16 +447,22 @@ function prepareExactTreeReconciliationHead(target, stagingSha, targetSha, title
   return {
     status: result.status,
     sha,
-    message: result.status === 0 && sha ? '' : sanitizeReconcileOutput(detail) || 'git commit-tree failed.',
+    message:
+      result.status === 0 && sha
+        ? ''
+        : sanitizeReconcileOutput(detail) || 'git commit-tree failed.',
   }
 }
 
 /** @param {string} branch @param {string} stderr */
 function reconciliationPullRequestCreateError(branch, stderr) {
   const detail = sanitizeReconcileOutput(stderr) || 'unknown error'
-  const permissionHint = /github actions is not permitted to create or approve pull requests|resource not accessible by integration/i.test(detail)
-    ? ' Enable Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests, then rerun the workflow.'
-    : ''
+  const permissionHint =
+    /github actions is not permitted to create or approve pull requests|resource not accessible by integration/i.test(
+      detail
+    )
+      ? ' Enable Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests, then rerun the workflow.'
+      : ''
   return `gh pr create failed for ${branch}: ${detail}${permissionHint}`
 }
 
@@ -377,13 +480,29 @@ function reconciliationPullRequestCreateError(branch, stderr) {
 function reuseReconciliationPullRequest(target, repository, pr, deliverySha, body) {
   const number = Number(pr.number)
   if (String(pr.headRefOid ?? '') !== deliverySha) {
-    const pushed = pushReconciliationHead(target, /** @type {string} */ (pr.headRefName), deliverySha)
+    const pushed = pushReconciliationHead(
+      target,
+      /** @type {string} */ (pr.headRefName),
+      deliverySha
+    )
     if (pushed.status !== 0) {
-      return failResult(`Failed to refresh the reconciliation branch ${pr.headRefName} to the exact-tree delivery head: ${sanitizeReconcileOutput(pushed.message)}`)
+      return failResult(
+        `Failed to refresh the reconciliation branch ${pr.headRefName} to the exact-tree delivery head: ${sanitizeReconcileOutput(pushed.message)}`
+      )
     }
-    const edited = ghSpawn(target, ['pr', 'edit', String(number), '--repo', repository, '--body', body])
+    const edited = ghSpawn(target, [
+      'pr',
+      'edit',
+      String(number),
+      '--repo',
+      repository,
+      '--body',
+      body,
+    ])
     if (edited.status !== 0) {
-      return failResult(`Failed to update reconciliation pull request #${number}: ${sanitizeReconcileOutput(edited.stderr) || 'unknown error'}`)
+      return failResult(
+        `Failed to update reconciliation pull request #${number}: ${sanitizeReconcileOutput(edited.stderr) || 'unknown error'}`
+      )
     }
   }
   return {
@@ -411,11 +530,20 @@ function reuseReconciliationPullRequest(target, repository, pr, deliverySha, bod
  */
 function pushReconciliationHead(target, branch, deliverySha) {
   const existingTip = remoteRefSha(target, branch)
-  if (existingTip === null) return { status: 1, message: `could not resolve the remote reconciliation branch ${branch} before pushing.` }
+  if (existingTip === null)
+    return {
+      status: 1,
+      message: `could not resolve the remote reconciliation branch ${branch} before pushing.`,
+    }
   if (existingTip === deliverySha) return { status: 0, message: '' }
   if (!existingTip) {
-    const result = spawnSync('git', ['push', 'origin', `${deliverySha}:refs/heads/${branch}`], { cwd: target, encoding: 'utf8' })
-    const message = `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim() || `failed to create reconciliation branch ${branch}.`
+    const result = spawnSync('git', ['push', 'origin', `${deliverySha}:refs/heads/${branch}`], {
+      cwd: target,
+      encoding: 'utf8',
+    })
+    const message =
+      `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim() ||
+      `failed to create reconciliation branch ${branch}.`
     return { status: result.status, message: sanitizeReconcileOutput(message) }
   }
   return pushWithLease(target, branch, existingTip, deliverySha)
@@ -428,7 +556,18 @@ function pushReconciliationHead(target, branch, deliverySha) {
  * @returns {Array<{number?: number, title?: string, headRefName?: string, headRefOid?: string, baseRefName?: string, url?: string}> | null}
  */
 function listOpenHeadPullRequests(target, repository, branch) {
-  const result = ghSpawn(target, ['pr', 'list', '--repo', repository, '--state', 'open', '--head', branch, '--json', 'number,title,headRefName,headRefOid,baseRefName,url'])
+  const result = ghSpawn(target, [
+    'pr',
+    'list',
+    '--repo',
+    repository,
+    '--state',
+    'open',
+    '--head',
+    branch,
+    '--json',
+    'number,title,headRefName,headRefOid,baseRefName,url',
+  ])
   if (result.status !== 0) return null
   try {
     const prs = JSON.parse(result.stdout)
@@ -446,13 +585,19 @@ function parsePullRequestNumber(stdout) {
 
 /** @param {string} target @param {string} head @param {string} expectedSha @param {string} tipSha */
 function pushWithLease(target, head, expectedSha, tipSha) {
-  const result = spawnSync('git', [
-    'push',
-    'origin',
-    `--force-with-lease=refs/heads/${head}:${expectedSha}`,
-    `${tipSha}:refs/heads/${head}`,
-  ], { cwd: target, encoding: 'utf8' })
-  const message = `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim() || `push with lease failed for ${head}.`
+  const result = spawnSync(
+    'git',
+    [
+      'push',
+      'origin',
+      `--force-with-lease=refs/heads/${head}:${expectedSha}`,
+      `${tipSha}:refs/heads/${head}`,
+    ],
+    { cwd: target, encoding: 'utf8' }
+  )
+  const message =
+    `${result.stdout?.trim() || ''}\n${result.stderr?.trim() || ''}`.trim() ||
+    `push with lease failed for ${head}.`
   return {
     status: result.status,
     message: sanitizeReconcileOutput(message),
@@ -469,10 +614,18 @@ function classifyPushFailure(branch, raw) {
   const message = sanitizeReconcileOutput(raw)
   if (!message) return { category: 'other', message: `push with lease failed for ${branch}.` }
   const lower = message.toLowerCase()
-  if (/permission denied|authentication failed|could not read from remote repository|publickey|not authorized|bad credentials/.test(lower)) {
+  if (
+    /permission denied|authentication failed|could not read from remote repository|publickey|not authorized|bad credentials/.test(
+      lower
+    )
+  ) {
     return { category: 'authentication', message }
   }
-  if (/changes must be made through a pull request|protected branch|protected branch hook declined|required status checks|pre-receive hook|branch policy|repository rule|ruleset|push declined due to repository rule|gh006|gh007|gh008|gh013/.test(lower)) {
+  if (
+    /changes must be made through a pull request|protected branch|protected branch hook declined|required status checks|pre-receive hook|branch policy|repository rule|ruleset|push declined due to repository rule|gh006|gh007|gh008|gh013/.test(
+      lower
+    )
+  ) {
     return { category: 'policy', message }
   }
   return { category: 'other', message }
@@ -503,23 +656,43 @@ function replayOntoMain(target, mainSha, commits) {
     'user.email=41898282+github-actions[bot]@users.noreply.github.com',
   ]
   try {
-    const added = spawnSync('git', ['worktree', 'add', '--detach', workspace, mainSha], { cwd: target, encoding: 'utf8' })
-    if (added.status !== 0) throw new Error(`Failed to create temporary replay worktree: ${added.stderr?.trim() || added.stdout?.trim()}`)
+    const added = spawnSync('git', ['worktree', 'add', '--detach', workspace, mainSha], {
+      cwd: target,
+      encoding: 'utf8',
+    })
+    if (added.status !== 0)
+      throw new Error(
+        `Failed to create temporary replay worktree: ${added.stderr?.trim() || added.stdout?.trim()}`
+      )
     for (const sha of orderedCommits) {
-      const cherryPick = spawnSync('git', [...identityArgs, 'cherry-pick', sha], { cwd: workspace, encoding: 'utf8' })
+      const cherryPick = spawnSync('git', [...identityArgs, 'cherry-pick', sha], {
+        cwd: workspace,
+        encoding: 'utf8',
+      })
       if (cherryPick.status !== 0) {
         spawnSync('git', ['cherry-pick', '--abort'], { cwd: workspace, encoding: 'utf8' })
-        const details = [cherryPick.stdout?.trim(), cherryPick.stderr?.trim()].filter(Boolean).join('\n')
-        throw new Error(`Cherry-pick of ${sha} failed while replaying staging commits: ${sanitizeReconcileOutput(details)}`)
+        const details = [cherryPick.stdout?.trim(), cherryPick.stderr?.trim()]
+          .filter(Boolean)
+          .join('\n')
+        throw new Error(
+          `Cherry-pick of ${sha} failed while replaying staging commits: ${sanitizeReconcileOutput(details)}`
+        )
       }
     }
     const replayTip = git(workspace, ['rev-parse', 'HEAD'])
     if (!replayTip) throw new Error('Failed to resolve replay tip SHA.')
-    const ancestry = spawnSync('git', ['merge-base', '--is-ancestor', mainSha, replayTip], { cwd: workspace, encoding: 'utf8' })
-    if (ancestry.status !== 0) throw new Error('Replayed head is not based on the current main tip.')
+    const ancestry = spawnSync('git', ['merge-base', '--is-ancestor', mainSha, replayTip], {
+      cwd: workspace,
+      encoding: 'utf8',
+    })
+    if (ancestry.status !== 0)
+      throw new Error('Replayed head is not based on the current main tip.')
     return replayTip
   } finally {
-    spawnSync('git', ['worktree', 'remove', '--force', workspace], { cwd: target, encoding: 'utf8' })
+    spawnSync('git', ['worktree', 'remove', '--force', workspace], {
+      cwd: target,
+      encoding: 'utf8',
+    })
     rmSync(workspace, { recursive: true, force: true })
   }
 }
@@ -533,26 +706,63 @@ export function dispatchPostReleaseHook(root, options) {
   const repository = process.env.GITHUB_REPOSITORY
   if (!repository) throw new Error('GITHUB_REPOSITORY is required for post-release hooks.')
   if (!options.tag) throw new Error('--tag is required for post-release hooks.')
-  const decision = selectHookDelivery({ mode: options.mode, tokenPresent: Boolean(process.env.CODE_FOUNDRY_TOKEN) })
-  console.log(JSON.stringify({ repository, tag: options.tag, workflow: options.workflow, ...decision }, null, 2))
+  const decision = selectHookDelivery({
+    mode: options.mode,
+    tokenPresent: Boolean(process.env.CODE_FOUNDRY_TOKEN),
+  })
+  console.log(
+    JSON.stringify(
+      { repository, tag: options.tag, workflow: options.workflow, ...decision },
+      null,
+      2
+    )
+  )
   if (decision.delivery === 'disabled' || decision.delivery === 'release-event') return decision
   if (decision.delivery === 'unavailable') throw new Error(decision.reason)
   if (!options.workflow) throw new Error('--workflow is required for workflow-dispatch hooks.')
   const key = releaseDeliveryKey(repository, options.tag)
-  const runs = ghJson(root, ['run', 'list', '--repo', repository, '--workflow', options.workflow, '--limit', '100', '--json', 'headBranch,displayTitle,status'])
+  const runs = ghJson(root, [
+    'run',
+    'list',
+    '--repo',
+    repository,
+    '--workflow',
+    options.workflow,
+    '--limit',
+    '100',
+    '--json',
+    'headBranch,displayTitle,status',
+  ])
   if (hasDeliveredHook(Array.isArray(runs) ? runs : [], options.tag)) {
-    console.log(`Post-release hook already delivered for ${options.tag}; skipping duplicate dispatch.`)
+    console.log(
+      `Post-release hook already delivered for ${options.tag}; skipping duplicate dispatch.`
+    )
     return { ...decision, deliveryKey: key, skipped: true }
   }
   if (options.dryRun) return { ...decision, deliveryKey: key, dispatched: false }
-  const result = spawnSync('gh', [
-    'workflow', 'run', options.workflow,
-    '--repo', repository,
-    '--ref', options.tag,
-    '--field', `release-tag=${options.tag}`,
-    '--field', `delivery-key=${key}`,
-  ], { cwd: resolve(root), stdio: 'inherit', env: { ...process.env, GH_TOKEN: process.env.CODE_FOUNDRY_TOKEN } })
-  if (result.status !== 0) throw new Error(`Failed to dispatch post-release workflow ${options.workflow}.`)
+  const result = spawnSync(
+    'gh',
+    [
+      'workflow',
+      'run',
+      options.workflow,
+      '--repo',
+      repository,
+      '--ref',
+      options.tag,
+      '--field',
+      `release-tag=${options.tag}`,
+      '--field',
+      `delivery-key=${key}`,
+    ],
+    {
+      cwd: resolve(root),
+      stdio: 'inherit',
+      env: { ...process.env, GH_TOKEN: process.env.CODE_FOUNDRY_TOKEN },
+    }
+  )
+  if (result.status !== 0)
+    throw new Error(`Failed to dispatch post-release workflow ${options.workflow}.`)
   return { ...decision, deliveryKey: key, dispatched: true }
 }
 
@@ -562,7 +772,18 @@ export function validateReleasePullRequestDiffs(root) {
   if (!repository) throw new Error('GITHUB_REPOSITORY is required for release PR validation.')
   let prs = []
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const result = ghJson(root, ['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title,headRefName'])
+    const result = ghJson(root, [
+      'pr',
+      'list',
+      '--repo',
+      repository,
+      '--state',
+      'open',
+      '--base',
+      'main',
+      '--json',
+      'number,title,headRefName',
+    ])
     prs = Array.isArray(result) ? result : []
     if (selectGeneratedReleasePrs(prs).length) break
     if (attempt < 4) spawnSync('sleep', ['2'])
@@ -572,10 +793,18 @@ export function validateReleasePullRequestDiffs(root) {
   const paths = new Map()
   for (const pr of generated) {
     const number = Number(pr.number)
-    const result = spawnSync('gh', ['pr', 'diff', String(number), '--repo', repository, '--name-only'], { cwd: resolve(root), encoding: 'utf8' })
+    const result = spawnSync(
+      'gh',
+      ['pr', 'diff', String(number), '--repo', repository, '--name-only'],
+      { cwd: resolve(root), encoding: 'utf8' }
+    )
     paths.set(number, result.status === 0 ? result.stdout.split(/\r?\n/).filter(Boolean) : [])
   }
-  const validation = validateReleasePullRequests(Array.isArray(prs) ? prs : [], paths, approvedReleaseFiles(readReleaseConfig(root)))
+  const validation = validateReleasePullRequests(
+    Array.isArray(prs) ? prs : [],
+    paths,
+    approvedReleaseFiles(readReleaseConfig(root))
+  )
   console.log(JSON.stringify(validation, null, 2))
   if (!validation.valid) throw new Error(validation.errors.join(' '))
   return validation
@@ -586,13 +815,35 @@ export function releaseRecoveryPlan(root) {
   const repository = process.env.GITHUB_REPOSITORY
   if (!repository) throw new Error('GITHUB_REPOSITORY is required for release recovery planning.')
   const tags = ghJson(root, ['api', `repos/${repository}/tags?per_page=100`])
-  const releases = ghJson(root, ['release', 'list', '--repo', repository, '--limit', '100', '--json', 'tagName,name,isDraft,isPrerelease'])
-  const releasePrs = ghJson(root, ['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title'])
+  const releases = ghJson(root, [
+    'release',
+    'list',
+    '--repo',
+    repository,
+    '--limit',
+    '100',
+    '--json',
+    'tagName,name,isDraft,isPrerelease',
+  ])
+  const releasePrs = ghJson(root, [
+    'pr',
+    'list',
+    '--repo',
+    repository,
+    '--state',
+    'open',
+    '--base',
+    'main',
+    '--json',
+    'number,title',
+  ])
   const packageVersions = localPackageVersions(root)
   const plan = buildReleaseRecoveryPlan({
     tags: Array.isArray(tags) ? tags.map((tag) => tag.name).filter(Boolean) : [],
     releases: Array.isArray(releases) ? releases : [],
-    releasePrs: Array.isArray(releasePrs) ? releasePrs.filter((pr) => /^chore\(main\): release /.test(pr.title ?? '')) : [],
+    releasePrs: Array.isArray(releasePrs)
+      ? releasePrs.filter((pr) => String(pr.title ?? '').startsWith('chore(main): release '))
+      : [],
     packageVersions,
   })
   console.log(JSON.stringify(plan, null, 2))
@@ -608,17 +859,23 @@ function git(root, args) {
 /** @param {string} root @param {string} from @param {string} to @returns {Array<{ sha: string, changedPaths: string[] }>} */
 function divergentCommits(root, from, to) {
   if (!from || !to || from === to) return []
-  const result = spawnSync('git', [
-    'log',
-    '--cherry-pick',
-    '--no-merges',
-    '--left-right',
-    '--reverse',
-    '--pretty=tformat:%m%H',
-    `${from}...${to}`,
-  ], { cwd: root, encoding: 'utf8' })
+  const result = spawnSync(
+    'git',
+    [
+      'log',
+      '--cherry-pick',
+      '--no-merges',
+      '--left-right',
+      '--reverse',
+      '--pretty=tformat:%m%H',
+      `${from}...${to}`,
+    ],
+    { cwd: root, encoding: 'utf8' }
+  )
   if (result.status !== 0) {
-    throw new Error(`Failed to enumerate divergent commits between ${from} and ${to}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+    throw new Error(
+      `Failed to enumerate divergent commits between ${from} and ${to}. ${result.stderr?.trim() || result.stdout?.trim()}`
+    )
   }
   return result.stdout
     .split(/\r?\n/)
@@ -632,16 +889,27 @@ function divergentCommits(root, from, to) {
 
 /** @param {string} root @param {string} commitSha @returns {string[]} */
 function commitChangedPaths(root, commitSha) {
-  const result = spawnSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', commitSha], { cwd: root, encoding: 'utf8' })
-  if (result.status !== 0) throw new Error(`Unable to read changed paths for commit ${commitSha}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+  const result = spawnSync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', commitSha], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0)
+    throw new Error(
+      `Unable to read changed paths for commit ${commitSha}. ${result.stderr?.trim() || result.stdout?.trim()}`
+    )
   return result.stdout.split(/\r?\n/).filter(Boolean)
 }
 
 /** @param {string} root @param {string} from @param {string} to @returns {string[]} */
 function treeChangedPaths(root, from, to) {
-  const result = spawnSync('git', ['diff', '--name-only', from, to], { cwd: root, encoding: 'utf8' })
+  const result = spawnSync('git', ['diff', '--name-only', from, to], {
+    cwd: root,
+    encoding: 'utf8',
+  })
   if (result.status !== 0) {
-    throw new Error(`Failed to compare branch trees between ${from} and ${to}. ${result.stderr?.trim() || result.stdout?.trim()}`)
+    throw new Error(
+      `Failed to compare branch trees between ${from} and ${to}. ${result.stderr?.trim() || result.stdout?.trim()}`
+    )
   }
   return result.stdout.split(/\r?\n/).filter(Boolean)
 }
@@ -649,15 +917,22 @@ function treeChangedPaths(root, from, to) {
 /** @param {string} root @param {string[]} args @returns {{ status: number | null, stdout: string, stderr: string }} */
 function ghSpawn(root, args) {
   const token = process.env.CODE_FOUNDRY_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN
-  return spawnSync('gh', args, { cwd: resolve(root), encoding: 'utf8', env: { ...process.env, ...(token ? { GH_TOKEN: token } : {}) } })
+  return spawnSync('gh', args, {
+    cwd: resolve(root),
+    encoding: 'utf8',
+    env: { ...process.env, ...(token ? { GH_TOKEN: token } : {}) },
+  })
 }
 
 /** @param {string} root @param {string[]} args @returns {unknown} */
 function ghJson(root, args) {
   const result = ghSpawn(root, args)
   if (result.status !== 0) return []
-  try { return JSON.parse(result.stdout) }
-  catch { return [] }
+  try {
+    return JSON.parse(result.stdout)
+  } catch {
+    return []
+  }
 }
 
 /** @param {string} root @returns {string[]} */
@@ -665,10 +940,17 @@ function localPackageVersions(root) {
   const versions = []
   const packageJson = join(resolve(root), 'package.json')
   if (existsSync(packageJson)) {
-    try { versions.push(JSON.parse(readFileSync(packageJson, 'utf8')).version) } catch { /* doctor handles malformed manifests */ }
+    try {
+      versions.push(JSON.parse(readFileSync(packageJson, 'utf8')).version)
+    } catch {
+      /* doctor handles malformed manifests */
+    }
   }
   /** @type {Array<[string, RegExp]>} */
-  const manifests = [['Cargo.toml', /^version\s*=\s*["']([^"']+)["']/m], ['pyproject.toml', /^(?:version|version\s*)\s*=\s*["']([^"']+)["']/m]]
+  const manifests = [
+    ['Cargo.toml', /^version\s*=\s*["']([^"']+)["']/m],
+    ['pyproject.toml', /^(?:version|version\s*)\s*=\s*["']([^"']+)["']/m],
+  ]
   for (const [file, pattern] of manifests) {
     const path = join(resolve(root), file)
     if (!existsSync(path)) continue

@@ -16,7 +16,10 @@ export function readConfig(file) {
   for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
     const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
     if (!match) continue
-    const value = match[2].replace(/\s+#.*$/, '').trim().replace(/^['"]|['"]$/g, '')
+    const value = match[2]
+      .replace(/\s+#.*$/, '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '')
     config[match[1]] = value
   }
   return config
@@ -29,7 +32,10 @@ export function configured(value, fallback) {
 
 /** @param {string} value @returns {string[]} */
 export function listValue(value) {
-  return value.split(',').map((item) => item.trim()).filter(Boolean)
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 /** @param {string} value @param {string} item */

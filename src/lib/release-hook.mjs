@@ -11,16 +11,26 @@ import { createHash } from 'node:crypto'
  */
 export function selectHookDelivery(input) {
   const mode = input.mode ?? 'auto'
-  if (mode === 'false' || mode === 'disabled') return { delivery: 'disabled', reason: 'Post-release hooks are disabled by configuration.' }
+  if (mode === 'false' || mode === 'disabled')
+    return { delivery: 'disabled', reason: 'Post-release hooks are disabled by configuration.' }
   if (mode === 'workflow-dispatch' || (mode === 'auto' && input.tokenPresent)) {
     return input.tokenPresent
-      ? { delivery: 'workflow-dispatch', reason: 'A PAT is available; use one explicit workflow dispatch.' }
+      ? {
+          delivery: 'workflow-dispatch',
+          reason: 'A PAT is available; use one explicit workflow dispatch.',
+        }
       : { delivery: 'unavailable', reason: 'workflow-dispatch requires a PAT.' }
   }
   if (mode === 'release-event' || (mode === 'auto' && input.releaseEventEnabled !== false)) {
-    return { delivery: 'release-event', reason: 'Use the published-release event; do not issue a fallback dispatch.' }
+    return {
+      delivery: 'release-event',
+      reason: 'Use the published-release event; do not issue a fallback dispatch.',
+    }
   }
-  return { delivery: 'unavailable', reason: 'No supported post-release delivery mechanism is configured.' }
+  return {
+    delivery: 'unavailable',
+    reason: 'No supported post-release delivery mechanism is configured.',
+  }
 }
 
 /** @param {string} repository @param {string} tag @returns {string} */
@@ -36,5 +46,7 @@ export function releaseDeliveryKey(repository, tag) {
  * @param {string} tag
  */
 export function hasDeliveredHook(runs, tag) {
-  return runs.some((run) => run.headBranch === tag || run.displayTitle?.includes(`release-tag=${tag}`))
+  return runs.some(
+    (run) => run.headBranch === tag || run.displayTitle?.includes(`release-tag=${tag}`)
+  )
 }

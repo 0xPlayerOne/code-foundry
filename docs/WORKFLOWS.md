@@ -7,7 +7,7 @@ points; it does not run the same suites again on branch pushes:
 
 ```yaml
 pull_request:
-  branches: [main, staging]   # staging-release topology
+  branches: [main, staging] # staging-release topology
   # direct topology: branches: [main]
 schedule:
   - cron: '31 6 * * 1'
@@ -71,15 +71,15 @@ honor the shared billing pause.
 
 ## Standard workflow responsibilities
 
-| Workflow | Responsibility |
-| --- | --- |
-| CI | Format, lint, type-check, and build |
-| Test | Unit, integration, E2E, and smoke tests |
-| Security | Profile, audits, and public-only Dependency Review |
-| CodeQL | GitHub-native code scanning, kept separate from CI |
-| Draft PR | Create/update development pull requests |
+| Workflow   | Responsibility                                                |
+| ---------- | ------------------------------------------------------------- |
+| CI         | Format, lint, type-check, and build                           |
+| Test       | Unit, integration, E2E, and smoke tests                       |
+| Security   | Profile, audits, and public-only Dependency Review            |
+| CodeQL     | GitHub-native code scanning, kept separate from CI            |
+| Draft PR   | Create/update development pull requests                       |
 | Release PR | Promote `staging` into `main` (staging-release topology only) |
-| Release | Release Please, GitHub release, and optional npm publication |
+| Release    | Release Please, GitHub release, and optional npm publication  |
 
 Use concise job names such as `CI / Format`, `Test / Unit`, and
 `CodeQL / Analyze (Python)`. Per-language CodeQL analyzers (Rust shards
@@ -98,12 +98,12 @@ The merge audit pins one merge method per transition. `code-foundry doctor`
 and `code-foundry sync` fail closed on any other strategy, and the release
 workflow refuses to run unless its strategy is exactly `rebase`.
 
-| Transition | Merge method | Enforcement |
-| --- | --- | --- |
-| Feature/fix PR into `main` (direct topology) | Squash | Contribution policy; see `CONTRIBUTING.md` |
-| Feature/fix PR into `staging` (staging-release topology) | Squash | Contribution policy; see `CONTRIBUTING.md` |
-| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`) | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
-| Release Please version PR into `main` | Rebase (`release_merge_strategy: rebase`) | Release automation fails closed unless `rebase`; never defaults to `merge`, never uses `--admin` |
+| Transition                                                 | Merge method                              | Enforcement                                                                                                                                                                |
+| ---------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature/fix PR into `main` (direct topology)               | Squash                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
+| Feature/fix PR into `staging` (staging-release topology)   | Squash                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
+| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`)         | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
+| Release Please version PR into `main`                      | Rebase (`release_merge_strategy: rebase`) | Release automation fails closed unless `rebase`; never defaults to `merge`, never uses `--admin`                                                                           |
 
 The promotion rows above apply only to `staging-release`; `direct`
 repositories never generate a promotion caller and `merge_strategy` is not
@@ -178,7 +178,7 @@ validation gate. Land changes through the standard `direct` or
 
 ## Language defaults
 
-- TypeScript/JavaScript: ESLint, Prettier, and Bun's native `bun test`.
+- TypeScript/JavaScript: Oxlint, Oxfmt, and Bun's native `bun test`.
 - Rust: default `rustfmt`, Clippy with `-D warnings`, and Cargo tests.
 - Python: Ruff formatting/linting, uv when a compatible lockfile exists, and
   native Python tests.

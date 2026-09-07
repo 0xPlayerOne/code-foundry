@@ -25,12 +25,12 @@ function workflowJobs(source) {
 }
 
 function jobCondition(lines) {
-  const conditionIndex = lines.findIndex((line) => /^    if:/.test(line))
+  const conditionIndex = lines.findIndex((line) => line.startsWith('    if:'))
   if (conditionIndex === -1) return ''
 
   const condition = [lines[conditionIndex].trim()]
   for (let index = conditionIndex + 1; index < lines.length; index += 1) {
-    if (!/^      /.test(lines[index])) break
+    if (!lines[index].startsWith('      ')) break
     condition.push(lines[index].trim())
   }
   return condition.join(' ')

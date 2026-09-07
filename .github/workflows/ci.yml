@@ -77,7 +77,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           # Repository format scripts normally call a project-local formatter
-          # (for example, Prettier). Install dependencies before running them;
+          # (for example, Oxfmt). Install dependencies before running them;
           # otherwise a clean runner cannot resolve the declared tool.
           install: 'true'
           cache-format: 'true'
