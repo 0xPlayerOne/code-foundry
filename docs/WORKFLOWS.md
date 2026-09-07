@@ -16,7 +16,9 @@ workflow_dispatch:
 
 In the `staging-release` topology, pull requests into `staging` run the fast
 tier, ordinary pull requests into `main` run the full audit tier, and exact
-Release Please pull requests into `main` run only release policy. In the
+Release Please pull requests into `main` run only release policy plus CodeQL
+(the CodeQL analysis keeps repository rulesets that require code scanning
+results satisfiable for the release commit). In the
 `direct` topology (the default) every pull request targets `main` and runs the
 full audit tier, because there is no integration branch for a fast pass.
 Scheduled and manual runs select the audit tier in both topologies. Draft PR

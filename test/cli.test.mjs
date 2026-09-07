@@ -3649,7 +3649,7 @@ describe('code-foundry CLI', () => {
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
     assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql'])
-    assert.deepEqual(requiredValidationJobs('release'), [])
+    assert.deepEqual(requiredValidationJobs('release'), ['codeql'])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
     assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql'])
@@ -3679,12 +3679,12 @@ describe('code-foundry CLI', () => {
         failures: [],
       }
     )
-    // The release tier requires no suite jobs: the generated release diff
-    // check runs as a conditional step inside the gate itself, so the gate
-    // passes vacuously here and the step outcome decides the job.
-    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: {} }), {
+    // The release tier skips the CI/test/security suites but requires CodeQL
+    // so repository rulesets that require code scanning results never
+    // deadlock the release pull request.
+    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { codeql: 'success' } }), {
       valid: true,
-      required: [],
+      required: ['codeql'],
       failures: [],
     })
   })
@@ -3707,7 +3707,7 @@ describe('code-foundry CLI', () => {
     assert.equal(
       evaluateValidationGate({
         mode: 'release',
-        results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'skipped' },
+        results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'success' },
       }).valid,
       true
     )
@@ -3738,14 +3738,14 @@ describe('code-foundry CLI', () => {
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
-    // Release mode has no required suite jobs; unexpected results there are
+    // Release mode requires CodeQL; the CI/test/security skips stay
     // irrelevant because the in-gate release diff step carries the policy.
     assert.deepEqual(
       evaluateValidationGate({ mode: 'release', results: { ci: 'failure', codeql: 'skipped' } }),
       {
-        valid: true,
-        required: [],
-        failures: [],
+        valid: false,
+        required: ['codeql'],
+        failures: [{ job: 'codeql', result: 'skipped' }],
       }
     )
     assert.deepEqual(
@@ -3976,7 +3976,10 @@ describe('code-foundry CLI', () => {
       orchestrator,
       /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/
     )
-    assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'/)
+    assert.match(
+      orchestrator,
+      /if: vars\.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')/
+    )
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
     assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
     assert.match(orchestrator, /validation release_diff/)
@@ -4141,7 +4144,7 @@ describe('code-foundry CLI', () => {
       FOUNDRY_CI: 'skipped',
       FOUNDRY_TEST: 'skipped',
       FOUNDRY_SECURITY: 'skipped',
-      FOUNDRY_CODEQL: 'skipped',
+      FOUNDRY_CODEQL: 'success',
     })
     assert.equal(release.status, 0)
     const failed = run({

@@ -109,7 +109,9 @@ jobs:
 
   codeql:
     name: CodeQL
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    # Release-please pull requests also analyze with CodeQL so repository
+    # rulesets requiring code scanning results never deadlock the release.
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/codeql.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
