@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.3.2...v1.4.0) (2026-09-07)
+
+
+### Features
+
+* **sync:** oxfmt-stable config merges, gitignore preservation, and OPENCODE_SECURITY variable override ([455ac37](https://github.com/0xPlayerOne/code-foundry/commit/455ac37635d7e88a0bfe007a98ee12b56bc430dc))
+
 ## [1.3.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.3.1...v1.3.2) (2026-09-07)
 
 
