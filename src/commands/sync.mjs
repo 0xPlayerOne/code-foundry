@@ -166,7 +166,8 @@ export function syncRepository(options) {
     // release commits; the direct topology has no reconciliation step, so it
     // may also squash Release Please version PRs (a single-commit release PR
     // squashes to the identical tree, and release-please recommends squash).
-    const allowedReleaseStrategies = workflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
+    const allowedReleaseStrategies =
+      workflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
     if (!allowedReleaseStrategies.includes(releaseMergeStrategy)) {
       throw new Error(
         `Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase (or squash in the direct topology) for Release Please version pull requests and never defaults to merge.`
