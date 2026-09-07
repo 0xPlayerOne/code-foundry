@@ -123,7 +123,10 @@ function runCi(root, task, log) {
 
 test('lint prefers the oxlint fallback when an oxlint setup exists', () => {
   const { root, log } = npmFixture('code-foundry-oxlint-')
-  writeFileSync(join(root, 'package.json'), '{"name":"fixture","private":true,"devDependencies":{"oxlint":"^1.81.0"}}\n')
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"devDependencies":{"oxlint":"^1.81.0"}}\n'
+  )
   execFileSync('git', ['add', '.'], { cwd: root })
   const result = runCi(root, 'lint', log)
   assert.equal(result.status ?? 0, 0)
@@ -134,7 +137,10 @@ test('lint prefers the oxlint fallback when an oxlint setup exists', () => {
 
 test('lint falls back to eslint when only an eslint setup exists', () => {
   const { root, log } = npmFixture('code-foundry-eslint-fallback-')
-  writeFileSync(join(root, 'package.json'), '{"name":"fixture","private":true,"devDependencies":{"eslint":"^9.0.0"}}\n')
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"devDependencies":{"eslint":"^9.0.0"}}\n'
+  )
   execFileSync('git', ['add', '.'], { cwd: root })
   const result = runCi(root, 'lint', log)
   assert.equal(result.status ?? 0, 0)
@@ -145,7 +151,10 @@ test('lint falls back to eslint when only an eslint setup exists', () => {
 
 test('format prefers the oxfmt fallback when an oxfmt setup exists', () => {
   const { root, log } = npmFixture('code-foundry-oxfmt-')
-  writeFileSync(join(root, 'package.json'), '{"name":"fixture","private":true,"devDependencies":{"oxfmt":"^0.66.0"}}\n')
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"devDependencies":{"oxfmt":"^0.66.0"}}\n'
+  )
   execFileSync('git', ['add', '.'], { cwd: root })
   const result = runCi(root, 'format', log)
   assert.equal(result.status ?? 0, 0)
@@ -156,7 +165,10 @@ test('format prefers the oxfmt fallback when an oxfmt setup exists', () => {
 
 test('format falls back to prettier when only prettier is configured', () => {
   const { root, log } = npmFixture('code-foundry-prettier-fallback-')
-  writeFileSync(join(root, 'package.json'), '{"name":"fixture","private":true,"devDependencies":{"prettier":"^3.9.6"}}\n')
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"devDependencies":{"prettier":"^3.9.6"}}\n'
+  )
   execFileSync('git', ['add', '.'], { cwd: root })
   const result = runCi(root, 'format', log)
   assert.equal(result.status ?? 0, 0)

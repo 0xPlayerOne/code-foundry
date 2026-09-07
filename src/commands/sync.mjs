@@ -337,11 +337,7 @@ export function syncRepository(options) {
     const customPatterns = []
     const legacyIgnore = join(target, '.prettierignore')
     if (existsSync(legacyIgnore)) {
-      const baselineEntries = new Set([
-        'CHANGELOG.md',
-        '.github/.code-foundry',
-        '.github/actions/',
-      ])
+      const baselineEntries = new Set(['CHANGELOG.md', '.github/.code-foundry', '.github/actions/'])
       for (const line of readFileSync(legacyIgnore, 'utf8').split(/\r?\n/)) {
         const entry = line.trim()
         if (!entry || entry.startsWith('#') || baselineEntries.has(entry)) continue
