@@ -29,29 +29,29 @@ repository manifests and source
 
 ## Core settings
 
-| Key | Values | Purpose |
-| --- | --- | --- |
-| `profile` | `auto`, `application`, `monorepo`, `minimal` | Repository shape |
-| `languages` | detected list | TypeScript, Rust, Python, Solidity |
-| `package_manager` | `bun`, `pnpm`, `yarn`, `npm`, `none` | JavaScript setup |
-| `toolchain` | `auto`, `native`, `mise` | Environment setup policy; defaults to `auto` |
-| `staging_validation_mode` | `fast`, `audit` | Validation tier for pull requests targeting `staging`; defaults to `fast` |
-| `features` | `all` or a list | Standard workflow callers |
-| `codeql` | `auto`, `true`, `false` | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled |
-| `codeql_rust_shards` | JSON array of paths | Rust scan scopes; `["all"]` keeps the safe single full scan |
-| `codeql_rust_threads` | integer, 1-64 | Threads per Rust CodeQL job; values above 1 opt into local parallelism |
-| `codeql_rust_max_parallel` | integer, 1-8 | Maximum Rust shard jobs allowed to run concurrently |
-| `dependency_review` | `auto`, `true`, `false` | Dependency Review policy; public repositories default to enabled, non-public repositories default to disabled |
-| `prune_standard` | `true` or `false` | Remove disabled standard callers |
-| `runtime_repository` | `OWNER/REPO` | Reusable workflow source |
-| `runtime_ref` | tag or branch | Reusable workflow version |
-| `release_type` | `node`, `python`, `rust`, `simple`, `none` | Release strategy |
-| `npm_publish` | `true` or `false` | Opt into npm publication |
-| `license` | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3 |
-| `git_workflow` | `direct` (default), `staging-release` | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
-| `merge_strategy` | `rebase` | Promotion merge method for `staging` → `main`; only enforced by the `staging-release` topology |
-| `release_merge_strategy` | `rebase` | Merge method for Release Please version PRs into `main`; release automation fails closed unless rebase |
-| `runner` fields | GitHub runner names | Per-workflow runner policy |
+| Key                        | Values                                                                           | Purpose                                                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `profile`                  | `auto`, `application`, `monorepo`, `minimal`                                     | Repository shape                                                                                                    |
+| `languages`                | detected list                                                                    | TypeScript, Rust, Python, Solidity                                                                                  |
+| `package_manager`          | `bun`, `pnpm`, `yarn`, `npm`, `none`                                             | JavaScript setup                                                                                                    |
+| `toolchain`                | `auto`, `native`, `mise`                                                         | Environment setup policy; defaults to `auto`                                                                        |
+| `staging_validation_mode`  | `fast`, `audit`                                                                  | Validation tier for pull requests targeting `staging`; defaults to `fast`                                           |
+| `features`                 | `all` or a list                                                                  | Standard workflow callers                                                                                           |
+| `codeql`                   | `auto`, `true`, `false`                                                          | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled                  |
+| `codeql_rust_shards`       | JSON array of paths                                                              | Rust scan scopes; `["all"]` keeps the safe single full scan                                                         |
+| `codeql_rust_threads`      | integer, 1-64                                                                    | Threads per Rust CodeQL job; values above 1 opt into local parallelism                                              |
+| `codeql_rust_max_parallel` | integer, 1-8                                                                     | Maximum Rust shard jobs allowed to run concurrently                                                                 |
+| `dependency_review`        | `auto`, `true`, `false`                                                          | Dependency Review policy; public repositories default to enabled, non-public repositories default to disabled       |
+| `prune_standard`           | `true` or `false`                                                                | Remove disabled standard callers                                                                                    |
+| `runtime_repository`       | `OWNER/REPO`                                                                     | Reusable workflow source                                                                                            |
+| `runtime_ref`              | tag or branch                                                                    | Reusable workflow version                                                                                           |
+| `release_type`             | `node`, `python`, `rust`, `simple`, `none`                                       | Release strategy                                                                                                    |
+| `npm_publish`              | `true` or `false`                                                                | Opt into npm publication                                                                                            |
+| `license`                  | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3                                                                   |
+| `git_workflow`             | `direct` (default), `staging-release`                                            | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
+| `merge_strategy`           | `rebase`                                                                         | Promotion merge method for `staging` → `main`; only enforced by the `staging-release` topology                      |
+| `release_merge_strategy`   | `rebase`                                                                         | Merge method for Release Please version PRs into `main`; release automation fails closed unless rebase              |
+| `runner` fields            | GitHub runner names                                                              | Per-workflow runner policy                                                                                          |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
 `release-pr`, `release`, and `dependabot`.
@@ -67,7 +67,7 @@ Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
   repository has no preview or staging environment.
 - `staging-release` (opt-in): feature branches squash into `staging`, a
   promotion PR rebases validated changes into `main` (`merge_strategy:
-  rebase`), and Release Please version PRs rebase into `main`
+rebase`), and Release Please version PRs rebase into `main`
   (`release_merge_strategy: rebase`). Choose this only when the repository
   maintains a preview/staging environment that needs validated integration
   before release.

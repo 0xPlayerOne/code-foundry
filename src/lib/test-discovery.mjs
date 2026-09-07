@@ -1,6 +1,7 @@
 // @ts-check
 
-const TEST_FILE_PATTERN = /(?:\.(?:test|spec|unit|integration|smoke|e2e)\.(?:[cm]?[jt]sx?|py)|(?:^|\/)test_[^/]+\.py$|(?:^|\/)tests\/.*\.rs$)/i
+const TEST_FILE_PATTERN =
+  /(?:\.(?:test|spec|unit|integration|smoke|e2e)\.(?:[cm]?[jt]sx?|py)|(?:^|\/)test_[^/]+\.py$|(?:^|\/)tests\/.*\.rs$)/i
 
 /** @param {string} file */
 export function isTestFile(file) {
@@ -12,7 +13,11 @@ export function testCategory(file) {
   const normalized = file.replaceAll('\\', '/').toLowerCase()
   const base = normalized.split('/').at(-1) ?? normalized
 
-  if (/(^|\/)(e2e|end-to-end|acceptance)(\/|$)|(?:^|[._-])(e2e|acceptance)(?:[._-]|$)/.test(normalized)) {
+  if (
+    /(^|\/)(e2e|end-to-end|acceptance)(\/|$)|(?:^|[._-])(e2e|acceptance)(?:[._-]|$)/.test(
+      normalized
+    )
+  ) {
     return 'e2e'
   }
   if (/(^|\/)(integration)(\/|$)|(?:^|[._-])integration(?:[._-]|$)/.test(normalized)) {

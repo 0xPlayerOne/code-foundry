@@ -3,21 +3,48 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { detectLanguages, detectPackageManager, detectProfile, recommendRunners } from '../lib/profile.mjs'
-import { configured, gitWorkflow, includesValue, isStagingRelease, readConfig } from '../lib/config.mjs'
+import {
+  detectLanguages,
+  detectPackageManager,
+  detectProfile,
+  recommendRunners,
+} from '../lib/profile.mjs'
+import {
+  configured,
+  gitWorkflow,
+  includesValue,
+  isStagingRelease,
+  readConfig,
+} from '../lib/config.mjs'
 import { buildReleaseConfig, buildReleaseManifest } from '../lib/release-manifest.mjs'
 import { customWorkflowFiles, overlayPolicy } from '../lib/overlay.mjs'
 
 const standardFiles = [
-  '.editorconfig', '.gitattributes', '.gitignore', 'release-please-config.json',
+  '.editorconfig',
+  '.gitattributes',
+  '.gitignore',
+  'release-please-config.json',
   'docs/EXTENSIONS.md',
-  '.githooks/pre-commit', 'AGENTS.md', 'LICENSE', 'NOTICE', 'ruff.toml', '.prettierrc', '.prettierignore',
-  '.github/CODEOWNERS', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
-  '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', '.github/dependabot.yml',
-  '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml',
+  '.githooks/pre-commit',
+  'AGENTS.md',
+  'LICENSE',
+  'NOTICE',
+  'ruff.toml',
+  '.oxfmtrc.json',
+  '.oxlintrc.json',
+  '.github/CODEOWNERS',
+  '.github/CODE_OF_CONDUCT.md',
+  '.github/CONTRIBUTING.md',
+  '.github/PULL_REQUEST_TEMPLATE.md',
+  '.github/SECURITY.md',
+  '.github/dependabot.yml',
+  '.github/ISSUE_TEMPLATE/bug_report.yml',
+  '.github/ISSUE_TEMPLATE/config.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
-  '.github/workflows/validation.yml', '.github/workflows/draft-pr.yml',
-  '.github/workflows/release-pr.yml', '.github/workflows/release.yml',
+  '.github/workflows/validation.yml',
+  '.github/workflows/draft-pr.yml',
+  '.github/workflows/release-pr.yml',
+  '.github/workflows/release.yml',
   '.github/workflows/opencode-security.yml',
 ]
 
@@ -29,8 +56,12 @@ const standardFiles = [
 const LEGACY_GENERATED_CALLERS = ['ci', 'test', 'security', 'codeql']
 
 const protectedFiles = new Set([
-  'AGENTS.md', '.github/CODE_OF_CONDUCT.md', '.github/CONTRIBUTING.md',
-  '.github/PULL_REQUEST_TEMPLATE.md', '.github/SECURITY.md', 'NOTICE',
+  'AGENTS.md',
+  '.github/CODE_OF_CONDUCT.md',
+  '.github/CONTRIBUTING.md',
+  '.github/PULL_REQUEST_TEMPLATE.md',
+  '.github/SECURITY.md',
+  'NOTICE',
 ])
 
 /** @type {Record<string, string>} */
@@ -38,18 +69,31 @@ const licenseFiles = {
   'gpl-3.0-or-later': 'GPL-3.0-or-later.txt',
   'agpl-3.0-or-later': 'AGPL-3.0-or-later.txt',
   'apache-2.0': 'APACHE-2.0.txt',
-  'mit': 'MIT.txt',
+  mit: 'MIT.txt',
 }
 
 const legacyFiles = [
-  '.github/code-foundry.yml.example', '.github/template.yml', '.github/template.yml.example',
-  '.github/scripts/bootstrap.sh', '.github/scripts/changed-files.sh', '.github/scripts/ci.sh',
-  '.github/scripts/codeql-languages.sh', '.github/scripts/doctor.sh', '.github/scripts/format-fast-path.sh',
-  '.github/scripts/init-repo.sh', '.github/scripts/pre-commit.sh', '.github/scripts/profile.sh',
-  '.github/scripts/security.sh', '.github/scripts/sitecustomize.py', '.github/scripts/sync-codeowners.sh',
-  '.github/scripts/sync-protection.sh', '.github/scripts/sync-template.sh', '.github/scripts/turbo-cache-probe.sh',
+  '.github/code-foundry.yml.example',
+  '.github/template.yml',
+  '.github/template.yml.example',
+  '.github/scripts/bootstrap.sh',
+  '.github/scripts/changed-files.sh',
+  '.github/scripts/ci.sh',
+  '.github/scripts/codeql-languages.sh',
+  '.github/scripts/doctor.sh',
+  '.github/scripts/format-fast-path.sh',
+  '.github/scripts/init-repo.sh',
+  '.github/scripts/pre-commit.sh',
+  '.github/scripts/profile.sh',
+  '.github/scripts/security.sh',
+  '.github/scripts/sitecustomize.py',
+  '.github/scripts/sync-codeowners.sh',
+  '.github/scripts/sync-protection.sh',
+  '.github/scripts/sync-template.sh',
+  '.github/scripts/turbo-cache-probe.sh',
   '.github/licenses/MIT.txt',
-  '.github/licenses/GPL-3.0-or-later.txt', '.github/licenses/AGPL-3.0-or-later.txt',
+  '.github/licenses/GPL-3.0-or-later.txt',
+  '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
 /** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean }} SyncOptions */
@@ -62,13 +106,17 @@ export function syncRepository(options) {
   const force = options.force ?? false
   const configPath = join(target, '.github/code-foundry.yml')
   const existingConfig = readConfig(configPath)
-  if (!Object.keys(existingConfig).length && !options.init) throw new Error('Missing .github/code-foundry.yml; run init first.')
+  if (!Object.keys(existingConfig).length && !options.init)
+    throw new Error('Missing .github/code-foundry.yml; run init first.')
   const defaults = createDefaultConfig(target, source)
   let config = { ...defaults, ...existingConfig }
   // Resolve and validate the license policy before any sync writes occur
   // (including config/default additions) so an unsupported policy fails
   // fast without leaving partially generated files behind.
-  const license = configured(config.license, existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later')
+  const license = configured(
+    config.license,
+    existsSync(join(target, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later'
+  )
   const licenseFile = licenseFiles[license]
   if (license !== 'preserve' && license !== 'none' && !licenseFile) {
     const supported = [...Object.keys(licenseFiles), 'preserve', 'none'].join(', ')
@@ -108,17 +156,25 @@ export function syncRepository(options) {
   }
   const mergeStrategy = configured(config.merge_strategy, 'rebase')
   if (workflow === 'staging-release' && mergeStrategy !== 'rebase') {
-    throw new Error(`Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`)
+    throw new Error(
+      `Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`
+    )
   }
   const releaseMergeStrategy = configured(config.release_merge_strategy, '')
   if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
-    throw new Error(`Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase for Release Please version pull requests and never defaults to merge.`)
+    throw new Error(
+      `Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase for Release Please version pull requests and never defaults to merge.`
+    )
   }
   const changed = []
 
   // Keep normal semver pins current during sync while preserving intentional
   // refs such as `main`, `staging`, or a custom immutable SHA.
-  if (existingConfig.runtime_ref && /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref) && existingConfig.runtime_ref !== sourceRuntimeRef) {
+  if (
+    existingConfig.runtime_ref &&
+    /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref) &&
+    existingConfig.runtime_ref !== sourceRuntimeRef
+  ) {
     runtimeRef = sourceRuntimeRef
     const current = readFileSync(configPath, 'utf8')
     const updated = current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${sourceRuntimeRef}`)
@@ -137,7 +193,12 @@ export function syncRepository(options) {
       const existing = readFileSync(destination, 'utf8')
       if (!isLegacyManagedDoc(file, existing)) continue
     }
-    if ((file === 'LICENSE' || file === 'NOTICE') && license === 'preserve' && existsSync(destination)) continue
+    if (
+      (file === 'LICENSE' || file === 'NOTICE') &&
+      license === 'preserve' &&
+      existsSync(destination)
+    )
+      continue
     if ((file === 'LICENSE' || file === 'NOTICE') && license === 'none') continue
     // An explicit license policy makes the license block below the single
     // owner of LICENSE; copying the runtime's own root LICENSE here would
@@ -149,7 +210,9 @@ export function syncRepository(options) {
       content = Buffer.from(renderReleaseConfig(target, sourceFile))
     }
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
-      content = Buffer.from(renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef, rustCodeql))
+      content = Buffer.from(
+        renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef, rustCodeql)
+      )
     }
     if (file === '.github/dependabot.yml') {
       content = Buffer.from(renderDependabot(content.toString('utf8'), config, languages))
@@ -158,10 +221,14 @@ export function syncRepository(options) {
       content = Buffer.from(renderContributionDocs(content.toString('utf8'), file, config))
     }
     if (file === '.gitignore' && existsSync(destination)) {
-      content = Buffer.from(mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8')))
+      content = Buffer.from(
+        mergeGitignore(content.toString('utf8'), readFileSync(destination, 'utf8'))
+      )
     }
-    if (file === '.prettierignore' && existsSync(destination)) {
-      content = Buffer.from(mergeIgnoreFile(content.toString('utf8'), readFileSync(destination, 'utf8')))
+    if (file === '.oxfmtrc.json' && existsSync(destination)) {
+      content = Buffer.from(
+        mergeOxfmtConfig(content.toString('utf8'), readFileSync(destination, 'utf8'))
+      )
     }
     if (!existsSync(destination) || !buffersEqual(content, readFileSync(destination))) {
       changed.push(file)
@@ -174,7 +241,8 @@ export function syncRepository(options) {
     if (!existsSync(destination)) continue
     if (isGeneratedEventCaller(readFileSync(destination, 'utf8'), stem, runtimeRepository)) {
       changed.push(`.github/workflows/${stem}.yml`)
-      if (dryRun) console.log(`Would remove generated legacy caller ${stem}.yml; validation.yml replaces it.`)
+      if (dryRun)
+        console.log(`Would remove generated legacy caller ${stem}.yml; validation.yml replaces it.`)
       else rmSync(destination, { force: true })
     } else {
       console.log(`Preserved ${stem}.yml: not recognized as a Code Foundry-generated caller.`)
@@ -186,25 +254,39 @@ export function syncRepository(options) {
   // linger dormant (it triggers on pushes to a branch that does not exist).
   if (!isStagingRelease(config.git_workflow)) {
     const promotion = join(target, '.github/workflows/release-pr.yml')
-    if (existsSync(promotion) && isGeneratedEventCaller(readFileSync(promotion, 'utf8'), 'release-pr', runtimeRepository)) {
+    if (
+      existsSync(promotion) &&
+      isGeneratedEventCaller(readFileSync(promotion, 'utf8'), 'release-pr', runtimeRepository)
+    ) {
       changed.push('.github/workflows/release-pr.yml')
-      if (dryRun) console.log('Would remove generated release-pr caller; the direct topology targets pull requests at main.')
+      if (dryRun)
+        console.log(
+          'Would remove generated release-pr caller; the direct topology targets pull requests at main.'
+        )
       else rmSync(promotion, { force: true })
     }
   }
 
-  const releaseManifest = buildReleaseManifest(target, mergeReleaseConfig(target, sourcePath(source, 'release-please-config.json')))
+  const releaseManifest = buildReleaseManifest(
+    target,
+    mergeReleaseConfig(target, sourcePath(source, 'release-please-config.json'))
+  )
   if (releaseManifest) {
     const manifestPath = join(target, '.release-please-manifest.json')
     /** @type {Record<string, string>} */
     let existingManifest = {}
     if (existsSync(manifestPath)) {
-      try { existingManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) }
-      catch { existingManifest = {} }
+      try {
+        existingManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      } catch {
+        existingManifest = {}
+      }
     }
     /** @type {Record<string, string>} */
     const mergedManifest = {}
-    for (const directory of [...new Set([...Object.keys(releaseManifest), ...Object.keys(existingManifest)])].sort()) {
+    for (const directory of [
+      ...new Set([...Object.keys(releaseManifest), ...Object.keys(existingManifest)]),
+    ].sort()) {
       mergedManifest[directory] = existingManifest[directory] ?? releaseManifest[directory]
     }
     const content = `${JSON.stringify(mergedManifest, null, 2)}\n`
@@ -218,11 +300,15 @@ export function syncRepository(options) {
     const sourceLicense = join(source, '.github/licenses', licenseFile)
     if (!existsSync(sourceLicense)) throw new Error(`License template missing: ${sourceLicense}`)
     const licenseContent = readFileSync(sourceLicense)
-    if (!existsSync(join(target, 'LICENSE')) || !buffersEqual(licenseContent, readFileSync(join(target, 'LICENSE')))) {
+    if (
+      !existsSync(join(target, 'LICENSE')) ||
+      !buffersEqual(licenseContent, readFileSync(join(target, 'LICENSE')))
+    ) {
       changed.push('LICENSE')
       writeOrReport(join(target, 'LICENSE'), licenseContent, dryRun)
     }
-    if (!existsSync(join(target, 'NOTICE'))) writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
+    if (!existsSync(join(target, 'NOTICE')))
+      writeOrReport(join(target, 'NOTICE'), readFileSync(join(source, 'NOTICE')), dryRun)
   }
 
   for (const file of legacyFiles) {
@@ -233,21 +319,57 @@ export function syncRepository(options) {
       else rmSync(destination, { force: true })
     }
   }
-  for (const file of ['ruff.toml', '.prettierrc', '.prettierignore']) {
-    const relevant = file === 'ruff.toml' ? includesValue(languages, 'python') : includesValue(languages, 'typescript')
+  for (const file of ['ruff.toml', '.oxfmtrc.json', '.oxlintrc.json']) {
+    const relevant =
+      file === 'ruff.toml'
+        ? includesValue(languages, 'python')
+        : includesValue(languages, 'typescript')
     if (!relevant && existsSync(join(target, file))) {
       changed.push(file)
       if (dryRun) console.log(`Would remove irrelevant language configuration ${file}`)
       else rmSync(join(target, file), { force: true })
     }
   }
-  if (includesValue(languages, 'typescript') && existsSync(join(target, '.prettierignore'))) {
-    const prettierIgnore = readFileSync(join(target, '.prettierignore'), 'utf8')
-    const present = new Set(prettierIgnore.split(/\r?\n/).map((line) => line.trim()))
-    const missing = ['.github/.code-foundry', '.github/actions/'].filter((entry) => !present.has(entry))
-    if (missing.length) {
-      writeOrReport(join(target, '.prettierignore'), `${prettierIgnore.trimEnd()}\n${missing.join('\n')}\n`, dryRun)
+  if (includesValue(languages, 'typescript')) {
+    // The Oxfmt baseline supersedes .prettierrc/.prettierignore. Entries the
+    // consumer added beyond the baseline survive the migration inside the
+    // .oxfmtrc.json ignorePatterns list.
+    const customPatterns = []
+    const legacyIgnore = join(target, '.prettierignore')
+    if (existsSync(legacyIgnore)) {
+      const baselineEntries = new Set([
+        'CHANGELOG.md',
+        '.github/.code-foundry',
+        '.github/actions/',
+      ])
+      for (const line of readFileSync(legacyIgnore, 'utf8').split(/\r?\n/)) {
+        const entry = line.trim()
+        if (!entry || entry.startsWith('#') || baselineEntries.has(entry)) continue
+        customPatterns.push(entry)
+      }
       changed.push('.prettierignore')
+      if (dryRun) console.log('Would remove superseded .prettierignore')
+      else rmSync(legacyIgnore, { force: true })
+    }
+    const legacyConfig = join(target, '.prettierrc')
+    if (existsSync(legacyConfig)) {
+      changed.push('.prettierrc')
+      if (dryRun) console.log('Would remove superseded .prettierrc')
+      else rmSync(legacyConfig, { force: true })
+    }
+    ensureOxfmtIgnorePatterns(
+      target,
+      ['.github/.code-foundry', '.github/actions/', ...customPatterns],
+      changed,
+      dryRun
+    )
+  } else {
+    for (const file of ['.prettierrc', '.prettierignore']) {
+      if (existsSync(join(target, file))) {
+        changed.push(file)
+        if (dryRun) console.log(`Would remove irrelevant language configuration ${file}`)
+        else rmSync(join(target, file), { force: true })
+      }
     }
   }
   if (!dryRun && existsSync(join(target, '.githooks/pre-commit'))) {
@@ -267,20 +389,33 @@ export function syncRepository(options) {
  * Package and release-type policy is detected from the repository itself and
  * must never leak from the runtime template.
  */
-const RELEASE_BASELINE_KEYS = ['$schema', 'bump-minor-pre-major', 'changelog-sections', 'include-component-in-tag']
+const RELEASE_BASELINE_KEYS = [
+  '$schema',
+  'bump-minor-pre-major',
+  'changelog-sections',
+  'include-component-in-tag',
+]
 
 /** @param {string} target @param {string} sourceFile @returns {Record<string, any>} */
 function mergeReleaseConfig(target, sourceFile) {
   /** @type {Record<string, any>} */
   let baseline = {}
-  try { baseline = JSON.parse(readFileSync(sourceFile, 'utf8')) }
-  catch { baseline = {} }
-  const safeBaseline = Object.fromEntries(RELEASE_BASELINE_KEYS.filter((key) => key in baseline).map((key) => [key, baseline[key]]))
+  try {
+    baseline = JSON.parse(readFileSync(sourceFile, 'utf8'))
+  } catch {
+    baseline = {}
+  }
+  const safeBaseline = Object.fromEntries(
+    RELEASE_BASELINE_KEYS.filter((key) => key in baseline).map((key) => [key, baseline[key]])
+  )
   const destination = join(target, 'release-please-config.json')
   let existing = baseline
   if (existsSync(destination)) {
-    try { existing = JSON.parse(readFileSync(destination, 'utf8')) }
-    catch { existing = baseline }
+    try {
+      existing = JSON.parse(readFileSync(destination, 'utf8'))
+    } catch {
+      existing = baseline
+    }
   }
   return buildReleaseConfig(target, { ...safeBaseline, ...existing })
 }
@@ -293,9 +428,11 @@ function renderReleaseConfig(target, sourceFile) {
 /** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */
 function shouldInclude(file, languages, features, config) {
   if (file === 'ruff.toml') return includesValue(languages, 'python')
-  if (file === '.prettierrc' || file === '.prettierignore') return includesValue(languages, 'typescript')
+  if (file === '.oxfmtrc.json' || file === '.oxlintrc.json')
+    return includesValue(languages, 'typescript')
   if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
-  if (file === '.github/workflows/opencode-security.yml') return ['true', 'auto'].includes(config.opencode_security ?? 'false')
+  if (file === '.github/workflows/opencode-security.yml')
+    return ['true', 'auto'].includes(config.opencode_security ?? 'false')
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
   // The staging promotion caller only exists in the staging-release topology;
   // direct repositories open feature branches into main and need no promotion.
@@ -303,7 +440,10 @@ function shouldInclude(file, languages, features, config) {
   // The tiered validation caller supersedes the legacy ci/test/security/codeql
   // event callers, so legacy feature names keep selecting it.
   if (workflow === 'validation') {
-    return includesValue(features, 'validation') || LEGACY_GENERATED_CALLERS.some((legacy) => includesValue(features, legacy))
+    return (
+      includesValue(features, 'validation') ||
+      LEGACY_GENERATED_CALLERS.some((legacy) => includesValue(features, legacy))
+    )
   }
   return !workflow || includesValue(features, workflow)
 }
@@ -332,14 +472,20 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
-  rendered = rendered.replace(new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'), `$&@${ref}`)
+  rendered = rendered.replace(
+    new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
+    `$&@${ref}`
+  )
   // Pin every runtime reference in the rendered caller: the orchestrator input
   // in the `with:` block and the mode job's runtime checkout. Self templates
   // use ${{ github.sha }} and are only rewritten when rendered for consumers.
   rendered = rendered.replace(/^(\s+runtime-ref:)\s+.*$/gm, `$1 ${ref}`)
   rendered = rendered.replace(/^(\s+ref:)\s+\$\{\{\s*github\.sha\s*\}\}\s*$/gm, `$1 ${ref}`)
   rendered = rendered.replace(/^(\s+runtime-repository:)\s+.*$/gm, `$1 ${repository}`)
-  rendered = rendered.replace(new RegExp(`^(\\s+repository:)\\s+0xPlayerOne\\/code-foundry\\s*$`, 'gm'), `$1 ${repository}`)
+  rendered = rendered.replace(
+    new RegExp(`^(\\s+repository:)\\s+0xPlayerOne\\/code-foundry\\s*$`, 'gm'),
+    `$1 ${repository}`
+  )
   /** @type {Record<string, string|undefined>} */
   const runners = {
     ci: config.ci_runner ?? config.runner,
@@ -361,7 +507,10 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     // The draft PR caller states the PR base explicitly so the shared
     // reusable workflow creates pull requests against the repository's
     // configured integration branch (staging) or main (direct).
-    rendered = rendered.replace(/^(\s+base:)\s+.*$/m, `$1 ${isStagingRelease(config.git_workflow) ? 'staging' : 'main'}`)
+    rendered = rendered.replace(
+      /^(\s+base:)\s+.*$/m,
+      `$1 ${isStagingRelease(config.git_workflow) ? 'staging' : 'main'}`
+    )
   }
   const runner = workflow ? runners[workflow] : undefined
   if (runner) rendered = rendered.replace(/^(\s+runner:)\s+.*$/m, `$1 ${runner}`)
@@ -514,10 +663,7 @@ const DIRECT_DOC_REPLACEMENTS = {
       'git switch staging\ngit pull --ff-only origin staging',
       'git switch main\ngit pull --ff-only origin main',
     ],
-    [
-      '1. Start from an up-to-date `staging` branch.',
-      '1. Start from an up-to-date `main` branch.',
-    ],
+    ['1. Start from an up-to-date `staging` branch.', '1. Start from an up-to-date `main` branch.'],
     [
       '8. Push the branch and open a pull request into `staging`.',
       '8. Push the branch and open a pull request into `main`.',
@@ -526,10 +672,7 @@ const DIRECT_DOC_REPLACEMENTS = {
       '10. Merge with a squash after required checks pass and the change is ready; feature PRs land on `staging` with squash merges.',
       '10. Merge with a squash after required checks pass and the change is ready; feature PRs land on `main` with squash merges.',
     ],
-    [
-      '3. Branch from the upstream `staging` branch.',
-      '3. Branch from the upstream `main` branch.',
-    ],
+    ['3. Branch from the upstream `staging` branch.', '3. Branch from the upstream `main` branch.'],
     [
       '7. Push to the fork and open a pull request targeting `staging`.',
       '7. Push to the fork and open a pull request targeting `main`.',
@@ -542,20 +685,14 @@ const DIRECT_DOC_REPLACEMENTS = {
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
       '| Change | Target | Merge method | Merge gate |\n|----------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| Working branch | `main` | Squash | All applicable required checks pass |\n| Release Please version PR | `main` | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass |',
     ],
-    [
-      '1. Create a focused branch from `staging`.',
-      '1. Create a focused branch from `main`.',
-    ],
+    ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],
   '.github/SECURITY.md': [
     [
       'The latest commit on `staging` receives security patches. Patches are promoted to `main` through the next release cycle.',
       'The latest commit on `main` receives security patches.',
     ],
-    [
-      '| `staging`        | ✅        |\n',
-      '',
-    ],
+    ['| `staging`        | ✅        |\n', ''],
   ],
 }
 
@@ -606,7 +743,9 @@ function validateRustCodeqlConfig(config) {
 }
 
 /** @param {string} value */
-function escapeRegExp(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 /**
  * Recognize a Code Foundry-generated legacy event caller (the consumer copies
@@ -626,49 +765,112 @@ export function isGeneratedEventCaller(content, stem, runtimeRepository) {
   if (/^\s*(runs-on|steps):/m.test(text)) return false
   if (!text.includes('runtime-repository:')) return false
   if (!new RegExp(`^  ${stem}:`, 'm').test(text)) return false
-  return new RegExp(`uses:\\s*${escapeRegExp(runtimeRepository)}/\\.github/workflows/${stem}\\.yml@`).test(text)
+  return new RegExp(
+    `uses:\\s*${escapeRegExp(runtimeRepository)}/\\.github/workflows/${stem}\\.yml@`
+  ).test(text)
 }
 
 /** @param {string} baseline @param {string} existing */
 function mergeGitignore(baseline, existing) {
   const marker = '# Repository-specific rules'
-  const custom = existing.includes(marker) ? existing.slice(existing.indexOf(marker) + marker.length).trim() : ''
+  const custom = existing.includes(marker)
+    ? existing.slice(existing.indexOf(marker) + marker.length).trim()
+    : ''
   return custom ? `${baseline.trimEnd()}\n\n${marker}\n${custom}\n` : baseline
 }
 
-/** @param {string} baseline @param {string} existing */
-function mergeIgnoreFile(baseline, existing) {
-  const marker = '# Repository-specific rules'
-  const baselineLines = new Set(baseline.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))
-  const custom = existing.split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim() && line.trim() !== marker && !baselineLines.has(line.trim()))
-  return custom.length ? `${baseline.trimEnd()}\n\n${marker}\n${custom.join('\n')}\n` : baseline
+/**
+ * Merge the baseline Oxfmt config with the consumer's current config. The
+ * baseline owns every key except `ignorePatterns`, where consumer-specific
+ * patterns (added by sync migrations or by the repository) are preserved so
+ * repeated syncs never churn them.
+ * @param {string} baseline @param {string} existing @returns {string}
+ */
+function mergeOxfmtConfig(baseline, existing) {
+  /** @type {string[]} */
+  let extra = []
+  try {
+    const parsed = JSON.parse(existing)
+    if (Array.isArray(parsed.ignorePatterns)) extra = parsed.ignorePatterns
+  } catch {
+    return baseline
+  }
+  if (extra.length === 0) return baseline
+  let config
+  try {
+    config = JSON.parse(baseline)
+  } catch {
+    return baseline
+  }
+  const base = Array.isArray(config.ignorePatterns) ? config.ignorePatterns : []
+  const missing = extra.filter((pattern) => !base.includes(pattern))
+  if (missing.length === 0) return baseline
+  config.ignorePatterns = [...base, ...missing]
+  return `${JSON.stringify(config, null, 2)}\n`
+}
+
+/**
+ * Ensure the consumer's .oxfmtrc.json carries every baseline ignore pattern
+ * (plus any migrated custom patterns). Missing patterns are appended to the
+ * existing list; the file is left untouched when nothing is missing or the
+ * config is absent/unparseable.
+ * @param {string} target @param {string[]} patterns @param {string[]} changed @param {boolean} dryRun
+ */
+function ensureOxfmtIgnorePatterns(target, patterns, changed, dryRun) {
+  const path = join(target, '.oxfmtrc.json')
+  if (patterns.length === 0 || !existsSync(path)) return
+  let config
+  try {
+    config = JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return
+  }
+  const existing = Array.isArray(config.ignorePatterns) ? config.ignorePatterns : []
+  const merged = [...existing]
+  for (const pattern of patterns) {
+    if (!merged.includes(pattern)) merged.push(pattern)
+  }
+  if (merged.length === existing.length) return
+  config.ignorePatterns = merged
+  changed.push('.oxfmtrc.json')
+  writeOrReport(path, `${JSON.stringify(config, null, 2)}\n`, dryRun)
 }
 
 /** @param {string} file @param {string} content */
 function isLegacyManagedDoc(file, content) {
   if (file === 'AGENTS.md') {
-    return content.includes('.github/scripts/bootstrap.sh') && content.includes('bash .github/scripts/ci.sh')
+    return (
+      content.includes('.github/scripts/bootstrap.sh') &&
+      content.includes('bash .github/scripts/ci.sh')
+    )
   }
   if (file === '.github/CONTRIBUTING.md') {
-    return content.includes('.github/scripts/bootstrap.sh') && content.includes('.github/template.yml')
+    return (
+      content.includes('.github/scripts/bootstrap.sh') && content.includes('.github/template.yml')
+    )
   }
   return false
 }
 
 /** @param {string} target @param {string[]} args */
-function git(target, args) { spawnSync('git', args, { cwd: target, stdio: 'ignore' }) }
+function git(target, args) {
+  spawnSync('git', args, { cwd: target, stdio: 'ignore' })
+}
 
 /** @param {string} file @param {Buffer|string} content @param {boolean} dryRun */
 function writeOrReport(file, content, dryRun) {
-  if (dryRun) { console.log(`Would sync ${file}`); return }
+  if (dryRun) {
+    console.log(`Would sync ${file}`)
+    return
+  }
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, content)
 }
 
 /** @param {Buffer} a @param {Buffer} b */
-function buffersEqual(a, b) { return a.equals(b) }
+function buffersEqual(a, b) {
+  return a.equals(b)
+}
 
 /** @param {string} root @param {string} source @returns {Record<string,string>} */
 function createDefaultConfig(root, source) {
@@ -676,31 +878,61 @@ function createDefaultConfig(root, source) {
   const packageManager = detectPackageManager(root)
   const runners = recommendRunners(root)
   return {
-    version: '1', profile: detectProfile(root), languages, features: 'all', codeql: 'auto', dependency_review: 'auto', package_manager: packageManager,
-    codeql_rust_shards: '["all"]', codeql_rust_threads: '1', codeql_rust_max_parallel: '1',
-    runtime_repository: '0xPlayerOne/code-foundry', runtime_ref: `v${readPackageVersion(source)}`,
+    version: '1',
+    profile: detectProfile(root),
+    languages,
+    features: 'all',
+    codeql: 'auto',
+    dependency_review: 'auto',
+    package_manager: packageManager,
+    codeql_rust_shards: '["all"]',
+    codeql_rust_threads: '1',
+    codeql_rust_max_parallel: '1',
+    runtime_repository: '0xPlayerOne/code-foundry',
+    runtime_ref: `v${readPackageVersion(source)}`,
     ...runners,
-    toolchain: 'auto', staging_validation_mode: 'fast',
-    prune_standard: 'false', cache_packages: 'auto', cache_build: 'auto', coverage_minimum: '80', turbo_remote: 'auto',
-    release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node', npm_publish: 'false',
-    post_release: 'false', post_release_workflow: '', post_release_mode: 'auto',
-    opencode_security: 'false', opencode_security_model: '',
-    sync_mode: 'overlay', custom_workflows: 'preserve',
-    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later', git_workflow: 'direct', merge_strategy: 'rebase', release_merge_strategy: 'rebase',
+    toolchain: 'auto',
+    staging_validation_mode: 'fast',
+    prune_standard: 'false',
+    cache_packages: 'auto',
+    cache_build: 'auto',
+    coverage_minimum: '80',
+    turbo_remote: 'auto',
+    release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node',
+    npm_publish: 'false',
+    post_release: 'false',
+    post_release_workflow: '',
+    post_release_mode: 'auto',
+    opencode_security: 'false',
+    opencode_security_model: '',
+    sync_mode: 'overlay',
+    custom_workflows: 'preserve',
+    license: existsSync(join(root, 'LICENSE')) ? 'preserve' : 'gpl-3.0-or-later',
+    git_workflow: 'direct',
+    merge_strategy: 'rebase',
+    release_merge_strategy: 'rebase',
   }
 }
 
 /** @param {Record<string,string>} config */
-function renderConfig(config) { return `${Object.entries(config).map(([key, value]) => renderConfigLine(key, value)).join('\n')}\n` }
+function renderConfig(config) {
+  return `${Object.entries(config)
+    .map(([key, value]) => renderConfigLine(key, value))
+    .join('\n')}\n`
+}
 /** @param {string} key @param {string} value */
 function renderConfigLine(key, value) {
   if (value === '') return `${key}:`
   // Quote values that YAML would parse as collections or that would trip
-  // prettier's formatter (e.g. codeql_rust_shards: '["all"]').
-  const needsQuotes = /^[\[\]{]|[:,#]\s|\s#/.test(value)
+  // the formatter (e.g. codeql_rust_shards: '["all"]').
+  const needsQuotes = /^[[\]{]|[:,#]\s|\s#/.test(value)
   return needsQuotes ? `${key}: '${value.replace(/'/g, "''")}'` : `${key}: ${value}`
 }
 /** @param {string} root */
 function readPackageVersion(root) {
-  try { return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0' } catch { return '0.0.0' }
+  try {
+    return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
 }

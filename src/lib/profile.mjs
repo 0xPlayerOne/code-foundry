@@ -47,15 +47,19 @@ export function detectLanguages(root) {
   if (
     existsSync(join(root, 'package.json')) ||
     files.some((file) => /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/.test(file)) ||
-    files.some((file) => /(?:bun\.lockb?|pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/.test(file))
-  ) languages.push('typescript')
+    files.some((file) =>
+      /(?:bun\.lockb?|pnpm-lock\.yaml|yarn\.lock|package-lock\.json)$/.test(file)
+    )
+  )
+    languages.push('typescript')
   if (existsSync(join(root, 'Cargo.toml')) || hasSource(root, /\.rs$/)) languages.push('rust')
   if (
     existsSync(join(root, 'pyproject.toml')) ||
     existsSync(join(root, 'requirements.txt')) ||
     existsSync(join(root, 'requirements-dev.txt')) ||
     hasSource(root, /\.py$/)
-  ) languages.push('python')
+  )
+    languages.push('python')
   if (files.some((file) => file.endsWith('.sol'))) languages.push('solidity')
   return languages.length ? languages : ['none']
 }
@@ -72,16 +76,23 @@ export function detectPackageManager(root) {
 
 /** @param {string} root */
 export function detectProfile(root) {
-  if (existsSync(join(root, 'turbo.json')) || existsSync(join(root, 'pnpm-workspace.yaml'))) return 'monorepo'
+  if (existsSync(join(root, 'turbo.json')) || existsSync(join(root, 'pnpm-workspace.yaml')))
+    return 'monorepo'
   if (existsSync(join(root, 'package.json'))) {
     try {
       const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-      if (Array.isArray(packageJson.workspaces) || typeof packageJson.workspaces === 'object') return 'monorepo'
+      if (Array.isArray(packageJson.workspaces) || typeof packageJson.workspaces === 'object')
+        return 'monorepo'
     } catch {
       // Doctor reports malformed package.json separately.
     }
   }
-  if (existsSync(join(root, 'package.json')) || existsSync(join(root, 'pyproject.toml')) || existsSync(join(root, 'Cargo.toml'))) return 'application'
+  if (
+    existsSync(join(root, 'package.json')) ||
+    existsSync(join(root, 'pyproject.toml')) ||
+    existsSync(join(root, 'Cargo.toml'))
+  )
+    return 'application'
   return 'minimal'
 }
 
@@ -110,7 +121,9 @@ export function resolveProfile(root) {
  */
 export function recommendRunners(root) {
   const languages = detectLanguages(root)
-  const heavy = languages.some((language) => ['rust', 'python', 'solidity'].includes(language)) || hasBrowserProject(root)
+  const heavy =
+    languages.some((language) => ['rust', 'python', 'solidity'].includes(language)) ||
+    hasBrowserProject(root)
   return {
     runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
     ci_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
@@ -125,7 +138,12 @@ export function recommendRunners(root) {
 
 /** @param {string} root */
 function hasBrowserProject(root) {
-  return ['playwright.config.ts', 'playwright.config.js', 'cypress.config.ts', 'cypress.config.js'].some((file) => existsSync(join(root, file)))
+  return [
+    'playwright.config.ts',
+    'playwright.config.js',
+    'cypress.config.ts',
+    'cypress.config.js',
+  ].some((file) => existsSync(join(root, file)))
 }
 
 /** @param {string} root */

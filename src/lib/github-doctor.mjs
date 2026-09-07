@@ -18,21 +18,39 @@ export function doctorGithub(root) {
   const rulesets = hydrateRulesets(repository, ghJson(['api', `repos/${repository}/rulesets`]))
   const mainRulesets = rulesetsForBranch(rulesets, 'main')
   const protection = ghJson(['api', `repos/${repository}/branches/main/protection`])
-  const required = mainRulesets.length ? requiredContextsFromRulesets(mainRulesets) : requiredContextsFromProtection(protection)
+  const required = mainRulesets.length
+    ? requiredContextsFromRulesets(mainRulesets)
+    : requiredContextsFromProtection(protection)
   details.requiredChecks = required
-  if (!protection && !mainRulesets.length) warnings.push('main branch protection or repository rulesets are not readable or are not configured.')
-  else if (!required.length) warnings.push(mainRulesets.length ? 'main ruleset has no required status checks.' : 'main protection has no required status checks.')
+  if (!protection && !mainRulesets.length)
+    warnings.push(
+      'main branch protection or repository rulesets are not readable or are not configured.'
+    )
+  else if (!required.length)
+    warnings.push(
+      mainRulesets.length
+        ? 'main ruleset has no required status checks.'
+        : 'main protection has no required status checks.'
+    )
   const duplicateNames = required.filter((name) => /\b([^/]+) \/ \1\b/i.test(name))
-  if (duplicateNames.length) errors.push(`required checks contain duplicate workflow prefixes: ${duplicateNames.join(', ')}`)
+  if (duplicateNames.length)
+    errors.push(`required checks contain duplicate workflow prefixes: ${duplicateNames.join(', ')}`)
 
   const sha = String(ghJson(['api', `repos/${repository}/git/ref/heads/main`])?.object?.sha ?? '')
-  const checks = sha ? ghJson(['api', `repos/${repository}/commits/${sha}/check-runs?per_page=100`])?.check_runs ?? [] : []
+  const checks = sha
+    ? (ghJson(['api', `repos/${repository}/commits/${sha}/check-runs?per_page=100`])?.check_runs ??
+      [])
+    : []
   const observed = checks.map(/** @param {any} check */ (check) => check.name).filter(Boolean)
   details.observedChecks = observed
-  if (!observed.length) warnings.push('no check runs were observed on the current main commit; exact check validation is deferred until CI runs.')
+  if (!observed.length)
+    warnings.push(
+      'no check runs were observed on the current main commit; exact check validation is deferred until CI runs.'
+    )
   if (required.length) {
     const missing = required.filter((name) => observed.length && !observed.includes(name))
-    if (missing.length) warnings.push(`required checks not observed on current main: ${missing.join(', ')}`)
+    if (missing.length)
+      warnings.push(`required checks not observed on current main: ${missing.join(', ')}`)
   }
 
   const workflowIssues = inspectWorkflows(root)
@@ -40,34 +58,79 @@ export function doctorGithub(root) {
   warnings.push(...workflowIssues.warnings)
 
   const secrets = ghJson(['secret', 'list', '--repo', repository, '--json', 'name'])
-  const secretNames = Array.isArray(secrets) ? secrets.map(/** @param {any} secret */ (secret) => secret.name) : []
+  const secretNames = Array.isArray(secrets)
+    ? secrets.map(/** @param {any} secret */ (secret) => secret.name)
+    : []
   details.secrets = {
     codeFoundryTokenPresent: secretNames.includes('CODE_FOUNDRY_TOKEN'),
     stagingDeployKeyPresent: secretNames.includes('STAGING_DEPLOY_KEY'),
   }
   if (!details.secrets.codeFoundryTokenPresent) {
-    warnings.push('CODE_FOUNDRY_TOKEN is absent. PR workflow triggers and automation may require manual readiness.')
+    warnings.push(
+      'CODE_FOUNDRY_TOKEN is absent. PR workflow triggers and automation may require manual readiness.'
+    )
   }
 
   const config = readConfig(root)
-  if (['workflow-dispatch', 'dispatch'].includes(config.post_release_mode) && config.post_release !== 'false' && !details.secrets.codeFoundryTokenPresent && !details.secrets.releasePleaseTokenPresent) {
+  if (
+    ['workflow-dispatch', 'dispatch'].includes(config.post_release_mode) &&
+    config.post_release !== 'false' &&
+    !details.secrets.codeFoundryTokenPresent &&
+    !details.secrets.releasePleaseTokenPresent
+  ) {
     errors.push('post-release workflow-dispatch mode requires CODE_FOUNDRY_TOKEN to be present.')
   }
   const credentialChecks = {
     npmTokenPresent: secretNames.includes('NPM_TOKEN'),
     turboTokenPresent: secretNames.includes('TURBO_TOKEN'),
-    turboTeamPresent: Boolean(ghJson(['variable', 'list', '--repo', repository, '--json', 'name'])?.some(/** @param {{ name?: string }} variable */ (variable) => variable.name === 'TURBO_TEAM')),
+    turboTeamPresent: Boolean(
+      ghJson(['variable', 'list', '--repo', repository, '--json', 'name'])?.some(
+        /** @param {{ name?: string }} variable */ (variable) => variable.name === 'TURBO_TEAM'
+      )
+    ),
     opencodeApiKeyPresent: secretNames.includes('OPENCODE_API_KEY'),
   }
   details.credentials = credentialChecks
-  if (config.npm_publish === 'true' && !credentialChecks.npmTokenPresent) warnings.push('npm_publish is enabled but NPM_TOKEN is not configured; npm trusted publishing must be configured for tokenless publication.')
-  if (['true', 'auto'].includes(config.turbo_remote ?? 'false') && (!credentialChecks.turboTokenPresent || !credentialChecks.turboTeamPresent)) warnings.push('turbo_remote is enabled but TURBO_TOKEN and/or TURBO_TEAM is not configured; remote caching will be skipped.')
-  if (['true', 'auto'].includes(config.opencode_security ?? 'false') && !credentialChecks.opencodeApiKeyPresent) warnings.push('opencode_security is enabled but OPENCODE_API_KEY is not configured; the optional scan will be skipped.')
+  if (config.npm_publish === 'true' && !credentialChecks.npmTokenPresent)
+    warnings.push(
+      'npm_publish is enabled but NPM_TOKEN is not configured; npm trusted publishing must be configured for tokenless publication.'
+    )
+  if (
+    ['true', 'auto'].includes(config.turbo_remote ?? 'false') &&
+    (!credentialChecks.turboTokenPresent || !credentialChecks.turboTeamPresent)
+  )
+    warnings.push(
+      'turbo_remote is enabled but TURBO_TOKEN and/or TURBO_TEAM is not configured; remote caching will be skipped.'
+    )
+  if (
+    ['true', 'auto'].includes(config.opencode_security ?? 'false') &&
+    !credentialChecks.opencodeApiKeyPresent
+  )
+    warnings.push(
+      'opencode_security is enabled but OPENCODE_API_KEY is not configured; the optional scan will be skipped.'
+    )
 
-  const prs = ghJson(['pr', 'list', '--repo', repository, '--state', 'open', '--base', 'main', '--json', 'number,title,headRefName'])
+  const prs = ghJson([
+    'pr',
+    'list',
+    '--repo',
+    repository,
+    '--state',
+    'open',
+    '--base',
+    'main',
+    '--json',
+    'number,title,headRefName',
+  ])
   const openPrs = Array.isArray(prs) ? prs : []
-  details.openPromotionPrs = openPrs.filter(/** @param {any} pr */ (pr) => pr.headRefName === 'staging' || /promote staging/i.test(pr.title))
-  details.openReleasePrs = openPrs.filter(/** @param {any} pr */ (pr) => String(pr.headRefName).startsWith('release-please--') || /^chore\(main\): release /.test(pr.title))
+  details.openPromotionPrs = openPrs.filter(
+    /** @param {any} pr */ (pr) => pr.headRefName === 'staging' || /promote staging/i.test(pr.title)
+  )
+  details.openReleasePrs = openPrs.filter(
+    /** @param {any} pr */ (pr) =>
+      String(pr.headRefName).startsWith('release-please--') ||
+      pr.title.startsWith('chore(main): release ')
+  )
   if (details.openPromotionPrs.length > 1) errors.push('multiple staging promotion PRs are open.')
   if (details.openReleasePrs.length > 1) errors.push('multiple Release Please PRs are open.')
   return { errors, warnings, details }
@@ -75,23 +138,33 @@ export function doctorGithub(root) {
 
 /** @param {any} protection @returns {string[]} */
 function requiredContextsFromProtection(protection) {
-  return [...new Set([
-    ...(protection?.required_status_checks?.contexts ?? []),
-    ...(protection?.required_status_checks?.checks ?? []).map(/** @param {any} check */ (check) => check.context),
-  ].filter(Boolean))]
+  return [
+    ...new Set(
+      [
+        ...(protection?.required_status_checks?.contexts ?? []),
+        ...(protection?.required_status_checks?.checks ?? []).map(
+          /** @param {any} check */ (check) => check.context
+        ),
+      ].filter(Boolean)
+    ),
+  ]
 }
 
 /** @param {any[]} rulesets @returns {string[]} */
 function requiredContextsFromRulesets(rulesets) {
-  return [...new Set(
-    (Array.isArray(rulesets) ? rulesets : []).flatMap((/** @type {any} */ ruleset) =>
-      (ruleset.rules ?? []).flatMap((/** @type {any} */ rule) =>
-        rule?.type === 'required_status_checks' ?
-          (rule.parameters?.required_status_checks ?? []).map((/** @type {any} */ check) => check?.context).filter(Boolean) :
-          []
-      ),
+  return [
+    ...new Set(
+      (Array.isArray(rulesets) ? rulesets : []).flatMap((/** @type {any} */ ruleset) =>
+        (ruleset.rules ?? []).flatMap((/** @type {any} */ rule) =>
+          rule?.type === 'required_status_checks'
+            ? (rule.parameters?.required_status_checks ?? [])
+                .map((/** @type {any} */ check) => check?.context)
+                .filter(Boolean)
+            : []
+        )
+      )
     ),
-  )]
+  ]
 }
 
 /** @param {string} repository @param {any[] | null} rulesets @returns {any[]} */
@@ -107,13 +180,14 @@ function hydrateRulesets(repository, rulesets) {
 /** @param {any[] | null} rulesets @param {string} branch @returns {any[]} */
 function rulesetsForBranch(rulesets, branch) {
   if (!Array.isArray(rulesets)) return []
-  return rulesets.filter((ruleset) => (
-    ruleset?.target === 'branch' &&
-    Array.isArray(ruleset?.conditions?.ref_name?.include) &&
-    Array.isArray(ruleset?.conditions?.ref_name?.exclude) &&
-    includesBranch(ruleset.conditions.ref_name.include, branch) &&
-    !includesBranch(ruleset.conditions.ref_name.exclude, branch)
-  ))
+  return rulesets.filter(
+    (ruleset) =>
+      ruleset?.target === 'branch' &&
+      Array.isArray(ruleset?.conditions?.ref_name?.include) &&
+      Array.isArray(ruleset?.conditions?.ref_name?.exclude) &&
+      includesBranch(ruleset.conditions.ref_name.include, branch) &&
+      !includesBranch(ruleset.conditions.ref_name.exclude, branch)
+  )
 }
 
 /** @param {(string | null | undefined)[]} patterns @param {string} branch @returns {boolean} */
@@ -123,8 +197,11 @@ function includesBranch(patterns, branch) {
     if (!pattern) return false
     if (pattern === '~ALL') return true
     if (pattern === target || pattern === branch) return true
-    if (!/[\*?]/.test(pattern)) return false
-    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*').replace(/\\\?/g, '.')
+    if (!/[*?]/.test(pattern)) return false
+    const escaped = pattern
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\\*/g, '.*')
+      .replace(/\\\?/g, '.')
     const regex = new RegExp(`^${escaped}$`)
     return regex.test(target) || regex.test(branch)
   })
@@ -139,12 +216,21 @@ function inspectWorkflows(root) {
   const directory = join(root, '.github/workflows')
   /** @type {string[]} */
   let files = []
-  try { files = readdirSync(directory).filter((file) => file.endsWith('.yml') || file.endsWith('.yaml')) }
-  catch { return { errors: ['.github/workflows is missing.'], warnings } }
+  try {
+    files = readdirSync(directory).filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'))
+  } catch {
+    return { errors: ['.github/workflows is missing.'], warnings }
+  }
   for (const file of files) {
     const content = readFileSync(join(directory, file), 'utf8')
-    if (!/^permissions:\s*$/m.test(content) && /uses:.*\.github\/workflows\//.test(content)) warnings.push(`${file} does not declare top-level permissions.`)
-    if (file === 'release.yml' && /contents:\s+write/.test(content) && !/pull-requests:\s+write/.test(content)) errors.push('release.yml needs pull-requests: write for guarded Release Please PR handling.')
+    if (!/^permissions:\s*$/m.test(content) && /uses:.*\.github\/workflows\//.test(content))
+      warnings.push(`${file} does not declare top-level permissions.`)
+    if (
+      file === 'release.yml' &&
+      /contents:\s+write/.test(content) &&
+      !/pull-requests:\s+write/.test(content)
+    )
+      errors.push('release.yml needs pull-requests: write for guarded Release Please PR handling.')
   }
   return { errors, warnings }
 }
@@ -153,27 +239,43 @@ function inspectWorkflows(root) {
 function remoteRepository(root) {
   const result = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: root, encoding: 'utf8' })
   const value = result.status === 0 ? result.stdout.trim() : ''
-  return value.replace(/^git@github\.com:/, '').replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '')
+  return value
+    .replace(/^git@github\.com:/, '')
+    .replace(/^https?:\/\/github\.com\//, '')
+    .replace(/\.git$/, '')
 }
 
 /** @param {string[]} args @returns {any} */
 function ghJson(args) {
   const result = spawnSync('gh', args, { encoding: 'utf8' })
   if (result.status !== 0) return null
-  try { return JSON.parse(result.stdout) }
-  catch { return null }
+  try {
+    return JSON.parse(result.stdout)
+  } catch {
+    return null
+  }
 }
 
 /** @param {string} command */
-function commandExists(command) { return spawnSync(command, ['--version'], { stdio: 'ignore' }).status === 0 }
+function commandExists(command) {
+  return spawnSync(command, ['--version'], { stdio: 'ignore' }).status === 0
+}
 
 /** @param {string} root @returns {Record<string, string>} */
 function readConfig(root) {
   const file = join(root, '.github/code-foundry.yml')
   try {
-    return Object.fromEntries(readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line) => {
-      const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
-      return match ? [[match[1], match[2].replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')]] : []
-    }))
-  } catch { return {} }
+    return Object.fromEntries(
+      readFileSync(file, 'utf8')
+        .split(/\r?\n/)
+        .flatMap((line) => {
+          const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
+          return match
+            ? [[match[1], match[2].replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')]]
+            : []
+        })
+    )
+  } catch {
+    return {}
+  }
 }
