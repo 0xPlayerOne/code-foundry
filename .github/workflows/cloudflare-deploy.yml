@@ -1,0 +1,98 @@
+name: Code Foundry Cloudflare Deploy
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: 'Deploy mode: preview (wrangler versions upload) or production (wrangler deploy).'
+        required: false
+        type: string
+        default: preview
+      working-directory:
+        description: 'Directory containing the wrangler configuration.'
+        required: false
+        type: string
+        default: '.'
+      runner:
+        required: false
+        type: string
+        default: ubuntu-latest
+      wrangler-version:
+        required: false
+        type: string
+        default: 'latest'
+      environment:
+        description: 'GitHub deployment environment. Defaults to Preview/Production based on the mode.'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    name: Cloudflare Deploy / ${{ inputs.mode }}
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Deploy to Cloudflare
+        id: deploy
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          npx -y wrangler@"$WRANGLER_VERSION" --version
+          if [ "$MODE" = "production" ]; then
+            npx -y wrangler@"$WRANGLER_VERSION" deploy 2>&1 | tee deploy-output.txt
+          elif [ "$MODE" = "preview" ]; then
+            npx -y wrangler@"$WRANGLER_VERSION" versions upload --message "preview ${GITHUB_SHA::7}" 2>&1 | tee deploy-output.txt
+          else
+            echo "Unsupported mode: $MODE (use preview or production)" >&2
+            exit 1
+          fi
+          # Prefer version preview URLs; fall back to the first workers.dev URL.
+          url=$(grep -Eo 'https://[a-zA-Z0-9][a-zA-Z0-9.-]*\.workers\.dev' deploy-output.txt | tail -1 || true)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Record GitHub deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          ENVIRONMENT_OVERRIDE: ${{ inputs.environment }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" != "production" ] && [ "$MODE" != "preview" ]; then
+            echo "Unsupported mode: $MODE" >&2
+            exit 1
+          fi
+          environment="${ENVIRONMENT_OVERRIDE:-$([ "$MODE" = "production" ] && echo Production || echo Preview)}"
+          body=$(jq -n \
+            --arg ref "$GITHUB_SHA" \
+            --arg environment "$environment" \
+            --argjson production "$([ "$MODE" = "production" ] && echo true || echo false)" \
+            '{ref: $ref, environment: $environment, auto_merge: false, production_environment: $production, required_contexts: []}')
+          deployment=$(gh api "repos/$GITHUB_REPOSITORY/deployments" --input - <<< "$body" --jq .id)
+          status_args=(-f state=success -f description="Cloudflare $MODE deploy (${GITHUB_SHA::7})")
+          if [ -n "$DEPLOY_URL" ]; then
+            status_args+=(-f environment_url="$DEPLOY_URL" -f log_url="$DEPLOY_URL")
+          fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses" "${status_args[@]}" --jq .state
+          echo "Recorded $environment deployment for ${GITHUB_SHA::7}"

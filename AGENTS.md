@@ -77,6 +77,21 @@ This repository uses the `staging-release` workflow: topic branches **squash** i
 
 Merge only with the repository's canonical method. Never merge with `--admin`, never default or auto-select a merge method, and never use a method the branch ruleset does not allow. When in doubt, prefer the merge button's configured method and verify the ruleset after merging. Check `.github/CONTRIBUTING.md` for the complete flow and merge table.
 
+### Branch and commit policy
+
+Branch rulesets enforce deletions, force-pushes, required status checks, pull
+requests, conversation resolution, and linear history where the repository's
+plan supports them. Mirror those rules even where the plan cannot enforce
+them:
+
+- Branch from the default branch using
+  `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, or `test/*` names.
+- Never push directly to protected branches; open a pull request.
+- Use Conventional Commit subjects (`feat:`, `fix:`, `chore:`, …); Release
+  Please depends on them to version releases.
+- Keep pull requests focused; merge with the canonical method only after
+  required checks pass.
+
 ## Toolchain and dependencies
 
 - Follow `toolchain: auto` in `.github/code-foundry.yml`; use native tools by
@@ -112,7 +127,7 @@ Run focused tests first, then the complete applicable set for release, security,
 
 At minimum:
 
-- TypeScript/JavaScript: Oxfmt formatting, Oxlint linting, type-check, build, and Bun's native test runner for unit/integration tests; use the project's native browser runner for E2E tests. Repositories still on Prettier/ESLint keep working through the runtime's fallback detection until they migrate.
+- TypeScript/JavaScript: Oxfmt formatting, Oxlint linting, type-check, build, and Bun's native test runner for unit/integration tests; use the project's native browser runner for E2E tests. Repositories using a different linter or formatter keep full control through their own `lint`/`format` scripts, which the runtime honors.
 - Do not add Vitest. Preserve specialized native runners such as Matchstick for The Graph and Hardhat for smart contracts.
 - Rust: default rustfmt, Clippy with warnings treated as errors, check, unit/integration tests, and dependency audit
 - Python: Ruff formatting and linting, compile or type checks, pytest, coverage, and dependency audit

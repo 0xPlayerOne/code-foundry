@@ -50,7 +50,7 @@ repository manifests and source
 | `license`                  | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3                                                                   |
 | `git_workflow`             | `direct` (default), `staging-release`                                            | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
 | `merge_strategy`           | `rebase`                                                                         | Promotion merge method for `staging` → `main`; only enforced by the `staging-release` topology                      |
-| `release_merge_strategy`   | `rebase`                                                                         | Merge method for Release Please version PRs into `main`; release automation fails closed unless rebase              |
+| `release_merge_strategy`   | `rebase`, `squash` (direct topology only)                                        | Merge method for Release Please version PRs into `main`; release automation fails closed on anything else           |
 | `runner` fields            | GitHub runner names                                                              | Per-workflow runner policy                                                                                          |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
@@ -115,3 +115,14 @@ Each scoped shard must contain tracked Rust source. Code Foundry rejects
 absolute paths, parent traversal, duplicates, empty scopes, and more than eight
 shards. Do not split a single crate by arbitrary non-Rust directories: use
 `["all"]` when complete, non-overlapping source scopes are not available.
+
+## Cloudflare Workers deployments
+
+Repositories that deploy to Cloudflare Workers can opt into GitHub-native
+deployments (Preview/Production environments with deployment statuses, like
+Vercel's integration) by adding a small caller for the runtime's reusable
+`cloudflare-deploy.yml` workflow. The workflow runs `wrangler versions upload`
+for pull-request previews and `wrangler deploy` for production, records a
+GitHub deployment plus status with the workers.dev URL, and respects
+`CI_BILLING_PAUSED`. It requires the `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` secrets in the consumer repository.

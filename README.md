@@ -74,7 +74,8 @@ The standard workflow triggers are:
 
 Jobs are language-aware and skip irrelevant setup while remaining visible as
 successful required checks. TypeScript uses Oxlint, Oxfmt, and Bun's native
-test runner (Prettier/ESLint setups keep working through fallback detection).
+test runner (repositories using another linter or formatter keep full control
+through their own `lint`/`format` scripts, which the runtime honors).
 Rust uses `rustfmt`, Clippy with warnings as errors, and native
 Cargo tests. Python uses Ruff, uv/pip-compatible setup, and native Python
 tests. Solidity projects retain their native toolchain and test runner.
