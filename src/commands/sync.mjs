@@ -227,7 +227,12 @@ export function syncRepository(options) {
     }
     if (file === '.oxfmtrc.json' && existsSync(destination)) {
       content = Buffer.from(
-        mergeOxfmtConfig(content.toString('utf8'), readFileSync(destination, 'utf8'))
+        mergeIgnorePatternsConfig(content.toString('utf8'), readFileSync(destination, 'utf8'))
+      )
+    }
+    if (file === '.oxlintrc.json' && existsSync(destination)) {
+      content = Buffer.from(
+        mergeIgnorePatternsConfig(content.toString('utf8'), readFileSync(destination, 'utf8'))
       )
     }
     if (!existsSync(destination) || !buffersEqual(content, readFileSync(destination))) {
@@ -776,13 +781,14 @@ function mergeGitignore(baseline, existing) {
 }
 
 /**
- * Merge the baseline Oxfmt config with the consumer's current config. The
- * baseline owns every key except `ignorePatterns`, where consumer-specific
- * patterns (added by sync migrations or by the repository) are preserved so
- * repeated syncs never churn them.
+ * Merge a baseline Oxc config (.oxfmtrc.json / .oxlintrc.json) with the
+ * consumer's current config. The baseline owns every key except
+ * `ignorePatterns`, where consumer-specific patterns (added by sync
+ * migrations or by the repository) are preserved so repeated syncs never
+ * churn them.
  * @param {string} baseline @param {string} existing @returns {string}
  */
-function mergeOxfmtConfig(baseline, existing) {
+function mergeIgnorePatternsConfig(baseline, existing) {
   /** @type {string[]} */
   let extra = []
   try {

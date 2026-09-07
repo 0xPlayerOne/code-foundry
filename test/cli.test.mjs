@@ -899,6 +899,10 @@ describe('code-foundry CLI', () => {
       join(root, '.prettierignore'),
       ['# Local build output', 'dist/', 'coverage/', ''].join('\n')
     )
+    writeFileSync(
+      join(root, '.oxlintrc.json'),
+      '{ "categories": { "correctness": "error" }, "ignorePatterns": ["vendor/**"] }\n'
+    )
 
     const first = syncRepository({ target: root, source: process.cwd() })
 
@@ -916,6 +920,9 @@ describe('code-foundry CLI', () => {
     assert.ok(oxfmtConfig.ignorePatterns.includes('.github/actions/'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('dist/'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('coverage/'))
+    const oxlintConfig = JSON.parse(readFileSync(join(root, '.oxlintrc.json'), 'utf8'))
+    assert.equal(oxlintConfig.categories.correctness, 'error')
+    assert.ok(oxlintConfig.ignorePatterns.includes('vendor/**'))
 
     // Idempotent: a second sync must not churn the migrated config.
     const second = syncRepository({ target: root, source: process.cwd() })
@@ -1554,23 +1561,26 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /^  dependency-review:\s*$/m)
   })
 
-  it('keeps the OpenCode scan to a single job with one skipped row', () => {
+  it('calls the OpenCode scanner from a job level, gated on detect outputs', () => {
     const workflow = readFileSync(
       join(process.cwd(), '.github/workflows/opencode-security_self-ci.yml'),
       'utf8'
     )
-    // One job: the release-please branch gate stays at the job level so
-    // ordinary pull requests render a single skipped check instead of two.
+    // Regression: reusable workflows may only be called from a job level. A
+    // step-level `uses:` of a workflow makes every run fail at parse time.
+    assert.match(workflow, /^  detect:\n    name: OpenCode Security \/ Detect/m)
     assert.match(workflow, /^  scan:\n    name: OpenCode Security \/ Scan/m)
-    assert.doesNotMatch(workflow, /^  detect:/m)
+    assert.match(workflow, /^    needs: detect$/m)
+    // The scan call must live at job level (two-space indent, no steps key).
+    assert.match(
+      workflow,
+      /^    uses: 0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@137698ef3545204af8fad00fc8bd64d663c8122e/m
+    )
+    assert.doesNotMatch(workflow, /^      - name: Scan$/m)
     assert.match(workflow, /vars\.CI_BILLING_PAUSED != 'true'/)
     assert.match(
       workflow,
       /startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
-    )
-    assert.match(
-      workflow,
-      /0xPlayerOne\/opencode-security\/\.github\/workflows\/opencode-security\.yml@137698ef3545204af8fad00fc8bd64d663c8122e/
     )
   })
 
