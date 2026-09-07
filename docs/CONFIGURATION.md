@@ -56,6 +56,20 @@ repository manifests and source
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
 `release-pr`, `release`, and `dependabot`.
 
+## OpenCode Security opt-in and opt-out
+
+`opencode_security` controls the optional OpenCode scan, and the generated
+caller ships in every repository. The `OPENCODE_SECURITY` repository variable
+overrides the configuration at run time, so a scan can be toggled on any
+repository without a configuration change or a new secret:
+
+- `OPENCODE_SECURITY: true` opts the repository in.
+- `OPENCODE_SECURITY: false` opts the repository out.
+- unset falls back to the `opencode_security` configuration (default `false`).
+
+The scan only runs when it is enabled and the `OPENCODE_API_KEY` secret is
+present.
+
 ## Git workflow
 
 `git_workflow` selects the branch topology:

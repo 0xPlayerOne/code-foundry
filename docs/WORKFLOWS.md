@@ -67,7 +67,10 @@ throughout the bounded release flow.
 
 Custom workflows are repository-owned and are not rewritten by sync. Add
 `if: vars.CI_BILLING_PAUSED != 'true'` to each custom root job that should
-honor the shared billing pause.
+honor the shared billing pause. The optional OpenCode Security scan honors a
+second toggle: the `OPENCODE_SECURITY` repository variable (`true`/`false`)
+overrides the `opencode_security` configuration per run, so individual
+repositories can opt in or out without a code change.
 
 ## Standard workflow responsibilities
 

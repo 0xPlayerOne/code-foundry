@@ -432,8 +432,11 @@ function shouldInclude(file, languages, features, config) {
   if (file === '.oxfmtrc.json' || file === '.oxlintrc.json')
     return includesValue(languages, 'typescript')
   if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
-  if (file === '.github/workflows/opencode-security.yml')
-    return ['true', 'auto'].includes(config.opencode_security ?? 'false')
+  // The OpenCode Security caller is installed in every repository so the
+  // OPENCODE_SECURITY repository variable can opt a repository in (or out)
+  // without a configuration change. The detect job keeps the scan off unless
+  // the configuration or the variable enables it and the API key exists.
+  if (file === '.github/workflows/opencode-security.yml') return true
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
   // The staging promotion caller only exists in the staging-release topology;
   // direct repositories open feature branches into main and need no promotion.
@@ -774,10 +777,48 @@ export function isGeneratedEventCaller(content, stem, runtimeRepository) {
 /** @param {string} baseline @param {string} existing */
 function mergeGitignore(baseline, existing) {
   const marker = '# Repository-specific rules'
-  const custom = existing.includes(marker)
-    ? existing.slice(existing.indexOf(marker) + marker.length).trim()
-    : ''
-  return custom ? `${baseline.trimEnd()}\n\n${marker}\n${custom}\n` : baseline
+  const markerIndex = existing.indexOf(marker)
+  const head = markerIndex >= 0 ? existing.slice(0, markerIndex) : existing
+  const customSection = markerIndex >= 0 ? existing.slice(markerIndex + marker.length).trim() : ''
+  const baselineLines = new Set(
+    baseline
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+  // Preserve consumer-owned entries the baseline does not define, including
+  // the comments that introduce them, so a sync never silently drops
+  // repository-specific ignore rules that live outside the managed section
+  // (for example Cloudflare or framework build output added by the repo).
+  /** @type {string[]} */
+  const preserved = []
+  /** @type {string[]} */
+  let pending = []
+  for (const line of head.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) {
+      pending.push(line)
+      continue
+    }
+    if (baselineLines.has(trimmed)) {
+      pending = []
+      continue
+    }
+    preserved.push(...pending, line)
+    pending = []
+  }
+  /** @type {string[]} */
+  const customLines = []
+  const seen = new Set()
+  for (const line of [...preserved, ...(customSection ? customSection.split(/\r?\n/) : [])]) {
+    const trimmed = line.trim()
+    if (!trimmed || seen.has(trimmed)) continue
+    seen.add(trimmed)
+    customLines.push(line)
+  }
+  return customLines.length
+    ? `${baseline.trimEnd()}\n\n${marker}\n${customLines.join('\n')}\n`
+    : baseline
 }
 
 /**
@@ -788,6 +829,11 @@ function mergeGitignore(baseline, existing) {
  * churn them. Keys the baseline does not define (e.g. a repository-owned
  * `overrides` block) belong to the consumer and are preserved as well, so
  * a sync never silently drops repository-owned configuration.
+ *
+ * When the merged semantics already match the consumer file, the exact
+ * existing bytes are returned untouched: rewriting canonical JSON here
+ * would fight the formatter (which collapses short collections that
+ * `JSON.stringify` expands) and churn the file on every sync.
  * @param {string} baseline @param {string} existing @returns {string}
  */
 function mergeIgnorePatternsConfig(baseline, existing) {
@@ -808,19 +854,36 @@ function mergeIgnorePatternsConfig(baseline, existing) {
   } catch {
     return baseline
   }
-  let preserved = false
+  /** @type {Record<string, any>} */
+  const merged = { ...config }
   for (const [key, value] of Object.entries(consumer)) {
-    if (!(key in config)) {
-      config[key] = value
-      preserved = true
-    }
+    if (!(key in merged)) merged[key] = value
   }
   const extra = Array.isArray(consumer.ignorePatterns) ? consumer.ignorePatterns : []
-  const base = Array.isArray(config.ignorePatterns) ? config.ignorePatterns : []
+  const base = Array.isArray(merged.ignorePatterns) ? merged.ignorePatterns : []
   const missing = extra.filter((pattern) => !base.includes(pattern))
-  if (missing.length) config.ignorePatterns = [...base, ...missing]
-  if (!preserved && !missing.length) return baseline
-  return `${JSON.stringify(config, null, 2)}\n`
+  if (missing.length) merged.ignorePatterns = [...base, ...missing]
+  if (jsonDeepEqual(merged, consumer)) return existing
+  return `${JSON.stringify(merged, null, 2)}\n`
+}
+
+/**
+ * Order-insensitive deep equality for JSON-compatible values. Used to detect
+ * semantic equality between the merged Oxc configuration and the consumer's
+ * current file so formatting differences never trigger a rewrite.
+ * @param {any} a @param {any} b @returns {boolean}
+ */
+function jsonDeepEqual(a, b) {
+  if (a === b) return true
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    return a.every((item, index) => jsonDeepEqual(item, b[index]))
+  }
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) return false
+  return aKeys.every((key) => key in b && jsonDeepEqual(a[key], b[key]))
 }
 
 /**

@@ -709,7 +709,13 @@ describe('code-foundry CLI', () => {
     const validationCaller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     assert.match(validationCaller, /code-foundry\/\.github\/workflows\/validation\.yml@v/)
     assert.equal(exists(join(root, '.github/workflows/slither.yml')), true)
-    assert.equal(exists(join(root, '.github/workflows/opencode-security.yml')), false)
+    // The OpenCode Security caller ships everywhere so the OPENCODE_SECURITY
+    // repository variable can opt a repository in without a config change.
+    assert.equal(exists(join(root, '.github/workflows/opencode-security.yml')), true)
+    assert.match(
+      readFileSync(join(root, '.github/workflows/opencode-security.yml'), 'utf8'),
+      /OPENCODE_SECURITY_OVERRIDE/
+    )
     for (const legacy of ['ci', 'test', 'security', 'codeql']) {
       assert.equal(exists(join(root, `.github/workflows/${legacy}.yml`)), false, legacy)
     }
@@ -966,6 +972,53 @@ describe('code-foundry CLI', () => {
     const afterSecond = JSON.parse(readFileSync(join(root, '.oxlintrc.json'), 'utf8'))
     assert.deepEqual(afterSecond.overrides, merged.overrides)
     assert.deepEqual(afterSecond.ignorePatterns, merged.ignorePatterns)
+  })
+
+  it('keeps oxfmt-formatted Oxc configs byte-identical across syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxfmt-stable-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    // First sync merges the baseline; simulate the formatter collapsing short
+    // collections afterwards (oxfmt style differs from JSON.stringify).
+    syncRepository({ target: root, source: process.cwd() })
+    writeFileSync(
+      join(root, '.oxlintrc.json'),
+      '{\n  "$schema": "./node_modules/oxlint/configuration_schema.json",\n  "categories": { "correctness": "error" },\n  "ignorePatterns": ["node_modules/**"]\n}\n'
+    )
+
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.ok(
+      !second.changed.includes('.oxlintrc.json'),
+      `formatter-style config must not churn: ${second.changed.join(', ')}`
+    )
+  })
+
+  it('preserves repository-owned gitignore entries outside the managed section', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-gitignore-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    const baseline = readFileSync(join(process.cwd(), 'src/templates/gitignore'), 'utf8')
+    writeFileSync(
+      join(root, '.gitignore'),
+      `${baseline.trimEnd()}\n\n# Cloudflare OpenNext / Wrangler build output\n.open-next/\n.wrangler/\n`
+    )
+
+    const result = syncRepository({ target: root, source: process.cwd() })
+    const merged = readFileSync(join(root, '.gitignore'), 'utf8')
+    assert.ok(merged.includes('.open-next/'), 'consumer build output must survive sync')
+    assert.ok(merged.includes('.wrangler/'), 'consumer build output must survive sync')
+    assert.ok(merged.includes('# Repository-specific rules'))
+    void result
+
+    // Idempotent: the normalized file must not churn on the next sync.
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.ok(!second.changed.includes('.gitignore'), second.changed.join(', '))
   })
 
   it('previews legacy caller removal in dry-run without writing files', () => {
