@@ -1275,7 +1275,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(createStep, /echo "\$AUTOMATION_TOKEN"|printenv|GITHUB_OUTPUT/)
     assert.doesNotMatch(workflow, /gh pr create/)
   })
-  it('fails closed on a non-rebase release merge strategy and never uses --admin', () => {
+  it('validates topology-specific release merge strategies and never uses --admin', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
     assert.match(workflow, /if \(!releaseConfig\.packages && !releaseConfig\['release-type'\]\)/)
@@ -1287,6 +1287,11 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release validate-prs/)
     assert.doesNotMatch(workflow, /--admin/)
     assert.match(workflow, /release_merge_strategy must be "rebase"/)
+    assert.match(
+      workflow,
+      /allowedStrategies = gitWorkflow === 'staging-release' \? \['rebase'\] : \['rebase', 'squash'\]/
+    )
+    assert.match(workflow, /or "squash" \(direct topology\)/)
     assert.match(workflow, /release automation never defaults to merge/)
     assert.doesNotMatch(workflow, /release_merge_strategy \|\| config\.merge_strategy/)
     assert.doesNotMatch(workflow, /\|\| 'merge'/)
@@ -1368,7 +1373,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /--admin/)
   })
 
-  it('doctor and sync reject merge strategies outside the audit topology', () => {
+  it('doctor and sync enforce topology-specific merge strategies', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-merge-policy-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
     const captureErrors = (fn) => {
@@ -1423,6 +1428,29 @@ describe('code-foundry CLI', () => {
     assert.throws(
       () => syncRepository({ target: root, source: process.cwd() }),
       /Unsupported release_merge_strategy: squash/
+    )
+
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nrelease_merge_strategy: squash\n'
+    )
+    syncRepository({ target: root, source: process.cwd() })
+    assert.doesNotThrow(() => doctor(root))
+
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nrelease_merge_strategy: merge\n'
+    )
+    const directRelease = captureErrors(() => doctor(root))
+    assert.ok(
+      directRelease.some((message) =>
+        /release_merge_strategy must be "rebase" or "squash" \(direct topology\)/.test(message)
+      ),
+      directRelease.join('\n')
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported release_merge_strategy: merge/
     )
 
     // Release automation is the only consumer of release_merge_strategy;

@@ -91,15 +91,16 @@ See [Workflow and CI conventions](docs/WORKFLOWS.md) for triggers, required
 checks, runners, coverage, caching, and custom workflow extensions.
 
 The contribution policy defaults to the `direct` workflow: feature PRs squash
-into `main`, and Release Please version PRs rebase into `main`
-(`release_merge_strategy: rebase`). Repositories with a preview/staging
-environment opt into `git_workflow: staging-release`, where feature PRs squash
-into `staging`, the promotion PR rebases into `main` (`merge_strategy:
-rebase`), and Release Please version PRs rebase into `main`. Release automation
-never defaults to a merge method and never merges with `--admin`;
-`code-foundry doctor` and `code-foundry sync` fail closed on any other
-strategy. GitHub Stacks is not part of this topology and does not reduce the
-required workflow runs.
+into `main`, and Release Please version PRs use the configured
+`release_merge_strategy` (rebase by default, or squash when opted in).
+Repositories with a preview/staging environment opt into
+`git_workflow: staging-release`, where feature PRs squash into `staging`, the
+promotion PR rebases into `main` (`merge_strategy: rebase`), and Release Please
+version PRs rebase into `main`. Release automation never defaults to a merge
+method and never merges with `--admin`; `code-foundry doctor` and
+`code-foundry sync` fail closed on any strategy outside the selected topology.
+GitHub Stacks is not part of this topology and does not reduce the required
+workflow runs.
 
 ## Releases and publishing
 

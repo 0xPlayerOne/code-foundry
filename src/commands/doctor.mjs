@@ -122,9 +122,14 @@ export function doctor(root, options = {}) {
     )
   }
   const releaseMergeStrategy = config.release_merge_strategy ?? ''
-  if (includesValue(features, 'release') && releaseMergeStrategy !== 'rebase') {
+  const allowedReleaseStrategies =
+    workflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
+  if (
+    includesValue(features, 'release') &&
+    !allowedReleaseStrategies.includes(releaseMergeStrategy)
+  ) {
     error(
-      `release_merge_strategy must be "rebase" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`
+      `release_merge_strategy must be "rebase"${workflow === 'staging-release' ? '' : ' or "squash" (direct topology)'} for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`
     )
   }
   for (const name of ['validation', 'draft-pr', 'release-pr', 'release']) {
