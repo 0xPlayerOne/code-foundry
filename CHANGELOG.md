@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.2...v1.9.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** suppress unavailable and draft checks ([#507](https://github.com/0xPlayerOne/code-foundry/issues/507)) ([e0b313a](https://github.com/0xPlayerOne/code-foundry/commit/e0b313ad1e4601ccd14066fb97a4f547400a6eaa))
+
 ## [1.9.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.1...v1.9.2) (2026-09-08)
 
 
