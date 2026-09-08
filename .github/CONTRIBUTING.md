@@ -32,6 +32,27 @@ Agents must not:
 - Change branch protections, secrets, deployments, or external systems unless that action is explicitly in scope.
 - Claim completion when tests, deployment checks, or required reviews are still pending.
 
+<!-- code-foundry-managed: pull-request-policy -->
+
+### Pull request readiness (mandatory)
+
+This repository uses the `direct` workflow. Topic pull requests target `main`.
+
+- Open every ordinary pull request as a draft. Use `gh pr create --draft` or
+  set `draft: true` in the GitHub API; never create a ready ordinary pull
+  request as a shortcut.
+- Keep ordinary pull requests in draft while making commits. The generated
+  Draft Guard resets a ready ordinary pull request to draft on creation,
+  reopening, or a new commit, and runner-heavy validation starts only after an
+  explicit `ready_for_review` transition.
+- Run local validation and finish review preparation before marking an ordinary
+  pull request ready. After any later commit, mark it ready again only after
+  the current head is ready for review.
+- Release Please version pull requests are managed by the Code Foundry release
+  workflow; do not manually change their draft state unless the workflow asks.
+
+<!-- /code-foundry-managed: pull-request-policy -->
+
 ## Branching model
 
 ```text
@@ -162,7 +183,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 | Push to a working branch                           | Draft PR workflow                                                                     |
 | Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |
 
-Draft pull requests do not start validation. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.
+Draft pull requests do not start validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.
 
 Pull-request validation keys concurrency by event and pull-request head, so a newer update cancels its superseded run. Scheduled and manual audits use a separate caller pinned to the protected default branch; this prevents caller-selected runtime code from executing with default-branch cache access. Both callers use the mode-aware orchestrator, which fans out only the required jobs and concludes with the stable aggregate gate.
 

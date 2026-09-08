@@ -36,7 +36,7 @@ contract. For normal updates, edit that file and run `npx code-foundry sync`.
 ## What it installs
 
 - Short workflow callers for pull-request validation, protected scheduled/manual
-  audits, Draft PR, Release PR, and Release.
+  audits, Draft Guard, Draft PR, Release PR, and Release.
 - A deterministic performance lane with ordered command support, stable result
   artifacts, and an optional shared Node package budget profile.
 - A small `.githooks/pre-commit` launcher with language-aware formatting and
@@ -75,9 +75,12 @@ The standard workflow triggers are:
 - Draft PR automation for supported feature/fix branches.
 
 Automated feature/fix and staging-promotion pull requests open as drafts.
-Pull-request validation runs on the ready-for-review transition. After later
-commits, convert the PR to draft and mark it ready again so checks attach to
-the current head. Converting a PR to draft runs only the lightweight
+The trusted Draft Guard is a fallback for manually created or reopened ready
+PRs and for new commits to ordinary ready PRs: it converts them to drafts
+without checking out PR code. It verifies the event head and update timestamp
+before changing state, and excludes Release Please version PRs whose release
+workflow owns readiness. Pull-request validation runs only on the
+ready-for-review transition. Converting a PR to draft runs only the lightweight
 cancellation control. Scheduled and manually dispatched audits are unaffected.
 
 Jobs are language-aware and skip irrelevant setup inside the applicable

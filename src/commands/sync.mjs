@@ -44,6 +44,7 @@ const standardFiles = [
   '.github/workflows/validation.yml',
   '.github/workflows/validation-audit.yml',
   '.github/workflows/draft-control.yml',
+  '.github/workflows/draft-enforcement.yml',
   '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml',
   '.github/workflows/release.yml',
@@ -221,10 +222,6 @@ export function syncRepository(options) {
     const sourceFile = sourcePath(source, file)
     if (!existsSync(sourceFile)) throw new Error(`Template file missing: ${file}`)
     const destination = join(target, file)
-    if (!force && protectedFiles.has(file) && existsSync(destination)) {
-      const existing = readFileSync(destination, 'utf8')
-      if (!isLegacyManagedDoc(file, existing) && !isManagedConfigPolicy(file, existing)) continue
-    }
     if (
       (file === 'LICENSE' || file === 'NOTICE') &&
       license === 'preserve' &&
@@ -266,6 +263,19 @@ export function syncRepository(options) {
       content = Buffer.from(
         mergeIgnorePatternsConfig(content.toString('utf8'), readFileSync(destination, 'utf8'))
       )
+    }
+    if (!force && protectedFiles.has(file) && existsSync(destination)) {
+      const existing = readFileSync(destination, 'utf8')
+      if (!isLegacyManagedDoc(file, existing) && !isManagedConfigPolicy(file, existing)) {
+        if (configAwarePolicyFiles.has(file)) {
+          const merged = mergeManagedPolicyBlocks(existing, content.toString('utf8'))
+          if (merged !== existing) {
+            changed.push(file)
+            writeOrReport(destination, merged, dryRun)
+          }
+        }
+        continue
+      }
     }
     if (!existsSync(destination) || !buffersEqual(content, readFileSync(destination))) {
       changed.push(file)
@@ -478,7 +488,12 @@ function shouldInclude(file, languages, features, config) {
   // the configuration or the variable enables it and the API key exists.
   if (file === '.github/workflows/opencode-security.yml') return true
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
-  if (workflow === 'draft-control') return true
+  if (workflow === 'draft-control' || workflow === 'draft-enforcement') {
+    return (
+      includesValue(features, 'validation') ||
+      LEGACY_GENERATED_CALLERS.some((legacy) => includesValue(features, legacy))
+    )
+  }
   // The staging promotion caller only exists in the staging-release topology;
   // direct repositories open feature branches into main and need no promotion.
   if (workflow === 'release-pr' && !isStagingRelease(config.git_workflow)) return false
@@ -719,8 +734,16 @@ const DIRECT_DOC_REPLACEMENTS = {
       'This repository uses the `staging-release` workflow: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `staging` with squash merges; promotion and release PRs land on `main` with rebase merges. Re-align `staging` with `main` after a release when needed.',
       'This repository uses the `direct` workflow: topic branches **squash** directly into `main`, and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Feature and release PRs land on `main` with squash merges. No integration branch exists; all pull requests target `main`.',
     ],
+    [
+      'This repository uses the `staging-release` workflow. Topic pull requests target `staging`; promotion pull requests target `main`.',
+      'This repository uses the `direct` workflow. Topic pull requests target `main`.',
+    ],
   ],
   '.github/CONTRIBUTING.md': [
+    [
+      'This repository uses the `staging-release` workflow. Topic pull requests target `staging`; promotion pull requests target `main`.',
+      'This repository uses the `direct` workflow. Topic pull requests target `main`.',
+    ],
     [
       '4. Branch from `staging` and target pull requests at `staging`; do not work directly on `main`.',
       '4. Branch from `main` and target pull requests at `main`; do not push directly to `main`.',
@@ -764,8 +787,8 @@ const DIRECT_DOC_REPLACEMENTS = {
       '| Change                    | Target | Merge method                      | Merge gate                              |\n| ------------------------- | ------ | --------------------------------- | --------------------------------------- |\n| Working branch            | `main` | Squash                            | All applicable required checks pass     |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |\n',
     ],
     [
-      'Draft pull requests do not start runner-heavy validation. Marking a pull request ready for review starts the applicable validation tier; converting it back to draft cancels in-flight validation, and no replacement starts until it is ready again.',
-      'Draft pull requests do not start validation. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.',
+      'Draft pull requests do not start runner-heavy validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head; converting it back to draft cancels in-flight validation, and no replacement starts until it is ready again.',
+      'Draft pull requests do not start validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.',
     ],
     ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],
@@ -1116,9 +1139,12 @@ function isLegacyManagedDoc(file, content) {
 
 /**
  * Config-aware policy documents are generated contracts: a normal sync must
- * refresh them after branch-topology or validation-policy edits. The marker
- * owns future copies. Exact scaffold signatures migrate older generated
- * copies without treating arbitrary repository documentation as managed.
+ * refresh generated copies after branch-topology or validation-policy edits.
+ * Unmarked consumer-owned documents receive only the explicitly marked policy
+ * blocks, so another agent's initializer cannot be overwritten. The top-level
+ * marker owns generated copies. Exact scaffold signatures migrate older
+ * generated copies without treating arbitrary repository documentation as
+ * managed.
  * @param {string} file
  * @param {string} content
  */
@@ -1155,6 +1181,45 @@ function isManagedConfigPolicy(file, content) {
 /** @param {string} target @param {string[]} args */
 function git(target, args) {
   spawnSync('git', args, { cwd: target, stdio: 'ignore' })
+}
+
+/**
+ * Merge the marked policy blocks from a rendered baseline into a consumer-owned
+ * policy document. Unmarked AGENTS.md/CONTRIBUTING.md files are commonly
+ * generated by another agent initializer, so sync must add and refresh the
+ * Code Foundry contract without replacing the user's surrounding instructions.
+ * @param {string} existing
+ * @param {string} baseline
+ * @returns {string}
+ */
+function mergeManagedPolicyBlocks(existing, baseline) {
+  const blockPattern =
+    /<!-- code-foundry-managed: ([A-Za-z0-9_-]+) -->[\s\S]*?<!-- \/code-foundry-managed: \1 -->/g
+  const blocks = [...baseline.matchAll(blockPattern)]
+  if (!blocks.length) return existing
+
+  let merged = existing
+  for (const match of blocks) {
+    const id = match[1]
+    const block = match[0]
+    const start = `<!-- code-foundry-managed: ${id} -->`
+    const end = `<!-- /code-foundry-managed: ${id} -->`
+    const pattern = new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}`, 'g')
+    const occurrences = merged.match(pattern) ?? []
+    if (occurrences.length > 1) {
+      throw new Error(`Managed policy block appears more than once in consumer document: ${id}`)
+    }
+    if (occurrences.length === 1) {
+      merged = merged.replace(pattern, block)
+      continue
+    }
+    if (merged.includes(start) || merged.includes(end)) {
+      throw new Error(`Managed policy block is incomplete in consumer document: ${id}`)
+    }
+    const separator = merged.endsWith('\n\n') ? '' : merged.endsWith('\n') ? '\n' : '\n\n'
+    merged = `${merged}${separator}${block}\n`
+  }
+  return merged
 }
 
 /** @param {string} file @param {Buffer|string} content @param {boolean} dryRun */

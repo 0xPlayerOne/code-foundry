@@ -371,6 +371,7 @@ function deliverReconciliationPullRequest(target, base, head, state, targetSha, 
     title,
     '--body',
     body,
+    '--draft',
   ])
   if (created.status !== 0) {
     // A concurrent run may have created the pull request between our list

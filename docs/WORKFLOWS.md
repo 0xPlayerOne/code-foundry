@@ -14,10 +14,15 @@ pull_request:
 
 The generated validation caller listens only for `ready_for_review`, so draft
 pull requests register no validation checks and allocate no validation runner.
-After any later update, convert the pull request to draft and mark it ready
-again so required checks attach to the current head. A separate lightweight
-draft-control caller listens for `converted_to_draft` and cancels queued or
-running pull-request workflows without creating skipped validation jobs.
+A separate lightweight Draft Guard runs from the trusted base branch on
+`opened`, `reopened`, and `synchronize`; it converts ordinary ready pull
+requests back to draft without checking out pull-request code. It rechecks the
+current head and update timestamp before mutating state, so a stale event
+cannot undo a later draft or ready transition. Release Please version heads are
+excluded because the release workflow owns their state. A separate draft-control
+caller listens for `converted_to_draft` and cancels queued or running
+pull-request workflows without creating skipped validation jobs. Marking a pull
+request ready again starts validation for the current head.
 
 The separate `validation-audit.yml` caller is pinned to the configured released
 runtime and handles scheduled and manual audits:
@@ -91,15 +96,16 @@ opt in or out without a code change.
 
 ## Standard workflow responsibilities
 
-| Workflow   | Responsibility                                                    |
-| ---------- | ----------------------------------------------------------------- |
-| CI         | Format, lint, type-check, and build                               |
-| Test       | Unit, standardized performance, integration, E2E, and smoke tests |
-| Security   | Profile, audits, and public-only Dependency Review                |
-| CodeQL     | GitHub-native code scanning, kept separate from CI                |
-| Draft PR   | Create/update development pull requests                           |
-| Release PR | Promote `staging` into `main` (staging-release topology only)     |
-| Release    | Release Please, GitHub release, and optional npm publication      |
+| Workflow    | Responsibility                                                    |
+| ----------- | ----------------------------------------------------------------- |
+| CI          | Format, lint, type-check, and build                               |
+| Test        | Unit, standardized performance, integration, E2E, and smoke tests |
+| Security    | Profile, audits, and public-only Dependency Review                |
+| CodeQL      | GitHub-native code scanning, kept separate from CI                |
+| Draft PR    | Create/update development pull requests                           |
+| Draft Guard | Keep ordinary PRs draft until `ready_for_review`                  |
+| Release PR  | Promote `staging` into `main` (staging-release topology only)     |
+| Release     | Release Please, GitHub release, and optional npm publication      |
 
 Use concise job names such as `CI / Format`, `Test / Unit`, and
 `CodeQL / Analyze (Python)`. Per-language CodeQL analyzers (Rust shards
