@@ -268,7 +268,9 @@ export function rustManifestPaths(root) {
     }
   }
   visit(root, '')
-  return manifests.toSorted()
+  // Sorting a fresh local collection is deterministic and cannot mutate caller-owned state.
+  // oxlint-disable-next-line unicorn/no-array-sort
+  return manifests.sort()
 }
 
 /** @param {string} root @param {string[]} args */
