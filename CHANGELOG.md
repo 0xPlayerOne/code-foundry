@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.1...v1.9.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **sync:** refresh config-aware policies ([#505](https://github.com/0xPlayerOne/code-foundry/issues/505)) ([466150d](https://github.com/0xPlayerOne/code-foundry/commit/466150dcf263187e9cb08be2a2c2fe7ff67ef060))
+
 ## [1.9.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.0...v1.9.1) (2026-09-08)
 
 
