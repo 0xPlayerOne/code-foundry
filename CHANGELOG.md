@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.10...v1.9.11) (2026-09-08)
+
+
+### Bug Fixes
+
+* **doctor:** support nested Rust crates ([#525](https://github.com/0xPlayerOne/code-foundry/issues/525)) ([0ffc87d](https://github.com/0xPlayerOne/code-foundry/commit/0ffc87d71c5e8069a26814dea2250e93a3e87416))
+
 ## [1.9.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.9...v1.9.10) (2026-09-08)
 
 
