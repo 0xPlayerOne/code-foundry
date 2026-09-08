@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.6.1...v1.7.0) (2026-09-08)
+
+
+### Features
+
+* **release:** standardize generated PR titles ([#497](https://github.com/0xPlayerOne/code-foundry/issues/497)) ([44de0c4](https://github.com/0xPlayerOne/code-foundry/commit/44de0c4f1261a017a0395ddae268c203cccc71b4))
+
 ## [1.6.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.6.0...v1.6.1) (2026-09-08)
 
 
