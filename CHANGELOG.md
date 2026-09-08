@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.3...v1.9.4) (2026-09-08)
+
+
+### Bug Fixes
+
+* **doctor:** accept no-CodeQL validation callers ([#509](https://github.com/0xPlayerOne/code-foundry/issues/509)) ([f447de8](https://github.com/0xPlayerOne/code-foundry/commit/f447de81b8f2e7e59ab6fdbd6b1939635286e2a9))
+
 ## [1.9.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.2...v1.9.3) (2026-09-08)
 
 
