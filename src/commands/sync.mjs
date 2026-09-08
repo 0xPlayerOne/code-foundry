@@ -42,6 +42,7 @@ const standardFiles = [
   '.github/ISSUE_TEMPLATE/config.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/workflows/validation.yml',
+  '.github/workflows/validation-audit.yml',
   '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml',
   '.github/workflows/release.yml',
@@ -473,6 +474,9 @@ function sourcePath(source, file) {
     return existsSync(rootTemplate) ? rootTemplate : join(source, 'src/templates/gitignore')
   }
   if (file.startsWith('.github/workflows/')) {
+    if (file === '.github/workflows/validation-audit.yml') {
+      return join(source, 'src/templates/workflows/validation-audit.yml')
+    }
     const name = file.slice('.github/workflows/'.length, -4)
     return join(source, '.github/workflows', `${name}_self-ci.yml`)
   }
@@ -535,7 +539,7 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   if (workflow === 'test' && config.unit_runner) {
     rendered = rendered.replace(/^(\s+unit-runner:)\s+.*$/m, `$1 ${config.unit_runner}`)
   }
-  if (workflow === 'validation') {
+  if (workflow === 'validation' || workflow === 'validation-audit') {
     // The mode classifier is a normal runner job in the caller rather than a
     // reusable-workflow input. Keep it on the configured default runner so
     // consumers that cannot use ubuntu-slim do not fail before validation.
