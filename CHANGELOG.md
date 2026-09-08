@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.0...v1.9.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** restore protected consumer audits ([#503](https://github.com/0xPlayerOne/code-foundry/issues/503)) ([d045cc4](https://github.com/0xPlayerOne/code-foundry/commit/d045cc4a5543d2096e4d6f33c5e74aa40604c887))
+
 ## [1.9.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.8.0...v1.9.0) (2026-09-08)
 
 
