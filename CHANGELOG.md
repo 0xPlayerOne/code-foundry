@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.7...v1.9.8) (2026-09-08)
+
+
+### Bug Fixes
+
+* **docs:** describe full release validation ([#519](https://github.com/0xPlayerOne/code-foundry/issues/519)) ([1c51368](https://github.com/0xPlayerOne/code-foundry/commit/1c513681dcd34d30d16d89505a159061d66e8fdb))
+
 ## [1.9.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.6...v1.9.7) (2026-09-08)
 
 
