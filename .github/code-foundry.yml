@@ -41,4 +41,6 @@ custom_workflows: preserve
 staging_validation_mode: fast
 performance: auto
 performance_command:
+performance_profile:
+performance_budget_file: performance-package-budgets.json
 opencode_security_model:

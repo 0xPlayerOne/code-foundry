@@ -80,6 +80,11 @@ test('performance task discovers and runs the repository check script', () => {
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BUN_ARGS_LOG: log },
   })
   assert.equal(readFileSync(log, 'utf8'), 'run\nperformance:check\n')
+  const summary = JSON.parse(
+    readFileSync(join(root, 'performance-results', 'summary.json'), 'utf8')
+  )
+  assert.equal(summary.status, 'passed')
+  assert.equal(summary.commands[0].source, 'package-script:performance:check')
 })
 
 test('performance task runs configured argv without shell interpolation', () => {
@@ -99,6 +104,38 @@ test('performance task runs configured argv without shell interpolation', () => 
     env: { ...process.env, PERFORMANCE_ARGS_LOG: log },
   })
   assert.equal(readFileSync(log, 'utf8'), '--check\ntwo words\n')
+})
+
+test('performance task runs configured commands in order and records the contract', () => {
+  const root = fixture()
+  const probe = join(root, 'performance-probe')
+  const log = join(root, 'performance-command.log')
+  writeFileSync(probe, '#!/bin/sh\nprintf "%s\\n" "$@" >> "$PERFORMANCE_ARGS_LOG"\n')
+  chmodSync(probe, 0o755)
+  const commands = [
+    [probe, 'first'],
+    [probe, 'second', 'two words'],
+  ]
+  writeFileSync(
+    join(root, '.github', 'code-foundry.yml'),
+    `languages: typescript\npackage_manager: bun\nperformance_command: '${JSON.stringify(commands)}'\n`
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+
+  execFileSync(process.execPath, [runtime.pathname, 'ci', 'performance'], {
+    cwd: root,
+    env: { ...process.env, PERFORMANCE_ARGS_LOG: log },
+  })
+  assert.equal(readFileSync(log, 'utf8'), 'first\nsecond\ntwo words\n')
+  const summary = JSON.parse(
+    readFileSync(join(root, 'performance-results', 'summary.json'), 'utf8')
+  )
+  assert.equal(summary.kind, 'code-foundry-performance-summary')
+  assert.equal(summary.status, 'passed')
+  assert.deepEqual(
+    summary.commands.map((command) => command.status),
+    [0, 0]
+  )
 })
 
 test('performance false disables script and command discovery', () => {
@@ -135,7 +172,7 @@ test('performance command validation fails closed', () => {
         cwd: root,
         encoding: 'utf8',
       }),
-    /performance_command must be a JSON array/
+    /performance_command must be a JSON argv array/
   )
 })
 

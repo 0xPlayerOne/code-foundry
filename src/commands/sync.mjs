@@ -1092,6 +1092,8 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     staging_validation_mode: 'fast',
     performance: 'auto',
     performance_command: '',
+    performance_profile: '',
+    performance_budget_file: 'performance-package-budgets.json',
     prune_standard: 'false',
     cache_packages: 'auto',
     cache_build: 'auto',

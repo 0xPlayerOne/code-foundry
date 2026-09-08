@@ -76,15 +76,15 @@ repositories can opt in or out without a code change.
 
 ## Standard workflow responsibilities
 
-| Workflow   | Responsibility                                                |
-| ---------- | ------------------------------------------------------------- |
-| CI         | Format, lint, type-check, and build                           |
-| Test       | Unit, performance, integration, E2E, and smoke tests          |
-| Security   | Profile, audits, and public-only Dependency Review            |
-| CodeQL     | GitHub-native code scanning, kept separate from CI            |
-| Draft PR   | Create/update development pull requests                       |
-| Release PR | Promote `staging` into `main` (staging-release topology only) |
-| Release    | Release Please, GitHub release, and optional npm publication  |
+| Workflow   | Responsibility                                                    |
+| ---------- | ----------------------------------------------------------------- |
+| CI         | Format, lint, type-check, and build                               |
+| Test       | Unit, standardized performance, integration, E2E, and smoke tests |
+| Security   | Profile, audits, and public-only Dependency Review                |
+| CodeQL     | GitHub-native code scanning, kept separate from CI                |
+| Draft PR   | Create/update development pull requests                           |
+| Release PR | Promote `staging` into `main` (staging-release topology only)     |
+| Release    | Release Please, GitHub release, and optional npm publication      |
 
 Use concise job names such as `CI / Format`, `Test / Unit`, and
 `CodeQL / Analyze (Python)`. Per-language CodeQL analyzers (Rust shards

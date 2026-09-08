@@ -37,7 +37,9 @@ repository manifests and source
 | `toolchain`                | `auto`, `native`, `mise`                                                         | Environment setup policy; defaults to `auto`                                                                        |
 | `staging_validation_mode`  | `fast`, `audit`                                                                  | Validation tier for pull requests targeting `staging`; defaults to `fast`                                           |
 | `performance`              | `auto`, `true`, `false`                                                          | Run a deterministic performance task when a supported entrypoint exists; defaults to `auto`                         |
-| `performance_command`      | JSON string array                                                                | Command argv for non-package performance harnesses; package scripts take precedence                                 |
+| `performance_command`      | JSON argv array or array of argv arrays                                          | One or more ordered commands for non-package harnesses; package scripts take precedence                             |
+| `performance_profile`      | empty, `node-package`                                                            | Optional shared package import, memory, archive, and dependency budget harness                                      |
+| `performance_budget_file`  | repository path                                                                  | Budget policy for the shared package harness; defaults to `performance-package-budgets.json`                        |
 | `features`                 | `all` or a list                                                                  | Standard workflow callers                                                                                           |
 | `codeql`                   | `auto`, `true`, `false`                                                          | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled                  |
 | `codeql_rust_shards`       | JSON array of paths                                                              | Rust scan scopes; `["all"]` keeps the safe single full scan                                                         |
@@ -62,13 +64,45 @@ Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
 
 The shared Test workflow exposes a deterministic `Performance` job. In JavaScript
 repositories it discovers `performance:check` first and `perf:check` second. Other
-repositories can declare an argv array without shell interpolation:
+repositories can declare one argv array, or an ordered array of argv arrays, without
+shell interpolation:
 
 ```yaml
 performance: true
 performance_command: '["python3","scripts/performance_audit.py","--check"]'
 performance_runner: ubuntu-latest
 ```
+
+The `node-package` profile adds a shared, repository-configured audit:
+
+```yaml
+performance: true
+performance_profile: node-package
+performance_budget_file: performance-package-budgets.json
+```
+
+```json
+{
+  "schemaVersion": 1,
+  "importTarget": "./dist/index.js",
+  "controlImport": "typebox",
+  "samples": 7,
+  "budgets": {
+    "coldImportP95Ms": 150,
+    "coldImportRssMaxBytes": 25000000,
+    "packedBytes": 500000,
+    "productionDependencyCount": 20
+  }
+}
+```
+
+Supported budgets are `coldImportP50Ms`, `coldImportP95Ms`,
+`coldImportRssMaxBytes`, `coldImportRelativeP50`, `packedBytes`,
+`unpackedBytes`, `packageFileCount`, `packageMapFileCount`, and
+`productionDependencyCount`. The profile writes
+`performance-results/node-package.json`. Every performance run also writes
+`performance-results/summary.json`, including repository-owned scripts and
+configured commands, so artifact consumers have one stable status contract.
 
 `performance: false` disables discovery. Performance budgets, fixtures, mock
 providers, and live endpoint credentials remain repository-owned. The shared job

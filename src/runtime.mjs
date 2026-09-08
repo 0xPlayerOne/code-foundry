@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
@@ -9,6 +9,7 @@ import { configured, readConfig } from './lib/config.mjs'
 import { classifyTestFiles } from './lib/test-discovery.mjs'
 import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
 import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
+import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
 
 const root = process.cwd()
 const config = readConfig(resolve(root, '.github/code-foundry.yml'))
@@ -56,23 +57,118 @@ function performanceEnabled() {
   return configured(config.performance, 'auto') !== 'false'
 }
 
-function performanceCommand() {
+function performanceCommands() {
   const raw = configured(config.performance_command, '').trim()
-  if (!raw) return null
+  if (!raw) return []
   let command
   try {
     command = JSON.parse(raw)
   } catch {
-    throw new Error('performance_command must be a JSON array of command arguments.')
+    throw new Error('performance_command must be a JSON argv array or an array of argv arrays.')
   }
+  if (!Array.isArray(command) || command.length === 0)
+    throw new Error('performance_command must be a non-empty JSON array.')
+  const commands = command.every((argument) => typeof argument === 'string') ? [command] : command
   if (
-    !Array.isArray(command) ||
-    command.length === 0 ||
-    command.some((argument) => typeof argument !== 'string' || argument.length === 0)
-  ) {
-    throw new Error('performance_command must be a non-empty JSON array of non-empty strings.')
+    !commands.every(
+      (argv) =>
+        Array.isArray(argv) &&
+        argv.length > 0 &&
+        argv.every((argument) => typeof argument === 'string' && argument.length > 0)
+    )
+  )
+    throw new Error(
+      'performance_command must contain one argv array or only non-empty argv arrays of non-empty strings.'
+    )
+  return /** @type {string[][]} */ (commands)
+}
+
+function performanceProfile() {
+  const profile = configured(config.performance_profile, '').trim()
+  if (!profile) return ''
+  if (profile !== 'node-package')
+    throw new Error(`Unsupported performance_profile: ${profile}. Expected node-package.`)
+  return profile
+}
+
+const performanceResultsDirectory = 'performance-results'
+
+/** @returns {{source: string, argv: string[]}[]} */
+function selectedPerformanceCommands() {
+  const name = ['performance:check', 'perf:check'].find((candidate) => hasScript(candidate))
+  if (name) {
+    const [manager, args] = packageCommand(['run', name])
+    return manager ? [{ source: `package-script:${name}`, argv: [manager, ...args] }] : []
   }
-  return command
+  return performanceCommands().map((argv) => ({ source: 'configuration', argv }))
+}
+
+/** @param {string} startedAt @param {'passed'|'failed'} status @param {{source: string, argv: string[], status: number}[]} commands @param {string[]} artifacts @param {string|null} error */
+function writePerformanceSummary(startedAt, status, commands, artifacts, error = null) {
+  const directory = resolve(root, performanceResultsDirectory)
+  mkdirSync(directory, { recursive: true })
+  writeFileSync(
+    resolve(directory, 'summary.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        kind: 'code-foundry-performance-summary',
+        status,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        commands,
+        profile: performanceProfile() || null,
+        artifacts,
+        error,
+      },
+      null,
+      2
+    )}\n`
+  )
+}
+
+function runPerformance() {
+  if (!performanceEnabled()) return
+  const startedAt = new Date().toISOString()
+  /** @type {{source: string, argv: string[], status: number}[]} */
+  const records = []
+  /** @type {string[]} */
+  const artifacts = []
+  try {
+    for (const command of selectedPerformanceCommands()) {
+      const result = spawnSync(command.argv[0], command.argv.slice(1), {
+        cwd: root,
+        stdio: 'inherit',
+        env: process.env,
+      })
+      if (result.error) throw result.error
+      const status = result.status ?? 1
+      records.push({ ...command, status })
+      if (status !== 0) {
+        writePerformanceSummary(startedAt, 'failed', records, artifacts, `command exited ${status}`)
+        process.exitCode = status
+        return
+      }
+    }
+    if (performanceProfile() === 'node-package') {
+      const result = runNodePackagePerformance(
+        root,
+        configured(config.performance_budget_file, 'performance-package-budgets.json'),
+        performanceResultsDirectory
+      )
+      artifacts.push(`${performanceResultsDirectory}/node-package.json`)
+      if (!result.passed) {
+        writePerformanceSummary(startedAt, 'failed', records, artifacts, result.failures.join('; '))
+        process.exitCode = 1
+        return
+      }
+    }
+    writePerformanceSummary(startedAt, 'passed', records, artifacts)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    writePerformanceSummary(startedAt, 'failed', records, artifacts, message)
+    throw error
+  }
 }
 
 /** @param {string} task */
@@ -299,7 +395,9 @@ function relevant(task) {
   if (task === 'performance') {
     if (!performanceEnabled()) return false
     return Boolean(
-      (scripted && scripted.some((candidate) => hasScript(candidate))) || performanceCommand()
+      (scripted && scripted.some((candidate) => hasScript(candidate))) ||
+      performanceCommands().length > 0 ||
+      performanceProfile()
     )
   }
   if (scripted && scripted.some((candidate) => hasScript(candidate)))
@@ -465,11 +563,7 @@ function ci(task) {
     return
   }
   if (task === 'performance') {
-    if (!performanceEnabled()) return
-    if (runScript(['performance:check', 'perf:check'])) return
-    const command = performanceCommand()
-    if (command) run(command[0], command.slice(1))
-    return
+    return runPerformance()
   }
   /** @type {Record<string, string[]>} */
   const scriptsByTask = {
