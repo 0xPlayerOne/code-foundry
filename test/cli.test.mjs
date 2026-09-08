@@ -1642,6 +1642,42 @@ jobs:
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('standardizes release PR titles in existing package-aware configs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-title-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.2.3"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\n'
+    )
+    writeFileSync(
+      join(root, 'release-please-config.json'),
+      `${JSON.stringify(
+        {
+          'pull-request-title-pattern': 'release staging to main',
+          'group-pull-request-title-pattern': 'chore: release ${version}',
+          packages: { '.': { 'release-type': 'node', 'package-name': 'fixture' } },
+        },
+        null,
+        2
+      )}\n`
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const releaseConfig = JSON.parse(readFileSync(join(root, 'release-please-config.json'), 'utf8'))
+    assert.equal(releaseConfig['pull-request-title-pattern'], 'chore(main): release ${version}')
+    assert.equal(
+      releaseConfig['group-pull-request-title-pattern'],
+      'chore(main): release ${version}'
+    )
+    assert.deepEqual(releaseConfig.packages, {
+      '.': { 'release-type': 'node', 'package-name': 'fixture' },
+    })
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.deepEqual(second.changed, [])
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('renders formatter-canonical CONTRIBUTING.md tables for both topologies', () => {
     // Regression: the runtime template and every DIRECT_DOC_REPLACEMENTS
     // variant must render tables in the canonical padded form the fleet

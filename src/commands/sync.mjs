@@ -427,7 +427,11 @@ const RELEASE_BASELINE_KEYS = [
   'bump-minor-pre-major',
   'changelog-sections',
   'include-component-in-tag',
+  'pull-request-title-pattern',
+  'group-pull-request-title-pattern',
 ]
+
+const RELEASE_ENFORCED_KEYS = ['pull-request-title-pattern', 'group-pull-request-title-pattern']
 
 /** @param {string} target @param {string} sourceFile @returns {Record<string, any>} */
 function mergeReleaseConfig(target, sourceFile) {
@@ -450,7 +454,11 @@ function mergeReleaseConfig(target, sourceFile) {
       existing = baseline
     }
   }
-  return buildReleaseConfig(target, { ...safeBaseline, ...existing })
+  const merged = { ...safeBaseline, ...existing }
+  for (const key of RELEASE_ENFORCED_KEYS) {
+    if (key in baseline) merged[key] = baseline[key]
+  }
+  return buildReleaseConfig(target, merged)
 }
 
 /** @param {string} target @param {string} sourceFile @returns {string} */
