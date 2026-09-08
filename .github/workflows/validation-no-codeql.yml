@@ -1,0 +1,165 @@
+name: Code Foundry Validation (CodeQL unavailable)
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: Validation tier (fast, audit, or release).
+        required: true
+        type: string
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: false
+        type: string
+        default: 0xPlayerOne/code-foundry
+      runtime-ref:
+        description: Code Foundry runtime tag or ref.
+        required: false
+        type: string
+        default: v1.0.5
+      ci-runner:
+        description: Runner used by CI jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      test-runner:
+        description: Runner used by non-unit test jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      unit-runner:
+        description: Runner used by unit tests.
+        required: false
+        type: string
+        default: ubuntu-slim
+      performance-runner:
+        description: Runner used by deterministic performance regression checks.
+        required: false
+        type: string
+        default: ubuntu-latest
+      security-runner:
+        description: Runner used by Security jobs.
+        required: false
+        type: string
+        default: ubuntu-slim
+      codeql-runner:
+        description: Runner used by CodeQL jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      rust-shards:
+        description: JSON array of Rust scope sharding values. Use ["all"] for single-pass behavior.
+        required: false
+        type: string
+        default: '["all"]'
+      rust-threads:
+        description: Threads used for Rust extraction and analysis. Values above 1 opt into local parallelism.
+        required: false
+        type: string
+        default: '1'
+      rust-max-parallel:
+        description: Maximum Rust shard jobs allowed to run concurrently.
+        required: false
+        type: number
+        default: 1
+    secrets:
+      TURBO_TOKEN:
+        required: false
+      NEXTAUTH_SECRET:
+        required: false
+
+# The orchestrator keeps the union of permissions needed by the chain it calls
+# (CodeQL uploads require security-events: write). Nested reusable workflows
+# can only maintain or reduce permissions, never elevate them.
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+jobs:
+  ci:
+    name: CI
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
+    uses: ./.github/workflows/ci.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.ci-runner }}
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+
+  test:
+    name: Test
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
+    uses: ./.github/workflows/test.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.test-runner }}
+      unit-runner: ${{ inputs.unit-runner }}
+      performance-runner: ${{ inputs.performance-runner }}
+      unit-only: ${{ inputs.mode == 'fast' }}
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+
+  security:
+    name: Security
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    uses: ./.github/workflows/security.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.security-runner }}
+
+  # Aggregate check: "Validation / Gate" (caller job name + this job name).
+  # Always evaluates; only jobs required for the mode must have succeeded.
+  # The release tier runs no suite jobs: its policy (generated release diff
+  # validation) executes as a conditional step below, so no separate
+  # release-policy job renders skipped checks on ordinary pull requests.
+  gate:
+    name: Gate
+    needs: [ci, test, security]
+    if: vars.CI_BILLING_PAUSED != 'true' && always()
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    env:
+      FOUNDRY_MODE: ${{ inputs.mode }}
+      FOUNDRY_CI: ${{ needs.ci.result }}
+      FOUNDRY_TEST: ${{ needs.test.result }}
+      FOUNDRY_SECURITY: ${{ needs.security.result }}
+      # This workflow is selected only for repositories whose canonical
+      # configuration explicitly disables unavailable CodeQL. Treat that
+      # policy decision as satisfied without registering a skipped PR check.
+      FOUNDRY_CODEQL: success
+    steps:
+      - name: Checkout runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            src/lib
+            src/runtime.mjs
+      - name: Install runtime
+        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Checkout consumer repository
+        if: ${{ inputs.mode == 'release' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+      - name: Validate generated release diff
+        if: ${{ inputs.mode == 'release' }}
+        env:
+          FOUNDRY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FOUNDRY_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          FOUNDRY_REPOSITORY: ${{ github.repository }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
+      - name: Evaluate aggregate gate
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation gate

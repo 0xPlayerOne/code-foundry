@@ -500,6 +500,15 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
+  // An explicitly unavailable CodeQL capability selects an orchestrator that
+  // omits the job entirely, so GitHub does not register a misleading skipped
+  // check on every pull request. `auto` retains runtime capability detection.
+  if (configured(config.codeql, 'auto') === 'false') {
+    rendered = rendered.replaceAll(
+      `${remotePrefix}validation.yml`,
+      `${remotePrefix}validation-no-codeql.yml`
+    )
+  }
   rendered = rendered.replace(
     new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
     `$&@${ref}`

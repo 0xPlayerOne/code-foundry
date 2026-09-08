@@ -249,9 +249,9 @@ jobs:
           # Creation uses authenticated REST (gh api POST) rather than
           # `gh pr create`, which issues a GraphQL mutation that
           # NiftyLeague's long-lived fine-grained token policy rejects. The
-          # REST payload keeps the exact base/head/title/body fields, adds
-          # draft=true only when no automation token is configured, and stays
-          # fail-closed through the create-race fallback below.
+          # REST payload keeps the exact base/head/title/body fields, always
+          # opens the automated promotion as a draft, and stays fail-closed
+          # through the create-race fallback below.
           CREATE_ARGS=(
             "repos/${GITHUB_REPOSITORY}/pulls"
             --method POST
@@ -259,11 +259,9 @@ jobs:
             --field head="$PROMOTION_BRANCH"
             --field title="chore(main): promote staging to main ($DATE)"
             --field body=@"$BODY_FILE"
+            --field draft=true
           )
-          if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
-            CREATE_ARGS+=(--field draft=true)
-            echo "::notice title=Manual PR readiness required::Created draft promotion PR because no automation token is configured. Configure CODE_FOUNDRY_TOKEN, or mark this PR ready manually to trigger validation."
-          fi
+          echo "::notice title=Manual PR readiness required::Created a draft promotion PR. Mark it ready for review to start validation."
 
           # Prefer the configured automation token for the write, but
           # NiftyLeague rejects long-lived fine-grained tokens with HTTP 403

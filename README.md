@@ -74,8 +74,13 @@ The standard workflow triggers are:
 - Pull requests targeting `main` (and `staging` in the staging-release topology).
 - Draft PR automation for supported feature/fix branches.
 
-Jobs are language-aware and skip irrelevant setup while remaining visible as
-successful required checks. TypeScript uses Oxlint, Oxfmt, and Bun's native
+Automated feature/fix and staging-promotion pull requests open as drafts.
+Pull-request validation waits until a PR is marked ready for review; later
+commits retrigger it, and converting the PR back to draft cancels in-flight
+validation. Scheduled and manually dispatched audits are unaffected.
+
+Jobs are language-aware and skip irrelevant setup inside the applicable
+aggregate checks. TypeScript uses Oxlint, Oxfmt, and Bun's native
 test runner (repositories using another linter or formatter keep full control
 through their own `lint`/`format` scripts, which the runtime honors).
 Rust uses `rustfmt`, Clippy with warnings as errors, and native
@@ -85,7 +90,10 @@ tests. Solidity projects retain their native toolchain and test runner.
 CodeQL remains separate from CI and Security. With the default `codeql: auto`
 and `dependency_review: auto` policies, public repositories use the free GitHub
 security checks while private repositories skip them unless explicitly opted
-in and supported by GitHub Advanced Security. JavaScript, Python, and Rust
+in and supported by GitHub Advanced Security. Set an unavailable private-repo
+capability to `false` during sync to omit its CodeQL job from pull requests;
+Dependency Review runs as a conditional Security step and does not register a
+separate skipped check. JavaScript, Python, and Rust
 audits remain available without Advanced Security. Code Foundry does not enable
 GitHub Code Quality or other paid GitHub features.
 

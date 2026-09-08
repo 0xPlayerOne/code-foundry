@@ -123,6 +123,12 @@ jobs:
           }
           fs.appendFileSync(env.GITHUB_OUTPUT, "audit_matrix=" + JSON.stringify(entries) + "\n");
           '
+      - name: Dependency Review
+        if: ${{ github.event_name == 'pull_request' && steps.profile.outputs.dependency_review == 'true' }}
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
+          license-check: true
 
   # Audits run only for detected languages: the audit matrix is built from the
   # profile, so repositories never see skipped checks for ecosystems they do
@@ -370,16 +376,3 @@ jobs:
       - name: Audit Python dependencies
         if: matrix.entry.language == 'python'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit python
-
-  dependency-review:
-    name: Dependency Review
-    needs: profile
-    if: ${{ vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request' && needs.profile.outputs.dependency_review == 'true' }}
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 10
-    steps:
-      - name: Review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
-        with:
-          fail-on-severity: high
-          license-check: true
