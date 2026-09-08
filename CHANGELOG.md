@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.7.0...v1.8.0) (2026-09-08)
+
+
+### Features
+
+* **performance:** enforce source budgets ([#499](https://github.com/0xPlayerOne/code-foundry/issues/499)) ([2f65ba1](https://github.com/0xPlayerOne/code-foundry/commit/2f65ba127f8fe186eda5d6bcae77150f13458428))
+
 ## [1.7.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.6.1...v1.7.0) (2026-09-08)
 
 
