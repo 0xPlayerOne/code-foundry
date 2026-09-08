@@ -1323,6 +1323,8 @@ describe('code-foundry CLI', () => {
     assert.match(opencodeCaller, /OPENCODE_SECURITY: \$\{\{ vars\.OPENCODE_SECURITY \}\}/)
     assert.doesNotMatch(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
     assert.doesNotMatch(opencodeCaller, /opencode_security|grep -Eq/)
+    assert.match(opencodeCaller, /if: vars\.CI_BILLING_PAUSED != 'true'/)
+    assert.doesNotMatch(opencodeCaller, /startsWith\(github\.event\.pull_request\.head\.ref/)
 
     const draftControlCaller = readFileSync('.github/workflows/draft-control_self-ci.yml', 'utf8')
     assert.match(draftControlCaller, /types:\n\s+- converted_to_draft/)
@@ -2012,7 +2014,7 @@ jobs:
     )
     assert.doesNotMatch(workflow, /^      - name: Scan$/m)
     assert.match(workflow, /vars\.CI_BILLING_PAUSED != 'true'/)
-    assert.match(
+    assert.doesNotMatch(
       workflow,
       /startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
     )
