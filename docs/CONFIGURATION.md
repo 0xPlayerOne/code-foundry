@@ -183,4 +183,6 @@ GitHub deployment plus status with the workers.dev URL, and respects
 `CLOUDFLARE_ACCOUNT_ID` secrets in the consumer repository. Bun consumers may
 also pass `build-script`, `install-working-directory`, and `bun-version`; the
 runtime installs the frozen lockfile and builds the Worker before invoking
-Wrangler.
+Wrangler. Bun-backed callers invoke Wrangler through `bunx` so OpenNext's
+production delegation resolves the workspace-local `opennextjs-cloudflare`
+binary; callers without `build-script` retain the npm/npx path.
