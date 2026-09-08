@@ -562,7 +562,7 @@ describe('code-foundry CLI', () => {
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\nfeatures: all\nopencode_security: true\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n'
+      'languages: typescript\npackage_manager: bun\nfeatures: all\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n'
     )
 
     syncRepository({ target: root, source: process.cwd() })
@@ -582,7 +582,7 @@ describe('code-foundry CLI', () => {
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: v1.3.2\ngit_workflow: direct\nrelease_merge_strategy: rebase\n'
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: v1.3.2\ngit_workflow: direct\nrelease_merge_strategy: squash\n'
     )
 
     const result = syncRepository({
@@ -608,7 +608,7 @@ describe('code-foundry CLI', () => {
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: main\ngit_workflow: direct\nrelease_merge_strategy: rebase\n'
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: main\ngit_workflow: direct\nrelease_merge_strategy: squash\n'
     )
 
     syncRepository({ target: root, source: process.cwd() })
@@ -1128,6 +1128,39 @@ describe('code-foundry CLI', () => {
     assert.ok(!second.changed.includes('.gitignore'), second.changed.join(', '))
   })
 
+  it('builds Bun Cloudflare Workers before recording GitHub deployments', () => {
+    const workflow = readFileSync('.github/workflows/cloudflare-deploy.yml', 'utf8')
+    assert.match(workflow, /build-script:/)
+    assert.match(workflow, /install-working-directory:/)
+    assert.match(workflow, /bun install --frozen-lockfile/)
+    assert.match(workflow, /bun run "\$BUILD_SCRIPT"/)
+    assert.match(workflow, /deployments: write/)
+    assert.match(workflow, /production_environment: \$production/)
+  })
+
+  it('accepts source self-CI workflow names during doctor checks', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-self-ci-doctor-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\nmerge_strategy: squash\n'
+    )
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    syncRepository({ target: root, source: process.cwd() })
+    writeFileSync(
+      join(root, '.github/workflows/draft-control_self-ci.yml'),
+      readFileSync(join(root, '.github/workflows/draft-control.yml'), 'utf8')
+    )
+    writeFileSync(
+      join(root, '.github/workflows/validation_self-ci.yml'),
+      readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    )
+    rmSync(join(root, '.github/workflows/draft-control.yml'))
+    rmSync(join(root, '.github/workflows/validation.yml'))
+    assert.doesNotThrow(() => doctor(root))
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('previews legacy caller removal in dry-run without writing files', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-dryrun-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
@@ -1273,17 +1306,20 @@ describe('code-foundry CLI', () => {
     assert.match(releaseMainCaller, /STAGING_DEPLOY_KEY: \$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
 
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
-    assert.match(
-      validationCaller,
-      /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review\n\s+- converted_to_draft/
-    )
-    assert.match(validationCaller, /github\.event\.pull_request\.draft == false/)
+    assert.match(validationCaller, /types:\n\s+- ready_for_review/)
+    assert.doesNotMatch(validationCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
+    assert.doesNotMatch(validationCaller, /github\.event\.pull_request\.draft == false/)
 
     const opencodeCaller = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
-    assert.match(
-      opencodeCaller,
-      /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review\n\s+- converted_to_draft/
-    )
+    assert.match(opencodeCaller, /types:\n\s+- ready_for_review/)
+    assert.doesNotMatch(opencodeCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
+    assert.match(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
+    assert.doesNotMatch(opencodeCaller, /opencode_security|grep -Eq/)
+
+    const draftControlCaller = readFileSync('.github/workflows/draft-control_self-ci.yml', 'utf8')
+    assert.match(draftControlCaller, /types:\n\s+- converted_to_draft/)
+    assert.match(draftControlCaller, /actions: write/)
+    assert.match(draftControlCaller, /\/actions\/runs\/\$run_id\/cancel/)
   })
   it('creates draft PRs through REST and falls back from rejected automation tokens', () => {
     const workflow = readFileSync('.github/workflows/draft-pr.yml', 'utf8')
@@ -1326,12 +1362,12 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
     assert.doesNotMatch(workflow, /--admin/)
-    assert.match(workflow, /release_merge_strategy must be "rebase"/)
+    assert.match(workflow, /release_merge_strategy must be "\$\{gitWorkflow/)
     assert.match(
       workflow,
-      /allowedStrategies = gitWorkflow === 'staging-release' \? \['rebase'\] : \['rebase', 'squash'\]/
+      /allowedStrategies = gitWorkflow === 'staging-release' \? \['rebase'\] : \['squash'\]/
     )
-    assert.match(workflow, /or "squash" \(direct topology\)/)
+    assert.match(workflow, /'staging-release' \? 'rebase' : 'squash'/)
     assert.match(workflow, /release automation never defaults to merge/)
     assert.doesNotMatch(workflow, /release_merge_strategy \|\| config\.merge_strategy/)
     assert.doesNotMatch(workflow, /\|\| 'merge'/)
@@ -1472,20 +1508,18 @@ describe('code-foundry CLI', () => {
 
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nrelease_merge_strategy: squash\n'
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n'
     )
     syncRepository({ target: root, source: process.cwd() })
     assert.doesNotThrow(() => doctor(root))
 
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nrelease_merge_strategy: merge\n'
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: merge\n'
     )
     const directRelease = captureErrors(() => doctor(root))
     assert.ok(
-      directRelease.some((message) =>
-        /release_merge_strategy must be "rebase" or "squash" \(direct topology\)/.test(message)
-      ),
+      directRelease.some((message) => /release_merge_strategy must be "squash"/.test(message)),
       directRelease.join('\n')
     )
     assert.throws(
@@ -1493,10 +1527,9 @@ describe('code-foundry CLI', () => {
       /Unsupported release_merge_strategy: merge/
     )
 
-    // Release automation is the only consumer of release_merge_strategy;
-    // a profile without the release feature never needs the key. merge_strategy
-    // is likewise only enforced by the staging-release topology: a direct
-    // repository may carry any value (or none) because no promotion exists.
+    // Release automation is the only consumer of release_merge_strategy, but
+    // merge_strategy always records the feature-PR policy and direct
+    // repositories require squash even without release automation.
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
       'languages: typescript\npackage_manager: bun\nfeatures: ci,test\ngit_workflow: staging-release\nmerge_strategy: rebase\n'
@@ -1507,8 +1540,15 @@ describe('code-foundry CLI', () => {
       join(root, '.github/code-foundry.yml'),
       'languages: typescript\npackage_manager: bun\nmerge_strategy: merge\n'
     )
-    assert.doesNotThrow(() => syncRepository({ target: root, source: process.cwd() }))
-    assert.doesNotThrow(() => doctor(root))
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported merge_strategy: merge/
+    )
+    const directFeature = captureErrors(() => doctor(root))
+    assert.ok(
+      directFeature.some((message) => /merge_strategy must be "squash"/.test(message)),
+      directFeature.join('\n')
+    )
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -1536,6 +1576,8 @@ jobs:
     assert.match(config, /^git_workflow: direct$/m)
     assert.match(config, /^merge_strategy: squash$/m)
     assert.match(config, /^release_merge_strategy: squash$/m)
+    assert.doesNotMatch(config, /^opencode_security:/m)
+    assert.doesNotMatch(config, /^staging_validation_mode:/m)
 
     const releaseConfig = JSON.parse(readFileSync(join(root, 'release-please-config.json'), 'utf8'))
     assert.equal(releaseConfig['pull-request-title-pattern'], 'chore(main): release ${version}')
@@ -1567,9 +1609,7 @@ jobs:
     )
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
-    assert.doesNotMatch(contributing, /Branch from `staging`/)
-    assert.doesNotMatch(contributing, /target normal pull requests here/)
-    assert.doesNotMatch(contributing, /staging` → `main` release PR/)
+    assert.doesNotMatch(contributing, /staging/i)
     const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
     assert.match(agents, /branch from `main` and target pull requests at `main`/)
     assert.doesNotMatch(agents, /staging/)
@@ -1632,7 +1672,8 @@ jobs:
       readFileSync(configPath, 'utf8')
         .replace('git_workflow: staging-release', 'git_workflow: direct')
         .replace('merge_strategy: rebase', 'merge_strategy: squash')
-        .replace('release_merge_strategy: rebase', 'release_merge_strategy: squash')
+        .replace('release_merge_strategy: rebase', 'release_merge_strategy: squash') +
+        'opencode_security: true\n'
     )
     syncRepository({ target: root, source: process.cwd() })
 
@@ -1645,11 +1686,13 @@ jobs:
     assert.doesNotMatch(agents, /branch from `staging` and target pull requests at `staging`/)
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
-    assert.doesNotMatch(contributing, /Branch from `staging` and target pull requests at `staging`/)
-    assert.doesNotMatch(contributing, /Ready pull request targeting `staging`/)
+    assert.doesNotMatch(contributing, /staging/i)
     assert.match(contributing, /Draft pull request targeting `main`/)
     assert.match(contributing, /Ready pull request targeting `main`/)
-    assert.match(contributing, /converting it back to draft cancels in-flight validation/)
+    assert.match(contributing, /mark it ready again after every update/i)
+    const migratedConfig = readFileSync(configPath, 'utf8')
+    assert.doesNotMatch(migratedConfig, /^opencode_security:/m)
+    assert.doesNotMatch(migratedConfig, /^staging_validation_mode:/m)
     assert.match(
       readFileSync(join(root, '.github/SECURITY.md'), 'utf8'),
       /latest commit on `main` receives security patches/
@@ -1720,7 +1763,7 @@ jobs:
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      'languages: typescript\npackage_manager: bun\nstaging_validation_mode: release\n'
+      'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nstaging_validation_mode: release\n'
     )
     assert.throws(
       () => syncRepository({ target: root, source: process.cwd() }),
@@ -3067,69 +3110,78 @@ jobs:
     rmSync(remote, { recursive: true, force: true })
   })
 
-  it('fails closed when reconciliation pull request state is ambiguous or gh fails', () => {
-    const { root, remote } = createPolicyBlockedReconcileWorkspace()
-    const branch = reconciliationPullRequestBranch('main', 'staging')
-    const title = reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' })
-    const execute = () =>
-      withFakeStagingPolicyPushFailure(
-        () =>
-          withGitHubEnv(
-            {
-              GITHUB_REPOSITORY: 'owner/repo',
-              GH_TOKEN: 'token',
-            },
-            () =>
-              reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
-          ),
-        POLICY_PUSH_FAILURE
-      )
-    const seeded = (number, overrides = {}) => ({
-      number,
-      title,
-      headRefName: branch,
-      baseRefName: 'staging',
-      url: `https://github.com/owner/repo/pull/${number}`,
-      ...overrides,
-    })
+  it(
+    'fails closed when reconciliation pull request state is ambiguous or gh fails',
+    { timeout: 15000 },
+    () => {
+      const { root, remote } = createPolicyBlockedReconcileWorkspace()
+      const branch = reconciliationPullRequestBranch('main', 'staging')
+      const title = reconciliationPullRequestTitle({ targetHead: 'staging', sourceBase: 'main' })
+      const execute = () =>
+        withFakeStagingPolicyPushFailure(
+          () =>
+            withGitHubEnv(
+              {
+                GITHUB_REPOSITORY: 'owner/repo',
+                GH_TOKEN: 'token',
+              },
+              () =>
+                reconcileRelease(root, {
+                  github: true,
+                  dryRun: false,
+                  base: 'main',
+                  head: 'staging',
+                })
+            ),
+          POLICY_PUSH_FAILURE
+        )
+      const seeded = (number, overrides = {}) => ({
+        number,
+        title,
+        headRefName: branch,
+        baseRefName: 'staging',
+        url: `https://github.com/owner/repo/pull/${number}`,
+        ...overrides,
+      })
 
-    // Two open PRs claim the deterministic branch: ambiguous, fail closed.
-    assert.throws(
-      () => withReconcileGh({ prs: [seeded(1), seeded(2)] }, execute),
-      /Multiple open pull requests/
-    )
-    // A foreign title on the deterministic branch: fail closed before pushing.
-    assert.throws(
-      () => withReconcileGh({ prs: [seeded(3, { title: 'chore: user edited title' })] }, execute),
-      /unexpected base or title/
-    )
-    // A pull request from the branch into another base: fail closed.
-    assert.throws(
-      () => withReconcileGh({ prs: [seeded(4, { baseRefName: 'main' })] }, execute),
-      /unexpected base or title/
-    )
-    // gh pr list failure: fail closed.
-    assert.throws(
-      () => withReconcileGh({ failList: true }, execute),
-      /Failed to list open pull requests/
-    )
-    // gh pr create failure with no reusable PR: fail closed.
-    assert.throws(() => withReconcileGh({ failCreate: true }, execute), /gh pr create failed/)
-    assert.throws(
-      () =>
-        withReconcileGh(
-          {
-            failCreate: true,
-            failCreateMessage:
-              'GraphQL: GitHub Actions is not permitted to create or approve pull requests.\\n',
-          },
-          execute
-        ),
-      /Settings > Actions > General > Workflow permissions/
-    )
-    rmSync(root, { recursive: true, force: true })
-    rmSync(remote, { recursive: true, force: true })
-  })
+      // Two open PRs claim the deterministic branch: ambiguous, fail closed.
+      assert.throws(
+        () => withReconcileGh({ prs: [seeded(1), seeded(2)] }, execute),
+        /Multiple open pull requests/
+      )
+      // A foreign title on the deterministic branch: fail closed before pushing.
+      assert.throws(
+        () => withReconcileGh({ prs: [seeded(3, { title: 'chore: user edited title' })] }, execute),
+        /unexpected base or title/
+      )
+      // A pull request from the branch into another base: fail closed.
+      assert.throws(
+        () => withReconcileGh({ prs: [seeded(4, { baseRefName: 'main' })] }, execute),
+        /unexpected base or title/
+      )
+      // gh pr list failure: fail closed.
+      assert.throws(
+        () => withReconcileGh({ failList: true }, execute),
+        /Failed to list open pull requests/
+      )
+      // gh pr create failure with no reusable PR: fail closed.
+      assert.throws(() => withReconcileGh({ failCreate: true }, execute), /gh pr create failed/)
+      assert.throws(
+        () =>
+          withReconcileGh(
+            {
+              failCreate: true,
+              failCreateMessage:
+                'GraphQL: GitHub Actions is not permitted to create or approve pull requests.\\n',
+            },
+            execute
+          ),
+        /Settings > Actions > General > Workflow permissions/
+      )
+      rmSync(root, { recursive: true, force: true })
+      rmSync(remote, { recursive: true, force: true })
+    }
+  )
 
   it('is idempotent when patch-equivalent branches are already synchronized', () => {
     const { root, remote, run } = createReconcileWorkspace()

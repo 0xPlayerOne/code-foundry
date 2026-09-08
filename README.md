@@ -75,9 +75,10 @@ The standard workflow triggers are:
 - Draft PR automation for supported feature/fix branches.
 
 Automated feature/fix and staging-promotion pull requests open as drafts.
-Pull-request validation waits until a PR is marked ready for review; later
-commits retrigger it, and converting the PR back to draft cancels in-flight
-validation. Scheduled and manually dispatched audits are unaffected.
+Pull-request validation runs on the ready-for-review transition. After later
+commits, convert the PR to draft and mark it ready again so checks attach to
+the current head. Converting a PR to draft runs only the lightweight
+cancellation control. Scheduled and manually dispatched audits are unaffected.
 
 Jobs are language-aware and skip irrelevant setup inside the applicable
 aggregate checks. TypeScript uses Oxlint, Oxfmt, and Bun's native
@@ -102,7 +103,8 @@ checks, runners, coverage, caching, and custom workflow extensions.
 
 The contribution policy defaults to the `direct` workflow: feature PRs squash
 into `main`, and Release Please version PRs use the configured
-`release_merge_strategy` (rebase by default, or squash when opted in).
+`release_merge_strategy` (squash for direct repositories; rebase for the
+optional staging-release topology).
 Repositories with a preview/staging environment opt into
 `git_workflow: staging-release`, where feature PRs squash into `staging`, the
 promotion PR rebases into `main` (`merge_strategy: rebase`), and Release Please

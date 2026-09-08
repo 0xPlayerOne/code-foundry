@@ -13,6 +13,21 @@ on:
         required: false
         type: string
         default: '.'
+      install-working-directory:
+        description: 'Directory containing bun.lock. Used only when build-script is set.'
+        required: false
+        type: string
+        default: '.'
+      build-script:
+        description: 'Optional Bun package script to run before Wrangler deploys.'
+        required: false
+        type: string
+        default: ''
+      bun-version:
+        description: 'Bun version used for dependency installation and the optional build.'
+        required: false
+        type: string
+        default: '1.4.0'
       runner:
         required: false
         type: string
@@ -47,6 +62,24 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
+      - name: Set up Bun
+        if: inputs.build-script != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Install dependencies
+        if: inputs.build-script != ''
+        working-directory: ${{ inputs.install-working-directory }}
+        run: bun install --frozen-lockfile
+
+      - name: Build Worker
+        if: inputs.build-script != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          BUILD_SCRIPT: ${{ inputs.build-script }}
+        run: bun run "$BUILD_SCRIPT"
 
       - name: Deploy to Cloudflare
         id: deploy

@@ -101,9 +101,9 @@ jobs:
             releaseType = fs.existsSync('package.json') ? 'node' : fs.existsSync('pyproject.toml') ? 'python' : fs.existsSync('Cargo.toml') ? 'rust' : fs.existsSync('version.txt') ? 'simple' : 'none'
           }
           if (!['node', 'python', 'rust', 'simple', 'none'].includes(releaseType)) throw new Error(`Unsupported release_type: ${releaseType}`)
-          const allowedStrategies = gitWorkflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
+          const allowedStrategies = gitWorkflow === 'staging-release' ? ['rebase'] : ['squash']
           if (!allowedStrategies.includes(releaseMergeStrategy)) {
-            throw new Error(`release_merge_strategy must be "rebase"${gitWorkflow === 'staging-release' ? '' : ' or "squash" (direct topology)'} for automated release merges; got ${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}`)
+            throw new Error(`release_merge_strategy must be "${gitWorkflow === 'staging-release' ? 'rebase' : 'squash'}" for automated release merges; got ${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}`)
           }
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
           let legacyReleaseType = ''
@@ -218,9 +218,13 @@ jobs:
           for pr in "${release_prs[@]}"; do
             PR_DRAFT=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
             if [ "$AUTO_MERGE" = true ]; then
-              if [ "$PR_DRAFT" = true ]; then
-                gh pr ready "$pr" --repo "$GITHUB_REPOSITORY"
+              if [ "$PR_DRAFT" = false ]; then
+                # A Release Please PR can be updated while already ready. Reset
+                # it so ready_for_review always starts validation for the exact
+                # current release head.
+                gh pr ready --undo "$pr" --repo "$GITHUB_REPOSITORY"
               fi
+              gh pr ready "$pr" --repo "$GITHUB_REPOSITORY"
             else
               if [ "$PR_DRAFT" = false ]; then
                 gh pr ready --undo "$pr" --repo "$GITHUB_REPOSITORY"

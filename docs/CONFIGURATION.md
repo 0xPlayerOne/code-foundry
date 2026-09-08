@@ -35,7 +35,7 @@ repository manifests and source
 | `languages`                | detected list                                                                    | TypeScript, Rust, Python, Solidity                                                                                  |
 | `package_manager`          | `bun`, `pnpm`, `yarn`, `npm`, `none`                                             | JavaScript setup                                                                                                    |
 | `toolchain`                | `auto`, `native`, `mise`                                                         | Environment setup policy; defaults to `auto`                                                                        |
-| `staging_validation_mode`  | `fast`, `audit`                                                                  | Validation tier for pull requests targeting `staging`; defaults to `fast`                                           |
+| `staging_validation_mode`  | `fast`, `audit`                                                                  | Staging-release-only validation tier; omitted from direct repositories                                              |
 | `performance`              | `auto`, `true`, `false`                                                          | Run a deterministic performance task when a supported entrypoint exists; defaults to `auto`                         |
 | `performance_command`      | JSON argv array or array of argv arrays                                          | One or more ordered commands for non-package harnesses; package scripts take precedence                             |
 | `performance_profile`      | empty, `node-package`                                                            | Optional shared package import, memory, archive, and dependency budget harness                                      |
@@ -53,8 +53,8 @@ repository manifests and source
 | `npm_publish`              | `true` or `false`                                                                | Opt into npm publication                                                                                            |
 | `license`                  | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3                                                                   |
 | `git_workflow`             | `direct` (default), `staging-release`                                            | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
-| `merge_strategy`           | `rebase`                                                                         | Promotion merge method for `staging` → `main`; only enforced by the `staging-release` topology                      |
-| `release_merge_strategy`   | `rebase`, `squash` (direct topology only)                                        | Merge method for Release Please version PRs into `main`; release automation fails closed on anything else           |
+| `merge_strategy`           | `squash` (direct), `rebase` (staging-release)                                    | Feature/promotion merge policy; direct repositories require squash                                                  |
+| `release_merge_strategy`   | `squash` (direct), `rebase` (staging-release)                                    | Merge method for Release Please version PRs into `main`; release automation fails closed on anything else           |
 | `runner` fields            | GitHub runner names                                                              | Per-workflow runner policy, including `performance_runner`                                                          |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
@@ -113,14 +113,13 @@ checks should remain separate from this deterministic validation task.
 
 ## OpenCode Security opt-in and opt-out
 
-`opencode_security` controls the optional OpenCode scan, and the generated
-caller ships in every repository. The `OPENCODE_SECURITY` repository variable
-overrides the configuration at run time, so a scan can be toggled on any
-repository without a configuration change or a new secret:
+The generated OpenCode caller ships in every repository. The
+`OPENCODE_SECURITY` repository or organization variable is its only enablement
+control, so a scan can be toggled without a code change:
 
 - `OPENCODE_SECURITY: true` opts the repository in.
 - `OPENCODE_SECURITY: false` opts the repository out.
-- unset falls back to the `opencode_security` configuration (default `false`).
+- unset is disabled.
 
 The scan only runs when it is enabled and the `OPENCODE_API_KEY` secret is
 present.
@@ -131,8 +130,8 @@ present.
 
 - `direct` (default): feature branches open pull requests directly into
   `main`. Validation and security scans run on every PR. No `staging` branch
-  exists, no promotion caller is generated, and `merge_strategy` is not
-  enforced. Release Please version PRs squash into `main`
+  exists, no promotion caller is generated, and `merge_strategy` must be
+  `squash`. Release Please version PRs squash into `main`
   (`release_merge_strategy: squash`). Dependabot updates target `main`. This is
   the right choice when a repository has no preview or staging environment.
 - `staging-release` (opt-in): feature branches squash into `staging`, a
@@ -181,4 +180,7 @@ Vercel's integration) by adding a small caller for the runtime's reusable
 for pull-request previews and `wrangler deploy` for production, records a
 GitHub deployment plus status with the workers.dev URL, and respects
 `CI_BILLING_PAUSED`. It requires the `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` secrets in the consumer repository.
+`CLOUDFLARE_ACCOUNT_ID` secrets in the consumer repository. Bun consumers may
+also pass `build-script`, `install-working-directory`, and `bun-version`; the
+runtime installs the frozen lockfile and builds the Worker before invoking
+Wrangler.
