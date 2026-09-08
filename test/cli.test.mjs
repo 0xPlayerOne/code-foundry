@@ -1478,6 +1478,20 @@ describe('code-foundry CLI', () => {
   it('renders the direct topology by default and drops every staging reference', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-direct-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/workflows/release-pr.yml'),
+      `name: Code Foundry
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  release-pr:
+    name: Release PR
+    uses: 0xPlayerOne/code-foundry/.github/workflows/release-pr.yml@v1.5.1
+`
+    )
     // No existing config: sync with init writes the fully resolved default.
     syncRepository({ target: root, source: process.cwd(), init: true })
 
@@ -1564,6 +1578,43 @@ describe('code-foundry CLI', () => {
       assert.deepEqual(second.changed, [])
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  it('refreshes managed policy documents after a topology config edit', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-policy-refresh-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n'
+    )
+    syncRepository({ target: root, source: process.cwd() })
+
+    const configPath = join(root, '.github/code-foundry.yml')
+    writeFileSync(
+      configPath,
+      readFileSync(configPath, 'utf8')
+        .replace('git_workflow: staging-release', 'git_workflow: direct')
+        .replace('merge_strategy: rebase', 'merge_strategy: squash')
+        .replace('release_merge_strategy: rebase', 'release_merge_strategy: squash')
+    )
+    syncRepository({ target: root, source: process.cwd() })
+
+    for (const file of ['AGENTS.md', '.github/CONTRIBUTING.md', '.github/SECURITY.md']) {
+      const policy = readFileSync(join(root, file), 'utf8')
+      assert.match(policy, /code-foundry-managed: config-aware-policy/)
+    }
+    const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    assert.match(agents, /branch from `main` and target pull requests at `main`/)
+    assert.doesNotMatch(agents, /branch from `staging` and target pull requests at `staging`/)
+    const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+    assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
+    assert.doesNotMatch(contributing, /Branch from `staging` and target pull requests at `staging`/)
+    assert.doesNotMatch(contributing, /Pull request targeting `staging`/)
+    assert.match(
+      readFileSync(join(root, '.github/SECURITY.md'), 'utf8'),
+      /latest commit on `main` receives security patches/
+    )
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('renders the staging-release topology when configured', () => {
@@ -3952,7 +4003,7 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      `languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: ${sourceRuntimeRef}\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n`
+      `languages: typescript\npackage_manager: bun\nfeatures: validation,release\nruntime_ref: ${sourceRuntimeRef}\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n`
     )
 
     syncRepository({ target: root, source: process.cwd() })
