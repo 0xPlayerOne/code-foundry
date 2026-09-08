@@ -681,6 +681,33 @@ describe('code-foundry CLI', () => {
     assert.match(result.stdout, /enabled=false/)
   })
 
+  it('omits unavailable CodeQL checks from generated consumer validation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-no-codeql-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      `languages: typescript\npackage_manager: bun\nfeatures: validation,release\ncodeql: false\ndependency_review: false\nruntime_ref: ${sourceRuntimeRef}\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n`
+    )
+    syncRepository({ target: root, source: process.cwd() })
+
+    for (const file of ['validation.yml', 'validation-audit.yml']) {
+      const caller = readFileSync(join(root, '.github/workflows', file), 'utf8')
+      assert.match(
+        caller,
+        /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/validation-no-codeql\.yml@v/
+      )
+      assert.doesNotMatch(
+        caller,
+        /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/validation\.yml@v/
+      )
+    }
+
+    const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
+    assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
+    assert.match(orchestrator, /needs: \[ci, test, security\]/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('profiles language-specific repositories without scanning dependencies', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-profile-'))
     mkdirSync(join(root, '.github'), { recursive: true })
@@ -1221,7 +1248,8 @@ describe('code-foundry CLI', () => {
     assert.match(draftCallee, /AUTOMATION_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
     assert.match(draftCallee, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/)
     assert.match(draftCallee, /CREATE_ARGS=\(/)
-    assert.match(draftCallee, /DRAFT_ARGS=\("\$\{CREATE_ARGS\[@\]\}" --field draft=true\)/)
+    assert.match(draftCallee, /--field draft=true/)
+    assert.doesNotMatch(draftCallee, /DRAFT_ARGS=/)
     assert.doesNotMatch(draftCallee, /gh pr create/)
 
     const draftCaller = readFileSync('.github/workflows/draft-pr_self-ci.yml', 'utf8')
@@ -1246,7 +1274,14 @@ describe('code-foundry CLI', () => {
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
     assert.match(
       validationCaller,
-      /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review/
+      /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review\n\s+- converted_to_draft/
+    )
+    assert.match(validationCaller, /github\.event\.pull_request\.draft == false/)
+
+    const opencodeCaller = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
+    assert.match(
+      opencodeCaller,
+      /types:\n\s+- opened\n\s+- synchronize\n\s+- reopened\n\s+- ready_for_review\n\s+- converted_to_draft/
     )
   })
   it('creates draft PRs through REST and falls back from rejected automation tokens', () => {
@@ -1271,9 +1306,10 @@ describe('code-foundry CLI', () => {
     assert.match(createStep, /--field head="\$BRANCH"/)
     assert.match(createStep, /--field title="\$PR_TITLE"/)
     assert.match(createStep, /--field body="@\$BODY_FILE"/)
+    assert.match(createStep, /--field draft=true/)
     assert.match(createStep, /GH_TOKEN="\$AUTOMATION_TOKEN" gh api "\$\{CREATE_ARGS\[@\]\}"/)
-    assert.match(createStep, /DRAFT_ARGS=\("\$\{CREATE_ARGS\[@\]\}" --field draft=true\)/)
-    assert.match(createStep, /GH_TOKEN="\$GITHUB_TOKEN" gh api "\$\{DRAFT_ARGS\[@\]\}"/)
+    assert.match(createStep, /GH_TOKEN="\$GITHUB_TOKEN" gh api "\$\{CREATE_ARGS\[@\]\}"/)
+    assert.doesNotMatch(createStep, /DRAFT_ARGS=/)
     assert.match(createStep, /Manual PR readiness required/)
     assert.doesNotMatch(createStep, /echo "\$AUTOMATION_TOKEN"|printenv|GITHUB_OUTPUT/)
     assert.doesNotMatch(workflow, /gh pr create/)
@@ -1826,7 +1862,12 @@ jobs:
     assert.doesNotMatch(workflow, /^  dependency-audit-python:\s*$/m)
     assert.doesNotMatch(workflow, /python-gate/)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
-    assert.match(workflow, /^  dependency-review:\s*$/m)
+    assert.doesNotMatch(workflow, /^  dependency-review:\s*$/m)
+    assert.match(workflow, /^      - name: Dependency Review$/m)
+    assert.match(
+      workflow,
+      /if: \$\{\{ github\.event_name == 'pull_request' && steps\.profile\.outputs\.dependency_review == 'true' \}\}/
+    )
     // Security executes a caller-selected runtime ref, so it must use direct
     // cache-free tool setup rather than loading the cache-capable general CI
     // setup action from that runtime.
@@ -3303,8 +3344,8 @@ jobs:
     // Creation must use authenticated REST (gh api POST) rather than
     // `gh pr create`, which issues a GraphQL mutation that NiftyLeague's
     // long-lived fine-grained token policy rejects. The REST payload must
-    // carry the exact base/head/title/body fields, add draft=true only when
-    // no automation token is configured, and fail closed on API errors.
+    // carry the exact base/head/title/body fields, always add draft=true, and
+    // fail closed on API errors.
     assert.match(createStep, /CREATE_ARGS=\(\n/)
     assert.match(createStep, /"repos\/\$\{GITHUB_REPOSITORY\}\/pulls"/)
     assert.match(createStep, /--method POST/)
@@ -3314,13 +3355,7 @@ jobs:
     assert.match(createStep, /--field body=@"\$BODY_FILE"/)
     assert.match(createStep, /if gh api "\$\{CREATE_ARGS\[@\]\}"; then/)
     assert.match(createStep, /--field draft=true/)
-    const draftCondition = createStep.indexOf('HAS_AUTOMATION_TOKEN" != true')
-    const draftField = createStep.indexOf('--field draft=true')
-    assert.ok(draftCondition !== -1 && draftField !== -1)
-    assert.ok(
-      draftCondition < draftField,
-      'draft=true must be added only when no automation token is configured'
-    )
+    assert.doesNotMatch(createStep, /CREATE_ARGS\+=\(--field draft=true\)/)
     assert.doesNotMatch(createCommands, /gh pr create/)
 
     // No `gh pr list` or `gh pr create` invocation may remain anywhere in

@@ -12,6 +12,11 @@ pull_request:
   # direct topology: branches: [main]
 ```
 
+The generated caller suppresses runner and reusable-workflow jobs while the
+pull request is a draft. It listens for `ready_for_review` to start validation,
+for later `synchronize` events to rerun it, and for `converted_to_draft` to
+cancel in-flight validation through the caller's concurrency group.
+
 The separate `validation-audit.yml` caller is pinned to the configured released
 runtime and handles scheduled and manual audits:
 
@@ -29,8 +34,9 @@ results satisfiable for the release commit). In the
 `direct` topology (the default) every pull request targets `main` and runs the
 full audit tier, because there is no integration branch for a fast pass.
 Scheduled and manual runs select the audit tier in both topologies. Draft PR
-automation separately listens to supported topic-branch pushes, promotion
-automation listens to `staging` pushes (staging-release only), and release
+automation separately listens to supported topic-branch pushes and always
+opens those PRs as drafts. Promotion automation listens to `staging` pushes
+(staging-release only) and also always opens its PR as a draft. Release
 automation listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should keep their own triggers and permissions.
@@ -204,8 +210,7 @@ validation gate. Land changes through the standard `direct` or
   test/security workflows.
 
 Jobs detect applicability before installing tools. Per-language CodeQL and
-security-audit jobs are generated from detection, so empty language surfaces
-produce no checks at all instead of skipped rows; the aggregate
+security-audit jobs are generated from detection; the aggregate
 `Validation / Gate` keeps branch protection unambiguous for mixed-language
 repositories by failing closed unless every generated check succeeds. An
 empty analysis matrix while analysis is enabled fails the build instead of
@@ -214,12 +219,16 @@ silently skipping every analyzer.
 ## Security behavior
 
 CodeQL is a separate workflow using GitHub's official actions. The default
-`codeql: auto` policy enables it for public repositories and skips it for
-private repositories unless explicitly enabled and Advanced Security is
-available. Dependency Review follows the same policy through
-`dependency_review: auto`; JavaScript, Python, and Rust audits remain
-available without Advanced Security. If GitHub default setup is enabled,
-disable its generated CodeQL workflow to avoid duplicate analysis.
+`codeql: auto` policy enables it for public repositories and detects Advanced
+Security availability for private repositories. When CodeQL is unavailable,
+set `codeql: false` and sync: the generated caller selects an orchestrator that
+omits CodeQL entirely, so pull requests do not show a skipped analyzer.
+Dependency Review follows the same capability policy through
+`dependency_review: auto`, but executes as a conditional step inside the
+Security profile job and never registers a separate skipped pull-request
+check. JavaScript, Python, and Rust audits remain available without Advanced
+Security. If GitHub default setup is enabled, disable its generated CodeQL
+workflow to avoid duplicate analysis.
 
 Code Foundry does not enable GitHub Code Quality or any paid GitHub feature.
 The repository's format and lint jobs are ordinary CI checks. Set `codeql:

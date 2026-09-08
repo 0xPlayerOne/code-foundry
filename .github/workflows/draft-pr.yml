@@ -80,9 +80,8 @@ jobs:
           cat > "$BODY_FILE" <<EOF
           CI PR created automatically by this workflow.
 
-          This PR is ready for review once required validation passes. If the
-          configured automation token is rejected, it is intentionally opened
-          as a draft for manual readiness.
+          This PR is intentionally opened as a draft. Mark it ready for review
+          when the proposed change is ready to start required validation.
 
           **CI Status:** Pending — this workflow triggered on push to $BRANCH.
           EOF
@@ -94,6 +93,7 @@ jobs:
             --field head="$BRANCH"
             --field title="$PR_TITLE"
             --field body="@$BODY_FILE"
+            --field draft=true
           )
 
           CREATED=false
@@ -102,9 +102,7 @@ jobs:
           fi
 
           if [ "$CREATED" != true ]; then
-            DRAFT_ARGS=("${CREATE_ARGS[@]}" --field draft=true)
-            if GH_TOKEN="$GITHUB_TOKEN" gh api "${DRAFT_ARGS[@]}" > /dev/null 2> "$ERROR_FILE"; then
-              echo "::notice title=Manual PR readiness required::The configured automation token was absent or rejected; this PR was opened as a draft with the short-lived workflow token."
+            if GH_TOKEN="$GITHUB_TOKEN" gh api "${CREATE_ARGS[@]}" > /dev/null 2> "$ERROR_FILE"; then
               CREATED=true
             fi
           fi
@@ -113,3 +111,4 @@ jobs:
             echo "::error title=Draft PR creation failed::Both the configured automation token and the workflow token failed to create the pull request."
             exit 1
           fi
+          echo "::notice title=Manual PR readiness required::The automated pull request was opened as a draft. Mark it ready for review to start validation."
