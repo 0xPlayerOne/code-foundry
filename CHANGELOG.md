@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.3...v1.5.4) (2026-09-08)
+
+
+### Bug Fixes
+
+* **security:** pin scheduled audit runtime ([#491](https://github.com/0xPlayerOne/code-foundry/issues/491)) ([af25ef6](https://github.com/0xPlayerOne/code-foundry/commit/af25ef6137078809f27c316bdde2a9d025ef34af))
+
 ## [1.5.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.2...v1.5.3) (2026-09-08)
 
 
