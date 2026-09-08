@@ -71,11 +71,11 @@ Ask for clarification when a missing decision would materially change the implem
 8. Run the broadest applicable validation available.
 9. Report what changed, exact checks and results, skipped checks with reasons, risks, and remaining work.
 
-For normal feature work, branch from `staging` and target pull requests at `staging`. Treat `main` as the protected release branch. Follow `.github/CONTRIBUTING.md` for the complete internal and external contribution flow.
+For normal feature work, branch from `main` and target pull requests at `main`. Treat `main` as the protected release branch. Follow `.github/CONTRIBUTING.md` for the complete internal and external contribution flow.
 
 ## Git workflow and merging
 
-This repository uses the `staging-release` workflow: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Feature PRs land on `staging` with squash merges; promotion and release PRs land on `main` with rebase merges. Re-align `staging` with `main` after a release when needed.
+This repository uses the `direct` workflow: topic branches **squash** directly into `main`, and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Feature and release PRs land on `main` with squash merges. No integration branch exists; all pull requests target `main`.
 
 Merge only with the repository's canonical method. Never merge with `--admin`, never default or auto-select a merge method, and never use a method the branch ruleset does not allow. When in doubt, prefer the merge button's configured method and verify the ruleset after merging. Check `.github/CONTRIBUTING.md` for the complete flow and merge table.
 
@@ -149,7 +149,7 @@ If a check cannot run, state the exact reason. A skipped check is not a passing 
 ## GitHub workflows and configuration
 
 - Keep workflows concise, independently runnable, and safe to re-run.
-- Use `push` for `main, staging` and `pull_request` for `staging` unless a workflow has a documented event-specific reason.
+- Use `push` for `main` and `pull_request` for `main` unless a workflow has a documented event-specific reason.
 - Give workflows clear names and jobs concise names; avoid repeating the workflow name in the job name.
 - Use per-workflow concurrency groups that cancel superseded runs while allowing independent workflows to run in parallel.
 - Keep setup language-aware and cache dependency downloads by lockfile; do not cache secrets, `node_modules`, virtual environments, or broad build output without a measured reason.

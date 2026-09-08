@@ -788,7 +788,7 @@ describe('code-foundry CLI', () => {
     assert.equal(exists(join(root, '.github/workflows/opencode-security.yml')), true)
     assert.match(
       readFileSync(join(root, '.github/workflows/opencode-security.yml'), 'utf8'),
-      /OPENCODE_SECURITY_OVERRIDE/
+      /OPENCODE_SECURITY: \$\{\{ vars\.OPENCODE_SECURITY \}\}/
     )
     for (const legacy of ['ci', 'test', 'security', 'codeql']) {
       assert.equal(exists(join(root, `.github/workflows/${legacy}.yml`)), false, legacy)
@@ -1310,7 +1310,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(releaseCaller, /RELEASE_PLEASE_TOKEN/)
 
     const releaseMainCaller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
-    assert.match(releaseMainCaller, /STAGING_DEPLOY_KEY: \$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
+    assert.doesNotMatch(releaseMainCaller, /STAGING_DEPLOY_KEY/)
 
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
     assert.match(validationCaller, /types:\n\s+- ready_for_review/)
@@ -1320,7 +1320,8 @@ describe('code-foundry CLI', () => {
     const opencodeCaller = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
     assert.match(opencodeCaller, /types:\n\s+- ready_for_review/)
     assert.doesNotMatch(opencodeCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
-    assert.match(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
+    assert.match(opencodeCaller, /OPENCODE_SECURITY: \$\{\{ vars\.OPENCODE_SECURITY \}\}/)
+    assert.doesNotMatch(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
     assert.doesNotMatch(opencodeCaller, /opencode_security|grep -Eq/)
 
     const draftControlCaller = readFileSync('.github/workflows/draft-control_self-ci.yml', 'utf8')
@@ -1598,6 +1599,11 @@ jobs:
     assert.match(validation, /branches: \[main\]/)
     assert.doesNotMatch(validation, /staging/)
 
+    const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(release, /CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
+    assert.match(release, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
+    assert.doesNotMatch(release, /STAGING_DEPLOY_KEY/)
+
     const draft = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
     assert.match(draft, /base: main/)
     assert.doesNotMatch(draft, /base: staging/)
@@ -1722,6 +1728,9 @@ jobs:
 
     const draft = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
     assert.match(draft, /base: staging/)
+
+    const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(release, /STAGING_DEPLOY_KEY: \$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
 
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
     assert.match(dependabot, /target-branch: staging/)

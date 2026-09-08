@@ -30,5 +30,4 @@ jobs:
       runtime-ref: ${{ github.sha }}
     secrets:
       CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
-      STAGING_DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
