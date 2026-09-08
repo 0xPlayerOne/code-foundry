@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.13...v1.10.0) (2026-09-08)
+
+
+### Features
+
+* **ci:** enforce draft pull request readiness ([#530](https://github.com/0xPlayerOne/code-foundry/issues/530)) ([fe62147](https://github.com/0xPlayerOne/code-foundry/commit/fe621477a46b49dee69a4c74c482e815a3e60b8d))
+
 ## [1.9.13](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.12...v1.9.13) (2026-09-08)
 
 
