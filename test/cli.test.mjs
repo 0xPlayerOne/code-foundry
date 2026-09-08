@@ -1600,7 +1600,7 @@ jobs:
       // The replacement must actually fire: staging keeps the staging row,
       // direct drops it.
       assert.strictEqual(
-        rendered.includes('Pull request targeting `staging`'),
+        rendered.includes('Ready pull request targeting `staging`'),
         wf === 'staging-release'
       )
       assert.strictEqual(
@@ -1646,7 +1646,10 @@ jobs:
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
     assert.doesNotMatch(contributing, /Branch from `staging` and target pull requests at `staging`/)
-    assert.doesNotMatch(contributing, /Pull request targeting `staging`/)
+    assert.doesNotMatch(contributing, /Ready pull request targeting `staging`/)
+    assert.match(contributing, /Draft pull request targeting `main`/)
+    assert.match(contributing, /Ready pull request targeting `main`/)
+    assert.match(contributing, /converting it back to draft cancels in-flight validation/)
     assert.match(
       readFileSync(join(root, '.github/SECURITY.md'), 'utf8'),
       /latest commit on `main` receives security patches/
@@ -1705,9 +1708,9 @@ jobs:
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(
       contributing,
-      /Pull request targeting `staging`\s+\| Audit validation: CI, full tests, Security, and CodeQL/
+      /Ready pull request targeting `staging`\s+\| Audit validation: CI, full tests, Security, and CodeQL/
     )
-    assert.doesNotMatch(contributing, /Pull request targeting `staging`\s+\| Fast validation/)
+    assert.doesNotMatch(contributing, /Ready pull request targeting `staging`\s+\| Fast validation/)
     assert.deepEqual(syncRepository({ target: root, source: process.cwd() }).changed, [])
     rmSync(root, { recursive: true, force: true })
   })
