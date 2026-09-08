@@ -551,6 +551,21 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   // target main, so their callers trigger on main alone.
   if (!isStagingRelease(config.git_workflow)) {
     rendered = rendered.replace(/^(\s+branches:)\s*\[main,\s*staging\]\s*$/gm, `$1 [main]`)
+    // Direct repositories have no staging branch or release reconciliation,
+    // so their generated release caller must not expose the legacy deploy-key
+    // secret. Keep it in the staging-release template for repositories that
+    // still explicitly select that topology.
+    if (workflow === 'release') {
+      rendered = rendered.replace(
+        /^\s+STAGING_DEPLOY_KEY:\s+\$\{\{\s*secrets\.STAGING_DEPLOY_KEY\s*\}\}\s*\n/m,
+        ''
+      )
+    }
+  } else if (workflow === 'release' && !rendered.includes('STAGING_DEPLOY_KEY')) {
+    rendered = rendered.replace(
+      /^(\s+)CODE_FOUNDRY_TOKEN:\s+\$\{\{\s*secrets\.CODE_FOUNDRY_TOKEN\s*\}\}\s*$/m,
+      '$&\n$1STAGING_DEPLOY_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}'
+    )
   }
   if (workflow === 'draft-pr') {
     // The draft PR caller states the PR base explicitly so the shared
@@ -657,21 +672,26 @@ function stripDependabotEcosystem(content, ecosystem) {
  * @returns {string}
  */
 export function renderContributionDocs(content, file, config) {
-  if (isStagingRelease(config.git_workflow)) {
-    if (configured(config.staging_validation_mode, 'fast') !== 'audit') return content
-    return content.replace(
-      'Fast validation: CI plus unit tests, ending in `Validation / Gate`',
-      'Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`'
-    )
-  }
   const replacements = DIRECT_DOC_REPLACEMENTS[file]
   if (!replacements) return content
   let rendered = content
-  for (const [from, to] of replacements) {
-    if (!rendered.includes(from)) {
-      throw new Error(`Missing direct-workflow template marker in ${file}: ${JSON.stringify(from)}`)
+  const stagingRelease = isStagingRelease(config.git_workflow)
+  for (const [staging, direct] of replacements) {
+    const from = stagingRelease ? direct : staging
+    const to = stagingRelease ? staging : direct
+    if (rendered.includes(from)) {
+      rendered = rendered.replace(from, to)
+    } else if (!rendered.includes(to)) {
+      throw new Error(
+        `Missing ${stagingRelease ? 'staging-release' : 'direct'} workflow template marker in ${file}: ${JSON.stringify(from)}`
+      )
     }
-    rendered = rendered.replace(from, to)
+  }
+  if (stagingRelease && configured(config.staging_validation_mode, 'fast') === 'audit') {
+    rendered = rendered.replace(
+      'Fast validation: CI plus unit tests, ending in `Validation / Gate`',
+      'Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`'
+    )
   }
   return rendered
 }
@@ -729,11 +749,11 @@ const DIRECT_DOC_REPLACEMENTS = {
     ],
     [
       '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                 |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate`                         |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
-      '| Event | Expected automation |\n|------------------------------------------------------------------------------------------------------------------------------------------------|\n| Draft pull request targeting `main` | No runner-heavy validation; run local checks before requesting review |\n| Ready pull request targeting `main` | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate` |\n| Scheduled or manual validation | Full audit tier |\n| Push to a working branch | Draft PR workflow |\n| Push to `main` | Release workflow; canonical validation already ran on the merged PR |',
+      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Release-policy validation only, ending in `Validation / Gate`                         |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
     ],
     [
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
-      '| Change | Target | Merge method | Merge gate |\n|----------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| Working branch | `main` | Squash | All applicable required checks pass |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |',
+      '| Change                    | Target | Merge method                      | Merge gate                              |\n| ------------------------- | ------ | --------------------------------- | --------------------------------------- |\n| Working branch            | `main` | Squash                            | All applicable required checks pass     |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |\n',
     ],
     [
       'Draft pull requests do not start runner-heavy validation. Marking a pull request ready for review starts the applicable validation tier; converting it back to draft cancels in-flight validation, and no replacement starts until it is ready again.',
