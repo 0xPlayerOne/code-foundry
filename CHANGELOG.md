@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.2...v1.5.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **security:** remove cache-capable setup from audits ([#489](https://github.com/0xPlayerOne/code-foundry/issues/489)) ([47bd1d9](https://github.com/0xPlayerOne/code-foundry/commit/47bd1d9495a02dd2abcb2fee82052136b7a3675d))
+
 ## [1.5.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.1...v1.5.2) (2026-09-08)
 
 
