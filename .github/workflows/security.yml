@@ -225,7 +225,10 @@ jobs:
         uses: ./.github/actions/setup
         with:
           mise-scope: javascript
-          cache-save: ${{ github.event_name == 'push' }}
+          # Security runs execute the caller-selected runtime ref. Restore
+          # caches for speed, but never let that runtime write to a shared
+          # default-branch cache scope.
+          cache-save: 'false'
       - name: Audit JavaScript dependencies
         if: >-
           matrix.entry.language == 'javascript' &&
@@ -253,7 +256,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           mise-scope: rust
-          cache-save: ${{ github.event_name == 'push' }}
+          cache-save: 'false'
       - name: Install cargo-audit
         if: >-
           matrix.entry.language == 'rust' &&
@@ -271,7 +274,7 @@ jobs:
         uses: ./.github/actions/setup
         with:
           mise-scope: python
-          cache-save: ${{ github.event_name == 'push' }}
+          cache-save: 'false'
       - name: Audit Python dependencies
         if: matrix.entry.language == 'python'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit python
