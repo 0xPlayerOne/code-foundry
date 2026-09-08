@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.8...v1.9.9) (2026-09-08)
+
+
+### Bug Fixes
+
+* **sync:** standardize existing release PR titles ([#521](https://github.com/0xPlayerOne/code-foundry/issues/521)) ([76b1c94](https://github.com/0xPlayerOne/code-foundry/commit/76b1c94ee2ddde2a438bbb0cd11515eacbcbdb8d))
+
 ## [1.9.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.7...v1.9.8) (2026-09-08)
 
 
