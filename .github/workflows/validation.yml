@@ -80,7 +80,7 @@ permissions:
 jobs:
   ci:
     name: CI
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/ci.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -92,7 +92,7 @@ jobs:
 
   test:
     name: Test
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -106,7 +106,7 @@ jobs:
 
   security:
     name: Security
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/security.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -129,9 +129,10 @@ jobs:
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
-  # The release tier runs no suite jobs: its policy (generated release diff
-  # validation) executes as a conditional step below, so no separate
-  # release-policy job renders skipped checks on ordinary pull requests.
+  # The release tier runs the full audit suite so Release Please pull requests
+  # expose no neutral suite checks. Its generated release diff policy executes
+  # as a conditional step below, so ordinary pull requests still render no
+  # skipped release-policy row.
   gate:
     name: Gate
     needs: [ci, test, security, codeql]

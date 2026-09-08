@@ -19,9 +19,9 @@ export const RELEASE_PLEASE_PREFIX = 'release-please--branches--main'
 
 /** Stable aggregate check name emitted by the validation orchestrator's gate job. */
 export const AGGREGATE_CHECK_NAME = 'Validation / Gate'
-/** Job ids owned by the validation orchestrator. The release tier runs no
- * suite jobs: its policy executes as a conditional step inside the gate, so
- * no release-policy job id exists. */
+/** Job ids owned by the validation orchestrator. Release runs the full audit
+ * suite and validates its generated diff inside the gate, so no separate
+ * release-policy job id exists. */
 export const VALIDATION_JOBS = ['ci', 'test', 'security', 'codeql']
 
 /** Events that may trigger canonical validation. */
@@ -82,12 +82,10 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql'],
-  // The release tier skips the CI/test/security suites (the generated release
-  // diff check runs as a conditional step inside the gate itself) but still
-  // runs CodeQL: repository rulesets that require code scanning results need
-  // a CodeQL analysis of the release pull request's commit, and Release
-  // Please pull requests must not deadlock against that requirement.
-  release: ['codeql'],
+  // Release Please pull requests run the full audit suite so every registered
+  // validation check succeeds rather than appearing as an expected skip. The
+  // gate additionally validates the generated release diff.
+  release: ['ci', 'test', 'security', 'codeql'],
 }
 
 /**

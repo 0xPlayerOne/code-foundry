@@ -3951,7 +3951,7 @@ jobs:
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
     assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql'])
-    assert.deepEqual(requiredValidationJobs('release'), ['codeql'])
+    assert.deepEqual(requiredValidationJobs('release'), ['ci', 'test', 'security', 'codeql'])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
     assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql'])
@@ -3981,14 +3981,17 @@ jobs:
         failures: [],
       }
     )
-    // The release tier skips the CI/test/security suites but requires CodeQL
-    // so repository rulesets that require code scanning results never
-    // deadlock the release pull request.
-    assert.deepEqual(evaluateValidationGate({ mode: 'release', results: { codeql: 'success' } }), {
-      valid: true,
-      required: ['codeql'],
-      failures: [],
-    })
+    assert.deepEqual(
+      evaluateValidationGate({
+        mode: 'release',
+        results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' },
+      }),
+      {
+        valid: true,
+        required: ['ci', 'test', 'security', 'codeql'],
+        failures: [],
+      }
+    )
   })
 
   it('lets expected skips of non-required jobs pass the gate', () => {
@@ -4011,7 +4014,7 @@ jobs:
         mode: 'release',
         results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'success' },
       }).valid,
-      true
+      false
     )
     // Non-required jobs never influence the gate, even when they fail.
     assert.equal(
@@ -4040,13 +4043,15 @@ jobs:
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
-    // Release mode requires CodeQL; the CI/test/security skips stay
-    // irrelevant because the in-gate release diff step carries the policy.
+    // Release mode requires the complete suite and rejects every skipped gate.
     assert.deepEqual(
-      evaluateValidationGate({ mode: 'release', results: { ci: 'failure', codeql: 'skipped' } }),
+      evaluateValidationGate({
+        mode: 'release',
+        results: { ci: 'success', test: 'success', security: 'success', codeql: 'skipped' },
+      }),
       {
         valid: false,
-        required: ['codeql'],
+        required: ['ci', 'test', 'security', 'codeql'],
         failures: [{ job: 'codeql', result: 'skipped' }],
       }
     )
@@ -4350,22 +4355,21 @@ jobs:
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
   })
 
-  it('runs only the mode-required tier jobs in the orchestrator', () => {
+  it('runs every registered tier job for release pull requests', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     for (const job of ['ci', 'test', 'security', 'codeql']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
-    // No release-policy job exists: the release tier validates the generated
-    // diff as a conditional step inside the gate, so ordinary pull requests
-    // render no skipped release row.
+    // No release-policy job exists: release diff validation runs inside the
+    // gate, so ordinary pull requests render no skipped release row.
     assert.doesNotMatch(orchestrator, /^  release-policy:/m)
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/
+      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
     )
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')/
+      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
     )
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
     assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
@@ -4532,9 +4536,9 @@ jobs:
     assert.equal(fast.status, 0)
     const release = run({
       FOUNDRY_MODE: 'release',
-      FOUNDRY_CI: 'skipped',
-      FOUNDRY_TEST: 'skipped',
-      FOUNDRY_SECURITY: 'skipped',
+      FOUNDRY_CI: 'success',
+      FOUNDRY_TEST: 'success',
+      FOUNDRY_SECURITY: 'success',
       FOUNDRY_CODEQL: 'success',
     })
     assert.equal(release.status, 0)
