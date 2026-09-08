@@ -4431,6 +4431,7 @@ jobs:
 
   it('runs every registered tier job for release pull requests', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
+    const noCodeqlOrchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     for (const job of ['ci', 'test', 'security', 'codeql']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
@@ -4462,6 +4463,14 @@ jobs:
       /FOUNDRY_HEAD_REPO: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/
     )
     assert.match(orchestrator, /FOUNDRY_REPOSITORY: \$\{\{ github\.repository \}\}/)
+    for (const job of ['ci', 'test', 'security']) {
+      assert.match(
+        noCodeqlOrchestrator,
+        new RegExp(`^  ${job}:[\\s\\S]*?inputs\\.mode == 'release'`, 'm')
+      )
+    }
+    assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
+    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security\]/)
   })
 
   it('pins all external workflow/action refs to approved immutable SHAs', () => {
