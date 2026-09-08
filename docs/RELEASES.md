@@ -27,7 +27,7 @@ rebase`), and Release Please version PRs merge with **rebase**
 branches squash straight into `main` and Release Please version PRs squash into
 `main` (`release_merge_strategy: squash`). `merge_strategy` is not enforced. Release automation never defaults
 to a merge method and never merges with `--admin`: `staging-release` accepts
-only rebase for release PRs, while `direct` accepts rebase or squash.
+only rebase for release PRs, while `direct` requires squash.
 
 The release workflow opens or updates a versioned PR after changes reach
 `main`. Merging that PR updates the changelog, creates the Git tag and GitHub
@@ -54,7 +54,7 @@ selected, `merge_strategy` applies to promotion PRs (`staging` into `main`)
 and `release_merge_strategy` to Release Please version PRs; feature PRs into
 `staging` use squash merges. `code-foundry doctor`, `code-foundry sync`, and
 the release workflow reject any non-`rebase` `merge_strategy` or release
-strategy in `staging-release`; `direct` accepts `rebase` or `squash` for
+strategy in `staging-release`; `direct` requires `squash` for
 release PRs and never falls back to `merge`. Both keep `main` fully linear,
 which is what makes the post-release reconciliation possible. The final
 branch trees are inspected before mutation; validated main-only changes are

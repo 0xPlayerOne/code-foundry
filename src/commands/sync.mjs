@@ -43,6 +43,7 @@ const standardFiles = [
   '.github/ISSUE_TEMPLATE/feature_request.yml',
   '.github/workflows/validation.yml',
   '.github/workflows/validation-audit.yml',
+  '.github/workflows/draft-control.yml',
   '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml',
   '.github/workflows/release.yml',
@@ -117,6 +118,15 @@ export function syncRepository(options) {
     throw new Error('Missing .github/code-foundry.yml; run init first.')
   const defaults = createDefaultConfig(target, source, existingConfig.git_workflow)
   let config = { ...defaults, ...existingConfig }
+  const workflow = gitWorkflow(config.git_workflow)
+  if (!['direct', 'staging-release'].includes(workflow)) {
+    throw new Error(`Unsupported git_workflow: ${workflow}; use direct or staging-release.`)
+  }
+  const obsoleteConfigKeys = [
+    'opencode_security',
+    ...(workflow === 'direct' ? ['staging_validation_mode'] : []),
+  ]
+  for (const key of obsoleteConfigKeys) delete config[key]
   // Resolve and validate the license policy before any sync writes occur
   // (including config/default additions) so an unsupported policy fails
   // fast without leaving partially generated files behind.
@@ -133,10 +143,11 @@ export function syncRepository(options) {
     writeOrReport(configPath, renderConfig(config), dryRun)
   } else {
     const missing = Object.keys(defaults).filter((key) => !(key in existingConfig))
-    if (missing.length) {
-      const current = readFileSync(configPath, 'utf8').trimEnd()
+    const original = readFileSync(configPath, 'utf8')
+    const normalized = removeConfigKeys(original, obsoleteConfigKeys).trimEnd()
+    if (missing.length || normalized !== original.trimEnd()) {
       const additions = missing.map((key) => renderConfigLine(key, defaults[key])).join('\n')
-      writeOrReport(configPath, `${current}\n${additions}\n`, dryRun)
+      writeOrReport(configPath, `${normalized}${additions ? `\n${additions}` : ''}\n`, dryRun)
     }
   }
 
@@ -155,17 +166,18 @@ export function syncRepository(options) {
   if (!['auto', 'native', 'mise'].includes(toolchain)) {
     throw new Error(`Unsupported toolchain: ${toolchain}; use auto, native, or mise.`)
   }
-  const workflow = gitWorkflow(config.git_workflow)
-  if (!['direct', 'staging-release'].includes(workflow)) {
-    throw new Error(`Unsupported git_workflow: ${workflow}; use direct or staging-release.`)
-  }
   const stagingValidationMode = configured(config.staging_validation_mode, 'fast')
-  if (!['fast', 'audit'].includes(stagingValidationMode)) {
+  if (workflow === 'staging-release' && !['fast', 'audit'].includes(stagingValidationMode)) {
     throw new Error(
       `Unsupported staging_validation_mode: ${stagingValidationMode}; use fast or audit.`
     )
   }
   const mergeStrategy = configured(config.merge_strategy, 'rebase')
+  if (workflow === 'direct' && mergeStrategy !== 'squash') {
+    throw new Error(
+      `Unsupported merge_strategy: ${mergeStrategy}; the direct topology requires squash for feature pull requests.`
+    )
+  }
   if (workflow === 'staging-release' && mergeStrategy !== 'rebase') {
     throw new Error(
       `Unsupported merge_strategy: ${mergeStrategy}; the staging-release topology requires rebase for staging to main promotions.`
@@ -177,11 +189,10 @@ export function syncRepository(options) {
     // release commits; the direct topology has no reconciliation step, so it
     // may also squash Release Please version PRs (a single-commit release PR
     // squashes to the identical tree, and release-please recommends squash).
-    const allowedReleaseStrategies =
-      workflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
+    const allowedReleaseStrategies = workflow === 'staging-release' ? ['rebase'] : ['squash']
     if (!allowedReleaseStrategies.includes(releaseMergeStrategy)) {
       throw new Error(
-        `Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires rebase (or squash in the direct topology) for Release Please version pull requests and never defaults to merge.`
+        `Unsupported release_merge_strategy: ${releaseMergeStrategy || '(unset)'}; release automation requires ${workflow === 'staging-release' ? 'rebase' : 'squash'} for Release Please version pull requests and never defaults to merge.`
       )
     }
   }
@@ -459,6 +470,7 @@ function shouldInclude(file, languages, features, config) {
   // the configuration or the variable enables it and the API key exists.
   if (file === '.github/workflows/opencode-security.yml') return true
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
+  if (workflow === 'draft-control') return true
   // The staging promotion caller only exists in the staging-release topology;
   // direct repositories open feature branches into main and need no promotion.
   if (workflow === 'release-pr' && !isStagingRelease(config.git_workflow)) return false
@@ -695,7 +707,7 @@ const DIRECT_DOC_REPLACEMENTS = {
     ],
     [
       'The Git workflow is `staging-release`: topic branches **squash** into `staging`, a promotion PR **rebases** validated changes into `main` (`merge_strategy: rebase`), and the Release Please version PR **rebases** into `main` (`release_merge_strategy: rebase`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other merge strategy. Re-align `staging` with `main` after a release when needed.',
-      'The Git workflow is `direct`: topic branches **squash** directly into `main`, and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other release merge strategy. Feature branches never touch `staging`; repositories with a preview/staging environment opt into `git_workflow: staging-release` explicitly.',
+      'The Git workflow is `direct`: topic branches **squash** directly into `main`, and the Release Please version PR **squashes** into `main` (`release_merge_strategy: squash`). Release automation never defaults to a merge method and never merges with `--admin`; `code-foundry doctor` and `code-foundry sync` fail closed on any other release merge strategy. This repository has one protected integration and release branch: `main`.',
     ],
     [
       'git switch staging\ngit pull --ff-only origin staging',
@@ -722,6 +734,10 @@ const DIRECT_DOC_REPLACEMENTS = {
     [
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
       '| Change | Target | Merge method | Merge gate |\n|----------------------------------------------------------------------------------------------------------------------------------------------------------------|\n| Working branch | `main` | Squash | All applicable required checks pass |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |',
+    ],
+    [
+      'Draft pull requests do not start runner-heavy validation. Marking a pull request ready for review starts the applicable validation tier; converting it back to draft cancels in-flight validation, and no replacement starts until it is ready again.',
+      'Draft pull requests do not start validation. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.',
     ],
     ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],
@@ -1149,7 +1165,7 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     runtime_ref: `v${readPackageVersion(source)}`,
     ...runners,
     toolchain: 'auto',
-    staging_validation_mode: 'fast',
+    ...(stagingRelease ? { staging_validation_mode: 'fast' } : {}),
     performance: 'auto',
     performance_command: '',
     performance_profile: '',
@@ -1164,7 +1180,6 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     post_release: 'false',
     post_release_workflow: '',
     post_release_mode: 'auto',
-    opencode_security: 'false',
     opencode_security_model: '',
     sync_mode: 'overlay',
     custom_workflows: 'preserve',
@@ -1181,6 +1196,20 @@ function renderConfig(config) {
     .map(([key, value]) => renderConfigLine(key, value))
     .join('\n')}\n`
 }
+
+/** @param {string} content @param {string[]} keys */
+function removeConfigKeys(content, keys) {
+  if (!keys.length) return content
+  const rejected = new Set(keys)
+  return content
+    .split(/\r?\n/)
+    .filter((line) => {
+      const key = line.match(/^([A-Za-z0-9_-]+):/)?.[1]
+      return !key || !rejected.has(key)
+    })
+    .join('\n')
+}
+
 /** @param {string} key @param {string} value */
 function renderConfigLine(key, value) {
   if (value === '') return `${key}:`

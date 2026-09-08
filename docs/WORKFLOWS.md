@@ -12,10 +12,12 @@ pull_request:
   # direct topology: branches: [main]
 ```
 
-The generated caller suppresses runner and reusable-workflow jobs while the
-pull request is a draft. It listens for `ready_for_review` to start validation,
-for later `synchronize` events to rerun it, and for `converted_to_draft` to
-cancel in-flight validation through the caller's concurrency group.
+The generated validation caller listens only for `ready_for_review`, so draft
+pull requests register no validation checks and allocate no validation runner.
+After any later update, convert the pull request to draft and mark it ready
+again so required checks attach to the current head. A separate lightweight
+draft-control caller listens for `converted_to_draft` and cancels queued or
+running pull-request workflows without creating skipped validation jobs.
 
 The separate `validation-audit.yml` caller is pinned to the configured released
 runtime and handles scheduled and manual audits:
@@ -39,7 +41,7 @@ opens those PRs as drafts. Promotion automation listens to `staging` pushes
 (staging-release only) and also always opens its PR as a draft. Release
 automation listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
-repository-owned extensions and should keep their own triggers and permissions.
+repository-owned extensions and should use the same ready-transition policy.
 
 ## Billing pause
 
@@ -83,9 +85,9 @@ throughout the bounded release flow.
 Custom workflows are repository-owned and are not rewritten by sync. Add
 `if: vars.CI_BILLING_PAUSED != 'true'` to each custom root job that should
 honor the shared billing pause. The optional OpenCode Security scan honors a
-second toggle: the `OPENCODE_SECURITY` repository variable (`true`/`false`)
-overrides the `opencode_security` configuration per run, so individual
-repositories can opt in or out without a code change.
+second toggle: the `OPENCODE_SECURITY` repository or organization variable
+(`true`/`false`) is its only enablement control, so individual repositories can
+opt in or out without a code change.
 
 ## Standard workflow responsibilities
 
@@ -114,20 +116,20 @@ succeeds.
 
 The merge audit pins one merge method per transition. `code-foundry doctor`
 and `code-foundry sync` validate release strategy against the repository
-topology. Staging-release release PRs require `rebase`; direct release PRs
-allow `rebase` or `squash`. The release workflow fails closed on any other
-strategy and never falls back to `merge`.
+topology. Direct feature and release PRs require `squash`; staging-release
+promotion and release PRs require `rebase`. The release workflow fails closed
+on any other strategy and never falls back to `merge`.
 
-| Transition                                                 | Merge method                                                              | Enforcement                                                                                                                                                                |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Feature/fix PR into `main` (direct topology)               | Squash                                                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
-| Feature/fix PR into `staging` (staging-release topology)   | Squash                                                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
-| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`)                                         | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
-| Release Please version PR into `main`                      | Configured (`release_merge_strategy`: rebase default; squash direct only) | Release automation fails closed on unsupported topology/strategy; never defaults to `merge`, never uses `--admin`                                                          |
+| Transition                                                 | Merge method                                | Enforcement                                                                                                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature/fix PR into `main` (direct topology)               | Squash                                      | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
+| Feature/fix PR into `staging` (staging-release topology)   | Squash                                      | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
+| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`)           | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
+| Release Please version PR into `main`                      | Squash (direct) or rebase (staging-release) | Release automation fails closed on unsupported topology/strategy; never defaults to `merge`, never uses `--admin`                                                          |
 
 The promotion rows above apply only to `staging-release`; `direct`
-repositories never generate a promotion caller and `merge_strategy` is not
-enforced for them.
+repositories never generate a promotion caller and require `merge_strategy:
+squash` for feature pull requests.
 
 Release auto-merge waits for required checks and then polls `mergeStateStatus`
 until it is `CLEAN`, or `UNSTABLE` with `mergeable` `MERGEABLE`, before
@@ -139,7 +141,7 @@ merge policy-blocked. The mergeability poll is bounded and fails closed on
 conflicts or timeout; releases without an automation token remain manual.
 
 Keeping `main` linear — rebase promotions and release PRs in the
-`staging-release` topology, or a single-commit rebase/squash release PR in the
+`staging-release` topology, or a single-commit squash release PR in the
 `direct` topology — is what lets the post-release reconciliation fast-forward
 or replay `staging` safely. `direct` repositories have no reconciliation step:
 releases merge straight into `main` with the configured
@@ -147,7 +149,7 @@ releases merge straight into `main` with the configured
 
 Protect `main` with the aggregate `Validation / Gate`. Require squash for
 feature/fix pull requests and permit the configured Release Please method:
-rebase in `staging-release`, or rebase/squash in `direct`. In the
+rebase in `staging-release`, or squash in `direct`. In the
 `staging-release` topology, protect `staging` the same way with a single GitHub
 Actions integration path. That path uses the
 GitHub Actions integration token by default, and optionally an SSH deploy key

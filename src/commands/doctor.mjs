@@ -116,30 +116,45 @@ export function doctor(root, options = {}) {
     error(`unsupported git_workflow: ${workflow}; use direct or staging-release`)
   }
   const mergeStrategy = config.merge_strategy ?? 'rebase'
+  if (workflow === 'direct' && mergeStrategy !== 'squash') {
+    error(
+      `merge_strategy must be "squash" for direct feature pull requests; got "${mergeStrategy}".`
+    )
+  }
   if (workflow === 'staging-release' && mergeStrategy !== 'rebase') {
     error(
       `merge_strategy must be "rebase" for the staging-release promotion topology; got "${mergeStrategy}".`
     )
   }
   const releaseMergeStrategy = config.release_merge_strategy ?? ''
-  const allowedReleaseStrategies =
-    workflow === 'staging-release' ? ['rebase'] : ['rebase', 'squash']
+  const allowedReleaseStrategies = workflow === 'staging-release' ? ['rebase'] : ['squash']
   if (
     includesValue(features, 'release') &&
     !allowedReleaseStrategies.includes(releaseMergeStrategy)
   ) {
     error(
-      `release_merge_strategy must be "rebase"${workflow === 'staging-release' ? '' : ' or "squash" (direct topology)'} for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`
+      `release_merge_strategy must be "${workflow === 'staging-release' ? 'rebase' : 'squash'}" for automated release merges; got "${releaseMergeStrategy || '(unset; release automation never defaults to merge)'}".`
     )
   }
-  for (const name of ['validation', 'draft-pr', 'release-pr', 'release']) {
-    if (name === 'release-pr' && workflow !== 'staging-release') continue
-    if (includesValue(features, name) && !existsSync(join(target, `.github/workflows/${name}.yml`)))
-      error(`missing enabled workflow: ${name}.yml`)
-  }
+  if ('opencode_security' in config)
+    error('opencode_security is obsolete; use the OPENCODE_SECURITY repository variable.')
+  if (workflow === 'direct' && 'staging_validation_mode' in config)
+    error(
+      'staging_validation_mode is not valid in a direct-topology repository; run sync to prune it.'
+    )
   const validationEnabled =
     includesValue(features, 'validation') ||
     ['ci', 'test', 'security', 'codeql'].some((legacy) => includesValue(features, legacy))
+  for (const name of ['validation', 'draft-control', 'draft-pr', 'release-pr', 'release']) {
+    if (name === 'release-pr' && workflow !== 'staging-release') continue
+    const enabled = name === 'draft-control' ? validationEnabled : includesValue(features, name)
+    const candidates = [
+      join(target, `.github/workflows/${name}.yml`),
+      join(target, `.github/workflows/${name}_self-ci.yml`),
+    ]
+    if (enabled && !candidates.some((file) => existsSync(file)))
+      error(`missing enabled workflow: ${name}.yml`)
+  }
   const validationCaller = ['validation.yml', 'validation_self-ci.yml']
     .map((file) => join(target, `.github/workflows/${file}`))
     .find((file) => existsSync(file) && /pull_request:/.test(readFileSync(file, 'utf8')))
@@ -151,6 +166,12 @@ export function doctor(root, options = {}) {
       error(
         'validation caller is missing the Validation job; the Validation / Gate aggregate check cannot form.'
       )
+    }
+    if (!/types:\n\s+- ready_for_review/.test(caller)) {
+      error('validation caller must wait for the ready_for_review transition.')
+    }
+    if (/\s+- (?:opened|synchronize|reopened|converted_to_draft)\s*$/.test(caller)) {
+      error('validation caller registers draft-time checks; run code-foundry sync.')
     }
     if (
       !/uses:\s+(?:\.\/\.github\/workflows\/validation(?:-no-codeql)?\.yml|\S+\/\.github\/workflows\/validation(?:-no-codeql)?\.yml@)/.test(

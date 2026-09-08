@@ -71,7 +71,42 @@ export function doctorGithub(root) {
     )
   }
 
-  const config = readConfig(root)
+  const config = readConfig(join(root, '.github/code-foundry.yml'))
+  const repositorySettings = ghJson(['api', `repos/${repository}`]) ?? {}
+  const configuredWorkflow = config.git_workflow ?? 'direct'
+  details.mergeMethods = {
+    squash: repositorySettings.allow_squash_merge,
+    rebase: repositorySettings.allow_rebase_merge,
+    merge: repositorySettings.allow_merge_commit,
+    autoMerge: repositorySettings.allow_auto_merge,
+  }
+  if (configuredWorkflow === 'direct') {
+    if (repositorySettings.allow_squash_merge !== true)
+      errors.push('direct topology requires squash merging to be enabled.')
+    if (
+      repositorySettings.allow_rebase_merge === true ||
+      repositorySettings.allow_merge_commit === true
+    )
+      errors.push('direct topology must disable rebase and merge-commit methods.')
+    if (config.release_type !== 'none' && repositorySettings.allow_auto_merge !== true)
+      errors.push('automated releases require repository auto-merge to be enabled.')
+    details.stagingBranchExists = Boolean(
+      ghJson(['api', `repos/${repository}/branches/staging`])?.name
+    )
+    if (details.stagingBranchExists)
+      errors.push('direct topology still has a staging branch; remove the obsolete branch.')
+    for (const ruleset of mainRulesets) {
+      for (const rule of ruleset.rules ?? []) {
+        if (rule?.type !== 'pull_request') continue
+        const methods = rule.parameters?.allowed_merge_methods ?? []
+        if (methods.length !== 1 || methods[0] !== 'squash') {
+          errors.push(
+            `main ruleset ${ruleset.name ?? ruleset.id} must allow only squash merges; got ${methods.join(', ') || '(none)'}.`
+          )
+        }
+      }
+    }
+  }
   if (
     ['workflow-dispatch', 'dispatch'].includes(config.post_release_mode) &&
     config.post_release !== 'false' &&
@@ -80,11 +115,19 @@ export function doctorGithub(root) {
   ) {
     errors.push('post-release workflow-dispatch mode requires CODE_FOUNDRY_TOKEN to be present.')
   }
+  const repositoryVariables =
+    ghJson(['variable', 'list', '--repo', repository, '--json', 'name,value']) ?? []
+  const opencodeSecurityVariable = Array.isArray(repositoryVariables)
+    ? repositoryVariables.find(
+        /** @param {{ name?: string }} variable */ (variable) =>
+          variable.name === 'OPENCODE_SECURITY'
+      )
+    : undefined
   const credentialChecks = {
     npmTokenPresent: secretNames.includes('NPM_TOKEN'),
     turboTokenPresent: secretNames.includes('TURBO_TOKEN'),
     turboTeamPresent: Boolean(
-      ghJson(['variable', 'list', '--repo', repository, '--json', 'name'])?.some(
+      repositoryVariables.some(
         /** @param {{ name?: string }} variable */ (variable) => variable.name === 'TURBO_TEAM'
       )
     ),
@@ -103,18 +146,15 @@ export function doctorGithub(root) {
       'turbo_remote is enabled but TURBO_TOKEN and/or TURBO_TEAM is not configured; remote caching will be skipped.'
     )
   if (
-    ['true', 'auto'].includes(config.opencode_security ?? 'false') &&
+    String(opencodeSecurityVariable?.value ?? 'false').toLowerCase() === 'true' &&
     !credentialChecks.opencodeApiKeyPresent
   )
     warnings.push(
-      'opencode_security is enabled but OPENCODE_API_KEY is not configured; the optional scan will be skipped.'
+      'OPENCODE_SECURITY is true but OPENCODE_API_KEY is not configured; the optional scan will be skipped.'
     )
-  if (['true', 'auto'].includes(config.opencode_security ?? 'false'))
-    details.credentials.opencodeSecurityConfigured = true
-  details.credentials.opencodeSecurityVariable =
-    ghJson(['variable', 'list', '--repo', repository, '--json', 'name'])?.some(
-      /** @param {{ name?: string }} variable */ (variable) => variable.name === 'OPENCODE_SECURITY'
-    ) ?? false
+  details.credentials.opencodeSecurityEnabled =
+    String(opencodeSecurityVariable?.value ?? 'false').toLowerCase() === 'true'
+  details.credentials.opencodeSecurityVariable = Boolean(opencodeSecurityVariable)
 
   const prs = ghJson([
     'pr',
