@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+      performance-runner:
+        description: Runner used by deterministic performance regression checks.
+        required: false
+        type: string
+        default: ubuntu-latest
       unit-only:
         description: Run only the unit-test subset; skip integration, E2E, and smoke jobs.
         required: false
@@ -113,6 +118,71 @@ jobs:
             htmlcov/**
             .coverage*
             target/llvm-cov/**
+          compression-level: 1
+          if-no-files-found: ignore
+          retention-days: 14
+
+  performance:
+    name: Performance
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.performance-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci task_profile performance >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-save: false
+          cache-packages: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+          task: performance
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
+      - name: Performance
+        if: steps.applicability.outputs.applicable == 'true'
+        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci performance
+      - name: Upload performance results
+        if: >-
+          always() &&
+          steps.applicability.outputs.applicable == 'true' &&
+          hashFiles('artifacts/performance/**', 'performance-results.json', 'performance-results/**') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: performance-${{ github.run_id }}
+          path: |
+            artifacts/performance/**
+            performance-results.json
+            performance-results/**
           compression-level: 1
           if-no-files-found: ignore
           retention-days: 14

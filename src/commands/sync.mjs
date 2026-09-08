@@ -549,6 +549,7 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
       'security-runner': config.security_runner ?? config.runner,
       'codeql-runner': config.codeql_runner ?? config.runner,
       'unit-runner': config.unit_runner,
+      'performance-runner': config.performance_runner ?? config.test_runner ?? config.runner,
     }
     for (const [input, value] of Object.entries(runnerInputs)) {
       if (!value) continue
@@ -1088,6 +1089,8 @@ function createDefaultConfig(root, source) {
     ...runners,
     toolchain: 'auto',
     staging_validation_mode: 'fast',
+    performance: 'auto',
+    performance_command: '',
     prune_standard: 'false',
     cache_packages: 'auto',
     cache_build: 'auto',

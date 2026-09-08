@@ -79,7 +79,7 @@ repositories can opt in or out without a code change.
 | Workflow   | Responsibility                                                |
 | ---------- | ------------------------------------------------------------- |
 | CI         | Format, lint, type-check, and build                           |
-| Test       | Unit, integration, E2E, and smoke tests                       |
+| Test       | Unit, performance, integration, E2E, and smoke tests          |
 | Security   | Profile, audits, and public-only Dependency Review            |
 | CodeQL     | GitHub-native code scanning, kept separate from CI            |
 | Draft PR   | Create/update development pull requests                       |

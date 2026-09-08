@@ -766,6 +766,7 @@ describe('code-foundry CLI', () => {
     assert.match(validationCaller, /rust-shards: '\["all"\]'/)
     assert.match(validationCaller, /rust-threads: '1'/)
     assert.match(validationCaller, /rust-max-parallel: 1/)
+    assert.match(validationCaller, /performance-runner: ubuntu-latest/)
     assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
     doctor(root)
   })
@@ -3994,6 +3995,24 @@ describe('code-foundry CLI', () => {
       /codeql:\n[\s\S]*?rust-max-parallel: \$\{\{ inputs\.rust-max-parallel \}\}\n\s+secrets:/
     )
     assert.doesNotMatch(orchestrator, /secrets:\s*inherit/)
+  })
+
+  it('runs deterministic performance checks through the shared test workflow', () => {
+    const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
+    const testWorkflow = readFileSync('.github/workflows/test.yml', 'utf8')
+    const setup = readFileSync('.github/actions/setup/action.yml', 'utf8')
+
+    assert.match(caller, /performance-runner: ubuntu-latest/)
+    assert.match(orchestrator, /performance-runner: \$\{\{ inputs\.performance-runner \}\}/)
+    assert.match(testWorkflow, /^  performance:\n    name: Performance/m)
+    assert.match(testWorkflow, /ci task_profile performance/)
+    assert.match(testWorkflow, /ci performance/)
+    assert.match(testWorkflow, /cache-build: false/)
+    assert.match(testWorkflow, /cache-save: false/)
+    assert.match(testWorkflow, /artifacts\/performance\/\*\*/)
+    assert.match(setup, /performance: \['performance:check', 'perf:check'\]/)
+    assert.match(setup, /inputs\.task == 'unit' \|\| inputs\.task == 'performance'/)
   })
 
   it('requires persist-credentials: false for every external checkout action in workflow YAML', () => {

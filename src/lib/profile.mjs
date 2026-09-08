@@ -129,6 +129,7 @@ export function recommendRunners(root) {
     ci_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
     test_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
     unit_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
+    performance_runner: 'ubuntu-latest',
     security_runner: 'ubuntu-slim',
     codeql_runner: 'ubuntu-latest',
     pr_runner: 'ubuntu-slim',
