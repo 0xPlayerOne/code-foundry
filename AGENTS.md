@@ -120,6 +120,7 @@ node src/runtime.mjs ci unit
 node src/runtime.mjs ci integration
 node src/runtime.mjs ci e2e
 node src/runtime.mjs ci smoke
+node src/runtime.mjs ci performance
 Security and dependency audits run through the GitHub Security workflow.
 ```
 
@@ -138,7 +139,7 @@ If a check cannot run, state the exact reason. A skipped check is not a passing 
 ## Tests and coverage
 
 - Add or update tests for behavior changes and regressions.
-- Keep unit, integration, E2E, and smoke coverage in the suite where each applies.
+- Keep unit, performance, integration, E2E, and smoke coverage in the suite where each applies.
 - Preserve project-specific coverage thresholds; do not lower them to make CI green.
 - Keep test data deterministic and remove secrets from logs and fixtures.
 - Use the narrowest test command while iterating, then run the affected package or workspace suite.

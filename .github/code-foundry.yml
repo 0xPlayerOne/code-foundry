@@ -20,6 +20,7 @@ merge_strategy: squash
 release_merge_strategy: squash
 runner: ubuntu-latest
 unit_runner: ubuntu-slim
+performance_runner: ubuntu-latest
 cache_packages: auto
 cache_build: auto
 coverage_minimum: 80
@@ -38,4 +39,6 @@ opencode_security: false
 sync_mode: overlay
 custom_workflows: preserve
 staging_validation_mode: fast
+performance: auto
+performance_command:
 opencode_security_model:

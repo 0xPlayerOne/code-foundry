@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.6.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.4...v1.6.0) (2026-09-08)
+
+
+### Features
+
+* **ci:** add shared performance validation ([#492](https://github.com/0xPlayerOne/code-foundry/issues/492)) ([ef12990](https://github.com/0xPlayerOne/code-foundry/commit/ef1299045b6d67e447def93e2096862cde64bbc7))
+
+## [1.5.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.3...v1.5.4) (2026-09-08)
+
+
+### Bug Fixes
+
+* **security:** pin scheduled audit runtime ([#491](https://github.com/0xPlayerOne/code-foundry/issues/491)) ([af25ef6](https://github.com/0xPlayerOne/code-foundry/commit/af25ef6137078809f27c316bdde2a9d025ef34af))
+
+## [1.5.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.2...v1.5.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **security:** remove cache-capable setup from audits ([#489](https://github.com/0xPlayerOne/code-foundry/issues/489)) ([47bd1d9](https://github.com/0xPlayerOne/code-foundry/commit/47bd1d9495a02dd2abcb2fee82052136b7a3675d))
+
 ## [1.5.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.1...v1.5.2) (2026-09-08)
 
 

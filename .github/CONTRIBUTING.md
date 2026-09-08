@@ -19,7 +19,7 @@ Agents must follow these rules before changing code:
 3. Preserve user-owned changes. Never discard or overwrite unrelated work.
 4. Branch from `staging` and target pull requests at `staging`; do not work directly on `main`.
 5. Keep the change focused. Do not expand scope without documenting why.
-6. Run the applicable format, lint, type-check, build, unit, integration, E2E, smoke, and security checks.
+6. Run the applicable format, lint, type-check, build, unit, performance, integration, E2E, smoke, and security checks.
 7. Report exact validation results, skipped checks, known limitations, and remaining risks.
 8. Never commit secrets, credentials, local environment files, generated artifacts, or machine-specific paths.
 
@@ -163,7 +163,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 | Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |
 | Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |
 
-The single validation caller keys concurrency by event and pull-request head. A newer update to the same pull request cancels its superseded validation run; scheduled and manual audits remain independent. The mode-aware orchestrator fans out only the jobs required by that event and always concludes with the stable aggregate gate.
+Pull-request validation keys concurrency by event and pull-request head, so a newer update cancels its superseded run. Scheduled and manual audits use a separate caller pinned to the protected default branch; this prevents caller-selected runtime code from executing with default-branch cache access. Both callers use the mode-aware orchestrator, which fans out only the required jobs and concludes with the stable aggregate gate.
 
 Required checks are enforced by branch protection rulesets/branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 

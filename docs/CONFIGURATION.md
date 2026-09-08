@@ -36,6 +36,8 @@ repository manifests and source
 | `package_manager`          | `bun`, `pnpm`, `yarn`, `npm`, `none`                                             | JavaScript setup                                                                                                    |
 | `toolchain`                | `auto`, `native`, `mise`                                                         | Environment setup policy; defaults to `auto`                                                                        |
 | `staging_validation_mode`  | `fast`, `audit`                                                                  | Validation tier for pull requests targeting `staging`; defaults to `fast`                                           |
+| `performance`              | `auto`, `true`, `false`                                                          | Run a deterministic performance task when a supported entrypoint exists; defaults to `auto`                         |
+| `performance_command`      | JSON string array                                                                | Command argv for non-package performance harnesses; package scripts take precedence                                 |
 | `features`                 | `all` or a list                                                                  | Standard workflow callers                                                                                           |
 | `codeql`                   | `auto`, `true`, `false`                                                          | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled                  |
 | `codeql_rust_shards`       | JSON array of paths                                                              | Rust scan scopes; `["all"]` keeps the safe single full scan                                                         |
@@ -51,10 +53,29 @@ repository manifests and source
 | `git_workflow`             | `direct` (default), `staging-release`                                            | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
 | `merge_strategy`           | `rebase`                                                                         | Promotion merge method for `staging` → `main`; only enforced by the `staging-release` topology                      |
 | `release_merge_strategy`   | `rebase`, `squash` (direct topology only)                                        | Merge method for Release Please version PRs into `main`; release automation fails closed on anything else           |
-| `runner` fields            | GitHub runner names                                                              | Per-workflow runner policy                                                                                          |
+| `runner` fields            | GitHub runner names                                                              | Per-workflow runner policy, including `performance_runner`                                                          |
 
 Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
 `release-pr`, `release`, and `dependabot`.
+
+## Performance validation
+
+The shared Test workflow exposes a deterministic `Performance` job. In JavaScript
+repositories it discovers `performance:check` first and `perf:check` second. Other
+repositories can declare an argv array without shell interpolation:
+
+```yaml
+performance: true
+performance_command: '["python3","scripts/performance_audit.py","--check"]'
+performance_runner: ubuntu-latest
+```
+
+`performance: false` disables discovery. Performance budgets, fixtures, mock
+providers, and live endpoint credentials remain repository-owned. The shared job
+owns checkout, pinned setup, billing controls, concurrency, and artifact upload;
+it uploads `artifacts/performance/**`, `performance-results.json`, or
+`performance-results/**` when present. Network-dependent and post-deployment
+checks should remain separate from this deterministic validation task.
 
 ## OpenCode Security opt-in and opt-out
 

@@ -52,6 +52,29 @@ function readPackage() {
   }
 }
 
+function performanceEnabled() {
+  return configured(config.performance, 'auto') !== 'false'
+}
+
+function performanceCommand() {
+  const raw = configured(config.performance_command, '').trim()
+  if (!raw) return null
+  let command
+  try {
+    command = JSON.parse(raw)
+  } catch {
+    throw new Error('performance_command must be a JSON array of command arguments.')
+  }
+  if (
+    !Array.isArray(command) ||
+    command.length === 0 ||
+    command.some((argument) => typeof argument !== 'string' || argument.length === 0)
+  ) {
+    throw new Error('performance_command must be a non-empty JSON array of non-empty strings.')
+  }
+  return command
+}
+
 /** @param {string} task */
 function validation(task) {
   if (task === 'mode') {
@@ -271,7 +294,14 @@ function relevant(task) {
     integration: ['test:integration'],
     e2e: ['test:e2e', 'e2e'],
     smoke: ['test:smoke', 'smoke'],
+    performance: ['performance:check', 'perf:check'],
   }[task]
+  if (task === 'performance') {
+    if (!performanceEnabled()) return false
+    return Boolean(
+      (scripted && scripted.some((candidate) => hasScript(candidate))) || performanceCommand()
+    )
+  }
   if (scripted && scripted.some((candidate) => hasScript(candidate)))
     return packageManager !== 'none'
   if (task === 'format' || task === 'lint' || task === 'type_check' || task === 'build') {
@@ -432,6 +462,13 @@ function ci(task) {
     const scripted = runScript(['build'])
     if (!scripted && hasLanguage('rust') && hasRootRustProject())
       run('cargo', ['build', '--all-targets'])
+    return
+  }
+  if (task === 'performance') {
+    if (!performanceEnabled()) return
+    if (runScript(['performance:check', 'perf:check'])) return
+    const command = performanceCommand()
+    if (command) run(command[0], command.slice(1))
     return
   }
   /** @type {Record<string, string[]>} */
