@@ -76,7 +76,10 @@ jobs:
     with:
       mode: ${{ needs.mode.outputs.mode }}
       runtime-repository: 0xPlayerOne/code-foundry
-      runtime-ref: ${{ github.sha }}
+      # Pull requests validate the proposed runtime commit. Scheduled and
+      # manually dispatched audits stay on the protected default branch so a
+      # selected branch cannot supply privileged runtime code.
+      runtime-ref: ${{ github.event_name == 'pull_request' && github.sha || 'main' }}
       ci-runner: ubuntu-latest
       test-runner: ubuntu-latest
       unit-runner: ubuntu-slim
