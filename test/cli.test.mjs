@@ -1764,6 +1764,10 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /python-gate/)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
     assert.match(workflow, /^  dependency-review:\s*$/m)
+    // Security executes a caller-selected runtime ref, so its setup action
+    // must remain restore-only and never write a shared default-branch cache.
+    assert.equal((workflow.match(/cache-save: 'false'/g) ?? []).length, 3)
+    assert.doesNotMatch(workflow, /cache-save: \$\{\{ github\.event_name == 'push' \}\}/)
   })
 
   it('calls the OpenCode scanner from a job level, gated on detect outputs', () => {
