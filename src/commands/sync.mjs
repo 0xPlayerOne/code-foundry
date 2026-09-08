@@ -96,7 +96,7 @@ const legacyFiles = [
   '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
-/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean }} SyncOptions */
+/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean, runtimeRef?: string }} SyncOptions */
 
 /** @param {SyncOptions} options */
 export function syncRepository(options) {
@@ -137,7 +137,11 @@ export function syncRepository(options) {
   const features = configured(config.features, 'all')
   const runtimeRepository = configured(config.runtime_repository, '0xPlayerOne/code-foundry')
   const sourceRuntimeRef = `v${readPackageVersion(source)}`
-  let runtimeRef = configured(config.runtime_ref, sourceRuntimeRef)
+  // An explicit runtime ref (fleet upgrade) is authoritative: the rendered
+  // callers and the config pin must agree with it, otherwise an upgrade would
+  // declare one runtime while shipping another.
+  const targetRuntimeRef = options.runtimeRef ?? sourceRuntimeRef
+  let runtimeRef = options.runtimeRef ?? configured(config.runtime_ref, sourceRuntimeRef)
   const toolchain = configured(config.toolchain, 'auto')
   const overlays = overlayPolicy(target, config)
   const rustCodeql = validateRustCodeqlConfig(config)
@@ -177,15 +181,17 @@ export function syncRepository(options) {
   const changed = []
 
   // Keep normal semver pins current during sync while preserving intentional
-  // refs such as `main`, `staging`, or a custom immutable SHA.
+  // refs such as `main`, `staging`, or a custom immutable SHA. An explicit
+  // runtime ref (fleet upgrade) is authoritative and overrides even those so
+  // the rendered callers and the config pin land on the same runtime.
   if (
     existingConfig.runtime_ref &&
-    /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref) &&
-    existingConfig.runtime_ref !== sourceRuntimeRef
+    existingConfig.runtime_ref !== targetRuntimeRef &&
+    (options.runtimeRef !== undefined || /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref))
   ) {
-    runtimeRef = sourceRuntimeRef
+    runtimeRef = targetRuntimeRef
     const current = readFileSync(configPath, 'utf8')
-    const updated = current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${sourceRuntimeRef}`)
+    const updated = current.replace(/^runtime_ref:\s*.*$/m, `runtime_ref: ${targetRuntimeRef}`)
     if (updated !== current) {
       changed.push('.github/code-foundry.yml')
       writeOrReport(configPath, updated, dryRun)
@@ -829,6 +835,103 @@ function mergeGitignore(baseline, existing) {
     : baseline
 }
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isJsonObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** @param {string} source @returns {string} */
+function stripJsonComments(source) {
+  const output = []
+  let inString = false
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    const next = source[index + 1]
+    if (inString) {
+      output.push(char)
+      if (char === '\\' && next !== undefined) {
+        output.push(next)
+        index += 1
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      output.push(char)
+      continue
+    }
+    if (char === '/' && next === '/') {
+      output.push(' ', ' ')
+      index += 2
+      while (index < source.length && source[index] !== '\n' && source[index] !== '\r') {
+        output.push(' ')
+        index += 1
+      }
+      index -= 1
+      continue
+    }
+    if (char === '/' && next === '*') {
+      output.push(' ', ' ')
+      index += 2
+      while (index < source.length) {
+        const commentChar = source[index]
+        const commentNext = source[index + 1]
+        if (commentChar === '*' && commentNext === '/') {
+          output.push(' ', ' ')
+          index += 1
+          break
+        }
+        output.push(commentChar === '\n' || commentChar === '\r' ? commentChar : ' ')
+        index += 1
+      }
+      continue
+    }
+    output.push(char)
+  }
+  return output.join('')
+}
+
+/** @param {string} source @returns {string} */
+function stripJsonTrailingCommas(source) {
+  const output = []
+  let inString = false
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    if (inString) {
+      output.push(char)
+      if (char === '\\') {
+        const escaped = source[index + 1]
+        if (escaped !== undefined) {
+          output.push(escaped)
+          index += 1
+        }
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      output.push(char)
+      continue
+    }
+    if (char === ',') {
+      let nextIndex = index + 1
+      while (/\s/.test(source[nextIndex] ?? '')) nextIndex += 1
+      if (source[nextIndex] === '}' || source[nextIndex] === ']') continue
+    }
+    output.push(char)
+  }
+  return output.join('')
+}
+
+/** @param {string} source @returns {unknown} */
+function parseJsonc(source) {
+  return JSON.parse(stripJsonTrailingCommas(stripJsonComments(source)))
+}
+
 /**
  * Merge a baseline Oxc config (.oxfmtrc.json / .oxlintrc.json) with the
  * consumer's current config. The baseline owns every key it defines, except
@@ -836,7 +939,9 @@ function mergeGitignore(baseline, existing) {
  * migrations or by the repository) are preserved so repeated syncs never
  * churn them. Keys the baseline does not define (e.g. a repository-owned
  * `overrides` block) belong to the consumer and are preserved as well, so
- * a sync never silently drops repository-owned configuration.
+ * a sync never silently drops repository-owned configuration. Consumer
+ * category values are merged last so explicit category overrides survive the
+ * baseline's default category levels.
  *
  * When the merged semantics already match the consumer file, the exact
  * existing bytes are returned untouched: rewriting canonical JSON here
@@ -848,23 +953,28 @@ function mergeIgnorePatternsConfig(baseline, existing) {
   /** @type {Record<string, any>} */
   let consumer = {}
   try {
-    consumer = JSON.parse(existing)
-    if (consumer === null || typeof consumer !== 'object' || Array.isArray(consumer))
-      return baseline
+    const parsed = parseJsonc(existing)
+    if (!isJsonObject(parsed)) return baseline
+    consumer = parsed
   } catch {
     return baseline
   }
   /** @type {Record<string, any>} */
   let config = {}
   try {
-    config = JSON.parse(baseline)
-    if (config === null || typeof config !== 'object' || Array.isArray(config)) return baseline
+    const parsed = parseJsonc(baseline)
+    if (!isJsonObject(parsed)) return baseline
+    config = parsed
   } catch {
     return baseline
   }
   /** @type {Record<string, any>} */
   const merged = { ...config }
   for (const [key, value] of Object.entries(consumer)) {
+    if (key === 'categories' && isJsonObject(merged.categories) && isJsonObject(value)) {
+      merged.categories = { ...merged.categories, ...value }
+      continue
+    }
     if (!(key in merged)) merged[key] = value
   }
   const extra = Array.isArray(consumer.ignorePatterns) ? consumer.ignorePatterns : []
@@ -1014,7 +1124,7 @@ function renderConfigLine(key, value) {
   return needsQuotes ? `${key}: '${value.replace(/'/g, "''")}'` : `${key}: ${value}`
 }
 /** @param {string} root */
-function readPackageVersion(root) {
+export function readPackageVersion(root) {
   try {
     return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version ?? '0.0.0'
   } catch {

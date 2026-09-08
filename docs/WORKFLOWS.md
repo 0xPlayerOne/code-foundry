@@ -100,15 +100,17 @@ succeeds.
 ## Merge methods
 
 The merge audit pins one merge method per transition. `code-foundry doctor`
-and `code-foundry sync` fail closed on any other strategy, and the release
-workflow refuses to run unless its strategy is exactly `rebase`.
+and `code-foundry sync` validate release strategy against the repository
+topology. Staging-release release PRs require `rebase`; direct release PRs
+allow `rebase` or `squash`. The release workflow fails closed on any other
+strategy and never falls back to `merge`.
 
-| Transition                                                 | Merge method                              | Enforcement                                                                                                                                                                |
-| ---------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Feature/fix PR into `main` (direct topology)               | Squash                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
-| Feature/fix PR into `staging` (staging-release topology)   | Squash                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
-| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`)         | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
-| Release Please version PR into `main`                      | Rebase (`release_merge_strategy: rebase`) | Release automation fails closed unless `rebase`; never defaults to `merge`, never uses `--admin`                                                                           |
+| Transition                                                 | Merge method                                                              | Enforcement                                                                                                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature/fix PR into `main` (direct topology)               | Squash                                                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
+| Feature/fix PR into `staging` (staging-release topology)   | Squash                                                                    | Contribution policy; see `CONTRIBUTING.md`                                                                                                                                 |
+| `staging` → `main` promotion PR (staging-release topology) | Rebase (`merge_strategy: rebase`)                                         | Code Foundry creates a one-commit head with `main` as its parent and the exact validated `staging` tree; `merge_strategy` must be `rebase`, and merge commits are rejected |
+| Release Please version PR into `main`                      | Configured (`release_merge_strategy`: rebase default; squash direct only) | Release automation fails closed on unsupported topology/strategy; never defaults to `merge`, never uses `--admin`                                                          |
 
 The promotion rows above apply only to `staging-release`; `direct`
 repositories never generate a promotion caller and `merge_strategy` is not
@@ -123,14 +125,18 @@ additional required checks after earlier ones have passed (for example
 merge policy-blocked. The mergeability poll is bounded and fails closed on
 conflicts or timeout; releases without an automation token remain manual.
 
-Keeping `main` linear — rebase promotions and rebase release PRs — is what
-lets the post-release reconciliation fast-forward or replay `staging` safely
-in the `staging-release` topology. `direct` repositories have no reconciliation
-step: releases merge straight into `main` with `release_merge_strategy: rebase`.
+Keeping `main` linear — rebase promotions and release PRs in the
+`staging-release` topology, or a single-commit rebase/squash release PR in the
+`direct` topology — is what lets the post-release reconciliation fast-forward
+or replay `staging` safely. `direct` repositories have no reconciliation step:
+releases merge straight into `main` with the configured
+`release_merge_strategy`.
 
-Protect `main` with the aggregate `Validation / Gate` and squash-only pull
-requests. In the `staging-release` topology, protect `staging` the same way
-with a single GitHub Actions integration path. That path uses the
+Protect `main` with the aggregate `Validation / Gate`. Require squash for
+feature/fix pull requests and permit the configured Release Please method:
+rebase in `staging-release`, or rebase/squash in `direct`. In the
+`staging-release` topology, protect `staging` the same way with a single GitHub
+Actions integration path. That path uses the
 GitHub Actions integration token by default, and optionally an SSH deploy key
 when `STAGING_DEPLOY_KEY` is configured. The deploy key is required only when
 a personal-repository ruleset for `staging` enforces a Deploy Key bypass for

@@ -575,6 +575,50 @@ describe('code-foundry CLI', () => {
     }
   })
 
+  it('pins rendered callers and the config to an explicit runtime ref', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-runtime-ref-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: v1.3.2\ngit_workflow: direct\nrelease_merge_strategy: rebase\n'
+    )
+
+    const result = syncRepository({
+      target: root,
+      source: process.cwd(),
+      runtimeRef: 'v1.4.1',
+    })
+    assert.ok(result.changed.includes('.github/code-foundry.yml'))
+    const config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
+    assert.match(config, /^runtime_ref: v1\.4\.1$/m)
+    const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(caller, /validation\.yml@v1\.4\.1/)
+    assert.match(caller, /runtime-ref: v1\.4\.1/)
+    assert.match(caller, /^\s+ref: v1\.4\.1$/m)
+    const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(release, /release\.yml@v1\.4\.1/)
+    assert.doesNotMatch(caller, /v1\.3\.2/)
+  })
+
+  it('preserves intentional non-semver runtime refs during plain syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-runtime-ref-keep-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: main\ngit_workflow: direct\nrelease_merge_strategy: rebase\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    assert.match(
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
+      /^runtime_ref: main$/m
+    )
+    const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.doesNotMatch(caller, /validation\.yml@v\d+\.\d+\.\d+/)
+  })
+
   it('allows only an explicit manual release to bypass the billing pause', () => {
     const caller = readFileSync('.github/workflows/release_self-ci.yml', 'utf8')
     const release = readFileSync('.github/workflows/release.yml', 'utf8')
@@ -974,6 +1018,38 @@ describe('code-foundry CLI', () => {
     assert.deepEqual(afterSecond.ignorePatterns, merged.ignorePatterns)
   })
 
+  it('preserves JSONC Oxc configs and consumer category overrides across syncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxlint-jsonc-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+    const oxlint = `{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "off"
+  },
+  // Repository-owned rules remain active after a baseline sync.
+  "rules": {
+    "typescript/no-explicit-any": "error"
+  },
+  "ignorePatterns": ["node_modules/**", "vendor/**",],
+}
+`
+    writeFileSync(join(root, '.oxlintrc.json'), oxlint)
+
+    const first = syncRepository({ target: root, source: process.cwd() })
+
+    // The baseline is semantically covered by the JSONC consumer config, so
+    // sync preserves its comments and formatter-specific bytes.
+    assert.ok(!first.changed.includes('.oxlintrc.json'))
+    assert.equal(readFileSync(join(root, '.oxlintrc.json'), 'utf8'), oxlint)
+    const second = syncRepository({ target: root, source: process.cwd() })
+    assert.deepEqual(second.changed, [])
+  })
+
   it('keeps oxfmt-formatted Oxc configs byte-identical across syncs', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-oxfmt-stable-'))
     mkdirSync(join(root, '.github'), { recursive: true })
@@ -1199,7 +1275,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(createStep, /echo "\$AUTOMATION_TOKEN"|printenv|GITHUB_OUTPUT/)
     assert.doesNotMatch(workflow, /gh pr create/)
   })
-  it('fails closed on a non-rebase release merge strategy and never uses --admin', () => {
+  it('validates topology-specific release merge strategies and never uses --admin', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
     assert.match(workflow, /if \(!releaseConfig\.packages && !releaseConfig\['release-type'\]\)/)
@@ -1211,6 +1287,11 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /release validate-prs/)
     assert.doesNotMatch(workflow, /--admin/)
     assert.match(workflow, /release_merge_strategy must be "rebase"/)
+    assert.match(
+      workflow,
+      /allowedStrategies = gitWorkflow === 'staging-release' \? \['rebase'\] : \['rebase', 'squash'\]/
+    )
+    assert.match(workflow, /or "squash" \(direct topology\)/)
     assert.match(workflow, /release automation never defaults to merge/)
     assert.doesNotMatch(workflow, /release_merge_strategy \|\| config\.merge_strategy/)
     assert.doesNotMatch(workflow, /\|\| 'merge'/)
@@ -1292,7 +1373,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /--admin/)
   })
 
-  it('doctor and sync reject merge strategies outside the audit topology', () => {
+  it('doctor and sync enforce topology-specific merge strategies', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-merge-policy-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
     const captureErrors = (fn) => {
@@ -1347,6 +1428,29 @@ describe('code-foundry CLI', () => {
     assert.throws(
       () => syncRepository({ target: root, source: process.cwd() }),
       /Unsupported release_merge_strategy: squash/
+    )
+
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nrelease_merge_strategy: squash\n'
+    )
+    syncRepository({ target: root, source: process.cwd() })
+    assert.doesNotThrow(() => doctor(root))
+
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nrelease_merge_strategy: merge\n'
+    )
+    const directRelease = captureErrors(() => doctor(root))
+    assert.ok(
+      directRelease.some((message) =>
+        /release_merge_strategy must be "rebase" or "squash" \(direct topology\)/.test(message)
+      ),
+      directRelease.join('\n')
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported release_merge_strategy: merge/
     )
 
     // Release automation is the only consumer of release_merge_strategy;
@@ -1570,6 +1674,17 @@ describe('code-foundry CLI', () => {
     // input stays declared for caller compatibility.
     assert.match(workflow, /for \(const shard of rust \? shards : \[\]\)/)
     assert.match(workflow, /sha256.*slice\(0, 12\)/)
+    assert.match(
+      workflow,
+      /ref: \$\{\{ github\.event_name == 'pull_request' && format\('refs\/pull\/\{0\}\/head', github\.event\.pull_request\.number\) \|\| github\.ref \}\}/
+    )
+    assert.match(
+      workflow,
+      /sha: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/
+    )
+    const action = readFileSync(join(process.cwd(), '.github/actions/codeql/action.yml'), 'utf8')
+    assert.match(action, /ref: \$\{\{ github\.event_name == 'pull_request'/)
+    assert.match(action, /sha: \$\{\{ github\.event_name == 'pull_request'/)
     // An empty matrix while analysis is enabled fails closed instead of
     // silently skipping every analyzer.
     assert.match(workflow, /matrix is empty while analysis is enabled/)

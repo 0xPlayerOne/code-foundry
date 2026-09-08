@@ -24,10 +24,11 @@ topology, feature and fix branches land on `staging` with **squash** merges,
 the `staging` → `main` promotion PR merges with **rebase** (`merge_strategy:
 rebase`), and Release Please version PRs merge with **rebase**
 (`release_merge_strategy: rebase`). In the `direct` topology, feature and fix
-branches squash straight into `main` and only Release Please version PRs merge
-with **rebase**; `merge_strategy` is not enforced. Release automation never
-defaults to a merge method and never merges with `--admin`: the release
-workflow fails closed unless `release_merge_strategy` is exactly `rebase`.
+branches squash straight into `main` and Release Please version PRs use the
+configured `release_merge_strategy` (**rebase** by default, or **squash** when
+opted in). `merge_strategy` is not enforced. Release automation never defaults
+to a merge method and never merges with `--admin`: `staging-release` accepts
+only rebase for release PRs, while `direct` accepts rebase or squash.
 
 The release workflow opens or updates a versioned PR after changes reach
 `main`. Merging that PR updates the changelog, creates the Git tag and GitHub
@@ -45,21 +46,21 @@ release_type: auto # auto, node, python, rust, simple, or none
 npm_publish: false # true only for an npm package
 git_workflow: direct # direct (default) or staging-release
 merge_strategy: rebase # staging-release only: staging -> main promotion PRs rebase
-release_merge_strategy: rebase # required: Release Please version PRs rebase only
+release_merge_strategy: rebase # required; direct also allows squash
 ```
 
 `git_workflow: staging-release` is opt-in; without it, repositories use the
 `direct` flow and no promotion PR exists. When the staging-release topology is
 selected, `merge_strategy` applies to promotion PRs (`staging` into `main`)
 and `release_merge_strategy` to Release Please version PRs; feature PRs into
-`staging` use squash merges. `code-foundry doctor` and `code-foundry sync`
-reject any non-`rebase` `merge_strategy` only when `staging-release` is
-configured, and always reject a non-`rebase` `release_merge_strategy`; the
-release workflow fails closed instead of falling back to `merge`. Both keep
-`main` fully linear, which is what makes the post-release reconciliation
-possible. The final branch trees are inspected before mutation; validated
-main-only changes are inherited by `staging`, while unpromoted staging work is
-replayed on top of `main`.
+`staging` use squash merges. `code-foundry doctor`, `code-foundry sync`, and
+the release workflow reject any non-`rebase` `merge_strategy` or release
+strategy in `staging-release`; `direct` accepts `rebase` or `squash` for
+release PRs and never falls back to `merge`. Both keep `main` fully linear,
+which is what makes the post-release reconciliation possible. The final
+branch trees are inspected before mutation; validated main-only changes are
+inherited by `staging`, while unpromoted staging work is replayed on top of
+`main`.
 
 Promotion never opens a pull request directly from a divergent `staging`
 history. The workflow creates or refreshes a deterministic promotion branch
@@ -135,6 +136,6 @@ already passed).
 
 1. Merge tested changes into `main` (direct: feature PRs; staging-release: promote `staging` into `main`).
 2. Review the generated Release Please PR and changelog.
-3. Merge the release PR with the repository's configured `release_merge_strategy` (**rebase**; the release workflow fails closed on any other value).
+3. Merge the release PR with the repository's configured `release_merge_strategy` (**rebase** by default; **squash** is also valid for direct topology).
 4. Confirm the GitHub Release and any package publication.
 5. staging-release only: synchronize `staging` with the new `main` release commit.
