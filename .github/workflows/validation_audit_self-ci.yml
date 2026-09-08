@@ -1,0 +1,43 @@
+name: Code Foundry Audit
+
+on:
+  schedule:
+    - cron: '31 6 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: code-foundry-audit-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  # Default-branch-capable events must not call the local reusable workflow:
+  # a pull request could otherwise change that workflow and feed an untrusted
+  # runtime ref into steps that can populate the protected branch cache. Use
+  # the protected default branch for both workflow code and runtime code.
+  validation:
+    name: Validation
+    if: vars.CI_BILLING_PAUSED != 'true'
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    uses: 0xPlayerOne/code-foundry/.github/workflows/validation.yml@main
+    with:
+      mode: audit
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: main
+      ci-runner: ubuntu-latest
+      test-runner: ubuntu-latest
+      unit-runner: ubuntu-slim
+      performance-runner: ubuntu-latest
+      security-runner: ubuntu-slim
+      codeql-runner: ubuntu-latest
+      rust-shards: '["all"]'
+      rust-threads: '1'
+      rust-max-parallel: 1
+    secrets:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}

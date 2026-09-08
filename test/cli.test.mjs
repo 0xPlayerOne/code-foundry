@@ -651,6 +651,7 @@ describe('code-foundry CLI', () => {
       'draft-pr_self-ci.yml',
       'opencode-security_self-ci.yml',
       'release-pr_self-ci.yml',
+      'validation_audit_self-ci.yml',
       'validation_self-ci.yml',
     ]) {
       const workflow = readFileSync(`.github/workflows/${file}`, 'utf8')
@@ -3913,18 +3914,26 @@ describe('code-foundry CLI', () => {
     assert.match(unknown.failures[0].result, /Unknown validation mode/)
   })
 
-  it('generates one validation caller with PR, schedule, and dispatch triggers only', () => {
+  it('isolates pull request validation from default-branch audit events', () => {
     const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    const audit = readFileSync('.github/workflows/validation_audit_self-ci.yml', 'utf8')
     assert.doesNotMatch(caller, /^  push:/m)
     assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
-    assert.match(caller, /schedule:/)
-    assert.match(caller, /workflow_dispatch:/)
+    assert.doesNotMatch(caller, /schedule:/)
+    assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
     assert.match(caller, /cancel-in-progress: true/)
+    assert.match(caller, /runtime-ref: \$\{\{ github\.sha \}\}/)
+
+    assert.doesNotMatch(audit, /pull_request:/)
+    assert.match(audit, /schedule:/)
+    assert.match(audit, /workflow_dispatch:/)
     assert.match(
-      caller,
-      /runtime-ref: \$\{\{ github\.event_name == 'pull_request' && github\.sha \|\| 'main' \}\}/
+      audit,
+      /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/validation\.yml@main/
     )
+    assert.match(audit, /^\s+runtime-ref: main$/m)
+    assert.doesNotMatch(audit, /inputs\.runtime-ref|github\.sha|github\.event\.inputs/)
   })
 
   it('classifies the validation mode through the pinned runtime in the caller', () => {
