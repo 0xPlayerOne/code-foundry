@@ -87,15 +87,25 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BUILD_SCRIPT: ${{ inputs.build-script }}
           WRANGLER_VERSION: ${{ inputs.wrangler-version }}
           MODE: ${{ inputs.mode }}
         run: |
           set -euo pipefail
-          npx -y wrangler@"$WRANGLER_VERSION" --version
+          # Bun callers install workspace dependencies with Bun. Keep that
+          # package-manager context for Wrangler's OpenNext auto-delegation;
+          # Wrangler otherwise selects npm/npx and cannot resolve the local
+          # opennextjs-cloudflare binary from a Bun workspace.
+          if [ -n "$BUILD_SCRIPT" ]; then
+            wrangler=(bunx --bun "wrangler@$WRANGLER_VERSION")
+          else
+            wrangler=(npx -y "wrangler@$WRANGLER_VERSION")
+          fi
+          "${wrangler[@]}" --version
           if [ "$MODE" = "production" ]; then
-            npx -y wrangler@"$WRANGLER_VERSION" deploy 2>&1 | tee deploy-output.txt
+            "${wrangler[@]}" deploy 2>&1 | tee deploy-output.txt
           elif [ "$MODE" = "preview" ]; then
-            npx -y wrangler@"$WRANGLER_VERSION" versions upload --message "preview ${GITHUB_SHA::7}" 2>&1 | tee deploy-output.txt
+            "${wrangler[@]}" versions upload --message "preview ${GITHUB_SHA::7}" 2>&1 | tee deploy-output.txt
           else
             echo "Unsupported mode: $MODE (use preview or production)" >&2
             exit 1
