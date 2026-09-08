@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.0...v1.5.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* sync-caller-runtime-pin ([#484](https://github.com/0xPlayerOne/code-foundry/issues/484)) ([e1a216a](https://github.com/0xPlayerOne/code-foundry/commit/e1a216a9dcebd040ef0eacdb20791f360a921908))
+
 ## [1.5.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.4.1...v1.5.0) (2026-09-07)
 
 
