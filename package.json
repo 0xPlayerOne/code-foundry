@@ -43,6 +43,7 @@
     "format:check": "oxfmt --check .",
     "fmt": "oxfmt .",
     "lint": "oxlint",
+    "performance:check": "node scripts/performance-check.mjs",
     "test": "node --test",
     "test:unit": "node --test",
     "type-check": "tsc --project jsconfig.json",

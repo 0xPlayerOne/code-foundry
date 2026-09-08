@@ -39,6 +39,8 @@ htmlcov/
 .coverage*
 .next/
 artifacts/
+performance-results.json
+performance-results/
 cache/
 !.github/actions/cache/
 !.github/actions/cache/action.yml

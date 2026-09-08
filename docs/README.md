@@ -12,6 +12,7 @@ its own names, environments, and deployment details.
 - [Release management](RELEASES.md)
 - [Publishing packages](PUBLISHING.md)
 - [Caching and remote caching](CACHING.md)
+- [Performance budgets and baselines](PERFORMANCE.md)
 
 ## Repository-specific documentation
 
