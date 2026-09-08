@@ -1319,6 +1319,7 @@ describe('code-foundry CLI', () => {
     const draftControlCaller = readFileSync('.github/workflows/draft-control_self-ci.yml', 'utf8')
     assert.match(draftControlCaller, /types:\n\s+- converted_to_draft/)
     assert.match(draftControlCaller, /actions: write/)
+    assert.match(draftControlCaller, /"\$run_id" -lt "\$CURRENT_RUN_ID"/)
     assert.match(draftControlCaller, /\/actions\/runs\/\$run_id\/cancel/)
   })
   it('creates draft PRs through REST and falls back from rejected automation tokens', () => {

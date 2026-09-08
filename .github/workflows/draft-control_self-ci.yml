@@ -33,7 +33,7 @@ jobs:
               --paginate \
               --jq '.workflow_runs[].id' |
               while read -r run_id; do
-                if [ -n "$run_id" ] && [ "$run_id" != "$CURRENT_RUN_ID" ]; then
+                if [ -n "$run_id" ] && [ "$run_id" -lt "$CURRENT_RUN_ID" ]; then
                   gh api \
                     --method POST \
                     "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" \
