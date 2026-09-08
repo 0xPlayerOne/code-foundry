@@ -1623,6 +1623,11 @@ jobs:
     )
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
+    assert.match(
+      contributing,
+      /Exact Release Please pull request targeting `main`.*Full validation: CI, full tests, Security, and CodeQL/
+    )
+    assert.doesNotMatch(contributing, /Release-policy validation only/)
     assert.doesNotMatch(contributing, /staging/i)
     const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
     assert.match(agents, /branch from `main` and target pull requests at `main`/)
@@ -1662,6 +1667,11 @@ jobs:
           rendered.includes('Working branch | `staging`'),
         wf === 'staging-release'
       )
+      assert.match(
+        rendered,
+        /Exact Release Please pull request targeting `main`.*Full validation: CI, full tests, Security, and CodeQL/
+      )
+      assert.doesNotMatch(rendered, /Release-policy validation only/)
       // No unpadded separator line may survive: prettier pads markdown tables.
       assert.doesNotMatch(rendered, /\| --- \|/)
       // Idempotent sync must not churn the canonical document.
