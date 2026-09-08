@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.1...v1.5.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **workflows:** disable security cache writes ([#487](https://github.com/0xPlayerOne/code-foundry/issues/487)) ([f484a9b](https://github.com/0xPlayerOne/code-foundry/commit/f484a9b014b731bc1ae48e4b69a0ac3ae6c07ef6))
+
 ## [1.5.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.0...v1.5.1) (2026-09-08)
 
 
