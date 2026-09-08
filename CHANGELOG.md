@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.4...v1.6.0) (2026-09-08)
+
+
+### Features
+
+* **ci:** add shared performance validation ([#492](https://github.com/0xPlayerOne/code-foundry/issues/492)) ([ef12990](https://github.com/0xPlayerOne/code-foundry/commit/ef1299045b6d67e447def93e2096862cde64bbc7))
+
 ## [1.5.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.3...v1.5.4) (2026-09-08)
 
 
