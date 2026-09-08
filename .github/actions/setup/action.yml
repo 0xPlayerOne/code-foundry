@@ -748,8 +748,9 @@ runs:
           ${{ runner.os }}-rust-build-v2-
     - name: Setup
       if: ${{ steps.profile.outputs.mise_required == 'true' }}
-      uses: jdx/mise-action@v4
+      uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
       with:
+        version: 2026.9.2
         cache: true
         install_args: ${{ steps.profile.outputs.mise_tools }}
     - name: Setup Rust components

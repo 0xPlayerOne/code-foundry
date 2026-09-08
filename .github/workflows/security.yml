@@ -99,7 +99,7 @@ jobs:
         env:
           REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
           REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security profile >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security profile >> "$GITHUB_OUTPUT"
       - id: matrix
         name: Build audit matrix
         env:
@@ -268,21 +268,24 @@ jobs:
             esac
           fi
 
-          printf 'toolchain_mode=%s\n' "$toolchain" >> "$GITHUB_OUTPUT"
-          printf 'package_manager=%s\n' "$package_manager" >> "$GITHUB_OUTPUT"
-          printf 'mise_tools=%s\n' "$mise_tools" >> "$GITHUB_OUTPUT"
+          {
+            printf 'toolchain_mode=%s\n' "$toolchain"
+            printf 'package_manager=%s\n' "$package_manager"
+            printf 'mise_tools=%s\n' "$mise_tools"
+          } >> "$GITHUB_OUTPUT"
       - name: Detect JavaScript
         id: applicability-javascript
         if: matrix.entry.language == 'javascript'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run javascript >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security should_run javascript >> "$GITHUB_OUTPUT"
       - name: Detect Rust
         id: applicability-rust
         if: matrix.entry.language == 'rust'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run rust >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security should_run rust >> "$GITHUB_OUTPUT"
       - name: Setup mise toolchain
         if: steps.audit-toolchain.outputs.mise_tools != ''
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
+          version: 2026.9.2
           cache: false
           install_args: ${{ steps.audit-toolchain.outputs.mise_tools }}
       - name: Setup Node
@@ -316,7 +319,7 @@ jobs:
         if: >-
           matrix.entry.language == 'javascript' &&
           steps.applicability-javascript.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit javascript
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit javascript
       - name: Check Rust
         id: system-rust
         if: >-
@@ -349,7 +352,7 @@ jobs:
         if: >-
           matrix.entry.language == 'rust' &&
           steps.applicability-rust.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit rust
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit rust
       - name: Setup Python
         if: >-
           matrix.entry.language == 'python' &&
@@ -375,4 +378,4 @@ jobs:
           enable-cache: false
       - name: Audit Python dependencies
         if: matrix.entry.language == 'python'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit python
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit python

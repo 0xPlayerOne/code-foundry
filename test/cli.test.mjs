@@ -1138,6 +1138,13 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /production_environment: \$production/)
   })
 
+  it('pins the mise binary version across reusable setup paths', () => {
+    const security = readFileSync('.github/workflows/security.yml', 'utf8')
+    const setup = readFileSync('.github/actions/setup/action.yml', 'utf8')
+    assert.match(security, /uses: jdx\/mise-action@[a-f0-9]{40}[\s\S]*?version: 2026\.9\.2/)
+    assert.match(setup, /uses: jdx\/mise-action@[a-f0-9]{40}[\s\S]*?version: 2026\.9\.2/)
+  })
+
   it('accepts source self-CI workflow names during doctor checks', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-self-ci-doctor-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })

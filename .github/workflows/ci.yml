@@ -71,7 +71,7 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci should_run format >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run format >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -86,7 +86,7 @@ jobs:
           task: format
       - name: Format
         if: steps.applicability.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci format
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci format
 
   lint:
     name: Lint
@@ -115,7 +115,7 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci should_run lint >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run lint >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -125,7 +125,7 @@ jobs:
           task: lint
       - name: Lint
         if: steps.applicability.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci lint
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci lint
 
   type-check:
     name: Type-Check
@@ -154,7 +154,7 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci should_run type_check >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run type_check >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -164,7 +164,7 @@ jobs:
           task: type_check
       - name: Type-Check
         if: steps.applicability.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci type_check
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci type_check
 
   build:
     name: Build
@@ -198,7 +198,7 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci should_run build >> "$GITHUB_OUTPUT"
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
       - name: Setup
         if: steps.applicability.outputs.applicable == 'true'
         uses: ./.github/actions/setup
@@ -208,4 +208,4 @@ jobs:
           task: build
       - name: Build
         if: steps.applicability.outputs.applicable == 'true'
-        run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs ci build
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
