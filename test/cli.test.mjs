@@ -54,7 +54,7 @@ import {
   releaseDeliveryKey,
   selectHookDelivery,
 } from '../src/lib/release-hook.mjs'
-import { doctor } from '../src/commands/doctor.mjs'
+import { doctor, rustManifestPaths } from '../src/commands/doctor.mjs'
 import { doctorGithub } from '../src/lib/github-doctor.mjs'
 import { reconcileRelease } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
@@ -81,6 +81,29 @@ function remoteHeadSha(root, branch) {
   const [sha] = result.stdout.trim().split(/\t/, 1)
   return sha || ''
 }
+
+describe('Rust doctor discovery', () => {
+  it('validates owned nested crates without treating vendored manifests as repositories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-nested-rust-'))
+    mkdirSync(join(root, 'apps/desktop/src-tauri/src'), { recursive: true })
+    mkdirSync(join(root, 'vendor/glib/src'), { recursive: true })
+    writeFileSync(
+      join(root, 'apps/desktop/src-tauri/Cargo.toml'),
+      '[package]\nname = "nested-app"\nversion = "0.1.0"\nedition = "2021"\n'
+    )
+    writeFileSync(
+      join(root, 'apps/desktop/src-tauri/src/lib.rs'),
+      'pub fn ready() -> bool { true }\n'
+    )
+    writeFileSync(
+      join(root, 'vendor/glib/Cargo.toml'),
+      '[package]\nname = "vendored-glib"\nversion = "0.1.0"\nedition = "2021"\n'
+    )
+
+    assert.deepEqual(rustManifestPaths(root), ['apps/desktop/src-tauri/Cargo.toml'])
+    rmSync(root, { recursive: true, force: true })
+  })
+})
 
 /**
  * Assert main is an ancestor of head in the remote-tracked branch refs.
