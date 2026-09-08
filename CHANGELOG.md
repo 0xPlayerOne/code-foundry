@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.4...v1.9.5) (2026-09-08)
+
+
+### Bug Fixes
+
+* **docs:** document draft validation behavior ([#511](https://github.com/0xPlayerOne/code-foundry/issues/511)) ([cfa3d9b](https://github.com/0xPlayerOne/code-foundry/commit/cfa3d9b9e7a6c9a4fe5af0dd858552c412d2d542))
+
 ## [1.9.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.3...v1.9.4) (2026-09-08)
 
 
