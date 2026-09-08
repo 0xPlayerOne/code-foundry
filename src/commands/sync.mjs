@@ -65,6 +65,12 @@ const protectedFiles = new Set([
   'NOTICE',
 ])
 
+const configAwarePolicyFiles = new Set([
+  'AGENTS.md',
+  '.github/CONTRIBUTING.md',
+  '.github/SECURITY.md',
+])
+
 /** @type {Record<string, string>} */
 const licenseFiles = {
   'gpl-3.0-or-later': 'GPL-3.0-or-later.txt',
@@ -206,7 +212,7 @@ export function syncRepository(options) {
     const destination = join(target, file)
     if (!force && protectedFiles.has(file) && existsSync(destination)) {
       const existing = readFileSync(destination, 'utf8')
-      if (!isLegacyManagedDoc(file, existing)) continue
+      if (!isLegacyManagedDoc(file, existing) && !isManagedConfigPolicy(file, existing)) continue
     }
     if (
       (file === 'LICENSE' || file === 'NOTICE') &&
@@ -458,7 +464,7 @@ function shouldInclude(file, languages, features, config) {
   if (workflow === 'release-pr' && !isStagingRelease(config.git_workflow)) return false
   // The tiered validation caller supersedes the legacy ci/test/security/codeql
   // event callers, so legacy feature names keep selecting it.
-  if (workflow === 'validation') {
+  if (workflow === 'validation' || workflow === 'validation-audit') {
     return (
       includesValue(features, 'validation') ||
       LEGACY_GENERATED_CALLERS.some((legacy) => includesValue(features, legacy))
@@ -786,7 +792,10 @@ export function isGeneratedEventCaller(content, stem, runtimeRepository) {
   const text = Buffer.isBuffer(content) ? content.toString('utf8') : String(content)
   if (!/^name:\s*Code Foundry\s*$/m.test(text)) return false
   if (/^\s*(runs-on|steps):/m.test(text)) return false
-  if (!text.includes('runtime-repository:')) return false
+  // Older generated staging-promotion callers predate the explicit runtime
+  // repository input. They are still safe to identify structurally by their
+  // single reusable-workflow job so direct-topology syncs can remove them.
+  if (stem !== 'release-pr' && !text.includes('runtime-repository:')) return false
   if (!new RegExp(`^  ${stem}:`, 'm').test(text)) return false
   return new RegExp(
     `uses:\\s*${escapeRegExp(runtimeRepository)}/\\.github/workflows/${stem}\\.yml@`
@@ -1050,6 +1059,44 @@ function isLegacyManagedDoc(file, content) {
     )
   }
   return false
+}
+
+/**
+ * Config-aware policy documents are generated contracts: a normal sync must
+ * refresh them after branch-topology or validation-policy edits. The marker
+ * owns future copies. Exact scaffold signatures migrate older generated
+ * copies without treating arbitrary repository documentation as managed.
+ * @param {string} file
+ * @param {string} content
+ */
+function isManagedConfigPolicy(file, content) {
+  if (!configAwarePolicyFiles.has(file)) return false
+  if (content.includes('<!-- code-foundry-managed: config-aware-policy -->')) return true
+  if (file === 'AGENTS.md') {
+    return (
+      content.startsWith('# Agent Instructions\n') &&
+      content.includes(
+        'These instructions are the repository-level operating contract for coding agents'
+      ) &&
+      content.includes('They complement `CONTRIBUTING.md`.')
+    )
+  }
+  if (file === '.github/CONTRIBUTING.md') {
+    return (
+      content.startsWith('# Contributing\n') &&
+      content.includes(
+        'This guide is the operating contract for humans and automation contributing to this repository.'
+      ) &&
+      content.includes('[Agent contract](#agent-operating-contract)')
+    )
+  }
+  return (
+    content.startsWith('# Security Policy\n') &&
+    content.includes('## Reporting a Vulnerability') &&
+    content.includes(
+      'This policy covers the code, configuration, dependencies, workflows, and generated artifacts maintained in this repository.'
+    )
+  )
 }
 
 /** @param {string} target @param {string[]} args */

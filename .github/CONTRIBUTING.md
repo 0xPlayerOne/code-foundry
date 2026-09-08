@@ -1,5 +1,7 @@
 # Contributing
 
+<!-- code-foundry-managed: config-aware-policy -->
+
 This guide is the operating contract for humans and automation contributing to this repository.
 
 It applies to TypeScript, Rust, Python, and mixed-language projects using this template.

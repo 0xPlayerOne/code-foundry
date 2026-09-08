@@ -1,5 +1,7 @@
 # Agent Instructions
 
+<!-- code-foundry-managed: config-aware-policy -->
+
 These instructions are the repository-level operating contract for coding agents, including Hermes, OpenCode, and other automation.
 
 They complement `CONTRIBUTING.md`. More specific instructions in nested `AGENTS.md` files and project documentation take precedence for their directory.
