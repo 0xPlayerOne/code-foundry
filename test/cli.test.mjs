@@ -4034,6 +4034,32 @@ describe('code-foundry CLI', () => {
     assert.match(setup, /inputs\.task == 'unit' \|\| inputs\.task == 'performance'/)
   })
 
+  it('enforces source performance budgets and keeps run reports untracked', () => {
+    const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+    const audit = readFileSync('scripts/performance-check.mjs', 'utf8')
+    const ignore = readFileSync('.gitignore', 'utf8')
+    const templateIgnore = readFileSync('src/templates/gitignore', 'utf8')
+
+    assert.equal(packageJson.scripts['performance:check'], 'node scripts/performance-check.mjs')
+    for (const budget of [
+      'cliP95Ms',
+      'runtimeP95Ms',
+      'focusedTestsMs',
+      'ciChecksMs',
+      'runtimeDependencies',
+      'developmentDependencies',
+      'packedBytes',
+      'unpackedBytes',
+      'packedFiles',
+    ]) {
+      assert.match(audit, new RegExp(`${budget}:`))
+    }
+    assert.match(audit, /npm.*pack.*--dry-run.*--json/)
+    assert.match(audit, /cacheIsolated/)
+    assert.match(ignore, /^performance-results\.json$/m)
+    assert.match(templateIgnore, /^performance-results\.json$/m)
+  })
+
   it('requires persist-credentials: false for every external checkout action in workflow YAML', () => {
     const workflowFiles = readdirSync('.github/workflows')
       .filter((file) => file.endsWith('.yml'))

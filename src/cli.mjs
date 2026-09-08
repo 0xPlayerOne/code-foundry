@@ -4,16 +4,6 @@
 import { resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { doctor } from './commands/doctor.mjs'
-import {
-  dispatchPostReleaseHook,
-  reconcileRelease,
-  releaseRecoveryPlan,
-  validateReleasePullRequestDiffs,
-} from './commands/release.mjs'
-import { discoverRepositories, upgradeFleet } from './commands/fleet.mjs'
-import { syncRepository } from './commands/sync.mjs'
-import { manageCiBilling } from './commands/ci.mjs'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
@@ -133,12 +123,13 @@ function parseArgs(argv) {
   return { command, options }
 }
 
-function main() {
+async function main() {
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
 
   if (command === 'init') {
     try {
+      const { syncRepository } = await import('./commands/sync.mjs')
       syncRepository({
         target,
         source: packageRoot,
@@ -151,12 +142,14 @@ function main() {
     }
   } else if (command === 'sync') {
     try {
+      const { syncRepository } = await import('./commands/sync.mjs')
       syncRepository({ target, source: packageRoot, dryRun: options.dryRun, force: options.force })
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
   } else if (command === 'doctor') {
     try {
+      const { doctor } = await import('./commands/doctor.mjs')
       doctor(target, { github: options.github })
     } catch (error) {
       console.error(`code-foundry: ${error instanceof Error ? error.message : String(error)}`)
@@ -164,6 +157,12 @@ function main() {
     }
   } else if (command === 'release') {
     try {
+      const {
+        dispatchPostReleaseHook,
+        reconcileRelease,
+        releaseRecoveryPlan,
+        validateReleasePullRequestDiffs,
+      } = await import('./commands/release.mjs')
       if (options.releaseSubcommand === 'hook') dispatchPostReleaseHook(target, options)
       else if (options.releaseSubcommand === 'validate-prs') validateReleasePullRequestDiffs(target)
       else if (options.releaseSubcommand === 'recovery-plan') releaseRecoveryPlan(target)
@@ -173,6 +172,7 @@ function main() {
     }
   } else if (command === 'fleet') {
     try {
+      const { discoverRepositories, upgradeFleet } = await import('./commands/fleet.mjs')
       const root = resolve(options.root)
       if (options.fleetSubcommand === 'status')
         console.log(JSON.stringify(discoverRepositories(root), null, 2))
@@ -189,6 +189,7 @@ function main() {
     }
   } else if (command === 'ci') {
     try {
+      const { manageCiBilling } = await import('./commands/ci.mjs')
       manageCiBilling(target, /** @type {'pause'|'resume'|'status'} */ (options.ciSubcommand))
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
@@ -196,7 +197,7 @@ function main() {
   } else fail(`unknown command: ${command}`)
 }
 
-main()
+await main()
 
 /** @param {string} root @returns {string} */
 function readPackageVersion(root) {
