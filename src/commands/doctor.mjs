@@ -1,6 +1,6 @@
 // @ts-check
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
@@ -80,11 +80,16 @@ export function doctor(root, options = {}) {
   if (profile.languages.split(',').includes('rust') && !commandExists('cargo'))
     error('Cargo is required for this repository')
   if (profile.languages.split(',').includes('rust')) {
-    const metadata = spawnSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], {
-      cwd: target,
-      stdio: 'ignore',
-    })
-    if (metadata.status !== 0) error('cargo metadata failed')
+    const manifests = rustManifestPaths(target)
+    if (!manifests.length) error('no Cargo.toml was found for the configured Rust language')
+    for (const manifest of manifests) {
+      const metadata = spawnSync(
+        'cargo',
+        ['metadata', '--manifest-path', manifest, '--no-deps', '--format-version', '1'],
+        { cwd: target, stdio: 'ignore' }
+      )
+      if (metadata.status !== 0) error(`cargo metadata failed for ${manifest}`)
+    }
   }
   if (
     profile.languages.split(',').includes('python') &&
@@ -227,6 +232,45 @@ export function doctor(root, options = {}) {
   }
   if (errors) throw new Error(`Repository doctor found ${errors} error(s).`)
   console.log('Repository doctor passed.')
+}
+
+const ignoredRustDirectories = new Set([
+  '.git',
+  '.code-foundry',
+  '.mise',
+  '.next',
+  '.nuxt',
+  '.venv',
+  'node_modules',
+  'target',
+  'vendor',
+])
+
+/**
+ * Return repository-relative Cargo manifests that represent owned Rust code.
+ * A root workspace is authoritative; otherwise validate each nested crate while
+ * excluding dependency/build trees that CodeQL shards should not treat as owned.
+ * @param {string} root
+ * @returns {string[]}
+ */
+export function rustManifestPaths(root) {
+  if (existsSync(join(root, 'Cargo.toml'))) return ['Cargo.toml']
+  /** @type {string[]} */
+  const manifests = []
+  /** @param {string} directory @param {string} relative */
+  function visit(directory, relative) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && ignoredRustDirectories.has(entry.name)) continue
+      const childRelative = relative ? join(relative, entry.name) : entry.name
+      const child = join(directory, entry.name)
+      if (entry.isDirectory()) visit(child, childRelative)
+      else if (entry.name === 'Cargo.toml') manifests.push(childRelative)
+    }
+  }
+  visit(root, '')
+  // Sorting a fresh local collection is deterministic and cannot mutate caller-owned state.
+  // oxlint-disable-next-line unicorn/no-array-sort
+  return manifests.sort()
 }
 
 /** @param {string} root @param {string[]} args */
