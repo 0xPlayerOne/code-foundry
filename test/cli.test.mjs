@@ -2014,6 +2014,9 @@ jobs:
 
   it('documents that GitHub Stacks is outside the merge topology', () => {
     const workflows = readFileSync('docs/WORKFLOWS.md', 'utf8')
+    assert.match(workflows, /Release Please pull requests.*run the full audit tier/s)
+    assert.match(workflows, /without exposing neutral or skipped suite checks/)
+    assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)
     assert.match(workflows, /does\s+not reduce required workflow runs/)
     assert.match(workflows, /not part of this topology/)
