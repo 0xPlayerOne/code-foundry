@@ -589,7 +589,14 @@ describe('code-foundry CLI', () => {
     )
 
     syncRepository({ target: root, source: process.cwd() })
-    for (const file of ['draft-pr', 'opencode-security', 'release-pr', 'release', 'validation']) {
+    for (const file of [
+      'draft-enforcement',
+      'draft-pr',
+      'opencode-security',
+      'release-pr',
+      'release',
+      'validation',
+    ]) {
       const workflow = readFileSync(join(root, `.github/workflows/${file}.yml`), 'utf8')
       const jobs = workflow.slice(workflow.indexOf('\njobs:\n'))
       const jobCount = [...jobs.matchAll(/^  [a-z][a-z0-9-]*:\s*$/gm)].length
@@ -597,6 +604,83 @@ describe('code-foundry CLI', () => {
       assert.ok(jobCount > 0, `${file} has root jobs`)
       assert.ok(guardCount >= jobCount, `${file} guards all ${jobCount} root jobs`)
     }
+  })
+
+  it('renders a trusted draft guard without registering draft-time validation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-draft-guard-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const guard = readFileSync(join(root, '.github/workflows/draft-enforcement.yml'), 'utf8')
+    assert.match(guard, /pull_request_target:/)
+    assert.match(guard, /- opened\n\s+- reopened\n\s+- synchronize/)
+    assert.match(guard, /pull-requests: write/)
+    assert.match(guard, /EVENT_HEAD_SHA/)
+    assert.match(guard, /EVENT_UPDATED_AT/)
+    assert.match(guard, /--method PATCH/)
+    assert.match(guard, /release-please--branches--main--\*/)
+    assert.doesNotMatch(guard, /actions\/checkout/)
+    assert.match(guard, /branches: \[main\]/)
+    assert.doesNotMatch(guard, /branches: \[main, staging\]/)
+    assert.deepEqual(syncRepository({ target: root, source: process.cwd() }).changed, [])
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('merges managed pull-request policy into agent-owned documents on resync', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-agent-policy-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\n'
+    )
+    const localAgentInstructions = '# Local agent instructions\n\nKeep the app portable.  \n'
+    const localContributingGuide = '# Local contributing guide\n\nPreserve the public API.  \n'
+    writeFileSync(join(root, 'AGENTS.md'), localAgentInstructions)
+    writeFileSync(join(root, '.github/CONTRIBUTING.md'), localContributingGuide)
+
+    syncRepository({ target: root, source: process.cwd() })
+    const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+    assert.ok(agents.startsWith(localAgentInstructions))
+    assert.match(agents, /code-foundry-managed: pull-request-policy/)
+    assert.match(agents, /gh pr create --draft/)
+    assert.match(agents, /direct` workflow\. Topic pull requests target `main`/)
+    assert.ok(contributing.startsWith(localContributingGuide))
+    assert.match(contributing, /code-foundry-managed: pull-request-policy/)
+
+    // A later /init- or OpenCode-style rewrite must not prevent sync from
+    // restoring the mandatory policy, and custom surrounding content remains.
+    writeFileSync(join(root, 'AGENTS.md'), '# Reinitialized by another agent\n')
+    writeFileSync(join(root, '.github/CONTRIBUTING.md'), '# Reinitialized by OpenCode\n')
+    const refreshed = syncRepository({ target: root, source: process.cwd() })
+    assert.ok(refreshed.changed.includes('AGENTS.md'))
+    assert.ok(refreshed.changed.includes('.github/CONTRIBUTING.md'))
+    const reinitialized = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    const reinitializedContributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
+    assert.match(reinitialized, /Reinitialized by another agent/)
+    assert.match(reinitialized, /gh pr create --draft/)
+    assert.match(reinitializedContributing, /Reinitialized by OpenCode/)
+    assert.match(reinitializedContributing, /gh pr create --draft/)
+
+    // Topology-specific policy in an existing unmarked file is refreshed too.
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
+        .replace('git_workflow: direct', 'git_workflow: staging-release')
+        .replace('merge_strategy: squash', 'merge_strategy: rebase')
+        .replace('release_merge_strategy: squash', 'release_merge_strategy: rebase')
+    )
+    syncRepository({ target: root, source: process.cwd() })
+    const topology = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    assert.match(topology, /staging-release` workflow\. Topic pull requests target `staging`/)
+    assert.doesNotMatch(topology, /direct` workflow\. Topic pull requests target `main`/)
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('pins rendered callers and the config to an explicit runtime ref', () => {
@@ -672,6 +756,7 @@ describe('code-foundry CLI', () => {
     }
 
     for (const file of [
+      'draft-enforcement_self-ci.yml',
       'draft-pr_self-ci.yml',
       'opencode-security_self-ci.yml',
       'release-pr_self-ci.yml',
@@ -1022,6 +1107,7 @@ describe('code-foundry CLI', () => {
     const oxfmtConfig = JSON.parse(readFileSync(join(root, '.oxfmtrc.json'), 'utf8'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('.github/.code-foundry'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('.github/actions/'))
+    assert.ok(oxfmtConfig.ignorePatterns.includes('plugin.json'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('dist/'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('coverage/'))
     const oxlintConfig = JSON.parse(readFileSync(join(root, '.oxlintrc.json'), 'utf8'))
@@ -1354,6 +1440,16 @@ describe('code-foundry CLI', () => {
     assert.match(draftControlCaller, /actions: write/)
     assert.match(draftControlCaller, /"\$run_id" -lt "\$CURRENT_RUN_ID"/)
     assert.match(draftControlCaller, /\/actions\/runs\/\$run_id\/cancel/)
+
+    const draftGuard = readFileSync('.github/workflows/draft-enforcement_self-ci.yml', 'utf8')
+    assert.match(draftGuard, /pull_request_target:/)
+    assert.match(draftGuard, /- opened\n\s+- reopened\n\s+- synchronize/)
+    assert.match(draftGuard, /pull-requests: write/)
+    assert.match(draftGuard, /EVENT_HEAD_SHA/)
+    assert.match(draftGuard, /EVENT_UPDATED_AT/)
+    assert.match(draftGuard, /--method PATCH/)
+    assert.match(draftGuard, /release-please--branches--main--\*/)
+    assert.doesNotMatch(draftGuard, /actions\/checkout/)
   })
   it('creates draft PRs through REST and falls back from rejected automation tokens', () => {
     const workflow = readFileSync('.github/workflows/draft-pr.yml', 'utf8')
@@ -3027,6 +3123,7 @@ jobs:
         `pr create --repo owner/repo --base staging --head ${branch} --title chore\\(staging\\): reconcile release metadata from main --body`
       )
     )
+    assert.match(log, /pr create[\s\S]*--draft/)
     assert.doesNotMatch(log, /pr edit/)
     assert.equal(state.prs.length, 1)
     assert.equal(state.prs[0].baseRefName, 'staging')

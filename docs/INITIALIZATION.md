@@ -38,7 +38,16 @@ runtime, then run sync.
 
 Sync updates standard Code Foundry files only. It preserves application code,
 authored documentation, existing `.mise.toml` selections, and custom workflows
-such as deployment, search, Slither, or monitoring workflows.
+such as deployment, search, Slither, or monitoring workflows. A missing
+`AGENTS.md` receives the baseline agent contract. If another initializer has
+created an unmarked `AGENTS.md` or `.github/CONTRIBUTING.md`, sync preserves its
+surrounding text and adds or refreshes only the marked Code Foundry policy block;
+this lets later syncs restore mandatory pull-request rules without replacing
+agent-specific instructions. Marked generated policy documents continue to
+receive topology-aware baseline updates, and missing configuration keys are
+added without changing existing values. The Oxfmt baseline also ignores
+`plugin.json`, whose serialization is owned by Release Please; plugin manifest
+semantics remain covered by repository tests rather than a formatter rewrite.
 
 The environment bootstrap enables repository hooks and uses mise only when an
 existing `.mise.toml` is present or `toolchain: mise` is selected. Otherwise it

@@ -150,9 +150,19 @@ export function doctor(root, options = {}) {
   const validationEnabled =
     includesValue(features, 'validation') ||
     ['ci', 'test', 'security', 'codeql'].some((legacy) => includesValue(features, legacy))
-  for (const name of ['validation', 'draft-control', 'draft-pr', 'release-pr', 'release']) {
+  for (const name of [
+    'validation',
+    'draft-control',
+    'draft-enforcement',
+    'draft-pr',
+    'release-pr',
+    'release',
+  ]) {
     if (name === 'release-pr' && workflow !== 'staging-release') continue
-    const enabled = name === 'draft-control' ? validationEnabled : includesValue(features, name)
+    const enabled =
+      name === 'draft-control' || name === 'draft-enforcement'
+        ? validationEnabled
+        : includesValue(features, name)
     const candidates = [
       join(target, `.github/workflows/${name}.yml`),
       join(target, `.github/workflows/${name}_self-ci.yml`),
