@@ -2,13 +2,20 @@
 
 ## Standard triggers
 
-The canonical validation caller uses pull requests plus bounded audit entry
-points; it does not run the same suites again on branch pushes:
+Validation uses two callers so pull-request code and default-branch-capable
+audit events never share a caller-selected runtime ref. The canonical
+`validation.yml` caller handles pull requests only:
 
 ```yaml
 pull_request:
   branches: [main, staging] # staging-release topology
   # direct topology: branches: [main]
+```
+
+The separate `validation-audit.yml` caller is pinned to the configured released
+runtime and handles scheduled and manual audits:
+
+```yaml
 schedule:
   - cron: '31 6 * * 1'
 workflow_dispatch:

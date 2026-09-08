@@ -66,6 +66,7 @@ import {
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
+const sourceRuntimeRef = `v${JSON.parse(readFileSync('package.json', 'utf8')).version}`
 const testEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT')
 )
@@ -3943,6 +3944,35 @@ describe('code-foundry CLI', () => {
       /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/validation\.yml@main/
     )
     assert.match(audit, /^\s+runtime-ref: main$/m)
+    assert.doesNotMatch(audit, /inputs\.runtime-ref|github\.sha|github\.event\.inputs/)
+  })
+
+  it('renders a protected scheduled and manual audit caller for consumers', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-consumer-audit-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      `languages: typescript\npackage_manager: bun\nfeatures: all\nruntime_ref: ${sourceRuntimeRef}\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n`
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+
+    const pullRequest = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    const audit = readFileSync(join(root, '.github/workflows/validation-audit.yml'), 'utf8')
+    assert.doesNotMatch(pullRequest, /schedule:|workflow_dispatch:/)
+    assert.match(audit, /schedule:/)
+    assert.match(audit, /workflow_dispatch:/)
+    assert.doesNotMatch(audit, /pull_request:/)
+    assert.match(
+      audit,
+      new RegExp(
+        `uses: 0xPlayerOne/code-foundry/\\.github/workflows/validation\\.yml@${sourceRuntimeRef.replaceAll('.', '\\.')}`
+      )
+    )
+    assert.match(
+      audit,
+      new RegExp(`^\\s+runtime-ref: ${sourceRuntimeRef.replaceAll('.', '\\.')}\\s*$`, 'm')
+    )
     assert.doesNotMatch(audit, /inputs\.runtime-ref|github\.sha|github\.event\.inputs/)
   })
 

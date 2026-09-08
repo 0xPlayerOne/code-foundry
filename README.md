@@ -35,8 +35,8 @@ contract. For normal updates, edit that file and run `npx code-foundry sync`.
 
 ## What it installs
 
-- Short workflow callers for CI, Test, Security, CodeQL, Draft PR, Release PR,
-  and Release.
+- Short workflow callers for pull-request validation, protected scheduled/manual
+  audits, Draft PR, Release PR, and Release.
 - A deterministic performance lane with ordered command support, stable result
   artifacts, and an optional shared Node package budget profile.
 - A small `.githooks/pre-commit` launcher with language-aware formatting and
