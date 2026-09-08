@@ -1480,6 +1480,15 @@ describe('code-foundry CLI', () => {
 
     const config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
     assert.match(config, /^git_workflow: direct$/m)
+    assert.match(config, /^merge_strategy: squash$/m)
+    assert.match(config, /^release_merge_strategy: squash$/m)
+
+    const releaseConfig = JSON.parse(readFileSync(join(root, 'release-please-config.json'), 'utf8'))
+    assert.equal(releaseConfig['pull-request-title-pattern'], 'chore(main): release ${version}')
+    assert.equal(
+      releaseConfig['group-pull-request-title-pattern'],
+      'chore(main): release ${version}'
+    )
 
     const validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     assert.match(validation, /branches: \[main\]/)
@@ -3157,6 +3166,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /steps\.check-pr\.outputs\.release_only != 'true'/)
     assert.match(workflow, /merge_strategy.*rebase/)
     assert.match(workflow, /never merge a promotion PR with a merge commit/)
+    assert.match(workflow, /--field title="chore\(main\): promote staging to main \(\$DATE\)"/)
     assert.match(workflow, /permissions:\n  contents: write\n  pull-requests: write/)
     assert.match(workflow, /PROMOTION_BRANCH: code-foundry\/promote\/staging-to-main/)
 
@@ -3235,7 +3245,7 @@ describe('code-foundry CLI', () => {
     assert.match(createStep, /--method POST/)
     assert.match(createStep, /--field base=main/)
     assert.match(createStep, /--field head="\$PROMOTION_BRANCH"/)
-    assert.match(createStep, /--field title="Promote staging -> main \(\$DATE\)"/)
+    assert.match(createStep, /--field title="chore\(main\): promote staging to main \(\$DATE\)"/)
     assert.match(createStep, /--field body=@"\$BODY_FILE"/)
     assert.match(createStep, /if gh api "\$\{CREATE_ARGS\[@\]\}"; then/)
     assert.match(createStep, /--field draft=true/)

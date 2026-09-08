@@ -77,8 +77,8 @@ present.
 - `direct` (default): feature branches open pull requests directly into
   `main`. Validation and security scans run on every PR. No `staging` branch
   exists, no promotion caller is generated, and `merge_strategy` is not
-  enforced. Release Please version PRs use `release_merge_strategy` (rebase by
-  default; squash is also allowed). Dependabot updates target `main`. This is
+  enforced. Release Please version PRs squash into `main`
+  (`release_merge_strategy: squash`). Dependabot updates target `main`. This is
   the right choice when a repository has no preview or staging environment.
 - `staging-release` (opt-in): feature branches squash into `staging`, a
   promotion PR rebases validated changes into `main` (`merge_strategy:
