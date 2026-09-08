@@ -24,9 +24,8 @@ topology, feature and fix branches land on `staging` with **squash** merges,
 the `staging` → `main` promotion PR merges with **rebase** (`merge_strategy:
 rebase`), and Release Please version PRs merge with **rebase**
 (`release_merge_strategy: rebase`). In the `direct` topology, feature and fix
-branches squash straight into `main` and Release Please version PRs use the
-configured `release_merge_strategy` (**rebase** by default, or **squash** when
-opted in). `merge_strategy` is not enforced. Release automation never defaults
+branches squash straight into `main` and Release Please version PRs squash into
+`main` (`release_merge_strategy: squash`). `merge_strategy` is not enforced. Release automation never defaults
 to a merge method and never merges with `--admin`: `staging-release` accepts
 only rebase for release PRs, while `direct` accepts rebase or squash.
 
@@ -46,7 +45,7 @@ release_type: auto # auto, node, python, rust, simple, or none
 npm_publish: false # true only for an npm package
 git_workflow: direct # direct (default) or staging-release
 merge_strategy: rebase # staging-release only: staging -> main promotion PRs rebase
-release_merge_strategy: rebase # required; direct also allows squash
+release_merge_strategy: squash # direct default; staging-release requires rebase
 ```
 
 `git_workflow: staging-release` is opt-in; without it, repositories use the
@@ -136,6 +135,6 @@ already passed).
 
 1. Merge tested changes into `main` (direct: feature PRs; staging-release: promote `staging` into `main`).
 2. Review the generated Release Please PR and changelog.
-3. Merge the release PR with the repository's configured `release_merge_strategy` (**rebase** by default; **squash** is also valid for direct topology).
+3. Merge the release PR with squash in the direct topology (`release_merge_strategy: squash`).
 4. Confirm the GitHub Release and any package publication.
 5. staging-release only: synchronize `staging` with the new `main` release commit.

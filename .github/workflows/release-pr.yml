@@ -257,7 +257,7 @@ jobs:
             --method POST
             --field base=main
             --field head="$PROMOTION_BRANCH"
-            --field title="Promote staging -> main ($DATE)"
+            --field title="chore(main): promote staging to main ($DATE)"
             --field body=@"$BODY_FILE"
           )
           if [ "$HAS_AUTOMATION_TOKEN" != true ]; then
