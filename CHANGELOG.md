@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.9...v1.9.10) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** keep OpenCode detection visible ([#523](https://github.com/0xPlayerOne/code-foundry/issues/523)) ([5499db8](https://github.com/0xPlayerOne/code-foundry/commit/5499db818f0b06e98f07173893104c655b2b63c1))
+
 ## [1.9.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.8...v1.9.9) (2026-09-08)
 
 
