@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.5...v1.9.6) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** finalize direct fleet policy ([#513](https://github.com/0xPlayerOne/code-foundry/issues/513)) ([98c59a7](https://github.com/0xPlayerOne/code-foundry/commit/98c59a713f31d0bc5e3b9893434d89dba3257550))
+
 ## [1.9.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.4...v1.9.5) (2026-09-08)
 
 
