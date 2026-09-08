@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.8.0...v1.9.0) (2026-09-08)
+
+
+### Features
+
+* **performance:** standardize package audit contracts ([#501](https://github.com/0xPlayerOne/code-foundry/issues/501)) ([ab30081](https://github.com/0xPlayerOne/code-foundry/commit/ab3008120772922a1affd1e5648a99b97b02e455))
+
 ## [1.8.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.7.0...v1.8.0) (2026-09-08)
 
 
