@@ -129,6 +129,7 @@ runs:
           integration: ['test:integration'],
           e2e: ['test:e2e', 'e2e'],
           smoke: ['test:smoke', 'smoke'],
+          performance: ['performance:check', 'perf:check'],
         }[task] || [];
         const selected = candidates.find((name) => scripts[name]);
         const usesTurbo = Boolean(selected && /\bturbo(?:\s|$)/.test(scripts[selected]));
@@ -441,7 +442,7 @@ runs:
     - name: Install native test libraries
       if: >-
         inputs.install == 'true' &&
-        inputs.task == 'unit' &&
+        (inputs.task == 'unit' || inputs.task == 'performance') &&
         hashFiles('**/package.json') != '' &&
         steps.profile.outputs.javascript == 'true'
       shell: bash

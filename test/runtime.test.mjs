@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -53,6 +53,90 @@ test('smoke execution passes only smoke files to Bun', () => {
   assert.match(args, /test\n/)
   assert.match(args, /tests\/smoke\/health\.test\.ts/)
   assert.doesNotMatch(args, /src\/value\.test\.ts/)
+})
+
+test('performance task discovers and runs the repository check script', () => {
+  const root = fixture()
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  const log = join(root, 'bun-args.log')
+  writeFileSync(join(bin, 'bun'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$BUN_ARGS_LOG"\n')
+  chmodSync(join(bin, 'bun'), 0o755)
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"scripts":{"performance:check":"node perf.mjs"}}\n'
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+
+  const profile = execFileSync(
+    process.execPath,
+    [runtime.pathname, 'ci', 'task_profile', 'performance'],
+    { cwd: root, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: '' } }
+  )
+  assert.match(profile, /applicable=true/)
+
+  execFileSync(process.execPath, [runtime.pathname, 'ci', 'performance'], {
+    cwd: root,
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BUN_ARGS_LOG: log },
+  })
+  assert.equal(readFileSync(log, 'utf8'), 'run\nperformance:check\n')
+})
+
+test('performance task runs configured argv without shell interpolation', () => {
+  const root = fixture()
+  const probe = join(root, 'performance-probe')
+  const log = join(root, 'performance-command.log')
+  writeFileSync(probe, '#!/bin/sh\nprintf "%s\\n" "$@" > "$PERFORMANCE_ARGS_LOG"\n')
+  chmodSync(probe, 0o755)
+  writeFileSync(
+    join(root, '.github', 'code-foundry.yml'),
+    `languages: typescript\npackage_manager: bun\nperformance_command: '${JSON.stringify([probe, '--check', 'two words'])}'\n`
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+
+  execFileSync(process.execPath, [runtime.pathname, 'ci', 'performance'], {
+    cwd: root,
+    env: { ...process.env, PERFORMANCE_ARGS_LOG: log },
+  })
+  assert.equal(readFileSync(log, 'utf8'), '--check\ntwo words\n')
+})
+
+test('performance false disables script and command discovery', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"scripts":{"performance:check":"node perf.mjs"}}\n'
+  )
+  writeFileSync(
+    join(root, '.github', 'code-foundry.yml'),
+    'languages: typescript\npackage_manager: bun\nperformance: false\n'
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+
+  const profile = execFileSync(
+    process.execPath,
+    [runtime.pathname, 'ci', 'task_profile', 'performance'],
+    { cwd: root, encoding: 'utf8', env: { ...process.env, GITHUB_OUTPUT: '' } }
+  )
+  assert.match(profile, /applicable=false/)
+})
+
+test('performance command validation fails closed', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, '.github', 'code-foundry.yml'),
+    'languages: typescript\npackage_manager: bun\nperformance_command: not-json\n'
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, [runtime.pathname, 'ci', 'task_profile', 'performance'], {
+        cwd: root,
+        encoding: 'utf8',
+      }),
+    /performance_command must be a JSON array/
+  )
 })
 
 test('lint skips the eslint fallback without repository-owned setup', () => {

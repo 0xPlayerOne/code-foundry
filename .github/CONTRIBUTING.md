@@ -19,7 +19,7 @@ Agents must follow these rules before changing code:
 3. Preserve user-owned changes. Never discard or overwrite unrelated work.
 4. Branch from `staging` and target pull requests at `staging`; do not work directly on `main`.
 5. Keep the change focused. Do not expand scope without documenting why.
-6. Run the applicable format, lint, type-check, build, unit, integration, E2E, smoke, and security checks.
+6. Run the applicable format, lint, type-check, build, unit, performance, integration, E2E, smoke, and security checks.
 7. Report exact validation results, skipped checks, known limitations, and remaining risks.
 8. Never commit secrets, credentials, local environment files, generated artifacts, or machine-specific paths.
 
