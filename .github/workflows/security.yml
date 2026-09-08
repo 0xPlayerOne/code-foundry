@@ -210,6 +210,61 @@ jobs:
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect audit toolchain
+        id: audit-toolchain
+        shell: bash
+        env:
+          REPO_FOUNDRY_LANGUAGE: ${{ matrix.entry.language }}
+        run: |
+          toolchain=auto
+          configured_toolchain=''
+          configured_package_manager=''
+          if [ -f .github/code-foundry.yml ]; then
+            configured_toolchain="$(awk -F': ' '/^toolchain:/ {print $2; exit}' .github/code-foundry.yml)"
+            configured_package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/code-foundry.yml)"
+          fi
+          [ -n "$configured_toolchain" ] && toolchain="$configured_toolchain"
+          if [ "$toolchain" = auto ] && [ -f .mise.toml ]; then toolchain=mise; fi
+
+          package_manager=none
+          case "$configured_package_manager" in
+            bun|pnpm|yarn|npm|none) package_manager="$configured_package_manager" ;;
+            *)
+              if [ -f bun.lock ] || [ -f bun.lockb ]; then package_manager=bun
+              elif [ -f pnpm-lock.yaml ]; then package_manager=pnpm
+              elif [ -f yarn.lock ]; then package_manager=yarn
+              elif [ -f package-lock.json ]; then package_manager=npm
+              elif [ -f package.json ]; then package_manager=bun
+              fi
+              ;;
+          esac
+
+          mise_tools=''
+          configured_tool() {
+            [ -f .mise.toml ] && grep -Eq "^$1[[:space:]]*=" .mise.toml
+          }
+          add_mise_tool() {
+            configured_tool "$1" || return 0
+            if [ -n "$mise_tools" ]; then mise_tools="$mise_tools $1"; else mise_tools="$1"; fi
+          }
+          if [ "$toolchain" = mise ] && [ -f .mise.toml ]; then
+            case "$REPO_FOUNDRY_LANGUAGE" in
+              javascript)
+                add_mise_tool node
+                [ "$package_manager" = bun ] && add_mise_tool bun
+                ;;
+              python)
+                add_mise_tool python
+                add_mise_tool uv
+                add_mise_tool ruff
+                ;;
+              rust) add_mise_tool rust ;;
+            esac
+          fi
+
+          printf 'toolchain_mode=%s\n' "$toolchain" >> "$GITHUB_OUTPUT"
+          printf 'package_manager=%s\n' "$package_manager" >> "$GITHUB_OUTPUT"
+          printf 'mise_tools=%s\n' "$mise_tools" >> "$GITHUB_OUTPUT"
       - name: Detect JavaScript
         id: applicability-javascript
         if: matrix.entry.language == 'javascript'
@@ -218,17 +273,39 @@ jobs:
         id: applicability-rust
         if: matrix.entry.language == 'rust'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security should_run rust >> "$GITHUB_OUTPUT"
-      - name: Setup JavaScript
+      - name: Setup mise toolchain
+        if: steps.audit-toolchain.outputs.mise_tools != ''
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          cache: false
+          install_args: ${{ steps.audit-toolchain.outputs.mise_tools }}
+      - name: Setup Node
         if: >-
           matrix.entry.language == 'javascript' &&
-          steps.applicability-javascript.outputs.applicable == 'true'
-        uses: ./.github/actions/setup
+          steps.applicability-javascript.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise' &&
+          steps.audit-toolchain.outputs.package_manager != 'bun' &&
+          steps.audit-toolchain.outputs.package_manager != 'none'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          mise-scope: javascript
-          # Security runs execute the caller-selected runtime ref. Restore
-          # caches for speed, but never let that runtime write to a shared
-          # default-branch cache scope.
-          cache-save: 'false'
+          node-version: 24
+      - name: Setup Bun
+        if: >-
+          matrix.entry.language == 'javascript' &&
+          steps.applicability-javascript.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise' &&
+          steps.audit-toolchain.outputs.package_manager == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Enable Corepack
+        if: >-
+          matrix.entry.language == 'javascript' &&
+          steps.applicability-javascript.outputs.applicable == 'true' &&
+          (steps.audit-toolchain.outputs.package_manager == 'pnpm' ||
+          steps.audit-toolchain.outputs.package_manager == 'yarn')
+        shell: bash
+        run: corepack enable
       - name: Audit JavaScript dependencies
         if: >-
           matrix.entry.language == 'javascript' &&
@@ -252,11 +329,9 @@ jobs:
         if: >-
           matrix.entry.language == 'rust' &&
           steps.applicability-rust.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise' &&
           steps.system-rust.outputs.available != 'true'
-        uses: ./.github/actions/setup
-        with:
-          mise-scope: rust
-          cache-save: 'false'
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
       - name: Install cargo-audit
         if: >-
           matrix.entry.language == 'rust' &&
@@ -270,11 +345,28 @@ jobs:
           steps.applicability-rust.outputs.applicable == 'true'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit rust
       - name: Setup Python
-        if: matrix.entry.language == 'python'
-        uses: ./.github/actions/setup
+        if: >-
+          matrix.entry.language == 'python' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          mise-scope: python
-          cache-save: 'false'
+          python-version: '3.13'
+      - name: Check uv
+        id: uv
+        if: matrix.entry.language == 'python'
+        shell: bash
+        run: |
+          if command -v uv >/dev/null 2>&1; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup uv
+        if: matrix.entry.language == 'python' && steps.uv.outputs.available != 'true'
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.11.32
+          enable-cache: false
       - name: Audit Python dependencies
         if: matrix.entry.language == 'python'
         run: node $RUNNER_TEMP/code-foundry/src/runtime.mjs security audit python

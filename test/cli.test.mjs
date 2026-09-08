@@ -1764,10 +1764,21 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /python-gate/)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
     assert.match(workflow, /^  dependency-review:\s*$/m)
-    // Security executes a caller-selected runtime ref, so its setup action
-    // must remain restore-only and never write a shared default-branch cache.
-    assert.equal((workflow.match(/cache-save: 'false'/g) ?? []).length, 3)
-    assert.doesNotMatch(workflow, /cache-save: \$\{\{ github\.event_name == 'push' \}\}/)
+    // Security executes a caller-selected runtime ref, so it must use direct
+    // cache-free tool setup rather than loading the cache-capable general CI
+    // setup action from that runtime.
+    assert.doesNotMatch(workflow, /uses: \.\/\.github\/actions\/setup/)
+    assert.doesNotMatch(workflow, /cache-save:/)
+    for (const action of [
+      'jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c',
+      'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+      'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6',
+      'dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87',
+      'actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1',
+      'astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9',
+    ]) {
+      assert.match(workflow, new RegExp(`uses: ${action}`))
+    }
   })
 
   it('calls the OpenCode scanner from a job level, gated on detect outputs', () => {
@@ -4134,11 +4145,15 @@ describe('code-foundry CLI', () => {
     const approvedRefs = new Set([
       'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
       'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+      'actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1',
       'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
       'github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3',
       'github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3',
       'googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7',
       'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6',
+      'dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87',
+      'jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c',
+      'astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9',
       'taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8',
       'actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294',
       '0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@137698ef3545204af8fad00fc8bd64d663c8122e',
