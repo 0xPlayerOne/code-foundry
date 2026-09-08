@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.6...v1.9.7) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** run full validation on release PRs ([#517](https://github.com/0xPlayerOne/code-foundry/issues/517)) ([01a3555](https://github.com/0xPlayerOne/code-foundry/commit/01a355505d6372dc26e2d917e0e6d566ab25546c))
+* **sync:** remove direct topology staging residue ([#515](https://github.com/0xPlayerOne/code-foundry/issues/515)) ([2765e6a](https://github.com/0xPlayerOne/code-foundry/commit/2765e6a6f66137d37f3d65f8eb8311ba28eeafd7))
+
 ## [1.9.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.5...v1.9.6) (2026-09-08)
 
 
