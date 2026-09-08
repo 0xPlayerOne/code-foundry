@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.12](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.11...v1.9.12) (2026-09-08)
+
+
+### Bug Fixes
+
+* **validation:** run available suites for no-CodeQL releases ([805c470](https://github.com/0xPlayerOne/code-foundry/commit/805c470f188ccfe7410bc9b2f02022d50c68f321))
+
 ## [1.9.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.10...v1.9.11) (2026-09-08)
 
 
