@@ -1107,6 +1107,7 @@ describe('code-foundry CLI', () => {
     const oxfmtConfig = JSON.parse(readFileSync(join(root, '.oxfmtrc.json'), 'utf8'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('.github/.code-foundry'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('.github/actions/'))
+    assert.ok(oxfmtConfig.ignorePatterns.includes('plugin.json'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('dist/'))
     assert.ok(oxfmtConfig.ignorePatterns.includes('coverage/'))
     const oxlintConfig = JSON.parse(readFileSync(join(root, '.oxlintrc.json'), 'utf8'))
