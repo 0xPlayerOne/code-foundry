@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.13](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.12...v1.9.13) (2026-09-08)
+
+
+### Bug Fixes
+
+* **cloudflare:** preserve Bun package manager for OpenNext deploys ([#529](https://github.com/0xPlayerOne/code-foundry/issues/529)) ([2f1bc00](https://github.com/0xPlayerOne/code-foundry/commit/2f1bc000ea28e207e4f12cc7abb5c330cb8448b9))
+
 ## [1.9.12](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.11...v1.9.12) (2026-09-08)
 
 
