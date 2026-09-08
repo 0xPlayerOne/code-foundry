@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.6.0...v1.6.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** isolate default-branch security audits ([5ea0914](https://github.com/0xPlayerOne/code-foundry/commit/5ea09146af9995f16d1ab4e9a73f14a13582da36))
+
 ## [1.6.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.5.4...v1.6.0) (2026-09-08)
 
 
