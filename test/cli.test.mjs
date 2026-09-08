@@ -3920,6 +3920,10 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
     assert.match(caller, /cancel-in-progress: true/)
+    assert.match(
+      caller,
+      /runtime-ref: \$\{\{ github\.event_name == 'pull_request' && github\.sha \|\| 'main' \}\}/
+    )
   })
 
   it('classifies the validation mode through the pinned runtime in the caller', () => {
