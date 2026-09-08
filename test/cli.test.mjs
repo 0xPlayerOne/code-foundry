@@ -705,6 +705,7 @@ describe('code-foundry CLI', () => {
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
     assert.match(orchestrator, /needs: \[ci, test, security\]/)
+    assert.doesNotThrow(() => doctor(root))
     rmSync(root, { recursive: true, force: true })
   })
 

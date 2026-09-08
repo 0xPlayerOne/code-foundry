@@ -153,7 +153,7 @@ export function doctor(root, options = {}) {
       )
     }
     if (
-      !/uses:\s+(?:\.\/\.github\/workflows\/validation\.yml|\S+\/\.github\/workflows\/validation\.yml@)/.test(
+      !/uses:\s+(?:\.\/\.github\/workflows\/validation(?:-no-codeql)?\.yml|\S+\/\.github\/workflows\/validation(?:-no-codeql)?\.yml@)/.test(
         caller
       )
     ) {
