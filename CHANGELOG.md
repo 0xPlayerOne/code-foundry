@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.10.1...v1.11.0) (2026-09-09)
+
+
+### Features
+
+* **validation:** enforce required capabilities, coverage, and task evidence ([#534](https://github.com/0xPlayerOne/code-foundry/issues/534)) ([2e341d9](https://github.com/0xPlayerOne/code-foundry/commit/2e341d94381599f1d78ec1394d42883157b30ea6))
+
 ## [1.10.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.10.0...v1.10.1) (2026-09-09)
 
 
