@@ -21,6 +21,7 @@ on:
         required: false
 
 permissions:
+  attestations: read
   contents: read
 
 jobs:
@@ -84,6 +85,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       actions: read
+      attestations: read
       contents: read
       id-token: write
     env:

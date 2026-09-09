@@ -52,9 +52,15 @@ node src/commands/qualified-publication.mjs stage \
   "$REPORT_NODE_20" "$REPORT_NODE_22" "$REPORT_NODE_24"
 ```
 
-The stage command needs a credential with immutable-setting read and release
-write access; a normal Actions token may lack the administration-read permission.
-No elevated credential is installed or requested automatically.
+The stage command needs a credential with immutable-setting read, release
+write, and attestation-read access; a normal Actions token may lack the
+administration-read permission.
+No elevated credential is installed or requested automatically. The producer must
+also prevent concurrent tag mutation (for example with protected release-tag
+rules and a single tag-scoped producer); GitHub does not offer an atomic
+"publish this draft only if the tag still resolves to SHA" operation. The final
+verification blocks npm if that invariant is violated, but cannot undo an
+already-published immutable release.
 
 Disable the old npm path before
 activating the replacement to prevent racing publishers. None of those production
@@ -64,8 +70,9 @@ Example caller job after its release producer (illustrative job IDs):
 
 ```yaml
 permissions:
-  contents: read
   actions: read
+  attestations: read
+  contents: read
   id-token: write
 jobs:
   publish:
