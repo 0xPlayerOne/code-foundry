@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.11.0...v1.12.0) (2026-09-09)
+
+
+### Features
+
+* **cloudflare:** verify candidates before protected version promotion ([#535](https://github.com/0xPlayerOne/code-foundry/issues/535)) ([5dd9afa](https://github.com/0xPlayerOne/code-foundry/commit/5dd9afa8418718823844875b0aedce926b887184))
+
 ## [1.11.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.10.1...v1.11.0) (2026-09-09)
 
 
