@@ -252,6 +252,16 @@ test('staging consumes verified current-attempt bytes without a rebuild and uses
   assert.match(caller, /uses: \.\/\.github\/workflows\/qualified-foundry-publish.yml/)
   assert.match(caller, /cancel-in-progress: false/)
 })
+test('post-release hook arguments are passed through environment variables', () => {
+  const postRelease = release.split('\n  post-release:\n')[1].split('\n  npm:\n')[0]
+  assert.match(postRelease, /RELEASE_TAG: \$\{\{ needs\.release\.outputs\.tag_name \}\}/)
+  assert.match(postRelease, /POST_RELEASE_WORKFLOW: \$\{\{ steps\.hook\.outputs\.workflow \}\}/)
+  assert.match(postRelease, /POST_RELEASE_MODE: \$\{\{ steps\.hook\.outputs\.mode \}\}/)
+  assert.match(postRelease, /--tag "\$RELEASE_TAG"/)
+  assert.match(postRelease, /--workflow "\$POST_RELEASE_WORKFLOW"/)
+  assert.match(postRelease, /--mode "\$POST_RELEASE_MODE"/)
+  assert.doesNotMatch(postRelease, /--(?:tag|workflow|mode) '\$\{\{/)
+})
 test('failed release creation reruns recover only an exact source-bound draft', () => {
   const recovery = caller.split('\n  recovery:\n')[1].split('\n  stage:\n')[0]
   assert.match(recovery, /needs: \[qualification, release\]/)

@@ -470,9 +470,6 @@ jobs:
       actions: write
       contents: read
     env:
-      # The release job validates the configured automation token and exposes
-      # the selection; the post hook reuses the same selected credential so a
-      # rejected long-lived token is never used after fallback.
       CODE_FOUNDRY_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
       GH_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
     steps:
@@ -511,7 +508,11 @@ jobs:
           NODE
       - name: Dispatch post-release hook once
         if: steps.hook.outputs.enabled == 'true' && steps.hook.outputs.workflow != ''
-        run: node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release hook --tag '${{ needs.release.outputs.tag_name }}' --workflow '${{ steps.hook.outputs.workflow }}' --mode '${{ steps.hook.outputs.mode }}'
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
+          POST_RELEASE_WORKFLOW: ${{ steps.hook.outputs.workflow }}
+          POST_RELEASE_MODE: ${{ steps.hook.outputs.mode }}
+        run: node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release hook --tag "$RELEASE_TAG" --workflow "$POST_RELEASE_WORKFLOW" --mode "$POST_RELEASE_MODE"
       - name: Explain disabled post-release hook
         if: steps.hook.outputs.enabled != 'true' || steps.hook.outputs.workflow == ''
         run: echo 'No post-release workflow configured; artifact delivery is intentionally skipped.'
