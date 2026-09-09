@@ -39,7 +39,10 @@ function fixture(t, files = [], mixed = false) {
     chmodSync(join(root, 'bin', command), 0o755)
   }
   if (mixed) {
-    write('package.json', JSON.stringify({ name: 'fixture', scripts: { 'test:unit': 'owned-unit' } }))
+    write(
+      'package.json',
+      JSON.stringify({ name: 'fixture', scripts: { 'test:unit': 'owned-unit' } })
+    )
     write('pyproject.toml', '[project]\nname = "fixture"\nversion = "0.1.0"\n')
     write('tests/test_value.py')
   }

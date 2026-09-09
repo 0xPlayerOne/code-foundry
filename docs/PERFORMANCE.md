@@ -69,24 +69,11 @@ package footprint described above.
 
 ## Native Rust test batching
 
-The runtime sends all selected targets in each test category to one Cargo
-invocation. A package with both conventional library and binary unit targets
-uses `cargo test --lib --bin <package>`; a category with multiple integration
-targets uses repeated `--test <target>` selectors. Cargo can schedule the
-selected targets' compilation through one dependency graph and jobserver,
-instead of the runtime serially starting Cargo once per target.
+Each Rust test category invokes Cargo once with tracked targets:
+units use `--lib`/`--bin <package>`; integration, E2E and smoke use repeated
+`--test <target>`. Cargo shares setup without competing processes.
 
-This preserves the existing tracked-file discovery, category boundaries,
-default-target fallback, compiler profile, flags and failure propagation.
-It deliberately does not use `--tests` or `--all-targets`, which would broaden
-coverage and repeat targets from other categories. Repository-owned scripts,
-Python checks and required-capability receipts are unchanged. The runtime does
-not infer that a package script replaces another language's checks.
-
-Cargo's existing `CARGO_BUILD_JOBS` or configuration controls compiler
-parallelism. This change does not spawn competing Cargo processes, raise job
-limits, or change test-harness threads. Separate test executables may still run
-serially. See [Cargo test options](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
-Measure cold and warm consumer runs, including compilation, test execution and
-cache transfer, before claiming a wall-clock speedup. Prefer removing repeated
-compilation on the critical path over splitting already short jobs further.
+Discovery, category boundaries, fallback, scripts, Python checks, flags and
+receipts stay unchanged. `--tests`/`--all-targets` stay avoided to prevent
+broader or repeated coverage. Executables may run serially; measure cold/warm
+runs, including compile and cache transfer, before claiming speedup.

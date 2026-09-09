@@ -600,15 +600,13 @@ function ci(task) {
 
   if (hasLanguage('rust') && hasRootRustProject()) {
     if (task === 'unit') {
-      // One Cargo graph lets independent target compilation use Cargo's
-      // jobserver. Keep the exact prior targets and default-target fallback.
+      // Batch exact prior targets through one Cargo graph.
       const args = ['test']
       if (existsSync(resolve(root, 'src/lib.rs'))) args.push('--lib')
       if (existsSync(resolve(root, 'src/main.rs'))) args.push('--bin', packageName())
       run('cargo', args)
     } else {
-      // Repeated --test selectors batch compilation without broadening to
-      // --tests (which also runs unit targets) or racing Cargo target locks.
+      // Keep --test selection narrow; --tests includes unit targets.
       const targets = rustTests.flatMap((file) => {
         const match = file.match(/^tests\/(.+)\.rs$/)
         return match && !match[1].includes('/') ? ['--test', match[1]] : []
