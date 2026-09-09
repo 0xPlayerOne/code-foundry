@@ -4,27 +4,23 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: 'Deploy mode: preview (wrangler versions upload) or production (wrangler deploy).'
+        description: 'Legacy direct deployment. Prefer cloudflare-delivery.yml for verified promotion.'
         required: false
         type: string
         default: preview
       working-directory:
-        description: 'Directory containing the wrangler configuration.'
         required: false
         type: string
         default: '.'
       install-working-directory:
-        description: 'Directory containing bun.lock. Used only when build-script is set.'
         required: false
         type: string
         default: '.'
       build-script:
-        description: 'Optional Bun package script to run before Wrangler deploys.'
         required: false
         type: string
         default: ''
       bun-version:
-        description: 'Bun version used for dependency installation and the optional build.'
         required: false
         type: string
         default: '1.4.0'
@@ -33,11 +29,16 @@ on:
         type: string
         default: ubuntu-latest
       wrangler-version:
+        description: 'local uses installed Wrangler; latest preserves legacy behavior; exact versions are recommended.'
         required: false
         type: string
-        default: 'latest'
+        default: latest
       environment:
-        description: 'GitHub deployment environment. Defaults to Preview/Production based on the mode.'
+        required: false
+        type: string
+        default: ''
+      deployment-url:
+        description: 'Optional HTTPS production URL when Wrangler targets are route patterns.'
         required: false
         type: string
         default: ''
@@ -46,41 +47,81 @@ on:
         required: true
       CLOUDFLARE_ACCOUNT_ID:
         required: true
+    outputs:
+      url:
+        value: ${{ jobs.deploy.outputs.url }}
+      version-id:
+        value: ${{ jobs.deploy.outputs.version-id }}
+      github-deployment-id:
+        value: ${{ jobs.deploy.outputs.github-deployment-id }}
 
 permissions:
   contents: read
   deployments: write
 
+concurrency:
+  group: code-foundry-cloudflare-legacy-${{ github.repository }}-${{ inputs.working-directory }}-${{ inputs.environment || inputs.mode }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Cloudflare Deploy / ${{ inputs.mode }}
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
+      github.event_name != 'pull_request_target' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment || (inputs.mode == 'production' && 'Production' || 'Preview') }}
+      url: ${{ steps.deploy.outputs.url }}
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+      version-id: ${{ steps.deploy.outputs.version-id }}
+      github-deployment-id: ${{ steps.start.outputs.id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-
+      - name: Validate deployment inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+        run: |
+          set -euo pipefail
+          [[ "$MODE" == preview || "$MODE" == production ]]
+          [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" == latest || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
+      - name: Record pending deployment
+        id: start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          ENVIRONMENT: ${{ inputs.environment || (inputs.mode == 'production' && 'Production' || 'Preview') }}
+        run: |
+          set -euo pipefail
+          body=$(jq -n --arg ref "$GITHUB_SHA" --arg environment "$ENVIRONMENT" \
+            --argjson production "$([ "$MODE" = production ] && echo true || echo false)" \
+            '{ref: $ref, environment: $environment, auto_merge: false, production_environment: $production, required_contexts: []}')
+          id=$(gh api "repos/$GITHUB_REPOSITORY/deployments" --input - <<< "$body" --jq .id)
+          [[ "$id" =~ ^[0-9]+$ ]]
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=in_progress -F auto_inactive=false --silent
       - name: Set up Bun
         if: inputs.build-script != ''
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ inputs.bun-version }}
-
       - name: Install dependencies
         if: inputs.build-script != ''
         working-directory: ${{ inputs.install-working-directory }}
         run: bun install --frozen-lockfile
-
       - name: Build Worker
         if: inputs.build-script != ''
         working-directory: ${{ inputs.working-directory }}
         env:
           BUILD_SCRIPT: ${{ inputs.build-script }}
         run: bun run "$BUILD_SCRIPT"
-
       - name: Deploy to Cloudflare
         id: deploy
         working-directory: ${{ inputs.working-directory }}
@@ -90,52 +131,54 @@ jobs:
           BUILD_SCRIPT: ${{ inputs.build-script }}
           WRANGLER_VERSION: ${{ inputs.wrangler-version }}
           MODE: ${{ inputs.mode }}
+          DEPLOYMENT_URL: ${{ inputs.deployment-url }}
         run: |
           set -euo pipefail
-          # Bun callers install workspace dependencies with Bun. Keep that
-          # package-manager context for Wrangler's OpenNext auto-delegation;
-          # Wrangler otherwise selects npm/npx and cannot resolve the local
-          # opennextjs-cloudflare binary from a Bun workspace.
-          if [ -n "$BUILD_SCRIPT" ]; then
+          if [ "$WRANGLER_VERSION" = local ]; then
+            if [ -n "$BUILD_SCRIPT" ]; then
+              wrangler=(bunx --bun --no-install wrangler)
+            else
+              wrangler=(npx --no-install wrangler)
+            fi
+          elif [ -n "$BUILD_SCRIPT" ]; then
             wrangler=(bunx --bun "wrangler@$WRANGLER_VERSION")
           else
             wrangler=(npx -y "wrangler@$WRANGLER_VERSION")
           fi
+          export WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/cloudflare-legacy.ndjson"
+          : > "$WRANGLER_OUTPUT_FILE_PATH"
           "${wrangler[@]}" --version
-          if [ "$MODE" = "production" ]; then
-            "${wrangler[@]}" deploy 2>&1 | tee deploy-output.txt
-          elif [ "$MODE" = "preview" ]; then
-            "${wrangler[@]}" versions upload --message "preview ${GITHUB_SHA::7}" 2>&1 | tee deploy-output.txt
+          if [ "$MODE" = production ]; then
+            "${wrangler[@]}" deploy
           else
-            echo "Unsupported mode: $MODE (use preview or production)" >&2
-            exit 1
+            "${wrangler[@]}" versions upload --message "preview ${GITHUB_SHA::7}"
           fi
-          # Prefer version preview URLs; fall back to the first workers.dev URL.
-          url=$(grep -Eo 'https://[a-zA-Z0-9][a-zA-Z0-9.-]*\.workers\.dev' deploy-output.txt | tail -1 || true)
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      - name: Record GitHub deployment
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs'
+          const records = readFileSync(process.env.WRANGLER_OUTPUT_FILE_PATH, 'utf8').split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line))
+          if (records.some(record => record.type === 'command-failed')) throw new Error('Wrangler command failed')
+          const type = process.env.MODE === 'production' ? 'deploy' : 'version-upload'
+          const matches = records.filter(record => record.type === type)
+          if (matches.length !== 1 || matches[0].version !== 1) throw new Error('Expected one supported structured deployment record')
+          const record = matches[0]
+          if (!/^[0-9a-f-]{36}$/i.test(record.version_id ?? '')) throw new Error('Missing Worker version ID')
+          const value = process.env.MODE === 'preview' ? record.preview_url : (process.env.DEPLOYMENT_URL || record.targets?.find(target => target.startsWith('https://')))
+          if (!value) throw new Error('Missing deployment URL; enable previews or configure deployment-url')
+          const url = new URL(value)
+          if (url.protocol !== 'https:' || url.username || url.password || url.hash) throw new Error('Invalid deployment URL')
+          appendFileSync(process.env.GITHUB_OUTPUT, `url=${url.href}\nversion-id=${record.version_id}\n`)
+          NODE
+      - name: Complete deployment status
+        if: always() && steps.start.outputs.id != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          MODE: ${{ inputs.mode }}
-          ENVIRONMENT_OVERRIDE: ${{ inputs.environment }}
+          DEPLOYMENT_ID: ${{ steps.start.outputs.id }}
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "$MODE" != "production" ] && [ "$MODE" != "preview" ]; then
-            echo "Unsupported mode: $MODE" >&2
-            exit 1
-          fi
-          environment="${ENVIRONMENT_OVERRIDE:-$([ "$MODE" = "production" ] && echo Production || echo Preview)}"
-          body=$(jq -n \
-            --arg ref "$GITHUB_SHA" \
-            --arg environment "$environment" \
-            --argjson production "$([ "$MODE" = "production" ] && echo true || echo false)" \
-            '{ref: $ref, environment: $environment, auto_merge: false, production_environment: $production, required_contexts: []}')
-          deployment=$(gh api "repos/$GITHUB_REPOSITORY/deployments" --input - <<< "$body" --jq .id)
-          status_args=(-f state=success -f description="Cloudflare $MODE deploy (${GITHUB_SHA::7})")
-          if [ -n "$DEPLOY_URL" ]; then
-            status_args+=(-f environment_url="$DEPLOY_URL" -f log_url="$DEPLOY_URL")
-          fi
-          gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses" "${status_args[@]}" --jq .state
-          echo "Recorded $environment deployment for ${GITHUB_SHA::7}"
+          state=failure
+          if [ "$JOB_STATUS" = success ]; then state=success; fi
+          args=(-f "state=$state" -F auto_inactive=false)
+          if [ -n "$DEPLOY_URL" ]; then args+=(-f "environment_url=$DEPLOY_URL"); fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" "${args[@]}" --silent
