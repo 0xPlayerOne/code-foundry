@@ -15,13 +15,22 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 220 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 850 kB | Bound installed footprint                            |
-| Packed files                        |     95 | Detect accidental release contents                   |
+| Packed artifact                     | 240 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 920 kB | Bound installed footprint                            |
+| Packed files                        |    110 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
 That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
+
+The consumer qualification workflow adds the installed-package harness and
+workflow contract to the distributable. The merged candidate measured 221,495
+packed bytes, 853,573 unpacked bytes, and 100 files on Node 24.18.0; the updated
+budgets leave a small margin while continuing to bound package growth. The
+product-quality profiles and consumer qualification workflow measured 232,650
+packed bytes, 890,418 unpacked bytes, and 103 files on Node 24.18.0. The opt-in
+merge queue adds the generated caller and verifier to the published runtime, so
+the unpacked limit is 920 kB while remaining intentionally bounded.
 
 ## v1.6.1 baseline
 

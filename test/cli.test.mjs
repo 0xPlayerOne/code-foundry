@@ -484,6 +484,18 @@ describe('code-foundry CLI', () => {
 
     assert.equal(result.status, 0)
     assert.match(result.stdout, /code-foundry .* initialize and maintain/)
+    assert.match(result.stdout, /release-integrity manifest/)
+  })
+
+  it('exposes release integrity through the CLI', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-cli-integrity-'))
+    mkdirSync(join(root, 'dist'))
+    writeFileSync(join(root, 'dist/app.tgz'), 'artifact')
+
+    const result = run('release-integrity', 'manifest', '--root', root, '--asset', 'dist/app.tgz')
+    assert.equal(result.status, 0)
+    assert.equal(JSON.parse(result.stdout).assets[0].file, 'dist/app.tgz')
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('rejects unknown commands with a useful exit code', () => {
@@ -595,6 +607,7 @@ describe('code-foundry CLI', () => {
       'opencode-security',
       'release-pr',
       'release',
+      'release-integrity',
       'validation',
     ]) {
       const workflow = readFileSync(join(root, `.github/workflows/${file}.yml`), 'utf8')
@@ -710,6 +723,29 @@ describe('code-foundry CLI', () => {
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
     assert.match(release, /release\.yml@v1\.4\.1/)
     assert.doesNotMatch(caller, /v1\.3\.2/)
+  })
+
+  it('installs release integrity as a pinned opt-in event caller', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-integrity-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: release\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const caller = readFileSync(join(root, '.github/workflows/release-integrity.yml'), 'utf8')
+    assert.match(caller, /on:\n  release:\n    types: \[published\]/)
+    assert.match(
+      caller,
+      new RegExp(
+        `uses: 0xPlayerOne/code-foundry/\\.github/workflows/release-integrity\\.yml@${sourceRuntimeRef.replaceAll('.', '\\.')}`
+      )
+    )
+    assert.match(caller, new RegExp(`runtime-ref: ${sourceRuntimeRef.replaceAll('.', '\\.')}`))
+    assert.match(caller, /REQUIRE_IMMUTABLE_RELEASES/)
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('preserves intentional non-semver runtime refs during plain syncs', () => {
@@ -1742,6 +1778,8 @@ jobs:
     assert.match(release, /CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
     assert.match(release, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
     assert.doesNotMatch(release, /STAGING_DEPLOY_KEY/)
+    assert.doesNotMatch(release, /consumer-qualification\.yml/)
+    assert.doesNotMatch(release, /needs: qualification/)
 
     const draft = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
     assert.match(draft, /base: main/)

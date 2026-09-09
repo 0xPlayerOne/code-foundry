@@ -39,6 +39,8 @@ contract. For normal updates, edit that file and run `npx code-foundry sync`.
   audits, Draft Guard, Draft PR, Release PR, and Release.
 - A deterministic performance lane with ordered command support, stable result
   artifacts, and an optional shared Node package budget profile.
+- An opt-in product-quality runner for static sites, web apps, Workers, and
+  published packages.
 - A small `.githooks/pre-commit` launcher with language-aware formatting and
   linting.
 - An optional `.mise.toml`/`mise.lock`, repository profile configuration, and
@@ -127,7 +129,8 @@ first. Either way, Release Please creates a GitHub release after the version
 PR is merged. npm publication is opt-in through `npm_publish: true` and
 supports npm trusted publishing or an `NPM_TOKEN` fallback.
 
-Read [Release management](docs/RELEASES.md) and
+Read [Release management](docs/RELEASES.md),
+[Release integrity and build provenance](docs/release-integrity.md), and
 [Publishing packages](docs/PUBLISHING.md) before enabling automated
 publishing. They are intentionally written with placeholders so they can be
 copied into other repositories.
