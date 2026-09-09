@@ -62,6 +62,11 @@ on:
         required: false
         type: number
         default: 1
+      artifact-prefix:
+        description: Prefix for task receipts; use a unique value when calling this workflow more than once.
+        required: false
+        type: string
+        default: task-result
     secrets:
       TURBO_TOKEN:
         required: false
@@ -86,6 +91,7 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.ci-runner }}
+      artifact-prefix: ${{ inputs.artifact-prefix }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
@@ -101,6 +107,7 @@ jobs:
       unit-runner: ${{ inputs.unit-runner }}
       performance-runner: ${{ inputs.performance-runner }}
       unit-only: ${{ inputs.mode == 'fast' }}
+      artifact-prefix: ${{ inputs.artifact-prefix }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
