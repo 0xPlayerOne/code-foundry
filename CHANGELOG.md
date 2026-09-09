@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.11.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.10.1...v1.11.0) (2026-09-09)
+
+
+### Features
+
+* **validation:** enforce required capabilities, coverage, and task evidence ([#534](https://github.com/0xPlayerOne/code-foundry/issues/534)) ([2e341d9](https://github.com/0xPlayerOne/code-foundry/commit/2e341d94381599f1d78ec1394d42883157b30ea6))
+
+## [1.10.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.10.0...v1.10.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **doctor:** honor shared config and correctly identify npm/Yarn lockfiles ([#533](https://github.com/0xPlayerOne/code-foundry/issues/533)) ([6464409](https://github.com/0xPlayerOne/code-foundry/commit/646440907ad3fc47f63e27b9621c8e0025459964))
+* **validation:** scan default branch with CodeQL on push ([#540](https://github.com/0xPlayerOne/code-foundry/issues/540)) ([98d8241](https://github.com/0xPlayerOne/code-foundry/commit/98d8241522c78e1b6d3f4f29a44053d33888edba))
+
 ## [1.10.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.13...v1.10.0) (2026-09-08)
 
 
