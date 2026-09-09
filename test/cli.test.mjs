@@ -631,7 +631,8 @@ describe('code-foundry CLI', () => {
     syncRepository({ target: root, source: process.cwd() })
     const guard = readFileSync(join(root, '.github/workflows/draft-enforcement.yml'), 'utf8')
     assert.match(guard, /pull_request_target:/)
-    assert.match(guard, /- opened\n\s+- reopened\n\s+- synchronize/)
+    assert.match(guard, /- opened\n\s+- reopened/)
+    assert.doesNotMatch(guard, /types:[\s\S]*- synchronize/)
     assert.match(guard, /pull-requests: write/)
     assert.match(guard, /EVENT_HEAD_SHA/)
     assert.match(guard, /EVENT_UPDATED_AT/)
@@ -714,7 +715,9 @@ describe('code-foundry CLI', () => {
     const config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
     assert.match(config, /^runtime_ref: v1\.4\.1$/m)
     const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    assert.match(caller, /on:\n  push:\n    branches: \[main\]/)
     assert.match(caller, /validation\.yml@v1\.4\.1/)
+    assert.match(caller, /default-branch-codeql:[\s\S]*?codeql\.yml@v1\.4\.1/)
     assert.match(caller, /runtime-ref: v1\.4\.1/)
     assert.match(caller, /^\s+ref: v1\.4\.1$/m)
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
@@ -844,6 +847,8 @@ describe('code-foundry CLI', () => {
         caller,
         /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/validation\.yml@v/
       )
+      assert.doesNotMatch(caller, /^  default-branch-codeql:/m)
+      assert.doesNotMatch(caller, /^  push:/m)
     }
 
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
@@ -1458,13 +1463,23 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(releaseMainCaller, /STAGING_DEPLOY_KEY/)
 
     const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
-    assert.match(validationCaller, /types:\n\s+- ready_for_review/)
-    assert.doesNotMatch(validationCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
-    assert.doesNotMatch(validationCaller, /github\.event\.pull_request\.draft == false/)
+    assert.match(validationCaller, /on:\n  push:\n    branches: \[main\]\n  pull_request:/)
+    assert.match(
+      validationCaller,
+      /default-branch-codeql:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push'/
+    )
+    assert.match(
+      validationCaller,
+      /default-branch-codeql:[\s\S]*?uses: \.\/\.github\/workflows\/codeql\.yml/
+    )
+    assert.match(validationCaller, /types:\n\s+- ready_for_review\n\s+- synchronize/)
+    assert.match(validationCaller, /github\.event\.pull_request\.draft == false/)
+    assert.doesNotMatch(validationCaller, /\s+- (opened|reopened|converted_to_draft)/)
 
     const opencodeCaller = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
-    assert.match(opencodeCaller, /types:\n\s+- ready_for_review/)
-    assert.doesNotMatch(opencodeCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
+    assert.match(opencodeCaller, /types:\n\s+- ready_for_review\n\s+- synchronize/)
+    assert.match(opencodeCaller, /github\.event\.pull_request\.draft == false/)
+    assert.doesNotMatch(opencodeCaller, /\s+- (opened|reopened|converted_to_draft)/)
     assert.match(opencodeCaller, /OPENCODE_SECURITY: \$\{\{ vars\.OPENCODE_SECURITY \}\}/)
     assert.doesNotMatch(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
     assert.doesNotMatch(opencodeCaller, /opencode_security|grep -Eq/)
@@ -1479,7 +1494,8 @@ describe('code-foundry CLI', () => {
 
     const draftGuard = readFileSync('.github/workflows/draft-enforcement_self-ci.yml', 'utf8')
     assert.match(draftGuard, /pull_request_target:/)
-    assert.match(draftGuard, /- opened\n\s+- reopened\n\s+- synchronize/)
+    assert.match(draftGuard, /- opened\n\s+- reopened/)
+    assert.doesNotMatch(draftGuard, /- synchronize/)
     assert.match(draftGuard, /pull-requests: write/)
     assert.match(draftGuard, /EVENT_HEAD_SHA/)
     assert.match(draftGuard, /EVENT_UPDATED_AT/)
@@ -1754,6 +1770,8 @@ jobs:
 
     const validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     assert.match(validation, /branches: \[main\]/)
+    assert.match(validation, /- ready_for_review\n\s+- synchronize/)
+    assert.match(validation, /github\.event\.pull_request\.draft == false/)
     assert.doesNotMatch(validation, /staging/)
 
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
@@ -1906,7 +1924,7 @@ jobs:
     assert.doesNotMatch(contributing, /staging/i)
     assert.match(contributing, /Draft pull request targeting `main`/)
     assert.match(contributing, /Ready pull request targeting `main`/)
-    assert.match(contributing, /mark it ready again after every update/i)
+    assert.match(contributing, /Ready pull requests stay ready when new commits arrive/i)
     const migratedConfig = readFileSync(configPath, 'utf8')
     assert.doesNotMatch(migratedConfig, /^opencode_security:/m)
     assert.doesNotMatch(migratedConfig, /^staging_validation_mode:/m)
@@ -4299,8 +4317,9 @@ jobs:
   it('isolates pull request validation from default-branch audit events', () => {
     const caller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
     const audit = readFileSync('.github/workflows/validation_audit_self-ci.yml', 'utf8')
-    assert.doesNotMatch(caller, /^  push:/m)
+    assert.match(caller, /^  push:\n\s+branches: \[main\]/m)
     assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
+    assert.match(caller, /default-branch-codeql:[\s\S]*?github\.event_name == 'push'/)
     assert.doesNotMatch(caller, /schedule:/)
     assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
@@ -4433,6 +4452,28 @@ jobs:
     assert.match(testWorkflow, /artifacts\/performance\/\*\*/)
     assert.match(setup, /performance: \['performance:check', 'perf:check'\]/)
     assert.match(setup, /inputs\.task == 'unit' \|\| inputs\.task == 'performance'/)
+  })
+
+  it('includes the split runtime executor in every runtime sparse checkout', () => {
+    const workflowFiles = [
+      'ci.yml',
+      'codeql.yml',
+      'security.yml',
+      'test.yml',
+      'validation-no-codeql.yml',
+      'validation.yml',
+      'validation_self-ci.yml',
+    ]
+
+    for (const file of workflowFiles) {
+      const workflow = readFileSync(`.github/workflows/${file}`, 'utf8')
+      const sparseCheckouts = [
+        ...workflow.matchAll(/sparse-checkout:\s*\|([\s\S]*?)(?=\n\s{6}\S|$)/g),
+      ]
+      for (const [, block] of sparseCheckouts) {
+        if (block.includes('src/runtime.mjs')) assert.match(block, /src\/runtime-core\.mjs/)
+      }
+    }
   })
 
   it('enforces source performance budgets and keeps run reports untracked', () => {

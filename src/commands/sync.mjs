@@ -106,7 +106,7 @@ const legacyFiles = [
   '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
-/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean, runtimeRef?: string }} SyncOptions */
+/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean, runtimeRef?: string, configureHooks?: boolean }} SyncOptions */
 
 /** @param {SyncOptions} options */
 export function syncRepository(options) {
@@ -116,6 +116,7 @@ export function syncRepository(options) {
   const force = options.force ?? false
   const configPath = join(target, '.github/code-foundry.yml')
   const existingConfig = readConfig(configPath)
+  const changed = []
   if (!Object.keys(existingConfig).length && !options.init)
     throw new Error('Missing .github/code-foundry.yml; run init first.')
   const defaults = createDefaultConfig(target, source, existingConfig.git_workflow)
@@ -142,12 +143,14 @@ export function syncRepository(options) {
     throw new Error(`Unsupported license: ${license}; use ${supported}.`)
   }
   if (!Object.keys(existingConfig).length) {
+    changed.push('.github/code-foundry.yml')
     writeOrReport(configPath, renderConfig(config), dryRun)
   } else {
     const missing = Object.keys(defaults).filter((key) => !(key in existingConfig))
     const original = readFileSync(configPath, 'utf8')
     const normalized = removeConfigKeys(original, obsoleteConfigKeys).trimEnd()
     if (missing.length || normalized !== original.trimEnd()) {
+      changed.push('.github/code-foundry.yml')
       const additions = missing.map((key) => renderConfigLine(key, defaults[key])).join('\n')
       writeOrReport(configPath, `${normalized}${additions ? `\n${additions}` : ''}\n`, dryRun)
     }
@@ -198,8 +201,6 @@ export function syncRepository(options) {
       )
     }
   }
-  const changed = []
-
   // Keep normal semver pins current during sync while preserving intentional
   // refs such as `main`, `staging`, or a custom immutable SHA. An explicit
   // runtime ref (fleet upgrade) is authoritative and overrides even those so
@@ -416,7 +417,11 @@ export function syncRepository(options) {
       }
     }
   }
-  if (!dryRun && existsSync(join(target, '.githooks/pre-commit'))) {
+  if (
+    !dryRun &&
+    options.configureHooks !== false &&
+    existsSync(join(target, '.githooks/pre-commit'))
+  ) {
     chmodSync(join(target, '.githooks/pre-commit'), 0o755)
     git(target, ['config', 'core.hooksPath', '.githooks'])
   }
@@ -539,12 +544,15 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   let rendered = content.replaceAll(localPrefix, remotePrefix)
   // An explicitly unavailable CodeQL capability selects an orchestrator that
   // omits the job entirely, so GitHub does not register a misleading skipped
-  // check on every pull request. `auto` retains runtime capability detection.
+  // check on every pull request or an unused main-push run. `auto` retains
+  // runtime capability detection.
   if (configured(config.codeql, 'auto') === 'false') {
     rendered = rendered.replaceAll(
       `${remotePrefix}validation.yml`,
       `${remotePrefix}validation-no-codeql.yml`
     )
+    rendered = removeWorkflowBlock(rendered, 'default-branch-codeql')
+    rendered = removeWorkflowBlock(rendered, 'push')
   }
   rendered = rendered.replace(
     new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
@@ -640,6 +648,25 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     if (model) rendered = rendered.replace(/^(\s+model:)\s+.*$/m, `$1 ${model}`)
   }
   return rendered
+}
+
+/**
+ * Remove a root-level YAML block by id while preserving the surrounding file.
+ * This is used for workflow jobs and triggers whose feature is disabled by
+ * configuration.
+ * @param {string} content
+ * @param {string} blockId
+ * @returns {string}
+ */
+function removeWorkflowBlock(content, blockId) {
+  const lines = content.split('\n')
+  const start = lines.findIndex((line) => line === `  ${blockId}:`)
+  if (start === -1) return content
+  let end = start + 1
+  while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
+  lines.splice(start, end - start)
+  if (content.endsWith('\n') && lines.at(-1) !== '') lines.push('')
+  return lines.join('\n')
 }
 
 /**
@@ -781,16 +808,16 @@ const DIRECT_DOC_REPLACEMENTS = {
       '7. Push to the fork and open a pull request targeting `main`.',
     ],
     [
-      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                 |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
-      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
+      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                 |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow plus default-branch CodeQL scan; validation ran on the merged PR     |\n',
+      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `main`                                     | Release workflow plus default-branch CodeQL scan; validation ran on the merged PR     |\n',
     ],
     [
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
       '| Change                    | Target | Merge method                      | Merge gate                              |\n| ------------------------- | ------ | --------------------------------- | --------------------------------------- |\n| Working branch            | `main` | Squash                            | All applicable required checks pass     |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |\n',
     ],
     [
-      'Draft pull requests do not start runner-heavy validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head; converting it back to draft cancels in-flight validation, and no replacement starts until it is ready again.',
-      'Draft pull requests do not start validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.',
+      'Draft pull requests do not start runner-heavy validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft cancels in-flight validation through the lightweight cancellation control.',
+      'Draft pull requests do not start validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft runs only the lightweight cancellation control.',
     ],
     ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],
@@ -1268,7 +1295,11 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     prune_standard: 'false',
     cache_packages: 'auto',
     cache_build: 'auto',
+    required_capabilities: '',
+    coverage_enforcement: 'auto',
     coverage_minimum: '80',
+    coverage_metrics: 'lines',
+    coverage_report: '',
     turbo_remote: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node',
     npm_publish: 'false',

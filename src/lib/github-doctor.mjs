@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { readConfig } from './config.mjs'
 
 /** @param {string} root @returns {{ errors: string[], warnings: string[], details: Record<string, unknown> }} */
 export function doctorGithub(root) {
@@ -305,23 +306,4 @@ function ghJson(args) {
 /** @param {string} command */
 function commandExists(command) {
   return spawnSync(command, ['--version'], { stdio: 'ignore' }).status === 0
-}
-
-/** @param {string} root @returns {Record<string, string>} */
-function readConfig(root) {
-  const file = join(root, '.github/code-foundry.yml')
-  try {
-    return Object.fromEntries(
-      readFileSync(file, 'utf8')
-        .split(/\r?\n/)
-        .flatMap((line) => {
-          const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*?)\s*$/)
-          return match
-            ? [[match[1], match[2].replace(/\s+#.*$/, '').replace(/^['"]|['"]$/g, '')]]
-            : []
-        })
-    )
-  } catch {
-    return {}
-  }
 }

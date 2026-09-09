@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
+import { packageManagerForLockfile } from '../lib/lockfiles.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
 import { isGeneratedEventCaller } from './sync.mjs'
 
@@ -69,9 +70,7 @@ export function doctor(root, options = {}) {
     if (lockfiles.length > 1) error('multiple JavaScript lockfiles found; keep one package manager')
     if (packageJson.packageManager && lockfiles.length) {
       const declared = String(packageJson.packageManager).split('@')[0]
-      const actual = lockfiles[0]?.startsWith('bun')
-        ? 'bun'
-        : lockfiles[0]?.split('-')[0].replace('.yaml', '')
+      const actual = packageManagerForLockfile(lockfiles[0])
       if (actual && declared !== actual)
         error(`packageManager (${declared}) does not match ${actual} lockfile`)
     }
@@ -182,10 +181,15 @@ export function doctor(root, options = {}) {
         'validation caller is missing the Validation job; the Validation / Gate aggregate check cannot form.'
       )
     }
-    if (!/types:\n\s+- ready_for_review/.test(caller)) {
-      error('validation caller must wait for the ready_for_review transition.')
+    if (
+      !/types:\n\s+- ready_for_review\n\s+- synchronize/.test(caller) ||
+      !/github\.event\.pull_request\.draft == false/.test(caller)
+    ) {
+      error(
+        'validation caller must run for ready pull requests and their new commits while ignoring drafts.'
+      )
     }
-    if (/\s+- (?:opened|synchronize|reopened|converted_to_draft)\s*$/.test(caller)) {
+    if (/^\s+- (?:opened|reopened|converted_to_draft)\s*$/m.test(caller)) {
       error('validation caller registers draft-time checks; run code-foundry sync.')
     }
     if (

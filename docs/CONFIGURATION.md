@@ -36,10 +36,15 @@ repository manifests and source
 | `package_manager`          | `bun`, `pnpm`, `yarn`, `npm`, `none`                                             | JavaScript setup                                                                                                    |
 | `toolchain`                | `auto`, `native`, `mise`                                                         | Environment setup policy; defaults to `auto`                                                                        |
 | `staging_validation_mode`  | `fast`, `audit`                                                                  | Staging-release-only validation tier; omitted from direct repositories                                              |
-| `performance`              | `auto`, `true`, `false`                                                          | Run a deterministic performance task when a supported entrypoint exists; defaults to `auto`                         |
+| `performance`              | `auto`, `true`, `false`                                                          | `auto` discovers an optional task; `true` requires a supported performance entrypoint; `false` disables discovery   |
 | `performance_command`      | JSON argv array or array of argv arrays                                          | One or more ordered commands for non-package harnesses; package scripts take precedence                             |
 | `performance_profile`      | empty, `node-package`                                                            | Optional shared package import, memory, archive, and dependency budget harness                                      |
 | `performance_budget_file`  | repository path                                                                  | Budget policy for the shared package harness; defaults to `performance-package-budgets.json`                        |
+| `required_capabilities`    | comma-separated task names                                                       | Fail closed when a required task or `coverage` evidence is unavailable; defaults to none                            |
+| `coverage_enforcement`     | `auto`, `required`, `off`                                                        | Shared coverage report policy; `auto` accepts explicit skips, `required` rejects missing reports, `off` skips it    |
+| `coverage_minimum`         | percentage from `0` to `100`                                                     | Minimum measured coverage; defaults to `80`                                                                         |
+| `coverage_metrics`         | `lines`, `functions`, `branches`, `statements`                                   | Metrics checked by the shared coverage gate; defaults to `lines`                                                    |
+| `coverage_report`          | comma-separated repository paths                                                 | Istanbul summary or LCOV evidence files; defaults to standard coverage paths                                        |
 | `features`                 | `all` or a list                                                                  | Standard workflow callers                                                                                           |
 | `codeql`                   | `auto`, `true`, `false`                                                          | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled                  |
 | `codeql_rust_shards`       | JSON array of paths                                                              | Rust scan scopes; `["all"]` keeps the safe single full scan                                                         |
@@ -174,15 +179,23 @@ shards. Do not split a single crate by arbitrary non-Rust directories: use
 ## Cloudflare Workers deployments
 
 Repositories that deploy to Cloudflare Workers can opt into GitHub-native
-deployments (Preview/Production environments with deployment statuses, like
-Vercel's integration) by adding a small caller for the runtime's reusable
-`cloudflare-deploy.yml` workflow. The workflow runs `wrangler versions upload`
-for pull-request previews and `wrangler deploy` for production, records a
-GitHub deployment plus status with the workers.dev URL, and respects
-`CI_BILLING_PAUSED`. It requires the `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` secrets in the consumer repository. Bun consumers may
-also pass `build-script`, `install-working-directory`, and `bun-version`; the
-runtime installs the frozen lockfile and builds the Worker before invoking
+verified delivery (fixed `Preview`/`Production` environments, candidate
+verification, and version-identity promotion) by adding a caller for the
+runtime's reusable `cloudflare-delivery.yml` workflow. Use the same immutable
+40-character Code Foundry commit SHA for both the reusable workflow ref and
+`runtime-ref`; configure required reviewers and branch restrictions on the
+`Production` environment. The workflow requires the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets in the consumer
+repository. See [Verified Cloudflare delivery](./cloudflare-delivery.md) for
+binding policy, canary, rollback, and evidence requirements.
+
+The legacy `cloudflare-deploy.yml` workflow remains available for direct
+(unverified) deployments. It runs `wrangler versions upload` for previews and
+`wrangler deploy` for production, records a GitHub deployment plus status, and
+respects `CI_BILLING_PAUSED`. Its legacy-compatible Wrangler default is `latest`;
+callers should prefer `local` or provide an exact `wrangler-version` for
+reproducibility. Bun consumers may pass `build-script`, `install-working-directory`, and `bun-version`;
+the runtime installs the frozen lockfile and builds the Worker before invoking
 Wrangler. Bun-backed callers invoke Wrangler through `bunx` so OpenNext's
 production delegation resolves the workspace-local `opennextjs-cloudflare`
 binary; callers without `build-script` retain the npm/npx path.

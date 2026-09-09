@@ -4,25 +4,30 @@
 
 Validation uses two callers so pull-request code and default-branch-capable
 audit events never share a caller-selected runtime ref. The canonical
-`validation.yml` caller handles pull requests only:
+`validation.yml` caller handles pull requests and a lightweight default-branch
+CodeQL lane:
 
 ```yaml
+push:
+  branches: [main] # CodeQL only
 pull_request:
   branches: [main, staging] # staging-release topology
   # direct topology: branches: [main]
 ```
 
-The generated validation caller listens only for `ready_for_review`, so draft
-pull requests register no validation checks and allocate no validation runner.
-A separate lightweight Draft Guard runs from the trusted base branch on
-`opened`, `reopened`, and `synchronize`; it converts ordinary ready pull
-requests back to draft without checking out pull-request code. It rechecks the
-current head and update timestamp before mutating state, so a stale event
-cannot undo a later draft or ready transition. Release Please version heads are
-excluded because the release workflow owns their state. A separate draft-control
-caller listens for `converted_to_draft` and cancels queued or running
-pull-request workflows without creating skipped validation jobs. Marking a pull
-request ready again starts validation for the current head.
+The generated validation caller listens for `ready_for_review` and
+`synchronize`. Its jobs require the pull request to remain ready, so draft
+updates allocate no validation runner; main pushes run only the default-branch
+CodeQL lane, while full validation remains pull-request-only. A separate
+lightweight Draft Guard runs from the trusted base branch on `opened` and
+`reopened`; it converts ordinary ready pull requests back to draft without
+checking out pull-request code. It rechecks the current head and update
+timestamp before mutating state, so a stale event cannot undo a later draft or
+ready transition. Release Please version heads are excluded because the
+release workflow owns their state. A separate draft-control caller listens for
+`converted_to_draft` and cancels queued or running pull-request workflows.
+Marking a pull request ready starts validation, and each new commit on a ready
+pull request starts it again for the current head.
 
 The separate `validation-audit.yml` caller is pinned to the configured released
 runtime and handles scheduled and manual audits:
@@ -44,7 +49,7 @@ Scheduled and manual runs select the audit tier in both topologies. Draft PR
 automation separately listens to supported topic-branch pushes and always
 opens those PRs as drafts. Promotion automation listens to `staging` pushes
 (staging-release only) and also always opens its PR as a draft. Release
-automation listens to `main` pushes.
+automation and default-branch CodeQL listen to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should use the same ready-transition policy.
 
@@ -103,7 +108,7 @@ opt in or out without a code change.
 | Security    | Profile, audits, and public-only Dependency Review                |
 | CodeQL      | GitHub-native code scanning, kept separate from CI                |
 | Draft PR    | Create/update development pull requests                           |
-| Draft Guard | Keep ordinary PRs draft until `ready_for_review`                  |
+| Draft Guard | Keep opened/reopened ordinary PRs draft until `ready_for_review`  |
 | Release PR  | Promote `staging` into `main` (staging-release topology only)     |
 | Release     | Release Please, GitHub release, and optional npm publication      |
 
