@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.22.0...v1.22.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **release:** use shell-safe recovery script ([#574](https://github.com/0xPlayerOne/code-foundry/issues/574)) ([264036f](https://github.com/0xPlayerOne/code-foundry/commit/264036f34afa4d7bc405285918395f2ce075bde3))
+
 ## [1.22.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.3...v1.22.0) (2026-09-09)
 
 
