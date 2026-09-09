@@ -242,15 +242,28 @@ test('all legacy downstream jobs are disabled together during external publicati
 test('staging consumes verified current-attempt bytes without a rebuild and uses a protected job', () => {
   const stage = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
   assert.match(stage, /environment: release/)
-  assert.match(stage, /needs: \[qualification, release\]/)
+  assert.match(stage, /needs: \[qualification, release, recovery\]/)
   assert.match(stage, /needs\.qualification\.outputs\.candidate-artifact/)
   assert.match(stage, /test "\$\(sha256sum .*\)" = "\$CANDIDATE_SHA256"/)
   assert.match(stage, /consumer-qualification-\$GITHUB_RUN_ATTEMPT-node-/)
   assert.match(stage, /qualified-publication.mjs stage/)
   assert.doesNotMatch(stage, /npm (pack|publish|install)|bun install|secrets.NPM_TOKEN/)
-  assert.match(caller, /needs: \[qualification, release, stage\]/)
+  assert.match(caller, /needs: \[qualification, release, recovery, stage\]/)
   assert.match(caller, /uses: \.\/\.github\/workflows\/qualified-foundry-publish.yml/)
   assert.match(caller, /cancel-in-progress: false/)
+})
+test('failed release creation reruns recover only an exact source-bound draft', () => {
+  const recovery = caller.split('\n  recovery:\n')[1].split('\n  stage:\n')[0]
+  assert.match(recovery, /needs: \[qualification, release\]/)
+  assert.match(recovery, /RELEASE_CREATED/)
+  assert.match(recovery, /resolveTagCommit/)
+  assert.match(recovery, /release\.draft !== true/)
+  assert.match(recovery, /sourceSha\.toLowerCase\(\) !== process\.env\.SOURCE_SHA\.toLowerCase\(\)/)
+  assert.match(caller, /needs\.recovery\.outputs\.found == 'true'/)
+  assert.match(
+    caller,
+    /tag: \$\{\{ needs\.release\.outputs\.tag_name \|\| needs\.recovery\.outputs\.tag \}\}/
+  )
 })
 test('immutable activation is checked before release writes and can never toggle the setting', () => {
   const preflight = caller.split('\n  preflight:\n')[1].split('\n  release:\n')[0]

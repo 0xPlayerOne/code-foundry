@@ -147,20 +147,21 @@ serializes the full release workflow and never cancels an active publish; it doe
 not auto-approve environments or bypass branch/review requirements.
 
 Use **Re-run all jobs** for qualification failures; attempts cannot reuse earlier
-reports. Matching assets on an existing draft can resume through the reviewed
-staging command after fresh qualification. Once a release is published, do not
-attempt to re-stage or overwrite it: rerun the verified publisher from the same
-source-bound workflow after confirming npm has not already accepted that version.
-The normal Release Please caller may return `release_created: false` on a retry;
-that is not proof of completed staging/publication. Inspect the retained identity
-receipts. If main has moved or the tag/asset identity differs, stop and use a
-separately reviewed source-bound recovery procedure. Never weaken the SHA guard,
-move an immutable tag, or treat npm's version-conflict response as success.
+reports. If Release Please returns `release_created: false`, the recovery job
+looks up only the package version's draft release, resolves its tag, and resumes
+only when that tag still points to the newly qualified source. Missing or already
+published releases are a safe no-op; malformed, inaccessible, or source-mismatched
+drafts fail closed. Inspect the retained identity receipts. Once a release is
+published, do not attempt to re-stage or overwrite it: rerun the verified
+publisher from the same source-bound workflow after confirming npm has not already
+accepted that version. Never weaken the SHA guard, move an immutable tag, or treat
+npm's version-conflict response as success.
 
-The combined candidate measures 253,095 packed bytes, 969,033 unpacked bytes,
-and 112 files. The cutover raises only the unpacked ceiling from the current
-965,000 to 970,000 bytes for its workflow/configuration/documentation additions;
-packed bytes remain capped at 255,000 and files at 115. Startup/test timing and
-dependency budgets remain unchanged. Re-measure after merging independent workflow
-changes; the added policy does not justify a runtime performance regression or a
-dependency increase.
+After rebasing onto the current main release and task-receipt workflows, the
+combined candidate measures 255,195 packed bytes, 981,678 unpacked bytes, and
+112 files. The cutover caps packed bytes at 260,000 and files at 115, and caps
+unpacked bytes at 990,000 to retain measured headroom for its
+workflow/configuration/documentation additions. Startup/test timing and
+dependency budgets remain unchanged. Re-measure after merging independent
+workflow changes; the added policy does not justify a runtime performance
+regression or a dependency increase.

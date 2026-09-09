@@ -1807,6 +1807,11 @@ jobs:
     assert.doesNotMatch(release, /STAGING_DEPLOY_KEY/)
     assert.doesNotMatch(release, /consumer-qualification\.yml/)
     assert.doesNotMatch(release, /needs: qualification/)
+    for (const job of ['qualification', 'preflight', 'recovery', 'stage', 'publish'])
+      assert.doesNotMatch(release, new RegExp(`^  ${job}:`, 'm'))
+    assert.doesNotMatch(release, /config-file: \.github\/release-please-foundry\.json/)
+    assert.doesNotMatch(release, /defer-publication: true/)
+    assert.match(release, /inputs\['release-while-paused'\]/)
 
     const draft = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
     assert.match(draft, /base: main/)

@@ -85,10 +85,74 @@ jobs:
     secrets:
       CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
 
+  recovery:
+    name: Recover qualified draft identity
+    needs: [qualification, release]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && needs.qualification.result == 'success' && needs.release.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.recover.outputs.found }}
+      tag: ${{ steps.recover.outputs.tag }}
+      sha: ${{ steps.recover.outputs.sha }}
+    env:
+      RELEASE_CREATED: ${{ needs.release.outputs.release_created }}
+      SOURCE_SHA: ${{ needs.qualification.outputs.source-sha }}
+    steps:
+      - name: Checkout trusted recovery runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Locate an exact existing draft
+        id: recover
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+          import { appendFileSync, readFileSync } from "node:fs"
+          import { resolveTagCommit, runGh } from "./src/commands/release-integrity.mjs"
+          const output = process.env.GITHUB_OUTPUT
+          const write = (found, tag = "", sha = "") => appendFileSync(output, `found=${found}\ntag=${tag}\nsha=${sha}\n`)
+          if (process.env.RELEASE_CREATED === "true") {
+            write("false")
+            process.exit(0)
+          }
+          const version = JSON.parse(readFileSync("package.json", "utf8")).version
+          const tag = `v${version}`
+          const endpoint = `repos/${process.env.GITHUB_REPOSITORY}/releases/tags/${encodeURIComponent(tag)}`
+          const response = runGh(["api", "--include", endpoint])
+          if (response.status !== 0 && /HTTP\/\d(?:\.\d)? 404\b/.test(response.stdout)) {
+            write("false")
+            process.exit(0)
+          }
+          if (response.status !== 0) throw new Error("Could not inspect the expected draft release; recovery remains blocked")
+          const separator = response.stdout.indexOf("\r\n\r\n")
+          if (separator < 0) throw new Error("GitHub returned an invalid release response; recovery remains blocked")
+          const release = JSON.parse(response.stdout.slice(separator + 4))
+          if (release.draft !== true) {
+            write("false")
+            process.exit(0)
+          }
+          if (release.tag_name !== tag) throw new Error("Existing draft tag does not match the expected package version")
+          const sourceSha = resolveTagCommit(process.env.GITHUB_REPOSITORY, tag, runGh)
+          if (sourceSha.toLowerCase() !== process.env.SOURCE_SHA.toLowerCase()) throw new Error("Existing draft tag does not match the qualified source SHA")
+          write("true", tag, sourceSha)
+          '
+
   stage:
     name: Stage qualified release
-    needs: [qualification, release]
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.release.outputs.release_created == 'true'
+    needs: [qualification, release, recovery]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: release
@@ -97,8 +161,8 @@ jobs:
       attestations: read
       contents: write
     env:
-      RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
-      RELEASE_SHA: ${{ needs.release.outputs.sha }}
+      RELEASE_TAG: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
+      RELEASE_SHA: ${{ needs.release.outputs.sha || needs.recovery.outputs.sha }}
       SOURCE_SHA: ${{ needs.qualification.outputs.source-sha }}
       PACKAGE: ${{ needs.qualification.outputs.filename }}
       CANDIDATE_SHA256: ${{ needs.qualification.outputs.sha256 }}
@@ -163,8 +227,8 @@ jobs:
 
   publish:
     name: Publish verified package
-    needs: [qualification, release, stage]
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.stage.result == 'success' && needs.release.outputs.release_created == 'true'
+    needs: [qualification, release, recovery, stage]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.stage.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     uses: ./.github/workflows/qualified-foundry-publish.yml
     permissions:
       actions: read
@@ -172,7 +236,7 @@ jobs:
       contents: read
       id-token: write
     with:
-      tag: ${{ needs.release.outputs.tag_name }}
+      tag: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
       asset: ${{ needs.qualification.outputs.filename }}
       environment: npm
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
