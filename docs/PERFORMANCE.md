@@ -15,8 +15,8 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 240 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 900 kB | Bound installed footprint                            |
+| Packed artifact                     | 250 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 930 kB | Bound installed footprint                            |
 | Packed files                        |    110 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
@@ -30,6 +30,10 @@ budgets leave a small margin while continuing to bound package growth. The
 product-quality profiles and consumer qualification workflow measured 232,650
 packed bytes, 890,418 unpacked bytes, and 103 files on Node 24.18.0, so the
 limits remain intentionally bounded while covering both opt-in feature sets.
+The qualified-publication workflow adds the release staging and publication
+contract to the distributable. This candidate measured 238,816 packed bytes,
+915,957 unpacked bytes, and 106 files on Node 24.18.0; the 250 kB and 930 kB
+limits retain a measured margin while covering the required release path.
 
 ## v1.6.1 baseline
 
