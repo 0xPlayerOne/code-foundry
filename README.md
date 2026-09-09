@@ -126,7 +126,8 @@ first. Either way, Release Please creates a GitHub release after the version
 PR is merged. npm publication is opt-in through `npm_publish: true` and
 supports npm trusted publishing or an `NPM_TOKEN` fallback.
 
-Read [Release management](docs/RELEASES.md) and
+Read [Release management](docs/RELEASES.md),
+[Release integrity and build provenance](docs/release-integrity.md), and
 [Publishing packages](docs/PUBLISHING.md) before enabling automated
 publishing. They are intentionally written with placeholders so they can be
 copied into other repositories.

@@ -48,6 +48,7 @@ const standardFiles = [
   '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml',
   '.github/workflows/release.yml',
+  '.github/workflows/release-integrity.yml',
   '.github/workflows/opencode-security.yml',
 ]
 
@@ -487,6 +488,7 @@ function shouldInclude(file, languages, features, config) {
   // without a configuration change. The detect job keeps the scan off unless
   // the configuration or the variable enables it and the API key exists.
   if (file === '.github/workflows/opencode-security.yml') return true
+  if (file === '.github/workflows/release-integrity.yml') return true
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
   if (workflow === 'draft-control' || workflow === 'draft-enforcement') {
     return (

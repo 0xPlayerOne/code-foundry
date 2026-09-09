@@ -595,6 +595,7 @@ describe('code-foundry CLI', () => {
       'opencode-security',
       'release-pr',
       'release',
+      'release-integrity',
       'validation',
     ]) {
       const workflow = readFileSync(join(root, `.github/workflows/${file}.yml`), 'utf8')
@@ -707,6 +708,27 @@ describe('code-foundry CLI', () => {
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
     assert.match(release, /release\.yml@v1\.4\.1/)
     assert.doesNotMatch(caller, /v1\.3\.2/)
+  })
+
+  it('installs release integrity as a pinned opt-in event caller', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-integrity-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: release\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const caller = readFileSync(join(root, '.github/workflows/release-integrity.yml'), 'utf8')
+    assert.match(caller, /on:\n  release:\n    types: \[published\]/)
+    assert.match(
+      caller,
+      /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/release-integrity\.yml@v1\.10\.0/
+    )
+    assert.match(caller, /runtime-ref: v1\.10\.0/)
+    assert.match(caller, /REQUIRE_IMMUTABLE_RELEASES/)
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('preserves intentional non-semver runtime refs during plain syncs', () => {

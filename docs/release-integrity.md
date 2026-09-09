@@ -56,14 +56,32 @@ JSON is emitted on stdout with a nonzero exit status on failure. No credential o
 raw failed API response is included in the report. Selected assets must be
 nonempty regular files inside the repository, without symlink components.
 
-For CI, call `.github/workflows/release-integrity.yml` with `runtime-ref`, `tag`,
-and optional `expected-sha`. Pin the workflow and runtime to the same reviewed tag
-or commit. The job checks out only the selected verifier, not executable code from
-the release under test, needs `contents: read`, preserves evidence, and exposes the
-verified `source-sha`. Downstream publication or consumer steps should explicitly
-`needs` this job when verification is their gate. Code Foundry's own release-event
-caller verifies **after publication**; it cannot prevent a release that has
-already been published. Actual immutability comes from the repository setting.
+`sync` installs an opt-in release-event caller in
+`.github/workflows/release-integrity.yml`; set `REQUIRE_IMMUTABLE_RELEASES=true`
+to enable it. To call the reusable workflow directly, pin both references to the
+same reviewed tag or commit:
+
+```yaml
+permissions:
+  contents: read
+  attestations: read
+jobs:
+  verify-release:
+    uses: 0xPlayerOne/code-foundry/.github/workflows/release-integrity.yml@REVIEWED_REF
+    with:
+      runtime-ref: REVIEWED_REF
+      tag: v1.2.3
+      expected-sha: FULL_40_CHARACTER_COMMIT_SHA
+```
+
+`runtime-ref`, `tag`, and optional `expected-sha` are the workflow inputs. The job
+checks out only the selected verifier, not executable code from the release under
+test, needs `contents: read` and `attestations: read`, preserves evidence, and
+exposes the verified `source-sha`. Downstream publication or consumer steps should
+explicitly `needs` this job when verification is their gate. Code Foundry's own
+release-event caller verifies **after publication**; it cannot prevent a release
+that has already been published. Actual immutability comes from the repository
+setting.
 
 ## Optional build provenance
 
@@ -109,9 +127,10 @@ That command makes no provenance or authenticity claim.
 
 Run `node --test test/release-integrity.test.mjs`. Tests cover exact command
 contracts, signature-verifier invocation, tag identity, asset replacement/path
-safety, settings uncertainty, and pinned/read-only workflow structure using CLI
-fixtures. Real signing and release verification require a supported authenticated
-GitHub environment and must be exercised there before rollout.
+safety, settings uncertainty, sync-installed caller wiring, and pinned/read-only
+workflow structure using CLI fixtures. Real signing and release verification
+require a supported authenticated GitHub environment and must be exercised there
+before rollout.
 
 - https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases
 - https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/verify-release-integrity

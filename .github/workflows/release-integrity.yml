@@ -21,6 +21,7 @@ on:
         value: ${{ jobs.verify.outputs.source-sha }}
 permissions:
   contents: read
+  attestations: read
 jobs:
   verify:
     if: vars.CI_BILLING_PAUSED != 'true'

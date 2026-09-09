@@ -10,6 +10,7 @@ on:
         type: string
 permissions:
   contents: read
+  attestations: read
 jobs:
   verify:
     # Enable only after an administrator enables immutable releases. This is a
