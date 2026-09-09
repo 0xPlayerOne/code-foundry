@@ -23,17 +23,11 @@ The performance workflow disables build-cache reads and writes for this task.
 That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
 
-The consumer qualification workflow adds the installed-package harness and
-workflow contract to the distributable. The merged candidate measured 221,495
-packed bytes, 853,573 unpacked bytes, and 100 files on Node 24.18.0; the updated
-budgets leave a small margin while continuing to bound package growth. The
-product-quality profiles and consumer qualification workflow measured 232,650
-packed bytes, 890,418 unpacked bytes, and 103 files on Node 24.18.0, so the
-limits remain intentionally bounded while covering both opt-in feature sets.
-The qualified-publication workflow adds the release staging and publication
-contract to the distributable. This candidate measured 238,816 packed bytes,
-915,957 unpacked bytes, and 106 files on Node 24.18.0; the 250 kB and 930 kB
-limits retain a measured margin while covering the required release path.
+The merged candidate includes the release-integrity verifier, fleet eligibility,
+consumer qualification harness, product-quality profiles, and qualified
+publication workflow. It measured 243,466 packed bytes, 930,389 unpacked bytes,
+and 109 files on Node 24.18.0; the 250 kB, 945 kB, and 110-file limits retain a
+small margin while continuing to bound package growth.
 
 ## v1.6.1 baseline
 
@@ -67,4 +61,6 @@ pull request, run the complete validation gate, and merge only when the new
 result artifact is available. A Release Please PR then carries the change into
 the next version. Never raise a budget solely to clear CI; include before/after
 measurements and the expected effect on local feedback, hosted runner time,
-package transfer, or installed footprint.
+package transfer, or installed footprint. The current budget covers the measured
+combined release-integrity, fleet, consumer-qualification, and product-quality
+package footprint described above.
