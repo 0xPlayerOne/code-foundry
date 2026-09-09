@@ -9,9 +9,9 @@ remains available for direct deployments and initial provisioning.
 
 ## Adoption
 
-Call the new reusable workflow using a released Code Foundry tag (or a reviewed
-40-character commit SHA during evaluation) and pass the same `runtime-ref`.
-Required inputs are `worker-name`, `artifact-path`, and `verify-command`.
+Call the new reusable workflow using an immutable, reviewed 40-character Code
+Foundry commit SHA and pass the same `runtime-ref`. Required inputs are
+`worker-name`, `artifact-path`, and `verify-command`.
 
 ```yaml
 jobs:
@@ -30,6 +30,7 @@ jobs:
       production-url: https://example.com
       smoke-path: /health
       canary-percentage: 10
+      canary-verify-command: '["bun", "run", "test:canary"]'
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -56,12 +57,20 @@ redirects. Deploy credentials are not supplied to verification steps and are
 removed from the verification child environment as defense in depth. Install any
 browser binaries required by your verification command explicitly.
 
+When `canary-percentage` is below 100, `canary-verify-command` is required and
+must prove that the live request served the candidate rather than the baseline.
+It receives `FOUNDRY_EXPECTED_VERSION_ID`, `FOUNDRY_DEPLOYMENT_ID`, and
+`FOUNDRY_CANARY_PERCENTAGE`; use a version-aware response/header or an equivalent
+application check. A command that only observes a successful production URL is
+not sufficient.
+
 ## Approvals, ordering, and evidence
 
-Create and protect the candidate and production GitHub environments before
-adoption. The workflow references them at the **job** level; naming an environment
-does not itself configure reviewers or branch restrictions. Set up these settings
-separately. Production execution requires the current default-branch commit and
+Create and protect the fixed `Preview` and `Production` GitHub environments
+before adoption. The workflow references them at the **job** level; naming an
+environment does not itself configure reviewers or branch restrictions. Configure
+required reviewers and branch restrictions on `Production` separately. Production
+execution requires the current default-branch commit and
 rechecks freshness after approval and before final promotion. Fork PRs and
 `pull_request_target` execution are excluded.
 
@@ -112,12 +121,14 @@ assert that they differ from declared production identifiers:
 ```json
 {
   "schemaVersion": 1,
-  "isolatedBindings": [{
-    "name": "DB",
-    "type": "d1",
-    "expected": { "id": "preview-database-id" },
-    "production": { "id": "production-database-id" }
-  }]
+  "isolatedBindings": [
+    {
+      "name": "DB",
+      "type": "d1",
+      "expected": { "id": "preview-database-id" },
+      "production": { "id": "production-database-id" }
+    }
+  ]
 }
 ```
 
@@ -132,10 +143,10 @@ own candidate on the production Worker with reviewed read-only tests.
 
 A percentage below 100 first routes that share to the candidate, verifies it,
 and then promotes the same version to 100 and verifies again. A canary requires
-one prior baseline serving 100%. The verification command must provide meaningful
-canary observation: a single load-balanced HTTP request may hit the old version.
-Use the immutable preview URL or version-aware application checks as appropriate;
-set `canary-percentage: 100` when such observability is not configured.
+one prior baseline serving 100% and the explicit `canary-verify-command` above.
+A single load-balanced HTTP request may hit the old version; the command must
+observe the expected version ID. Set `canary-percentage: 100` when that
+version-aware observability is not configured.
 
 Automatic rollback is off. Enabling `auto-rollback` also requires an explicit
 `rollbackSafe: true` policy and both current and prior versions to be free of
@@ -155,11 +166,11 @@ the deployment API intentionally changes version routing only.
 
 `cloudflare-deploy.yml` now uses real job environments, non-cancelling concurrency,
 structured Wrangler output, exact/local Wrangler selection, reusable outputs, and
-in-progress/failure deployment records. Its default changes from `latest` to
-`local`: consumers without installed Wrangler must explicitly pin an exact
-version. A production URL can be supplied with `deployment-url` when API output
-contains only route patterns. It is still a **direct, unverified deployment**;
-adopt `cloudflare-delivery.yml` for candidate verification and guarded promotion.
+in-progress/failure deployment records. Its legacy-compatible default remains
+`latest`; callers should prefer `local` or an exact version for reproducibility. A
+production URL can be supplied with `deployment-url` when API output contains only
+route patterns. It is still a **direct, unverified deployment**; adopt
+`cloudflare-delivery.yml` for candidate verification and guarded promotion.
 
 ## References and testing
 

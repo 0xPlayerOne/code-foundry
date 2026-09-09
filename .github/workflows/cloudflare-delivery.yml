@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       runtime-ref:
-        description: 'Exact Code Foundry tag or SHA containing this workflow and its helper.'
+        description: 'Immutable 40-character Code Foundry commit SHA containing this workflow and its helper.'
         required: true
         type: string
       worker-name:
@@ -52,17 +52,12 @@ on:
         required: false
         type: string
         default: ''
-      candidate-environment:
-        description: 'Protected GitHub environment for uploading and testing the candidate.'
-        required: false
-        type: string
-        default: Preview
-      production-environment:
-        description: 'Protected GitHub environment whose approval precedes traffic promotion.'
-        required: false
-        type: string
-        default: Production
       production-url:
+        required: false
+        type: string
+        default: ''
+      canary-verify-command:
+        description: 'Required JSON argv when canary-percentage is below 100; must prove the live request served this version.'
         required: false
         type: string
         default: ''
@@ -123,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      name: ${{ inputs.candidate-environment }}
+      name: Preview
       url: ${{ steps.upload.outputs.url }}
     defaults:
       run:
@@ -140,7 +135,7 @@ jobs:
       WRANGLER_ENVIRONMENT: ${{ inputs.wrangler-environment }}
       WRANGLER_CONFIG: ${{ inputs.wrangler-config }}
       BINDING_POLICY_FILE: ${{ inputs.binding-policy-file }}
-      DEPLOYMENT_ENVIRONMENT: ${{ inputs.candidate-environment }}
+      DEPLOYMENT_ENVIRONMENT: Preview
     outputs:
       url: ${{ steps.upload.outputs.url }}
       version-id: ${{ steps.upload.outputs.version-id }}
@@ -157,12 +152,21 @@ jobs:
         env:
           RUNTIME_REF: ${{ inputs.runtime-ref }}
           CANARY_PERCENTAGE: ${{ inputs.canary-percentage }}
+          CANARY_VERIFY_COMMAND: ${{ inputs.canary-verify-command }}
           PRODUCTION_URL: ${{ inputs.production-url }}
         run: |
           set -euo pipefail
-          [[ "$RUNTIME_REF" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+|[0-9a-fA-F]{40})$ ]]
+          [[ "$RUNTIME_REF" =~ ^[0-9a-fA-F]{40}$ ]]
           [[ "$FOUNDRY_MODE" == preview || "$FOUNDRY_MODE" == production ]]
-          node -e 'const p = Number(process.env.CANARY_PERCENTAGE); if (!Number.isFinite(p) || p < 0.01 || p > 100 || (p < 100 && p > 99.99)) process.exit(1)'
+          node --input-type=module <<'NODE'
+          const percentage = Number(process.env.CANARY_PERCENTAGE)
+          if (!Number.isFinite(percentage) || percentage < 0.01 || percentage > 100 || (percentage < 100 && percentage > 99.99)) process.exit(1)
+          if (process.env.FOUNDRY_MODE === 'production' && percentage < 100) {
+            let argv
+            try { argv = JSON.parse(process.env.CANARY_VERIFY_COMMAND ?? '') } catch { process.exit(1) }
+            if (!Array.isArray(argv) || !argv.length || argv.some((arg) => typeof arg !== 'string' || !arg.length || arg.includes('\0'))) process.exit(1)
+          }
+          NODE
           if [[ "$FOUNDRY_MODE" == production ]]; then
             [[ "$GITHUB_REF" == "refs/heads/$FOUNDRY_DEFAULT_BRANCH" ]]
             [[ "$PRODUCTION_URL" == https://* ]]
@@ -232,11 +236,13 @@ jobs:
 
   promote:
     needs: candidate
-    if: inputs.mode == 'production' && needs.candidate.outputs.verified == 'true'
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
+      inputs.mode == 'production' && needs.candidate.outputs.verified == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      name: ${{ inputs.production-environment }}
+      name: Production
       url: ${{ inputs.production-url }}
     defaults:
       run:
@@ -250,7 +256,7 @@ jobs:
       SMOKE_PATH: ${{ inputs.smoke-path }}
       PRODUCTION_URL: ${{ inputs.production-url }}
       BINDING_POLICY_FILE: ${{ inputs.binding-policy-file }}
-      DEPLOYMENT_ENVIRONMENT: ${{ inputs.production-environment }}
+      DEPLOYMENT_ENVIRONMENT: Production
       AUTO_ROLLBACK: ${{ inputs.auto-rollback }}
     outputs:
       cloudflare-deployment-id: ${{ steps.promote.outputs.cloudflare-deployment-id || steps.canary.outputs.cloudflare-deployment-id }}
@@ -309,6 +315,7 @@ jobs:
         if: inputs.canary-percentage < 100
         env:
           FOUNDRY_PHASE: canary
+          VERIFY_COMMAND: ${{ inputs.canary-verify-command }}
         run: node "$FOUNDRY_EXECUTOR" verify
       - name: Recheck source before final promotion
         env:

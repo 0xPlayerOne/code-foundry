@@ -29,10 +29,10 @@ on:
         type: string
         default: ubuntu-latest
       wrangler-version:
-        description: 'local uses installed Wrangler; otherwise specify an exact version.'
+        description: 'local uses installed Wrangler; latest preserves legacy behavior; exact versions are recommended.'
         required: false
         type: string
-        default: local
+        default: latest
       environment:
         required: false
         type: string
@@ -91,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$MODE" == preview || "$MODE" == production ]]
-          [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
+          [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" == latest || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
       - name: Record pending deployment
         id: start
         env:
