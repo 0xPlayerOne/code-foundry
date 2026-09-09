@@ -1,16 +1,17 @@
 # Agent-facing validation commands
 
-The public CLI now exposes a stable plan/check interface using the same discovery,
+The public CLI exposes a stable plan/check interface using the same discovery,
 required-capability policy, ecosystem executor, and task receipts as reusable CI.
 
 ```sh
-code-foundry plan --changed --base origin/main --json
-code-foundry check --tier fast --json
-code-foundry check --tier audit --json
+npx code-foundry plan --changed --base origin/main --json
+npx code-foundry check --tier fast --json
+npx code-foundry check --tier audit --json
 ```
 
 Both commands accept `--target PATH`. Use the Code Foundry version pinned by the
-repository, not an unreviewed floating installation. `plan` executes discovery
+repository, not an unreviewed floating installation; use your package manager's
+local binary when the package is installed as a dependency. `plan` executes discovery
 only: it does not install dependencies, run project checks, modify source files,
 or emit skip-receipt files. Required entrypoints are validated across the complete
 task set, including tasks deferred from the selected local tier.

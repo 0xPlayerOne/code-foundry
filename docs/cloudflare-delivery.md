@@ -164,12 +164,12 @@ the deployment API intentionally changes version routing only.
 
 ## Legacy workflow hardening
 
-`cloudflare-deploy.yml` now uses real job environments, non-cancelling concurrency,
+`cloudflare-deploy.yml` uses real job environments, non-cancelling concurrency,
 structured Wrangler output, exact/local Wrangler selection, reusable outputs, and
-in-progress/failure deployment records. Its legacy-compatible default remains
+in-progress/failure deployment records. Its compatibility default remains
 `latest`; callers should prefer `local` or an exact version for reproducibility. A
 production URL can be supplied with `deployment-url` when API output contains only
-route patterns. It is still a **direct, unverified deployment**; adopt
+route patterns. It is still a **direct, unverified deployment**; use
 `cloudflare-delivery.yml` for candidate verification and guarded promotion.
 
 ## References and testing

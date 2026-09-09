@@ -1,22 +1,25 @@
 # Initialization and synchronization
 
-## The two-command workflow
+## Initialize, synchronize, and diagnose
 
 Run these commands from a repository root:
 
-```bash
+```sh
 npx code-foundry init
+# review or edit .github/code-foundry.yml
 npx code-foundry sync
-npx code-foundry doctor
+npx code-foundry doctor  # optional local/GitHub prerequisite check
 ```
 
-`init` detects supported languages, package manager, repository profile,
-release strategy, toolchain preference, and standard features. It writes the resolved
+`init` detects supported languages, package manager, repository profile, release
+strategy, toolchain preference, and standard features. It writes the resolved
 choices to `.github/code-foundry.yml`, initializes the local environment, and
 renders the standard baseline.
 
-After reviewing or editing the configuration, run `sync` to apply it. Sync can
-be run at any time to pull in a newer runtime configured by `runtime_ref`.
+After reviewing or editing the configuration, run `sync` to apply it. Run sync
+again whenever `runtime_ref` changes or a newer reviewed runtime should be
+adopted. `doctor` is an optional diagnostic pass; use `npx code-foundry doctor
+--github` when authenticated GitHub prerequisite checks are also needed.
 
 ## Detection
 
@@ -25,8 +28,9 @@ manifests, lockfiles, source extensions, workspace metadata, and existing
 project scripts. The generated values are explicit, so later syncs are stable
 until a maintainer changes the file.
 
-New repositories receive the GNU GPLv3. Existing repositories with an authored
-`LICENSE` keep that license unless the generated configuration is changed.
+New repositories receive GPL-3.0-or-later. Existing repositories with an
+authored `LICENSE` keep that license unless the generated configuration is
+changed.
 
 ## Runtime selection
 

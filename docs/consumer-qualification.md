@@ -5,8 +5,9 @@ Release-candidate compatibility checks against the distributable package.
 **Status:** Opt-in reusable workflow; required by Code Foundry's own release caller.
 **Scope:** Package installation, CLI initialization/synchronization, generated workflow contracts.
 
-`consumer-qualification.yml` packs the checked-out candidate once, shares that archive across all supported
-Node majors using an artifact scoped to the same workflow run **and attempt**, installs it offline with lifecycle scripts disabled,
+`consumer-qualification.yml` packs the checked-out candidate once, shares that
+archive across Node 20, 22, and 24 using an artifact scoped to the same workflow
+run **and attempt**, and installs it offline with lifecycle scripts disabled,
 and executes its public CLI from the installed package. The harness does not
 import the source checkout's initializer as a substitute for package testing.
 
@@ -39,13 +40,14 @@ member. Reports are evidence, not signatures or a substitute for release identit
 verification.
 
 The self release caller cannot start Release Please or npm publication until all
-qualification jobs and the aggregate `Gate` succeed. An explicit `release-while-paused` dispatch is passed
-through to the reusable workflow; ordinary calls remain blocked by the billing pause.
-Consumer-generated release callers do not inherit this Code Foundry-specific
-qualification job. This does not yet guarantee that its legacy publishing job uses
-this same archive; the verified-publication workflow handles that separate
-requirement. No branch protections, repository settings, credentials, or consumer
-runtimes are changed by this feature.
+qualification jobs and the aggregate `Gate` succeed. An explicit
+`release-while-paused` dispatch is passed through to the reusable workflow;
+ordinary calls remain blocked by the billing pause. Consumer-generated release
+callers do not inherit this Code Foundry-specific qualification job. Code
+Foundry's self caller passes the qualified archive to the verified publication
+workflow, which independently rechecks the same bytes before publishing. No
+branch protections, repository settings, credentials, or consumer runtimes are
+changed by this workflow.
 
 ## Verified handoff and reruns
 

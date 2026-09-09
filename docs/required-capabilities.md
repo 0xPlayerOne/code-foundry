@@ -1,7 +1,7 @@
 # Required capabilities and task evidence
 
 Declared requirements fail closed when discovery cannot find an executable task.
-Existing optional task discovery remains available. Configure scalar values in
+Optional task discovery remains available. Configure scalar values in
 `.github/code-foundry.yml`:
 
 ```yaml
@@ -16,14 +16,14 @@ coverage_report: coverage/coverage-summary.json
 Supported task capabilities are `format`, `lint`, `type_check`, `build`, `unit`,
 `integration`, `e2e`, `smoke`, and `performance`. `coverage` additionally requires
 unit tests. Unknown names, contradictory requirements, and invalid thresholds
-are errors. `performance: true` now means required, not merely enabled when a
+are errors. `performance: true` means required, not merely enabled when a
 script happens to exist. Use `performance: auto` to retain optional discovery.
 
 The public `src/runtime.mjs` entrypoint delegates ecosystem execution to the
-unchanged private `src/runtime-core.mjs`. Keep both files and `src/lib` when
-vendoring the runtime. Published packages and the reusable workflows' existing
-cone-mode sparse checkout include both files. Do not call the private executor
-from consumer CI: it intentionally does not enforce the public policy contract.
+private `src/runtime-core.mjs`. Keep both files and `src/lib` when vendoring the
+runtime. Published packages and reusable workflows must include those paths. Do
+not call the private executor from consumer CI: it does not enforce the public
+policy contract.
 
 ## Coverage migration
 
@@ -84,10 +84,17 @@ script-derived reasons. Do not put credentials in command arguments. Artifact
 access follows repository/Actions visibility; receipt retention does not provide
 a sandbox or independently validate repository-authored evidence.
 
-`node src/runtime.mjs ci plan` prints a JSON discovery plan without executing
-checks. Discovery validates every required task before reusable workflows select
-jobs. A fast/unit-only tier is still a subset: discovery proves that E2E exists,
-not that E2E ran. Require the existing audit validation gate before merging.
+Use the public CLI for a repository-facing discovery plan:
+
+```sh
+npx code-foundry plan --tier audit --json
+```
+
+The lower-level `node src/runtime.mjs ci plan` form remains useful to reusable
+workflows and runtime tests. Both forms discover tasks without executing checks.
+Discovery validates every required task before workflows select jobs. A
+fast/unit-only tier is still a subset: discovery proves that E2E exists, not that
+E2E ran. Require the audit validation gate before merging.
 
 Native task detection rejects known no-ops such as a JavaScript project with no
 build script or a Python project with no supported type-check command. Add a
@@ -98,5 +105,5 @@ an installed package manager or discovered project proves task execution.
 
 `node --test test/task-policy.test.mjs` exercises policy parsing, discovery,
 coverage parsing/thresholds/freshness/path safety, exit propagation, and reports
-with a deterministic executor fixture. The unchanged ecosystem executor remains
-covered by `test/runtime.test.mjs` in the full suite.
+with a deterministic executor fixture. The ecosystem executor is covered by
+`test/runtime.test.mjs` in the full suite.

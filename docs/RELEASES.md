@@ -25,13 +25,17 @@ the `staging` → `main` promotion PR merges with **rebase** (`merge_strategy:
 rebase`), and Release Please version PRs merge with **rebase**
 (`release_merge_strategy: rebase`). In the `direct` topology, feature and fix
 branches squash straight into `main` and Release Please version PRs squash into
-`main` (`release_merge_strategy: squash`). `merge_strategy` is not enforced. Release automation never defaults
-to a merge method and never merges with `--admin`: `staging-release` accepts
-only rebase for release PRs, while `direct` requires squash.
+`main` (`release_merge_strategy: squash`). `sync`, `doctor`, and release
+automation reject any other strategy. Release automation never defaults to a
+merge method and never merges with `--admin`.
 
 The release workflow opens or updates a versioned PR after changes reach
-`main`. Merging that PR updates the changelog, creates the Git tag and GitHub
-Release, and triggers any configured package publication.
+`main`. For generated consumer callers, merging that PR updates the changelog,
+creates the Git tag and GitHub Release, and can trigger npm publication. Code
+Foundry's own caller uses the qualified path: it qualifies the package first,
+creates a draft release, stages the exact qualified archive, then publishes the
+immutable release and package through the verified publisher. See [Qualified
+publication](qualified-publication.md).
 
 For an explicit version, put `Release-As: 2.0.0` in a commit or pull request
 body. Existing `CHANGELOG.md` history remains repository-owned.
@@ -136,7 +140,10 @@ already passed).
 1. Merge tested changes into `main` (direct: feature PRs; staging-release: promote `staging` into `main`).
 2. Review the generated Release Please PR and changelog. A validated
    `CODE_FOUNDRY_TOKEN` lets the release workflow merge it automatically after
-   required checks; without that token, merge it manually with squash in the
-   direct topology (`release_merge_strategy: squash`).
-3. Confirm the GitHub Release and any package publication.
-4. staging-release only: synchronize `staging` with the new `main` release commit.
+   required checks; without that token, merge it manually with the configured
+   topology method: squash for `direct`, rebase for `staging-release`.
+3. For a generated consumer caller, confirm the GitHub Release and any package
+   publication.
+4. For Code Foundry itself, confirm qualification, draft staging, immutable
+   publication, and the retained identity receipts.
+5. In `staging-release`, synchronize `staging` with the new `main` release commit.

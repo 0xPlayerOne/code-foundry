@@ -58,7 +58,7 @@ preserved and can coexist with the standard baseline.
 The generated configuration is the one place to control the baseline. See
 [Configuration reference](docs/CONFIGURATION.md) for the visual configuration
 guide and [Initialization and synchronization](docs/INITIALIZATION.md) for
-the two-command workflow.
+the init, sync, and doctor workflow.
 
 New repositories default to GPL-3.0-or-later. Existing projects preserve an
 authored license unless a replacement is explicitly selected. Our maintained
@@ -125,9 +125,16 @@ workflow runs.
 In the default `direct` flow, changes reach `main` through feature pull
 requests and Release Please opens a versioned release PR against `main`. In
 the `staging-release` flow, a promotion PR promotes `staging` into `main`
-first. Either way, Release Please creates a GitHub release after the version
-PR is merged. npm publication is opt-in through `npm_publish: true` and
-supports npm trusted publishing or an `NPM_TOKEN` fallback.
+first. Generated consumer callers create a GitHub release after the version PR
+is merged; npm publication is opt-in through `npm_publish: true` and supports
+npm trusted publishing or an `NPM_TOKEN` fallback.
+
+Code Foundry's own release caller is stricter: it qualifies the package across
+Node 20, 22, and 24, stages the exact qualified archive, publishes the
+immutable GitHub Release, and publishes that archive through the verified
+publisher. See
+[Consumer qualification](docs/consumer-qualification.md) and [Qualified
+publication](docs/qualified-publication.md).
 
 Read [Release management](docs/RELEASES.md),
 [Release integrity and build provenance](docs/release-integrity.md), and
@@ -137,16 +144,10 @@ copied into other repositories.
 
 ## Documentation and extensions
 
-The `docs/` directory contains generalized operational guides. Add
-repository-specific documentation there as well; synchronization does not
-replace files in `docs/`.
-
-- [Documentation index](docs/README.md)
-- [Initialization and synchronization](docs/INITIALIZATION.md)
-- [Workflow and CI conventions](docs/WORKFLOWS.md)
-- [Release management](docs/RELEASES.md)
-- [Publishing packages](docs/PUBLISHING.md)
-- [Caching and remote caching](docs/CACHING.md)
+The `docs/` directory contains generalized operational guides. Start with the
+[documentation index](docs/README.md), which groups every guide by task. Add
+repository-specific documentation there as well; synchronization preserves
+files in `docs/`.
 
 ## License
 

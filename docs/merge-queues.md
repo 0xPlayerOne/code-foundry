@@ -2,25 +2,25 @@
 
 Opt-in validation of the combined commit produced by GitHub's merge queue.
 
-**Activation:** `merge_queue: true` in the consumer's `.github/code-foundry.yml`, followed by normal sync.
-**Required check:** Existing canonical `Validation / Gate`.
+**Activation:** Set `merge_queue: true` in the consumer's
+`.github/code-foundry.yml`, then run `sync`.
+**Required check:** The canonical `Validation / Gate` aggregate check.
 
 The synchronizer adds `.github/workflows/validation-merge-queue.yml` only when
-explicitly enabled. The ordinary PR readiness workflow is unchanged: this feature
-does not turn draft pushes into CI, mark PRs ready, enqueue PRs, or change release
-behavior. Queue events receive the full audit even when staging PRs normally use
-fast validation. Release Please branch detection is deliberately not reused for
-a merge group containing several PRs; the group's combined tree is audited, not
-treated as a generated version-only diff.
+explicitly enabled. Queue validation does not turn draft pushes into CI, mark
+pull requests ready, enqueue pull requests, or change release behavior. Queue
+events receive the full audit even when staging pull requests normally use fast
+validation. Release Please branch detection is not reused for a merge group
+containing several pull requests; the combined tree is audited as submitted.
 
 ```yaml
 merge_queue: true
 ```
 
-Normal `code-foundry sync` updates the generated queue caller alongside the other
-runtime pins. Explicit fleet runtime overrides are honored. The installed runtime
-must contain this feature, and queues require an exact commit or released version
-pin rather than a moving branch. Direct topology enables main; staging-release
+Normal `npx code-foundry sync` updates the generated queue caller alongside the
+other runtime pins. Explicit fleet runtime overrides are honored. The installed
+runtime must contain this feature, and queues require an exact commit or released
+version pin rather than a moving branch. Direct topology enables main; staging-release
 enables main and staging. Existing runner choices, Rust CodeQL sharding, and an
 explicit `codeql: false` policy select the same appropriate validation orchestrator
 as ordinary PRs. No CodeQL policy or runtime default is relaxed.
@@ -60,8 +60,7 @@ Setting `merge_queue: false` or removing the key removes only a caller bearing t
 exact Foundry management marker. A custom file at that path is preserved when
 disabled; enabling over it fails before synchronization writes, even with force.
 Symlinked workflow paths are rejected. Dry runs report changes without creating,
-updating, or deleting the caller. The original synchronizer is retained verbatim
-in `sync-core.mjs`; its public exports are preserved through the thin wrapper.
+updating, or deleting the caller.
 
 Disable the repository's queue rule before removing its required queue workflow.
 Otherwise queued PRs will correctly wait for checks that no longer run.
@@ -74,16 +73,17 @@ configure required checks. Register the aggregate check, not PR-only mode or
 readiness checks that have no merge-group equivalent. An existing rule requiring
 individual checks needs those exact contexts reviewed as well. Do not enable the
 queue rule before the workflow is merged and a disposable queue exercise passes.
-No repository rule, branch protection, secret, merge setting, or queue is changed
-by this PR.
+Enabling this workflow does not change repository rules, branch protection,
+secrets, merge settings, or the queue itself.
 
 Focused tests cover event identity and rejection, generated audit wiring,
 configured CodeQL policy, pin evolution, idempotence, dry runs, and ownership
-preservation. They do not establish a live merge-group run or full sync integration.
-Before readiness, run the existing complete sync/fleet tests, locked formatter,
-linter, TypeScript and package budgets, and Actionlint against rendered callers
-and their pinned/local reusable workflow contracts. Exercise two queued PRs and
-one deliberately failing check in an eligible disposable repository.
+preservation. They do not establish a live merge-group run or full sync
+integration. Before enabling the queue rule, run the complete sync/fleet tests,
+locked formatter, linter, type check, package budgets, and Actionlint against
+rendered callers and their pinned/local reusable workflow contracts. Exercise two
+queued pull requests and one deliberately failing check in an eligible
+disposable repository.
 
 References: [GitHub merge-queue CI configuration](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue),
 [merge-group event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group).

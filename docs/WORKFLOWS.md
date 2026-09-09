@@ -112,6 +112,11 @@ opt in or out without a code change.
 | Release PR  | Promote `staging` into `main` (staging-release topology only)     |
 | Release     | Release Please, GitHub release, and optional npm publication      |
 
+Generated consumer callers use the standard Release workflow. Code Foundry's
+own `release_self-ci.yml` adds consumer qualification, draft-release staging,
+immutable-release verification, and qualified npm publication; see [Qualified
+publication](qualified-publication.md).
+
 Use concise job names such as `CI / Format`, `Test / Unit`, and
 `CodeQL / Analyze (Python)`. Per-language CodeQL analyzers (Rust shards
 included) and security audits run through a detection-built matrix, so a

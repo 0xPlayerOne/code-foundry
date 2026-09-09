@@ -1,9 +1,10 @@
 # Release integrity and build provenance
 
-Code Foundry now provides a read-only immutable-setting preflight, cryptographic
+Code Foundry provides a read-only immutable-setting preflight, cryptographic
 release/asset verification, and an optional build-provenance action. These are
-separate guarantees: a checksum identifies bytes, an attestation identifies their
-origin, and GitHub's immutable-release setting prevents replacement after publish.
+separate guarantees: a checksum identifies bytes, an attestation identifies
+their origin, and GitHub's immutable-release setting prevents replacement after
+publication.
 
 ## Enable immutable releases explicitly
 
@@ -16,9 +17,9 @@ can verify an explicitly selected tag without the variable. Billing pause is
 honored by both workflows. A skipped workflow is not verification evidence.
 
 Publish all assets to a draft release **before** publishing it. Do not attach or
-replace assets after an immutable release is published. The existing Release
-Please/npm workflow is not rewritten by this change; repositories adding release
-assets must review their attachment ordering before enabling immutability.
+replace assets after an immutable release is published. If a repository adds
+release assets, its release workflow must stage them before the release is
+published; the verifier does not repair an already-published release.
 
 A release workflow can run this preflight before publication:
 
