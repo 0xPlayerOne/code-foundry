@@ -181,11 +181,11 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 | Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |
 | Scheduled or manual validation                     | Full audit tier                                                                       |
 | Push to a working branch                           | Draft PR workflow                                                                     |
-| Push to `main`                                     | Release workflow plus default-branch CodeQL scan; validation ran on the merged PR     |
+| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |
 
 Draft pull requests do not start validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.
 
-Pull-request validation keys concurrency by event and pull-request head, so a newer update cancels its superseded run. Scheduled and manual audits use a separate caller pinned to the protected default branch; this prevents caller-selected runtime code from executing with default-branch cache access. Pull-request and scheduled/manual callers use the mode-aware orchestrator, which fans out only the required jobs and concludes with the stable aggregate gate. Main pushes run the default-branch CodeQL lane separately.
+Pull-request validation keys concurrency by event and pull-request head, so a newer update cancels its superseded run. Scheduled and manual audits use a separate caller pinned to the protected default branch; this prevents caller-selected runtime code from executing with default-branch cache access. Both callers use the mode-aware orchestrator, which fans out only the required jobs and concludes with the stable aggregate gate.
 
 Required checks are enforced by branch protection rulesets/branch protection. Do not duplicate their checklists in the pull request description; document validation commands and results instead.
 

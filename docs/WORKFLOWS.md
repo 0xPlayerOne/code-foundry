@@ -4,21 +4,16 @@
 
 Validation uses two callers so pull-request code and default-branch-capable
 audit events never share a caller-selected runtime ref. The canonical
-`validation.yml` caller handles pull requests and a lightweight default-branch
-CodeQL lane:
+`validation.yml` caller handles pull requests only:
 
 ```yaml
-push:
-  branches: [main] # CodeQL only
 pull_request:
   branches: [main, staging] # staging-release topology
   # direct topology: branches: [main]
 ```
 
-The generated validation caller listens for `ready_for_review` and `push` to
-`main`. Draft pull requests register no validation checks and allocate no
-validation runner; main pushes run only the default-branch CodeQL lane, while
-full validation remains pull-request-only.
+The generated validation caller listens only for `ready_for_review`, so draft
+pull requests register no validation checks and allocate no validation runner.
 A separate lightweight Draft Guard runs from the trusted base branch on
 `opened`, `reopened`, and `synchronize`; it converts ordinary ready pull
 requests back to draft without checking out pull-request code. It rechecks the
@@ -49,7 +44,7 @@ Scheduled and manual runs select the audit tier in both topologies. Draft PR
 automation separately listens to supported topic-branch pushes and always
 opens those PRs as drafts. Promotion automation listens to `staging` pushes
 (staging-release only) and also always opens its PR as a draft. Release
-automation and default-branch CodeQL listen to `main` pushes.
+automation listens to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should use the same ready-transition policy.
 

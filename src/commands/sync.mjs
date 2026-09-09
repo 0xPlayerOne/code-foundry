@@ -537,15 +537,12 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
   let rendered = content.replaceAll(localPrefix, remotePrefix)
   // An explicitly unavailable CodeQL capability selects an orchestrator that
   // omits the job entirely, so GitHub does not register a misleading skipped
-  // check on every pull request or an unused main-push run. `auto` retains
-  // runtime capability detection.
+  // check on every pull request. `auto` retains runtime capability detection.
   if (configured(config.codeql, 'auto') === 'false') {
     rendered = rendered.replaceAll(
       `${remotePrefix}validation.yml`,
       `${remotePrefix}validation-no-codeql.yml`
     )
-    rendered = removeWorkflowBlock(rendered, 'default-branch-codeql')
-    rendered = removeWorkflowBlock(rendered, 'push')
   }
   rendered = rendered.replace(
     new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
@@ -641,25 +638,6 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     if (model) rendered = rendered.replace(/^(\s+model:)\s+.*$/m, `$1 ${model}`)
   }
   return rendered
-}
-
-/**
- * Remove a root-level YAML block by id while preserving the surrounding file.
- * This is used for workflow jobs and triggers whose feature is disabled by
- * configuration.
- * @param {string} content
- * @param {string} blockId
- * @returns {string}
- */
-function removeWorkflowBlock(content, blockId) {
-  const lines = content.split('\n')
-  const start = lines.findIndex((line) => line === `  ${blockId}:`)
-  if (start === -1) return content
-  let end = start + 1
-  while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
-  lines.splice(start, end - start)
-  if (content.endsWith('\n') && lines.at(-1) !== '') lines.push('')
-  return lines.join('\n')
 }
 
 /**
@@ -801,8 +779,8 @@ const DIRECT_DOC_REPLACEMENTS = {
       '7. Push to the fork and open a pull request targeting `main`.',
     ],
     [
-      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                 |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow plus default-branch CodeQL scan; validation ran on the merged PR     |\n',
-      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `main`                                     | Release workflow plus default-branch CodeQL scan; validation ran on the merged PR     |\n',
+      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                 |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
+      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | Full validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`  |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `main`                                     | Release workflow; canonical validation already ran on the merged PR                   |\n',
     ],
     [
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
