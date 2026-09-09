@@ -27,7 +27,7 @@ The merged candidate includes the release-integrity verifier, fleet eligibility,
 consumer qualification harness, product-quality profiles, qualified publication
 workflow, and opt-in merge-queue verifier. After the qualified publication
 cutover was rebased onto the current main release and task-receipt workflows, it
-measured 257,543 packed bytes, 989,833 unpacked bytes, and 112 files on Node
+measured 257,544 packed bytes, 989,821 unpacked bytes, and 112 files on Node
 24.18.0. The 260 kB, 990 kB, and 115-file limits retain a measured margin while
 continuing to bound package growth.
 
