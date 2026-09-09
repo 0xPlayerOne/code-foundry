@@ -5,7 +5,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { readPackageVersion, syncRepository } from './sync.mjs'
-import { discoverManifestRepositories, hasFleetManifest, upgradeManifestFleet } from '../lib/fleet-manifest.mjs'
+import {
+  discoverManifestRepositories,
+  hasFleetManifest,
+  upgradeManifestFleet,
+} from '../lib/fleet-manifest.mjs'
 
 /** @typedef {{ path: string, repository: string, runtimeRef: string, dirty: boolean, configured: boolean, gitWorkflow: string }} FleetRepository */
 

@@ -13,6 +13,7 @@ its own names, environments, and deployment details.
 - [Publishing packages](PUBLISHING.md)
 - [Caching and remote caching](CACHING.md)
 - [Performance budgets and baselines](PERFORMANCE.md)
+- [Declarative fleet inventory and staged rollouts](fleet-rollouts.md)
 
 ## Repository-specific documentation
 
