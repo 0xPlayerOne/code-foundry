@@ -79,6 +79,10 @@ Each repository must supply explicit validation argv arrays. Include locked
 installation, application checks, and genuine consumer compatibility tests where
 relevant. No shell splitting is used. Commands run in an isolated detached
 worktree, have bounded execution time, and must not rewrite the candidate source.
+Validation is not a security sandbox: commands run as the invoking user with its
+inherited environment and network access. Treat the manifest and every validation
+command as trusted code; do not use this feature with unreviewed manifests or
+credentials that the checks should not access.
 Only files changed by Code Foundry sync are staged; generated test evidence and
 other untracked files are not swept into the commit. A commit-hook change to the
 validated Git tree is rejected before publishing.

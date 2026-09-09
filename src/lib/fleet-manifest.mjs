@@ -520,14 +520,15 @@ function upgradeCandidate(run, sync, path, source, entry, version, base, identit
         '--repo',
         entry.repository,
         '--json',
-        'headRefOid,headRefName,baseRefName,isCrossRepository',
+        'headRefOid,headRefName,baseRefName,isCrossRepository,isDraft',
       ])
     )
     if (
       created.headRefOid !== validatedHead ||
       created.headRefName !== identity.branch ||
       created.baseRefName !== base ||
-      created.isCrossRepository !== false
+      created.isCrossRepository !== false ||
+      created.isDraft !== true
     )
       throw new Error('Created pull request does not reference the validated rollout branch')
     return {
