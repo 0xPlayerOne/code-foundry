@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.19.0...v1.20.0) (2026-09-09)
+
+
+### Features
+
+* **ci:** add opt-in merge-group audit validation ([#549](https://github.com/0xPlayerOne/code-foundry/issues/549)) ([ae418a7](https://github.com/0xPlayerOne/code-foundry/commit/ae418a779ada2927bd391cc6cf54db16e342d921))
+
 ## [1.19.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.18.0...v1.19.0) (2026-09-09)
 
 
