@@ -123,8 +123,14 @@ for (const mode of ['commit-source', 'empty-commit']) {
     )
     assert.equal(report[0].status, 'failed')
     assert.match(report[0].reason, /Validation modified the candidate source/)
-    assert.equal(f.calls.some((argv) => argv[0] === 'git' && argv[1] === 'push'), false)
-    assert.equal(f.calls.some((argv) => argv[0] === 'gh' && argv[2] === 'create'), false)
+    assert.equal(
+      f.calls.some((argv) => argv[0] === 'git' && argv[1] === 'push'),
+      false
+    )
+    assert.equal(
+      f.calls.some((argv) => argv[0] === 'gh' && argv[2] === 'create'),
+      false
+    )
     assert.equal(git(f.path, 'rev-parse', 'HEAD'), f.main)
     assert.equal(git(f.path, 'rev-parse', f.identity.branch), f.candidate)
     assert.equal(git(f.path, 'status', '--porcelain'), '')
