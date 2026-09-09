@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.20.0...v1.20.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **qualification:** isolate attempts and verify release handoff ([#556](https://github.com/0xPlayerOne/code-foundry/issues/556)) ([5fe7f42](https://github.com/0xPlayerOne/code-foundry/commit/5fe7f4203b8018fd3eb88bd68e2286c6feb3d3dc))
+
 ## [1.20.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.19.0...v1.20.0) (2026-09-09)
 
 
