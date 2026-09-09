@@ -736,9 +736,11 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /on:\n  release:\n    types: \[published\]/)
     assert.match(
       caller,
-      /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/release-integrity\.yml@v1\.10\.0/
+      new RegExp(
+        `uses: 0xPlayerOne/code-foundry/\\.github/workflows/release-integrity\\.yml@${sourceRuntimeRef.replaceAll('.', '\\.')}`
+      )
     )
-    assert.match(caller, /runtime-ref: v1\.10\.0/)
+    assert.match(caller, new RegExp(`runtime-ref: ${sourceRuntimeRef.replaceAll('.', '\\.')}`))
     assert.match(caller, /REQUIRE_IMMUTABLE_RELEASES/)
     rmSync(root, { recursive: true, force: true })
   })
