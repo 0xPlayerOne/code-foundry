@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.3...v1.22.0) (2026-09-09)
+
+
+### Features
+
+* **workflows:** protect draft pull requests by default ([#572](https://github.com/0xPlayerOne/code-foundry/issues/572)) ([6fa4ce1](https://github.com/0xPlayerOne/code-foundry/commit/6fa4ce1b2dde5eddff361b819722912fed7a9815))
+
 ## [1.21.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.2...v1.21.3) (2026-09-09)
 
 
