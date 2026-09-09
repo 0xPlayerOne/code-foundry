@@ -2,14 +2,12 @@
 
 Require a verified, qualified runtime before any fleet upgrade mutates repositories.
 
-**Dependency:** Installed release-integrity verifier (#537).
-**Activation:** Consumer-owned `.code-foundry-release-policy.json` at the fleet root.
+**Activation:** Add a consumer-owned `.code-foundry-release-policy.json` at the
+fleet root.
 
-The public `upgradeFleet` entrypoint now applies an optional release eligibility
-guard before delegating to the unchanged legacy/manifest rollout implementation.
-The implementation was moved verbatim to `fleet-core.mjs`; discovery exports and
-existing callers retain their interface. No policy file means existing behavior.
-A malformed or symlinked policy is an error, not an opt-out. Dry runs use the same
+The public fleet upgrade command applies an optional release-eligibility guard
+before it mutates repositories. No policy file means existing fleet behavior. A
+malformed or symlinked policy is an error, not an opt-out. Dry runs use the same
 guard, and `--force` cannot bypass source identity or qualification.
 
 ```json
@@ -30,8 +28,8 @@ This is a shape example, not a completed fleet policy. Populate canonical reposi
 identity, actual workflow path, and exact job names from the qualified release
 caller's Actions API results. Include the publication job when successful registry
 publication is required before adoption. Require every relevant job: a workflow's
-aggregate success alone can conceal skipped jobs. The qualification gate in #544
-and verified publisher in #547 provide the producer side of this policy.
+aggregate success alone can conceal skipped jobs. The producer-side qualification
+and verified-publication workflows provide the evidence this policy consumes.
 
 Keep the policy alongside the **consumer workspace's** fleet inventory. Do not put
 private repository names, local layouts, or deployment credentials into this
@@ -69,12 +67,13 @@ First release and validate the qualification/verification producer and confirm
 real workflow/job identities. Then opt a consumer workspace into this policy and
 exercise `fleet upgrade --dry-run --root <fleet-root> --source <clean-release-checkout>`.
 When `--source` is omitted, the installed package is used and an enabled policy
-will reject it unless that installation is itself a clean Git checkout. Older mutable
-releases or unavailable permissions should fail; do not weaken the policy just to
-make an old release eligible. No real fleet inventory is fabricated by this PR.
+will reject it unless that installation is itself a clean Git checkout. Older
+mutable releases or unavailable permissions should fail; do not weaken the policy
+just to make an old release eligible. No real fleet inventory is created by the
+eligibility guard.
 
 The focused suite verifies guard ordering and failure propagation with GitHub/CLI
 fixtures. Live authenticated verification, exact production job naming, and the
-full existing fleet-engine suite must pass before activation. The original fleet
-engine's Git blob is retained byte-for-byte; the source move still needs full
-repository import/type-check/packaging validation in CI.
+full fleet-engine suite should pass before activation. The guard is not a
+substitute for repository import, type-check, packaging, or deployment
+validation.

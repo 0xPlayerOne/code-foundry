@@ -1,19 +1,20 @@
 # Configuration reference
 
-Code Foundry has one repository-owned control plane: `.github/code-foundry.yml`.
+Code Foundry has one repository-owned control plane:
+`.github/code-foundry.yml`. `init` creates it, `sync` renders the selected
+baseline, and `doctor` checks local and GitHub-facing prerequisites.
 
-```bash
+```sh
 npx code-foundry init
+# edit .github/code-foundry.yml
+npx code-foundry sync
+npx code-foundry doctor
 ```
 
-Initialization detects the repository and writes a fully resolved configuration.
-Edit that file directly, then run `npx code-foundry sync`.
+The generated file is deliberately explicit. Keep it under version control and
+change it directly rather than passing one-off flags to `sync`.
 
-The default `toolchain: auto` reuses an existing `.mise.toml`; otherwise it
-selects native setup for the detected languages. Use `toolchain: native` to
-prohibit mise or `toolchain: mise` to require it.
-
-## Configuration flow
+## How configuration is applied
 
 ```text
 repository manifests and source
@@ -21,181 +22,191 @@ repository manifests and source
             v
   .github/code-foundry.yml
             |
-            +--> native or mise toolchain setup
+            +--> detected language and package-manager setup
             +--> standard workflow callers
             +--> runtime repository and version
-            +--> release, license, cache, and coverage policy
+            +--> validation, release, license, and cache policy
 ```
 
-## Core settings
+`toolchain: auto` reuses an existing `.mise.toml`; otherwise it uses native
+language tooling. Set `toolchain: native` to prohibit mise or `toolchain: mise`
+to require an existing mise configuration.
 
-| Key                        | Values                                                                           | Purpose                                                                                                             |
-| -------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `profile`                  | `auto`, `application`, `monorepo`, `minimal`                                     | Repository shape                                                                                                    |
-| `languages`                | detected list                                                                    | TypeScript, Rust, Python, Solidity                                                                                  |
-| `package_manager`          | `bun`, `pnpm`, `yarn`, `npm`, `none`                                             | JavaScript setup                                                                                                    |
-| `toolchain`                | `auto`, `native`, `mise`                                                         | Environment setup policy; defaults to `auto`                                                                        |
-| `staging_validation_mode`  | `fast`, `audit`                                                                  | Staging-release-only validation tier; omitted from direct repositories                                              |
-| `performance`              | `auto`, `true`, `false`                                                          | `auto` discovers an optional task; `true` requires a supported performance entrypoint; `false` disables discovery   |
-| `performance_command`      | JSON argv array or array of argv arrays                                          | One or more ordered commands for non-package harnesses; package scripts take precedence                             |
-| `performance_profile`      | empty, `node-package`                                                            | Optional shared package import, memory, archive, and dependency budget harness                                      |
-| `performance_budget_file`  | repository path                                                                  | Budget policy for the shared package harness; defaults to `performance-package-budgets.json`                        |
-| `required_capabilities`    | comma-separated task names                                                       | Fail closed when a required task or `coverage` evidence is unavailable; defaults to none                            |
-| `coverage_enforcement`     | `auto`, `required`, `off`                                                        | Shared coverage report policy; `auto` accepts explicit skips, `required` rejects missing reports, `off` skips it    |
-| `coverage_minimum`         | percentage from `0` to `100`                                                     | Minimum measured coverage; defaults to `80`                                                                         |
-| `coverage_metrics`         | `lines`, `functions`, `branches`, `statements`                                   | Metrics checked by the shared coverage gate; defaults to `lines`                                                    |
-| `coverage_report`          | comma-separated repository paths                                                 | Istanbul summary or LCOV evidence files; defaults to standard coverage paths                                        |
-| `features`                 | `all` or a list                                                                  | Standard workflow callers                                                                                           |
-| `codeql`                   | `auto`, `true`, `false`                                                          | CodeQL policy; public repositories default to enabled, non-public repositories default to disabled                  |
-| `codeql_rust_shards`       | JSON array of paths                                                              | Rust scan scopes; `["all"]` keeps the safe single full scan                                                         |
-| `codeql_rust_threads`      | integer, 1-64                                                                    | Threads per Rust CodeQL job; values above 1 opt into local parallelism                                              |
-| `codeql_rust_max_parallel` | integer, 1-8                                                                     | Maximum Rust shard jobs allowed to run concurrently                                                                 |
-| `dependency_review`        | `auto`, `true`, `false`                                                          | Dependency Review policy; public repositories default to enabled, non-public repositories default to disabled       |
-| `prune_standard`           | `true` or `false`                                                                | Remove disabled standard callers                                                                                    |
-| `runtime_repository`       | `OWNER/REPO`                                                                     | Reusable workflow source                                                                                            |
-| `runtime_ref`              | tag or branch                                                                    | Reusable workflow version                                                                                           |
-| `release_type`             | `node`, `python`, `rust`, `simple`, `none`                                       | Release strategy                                                                                                    |
-| `npm_publish`              | `true` or `false`                                                                | Opt into npm publication                                                                                            |
-| `license`                  | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy; new repositories default to GPLv3                                                                   |
-| `git_workflow`             | `direct` (default), `staging-release`                                            | Branch/release model; `direct` opens feature branches into `main`, `staging-release` promotes `staging` into `main` |
-| `merge_strategy`           | `squash` (direct), `rebase` (staging-release)                                    | Feature/promotion merge policy; direct repositories require squash                                                  |
-| `release_merge_strategy`   | `squash` (direct), `rebase` (staging-release)                                    | Merge method for Release Please version PRs into `main`; release automation fails closed on anything else           |
-| `runner` fields            | GitHub runner names                                                              | Per-workflow runner policy, including `performance_runner`                                                          |
+## Repository and runtime
 
-Supported features are `ci`, `codeql`, `security`, `test`, `draft-pr`,
-`release-pr`, `release`, and `dependabot`.
+| Key                     | Values                                       | Notes                                                                |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
+| `version`               | `1`                                          | Configuration schema version.                                        |
+| `profile`               | `auto`, `application`, `monorepo`, `minimal` | Repository shape; `auto` detects it.                                 |
+| `languages`             | comma-separated language names               | Supported values are `typescript`, `rust`, `python`, and `solidity`. |
+| `package_manager`       | `bun`, `pnpm`, `yarn`, `npm`, `none`         | JavaScript package-manager policy.                                   |
+| `toolchain`             | `auto`, `native`, `mise`                     | Environment setup policy.                                            |
+| `runtime_repository`    | `OWNER/REPO`                                 | Source of reusable workflows and runtime code.                       |
+| `runtime_ref`           | tag or commit                                | Runtime version used by generated callers.                           |
+| `features`              | `all` or a list                              | See [Feature selection](#feature-selection).                         |
+| `codeql`                | `auto`, `true`, `false`                      | Enable CodeQL when the repository and GitHub plan support it.        |
+| `dependency_review`     | `auto`, `true`, `false`                      | Enable Dependency Review when supported.                             |
+| `runner` and `*_runner` | GitHub runner labels                         | Override the default runner per workflow.                            |
 
-## Performance validation
+For `codeql: auto` and `dependency_review: auto`, public repositories use the
+available GitHub security checks and private repositories require the relevant
+capability. Set either key to `false` when the check is unavailable or not
+wanted. CodeQL is omitted from the generated validation caller; Dependency
+Review remains a conditional step inside Security rather than a separate check.
 
-The shared Test workflow exposes a deterministic `Performance` job. In JavaScript
-repositories it discovers `performance:check` first and `perf:check` second. Other
-repositories can declare one argv array, or an ordered array of argv arrays, without
-shell interpolation:
+## Feature selection
+
+Use `features: all` or a comma/space-separated list. The canonical validation
+feature is `validation`; the legacy names `ci`, `test`, `security`, and `codeql`
+remain aliases for compatibility. Other selectable features are:
+
+- `draft-pr` — create or update development pull requests.
+- `release-pr` — promote `staging` into `main` in the `staging-release` topology.
+- `release` — run Release Please and optional package publication.
+- `dependabot` — install the language-aware Dependabot configuration.
+
+The release-integrity and OpenCode Security callers are installed independently
+of feature selection. OpenCode Security is disabled unless the repository or
+organization variable `OPENCODE_SECURITY` is `true` and the
+`OPENCODE_API_KEY` secret exists. `opencode_security_model` optionally replaces
+the generated scanner model.
+
+Merge queues are a separate opt-in because they need a stable runtime pin:
+
+```yaml
+merge_queue: true
+```
+
+See [Merge queue validation](merge-queues.md) before enabling it.
+
+## Validation and quality
+
+| Key                       | Values                                         | Purpose                                                                         |
+| ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------- |
+| `performance`             | `auto`, `true`, `false`                        | Discover, require, or disable performance checks.                               |
+| `performance_command`     | JSON argv array or array of argv arrays        | Ordered commands for a non-package performance harness.                         |
+| `performance_profile`     | empty or `node-package`                        | Shared package import, memory, archive, and dependency audit.                   |
+| `performance_budget_file` | repository-relative path                       | Budget file for `node-package`; defaults to `performance-package-budgets.json`. |
+| `required_capabilities`   | comma-separated task names                     | Fail closed when a required task or coverage evidence is unavailable.           |
+| `coverage_enforcement`    | `auto`, `required`, `off`                      | Shared coverage-report policy.                                                  |
+| `coverage_minimum`        | `0`–`100`                                      | Minimum percentage; defaults to `80`.                                           |
+| `coverage_metrics`        | `lines`, `functions`, `branches`, `statements` | Metrics checked by the coverage gate.                                           |
+| `coverage_report`         | comma-separated repository paths               | Istanbul JSON summary or LCOV evidence files.                                   |
+
+Supported task capabilities are `format`, `lint`, `type_check`, `build`, `unit`,
+`integration`, `e2e`, `smoke`, and `performance`. `coverage` is a policy
+capability that also requires unit tests. See [Required capabilities and task
+evidence](required-capabilities.md).
+
+The shared performance job discovers `performance:check`, then `perf:check`,
+in JavaScript repositories. Other repositories can provide one command or an
+ordered list of argv arrays without shell interpolation:
 
 ```yaml
 performance: true
-performance_command: '["python3","scripts/performance_audit.py","--check"]'
+performance_command: '["python3", "scripts/performance_audit.py", "--check"]'
 performance_runner: ubuntu-latest
 ```
 
-The `node-package` profile adds a shared, repository-configured audit:
+The `node-package` profile supports cold-import, memory, package-size, file-count,
+and production-dependency budgets. Supported budget names are
+`coldImportP50Ms`, `coldImportP95Ms`, `coldImportRssMaxBytes`,
+`coldImportRelativeP50`, `packedBytes`, `unpackedBytes`, `packageFileCount`,
+`packageMapFileCount`, and `productionDependencyCount`. Reports are written under
+`performance-results/` and are uploaded when present.
+
+`performance: true` makes the performance task required. Use `performance: auto`
+to keep discovery optional. Product-quality profiles are repository-owned
+manifests invoked by existing build or E2E commands; they are not activated by a
+configuration key. See [Product quality profiles](product-quality.md).
+
+## Release and branch policy
+
+| Key                       | Values                                                                           | Purpose                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `release_type`            | `auto`, `node`, `python`, `rust`, `simple`, `none`                               | Select a release manifest; `auto` detects one.                          |
+| `npm_publish`             | `true`, `false`                                                                  | Opt into npm publication.                                               |
+| `license`                 | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy for initialized repositories.                            |
+| `git_workflow`            | `direct`, `staging-release`                                                      | Choose the branch topology.                                             |
+| `merge_strategy`          | `squash` or `rebase`                                                             | Required topology-specific merge method.                                |
+| `release_merge_strategy`  | `squash` or `rebase`                                                             | Required method for Release Please version PRs.                         |
+| `staging_validation_mode` | `fast`, `audit`                                                                  | Validation tier for pull requests into `staging`; staging-release only. |
+
+`direct` is the default: feature branches and release PRs target `main`, and
+both merge with squash. `staging-release` sends feature branches to `staging`,
+uses rebase for the `staging` → `main` promotion and Release Please PR, and
+keeps feature PRs into `staging` on squash. `sync`, `doctor`, and release
+automation reject a strategy that does not match the selected topology.
 
 ```yaml
-performance: true
-performance_profile: node-package
-performance_budget_file: performance-package-budgets.json
-```
-
-```json
-{
-  "schemaVersion": 1,
-  "importTarget": "./dist/index.js",
-  "controlImport": "typebox",
-  "samples": 7,
-  "budgets": {
-    "coldImportP95Ms": 150,
-    "coldImportRssMaxBytes": 25000000,
-    "packedBytes": 500000,
-    "productionDependencyCount": 20
-  }
-}
-```
-
-Supported budgets are `coldImportP50Ms`, `coldImportP95Ms`,
-`coldImportRssMaxBytes`, `coldImportRelativeP50`, `packedBytes`,
-`unpackedBytes`, `packageFileCount`, `packageMapFileCount`, and
-`productionDependencyCount`. The profile writes
-`performance-results/node-package.json`. Every performance run also writes
-`performance-results/summary.json`, including repository-owned scripts and
-configured commands, so artifact consumers have one stable status contract.
-
-`performance: false` disables discovery. Performance budgets, fixtures, mock
-providers, and live endpoint credentials remain repository-owned. The shared job
-owns checkout, pinned setup, billing controls, concurrency, and artifact upload;
-it uploads `artifacts/performance/**`, `performance-results.json`, or
-`performance-results/**` when present. Network-dependent and post-deployment
-checks should remain separate from this deterministic validation task.
-
-## OpenCode Security opt-in and opt-out
-
-The generated OpenCode caller ships in every repository. The
-`OPENCODE_SECURITY` repository or organization variable is its only enablement
-control, so a scan can be toggled without a code change:
-
-- `OPENCODE_SECURITY: true` opts the repository in.
-- `OPENCODE_SECURITY: false` opts the repository out.
-- unset is disabled.
-
-The scan only runs when it is enabled and the `OPENCODE_API_KEY` secret is
-present.
-
-## Git workflow
-
-`git_workflow` selects the branch topology:
-
-- `direct` (default): feature branches open pull requests directly into
-  `main`. Validation and security scans run on every PR. No `staging` branch
-  exists, no promotion caller is generated, and `merge_strategy` must be
-  `squash`. Release Please version PRs squash into `main`
-  (`release_merge_strategy: squash`). Dependabot updates target `main`. This is
-  the right choice when a repository has no preview or staging environment.
-- `staging-release` (opt-in): feature branches squash into `staging`, a
-  promotion PR rebases validated changes into `main` (`merge_strategy:
-rebase`), and Release Please version PRs rebase into `main`
-  (`release_merge_strategy: rebase`). Choose this only when the repository
-  maintains a preview/staging environment that needs validated integration
-  before release.
-
-```yaml
-# A repository with a preview/staging environment
+# Preview/staging environment
+release_type: auto
 git_workflow: staging-release
+staging_validation_mode: fast
+merge_strategy: rebase
+release_merge_strategy: rebase
 ```
 
-Any other value is rejected by `code-foundry sync` and `code-foundry doctor`.
+Use `simple` with `version.txt` when no package manifest exists. Use `none` to
+skip automated releases. `npm_publish` affects generated consumer release
+callers; Code Foundry's own repository uses the qualified publication path
+described in [Qualified publication](qualified-publication.md).
 
-## Editing workflow
+## Synchronization and extensions
 
-`init` creates the file and renders the baseline. `sync` reads the file and
-refreshes standard files from the configured runtime. Generated callers are
-short and replaceable; custom workflows and project documentation are kept.
+| Key                     | Values                                                   | Purpose                                                           |
+| ----------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `sync_mode`             | `overlay`, `strict`                                      | Synchronization policy; `overlay` is the default.                 |
+| `custom_workflows`      | `preserve`                                               | Custom workflows are always preserved; other values are rejected. |
+| `post_release`          | `true`, `auto`, `false`                                  | Enable a post-release delivery hook.                              |
+| `post_release_workflow` | workflow filename                                        | Workflow dispatched by the post-release hook.                     |
+| `post_release_mode`     | `auto`, `workflow-dispatch`, `release-event`, `disabled` | Select the hook delivery mechanism.                               |
 
-The generated configuration includes all defaults so humans and agents can
-understand the repository without memorizing flags or environment variables.
+`sync_mode` accepts `overlay` (the default) or `strict`; `sync` validates the
+selected value before writing. Custom workflows remain preserved in either mode,
+and `custom_workflows` must remain `preserve`. See [Extension points](EXTENSIONS.md).
 
-Rust CodeQL defaults to one full scan with one worker. Large multi-crate
-repositories can opt into bounded parallelism, for example:
+## Caching and remote caching
+
+The standard workflows use lockfile- and configuration-keyed caches. Their
+repository variables, rather than application source files, control cache
+behavior:
+
+- `REPO_FOUNDRY_CACHE_PACKAGES` controls package-store caching.
+- `REPO_FOUNDRY_CACHE_BUILD` controls build-cache reuse.
+- `turbo_remote: auto`, `true`, or `false` declares the remote-cache policy;
+  `doctor --github` warns when enabled remote caching lacks `TURBO_TOKEN` or
+  `TURBO_TEAM`.
+- `TURBO_TOKEN` and `TURBO_TEAM` provide the Turborepo remote-cache
+  credentials.
+
+Use these controls only after measuring a repeatable benefit. See [Caching and
+remote caching](CACHING.md).
+
+## Rust CodeQL tuning
+
+Rust CodeQL defaults to one full scan with one worker. Larger multi-crate
+repositories can opt into bounded parallelism:
 
 ```yaml
-codeql_rust_shards: '["crates/api","crates/worker"]'
+codeql_rust_shards: '["crates/api", "crates/worker"]'
 codeql_rust_threads: 2
 codeql_rust_max_parallel: 2
 ```
 
-Each scoped shard must contain tracked Rust source. Code Foundry rejects
-absolute paths, parent traversal, duplicates, empty scopes, and more than eight
-shards. Do not split a single crate by arbitrary non-Rust directories: use
+Each shard must contain tracked Rust source. Absolute paths, parent traversal,
+duplicates, empty scopes, and more than eight shards are rejected. Use
 `["all"]` when complete, non-overlapping source scopes are not available.
 
-## Cloudflare Workers deployments
+## Cloudflare Workers
 
-Repositories that deploy to Cloudflare Workers can opt into GitHub-native
-verified delivery (fixed `Preview`/`Production` environments, candidate
-verification, and version-identity promotion) by adding a caller for the
-runtime's reusable `cloudflare-delivery.yml` workflow. Use the same immutable
-40-character Code Foundry commit SHA for both the reusable workflow ref and
-`runtime-ref`; configure required reviewers and branch restrictions on the
-`Production` environment. The workflow requires the
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets in the consumer
-repository. See [Verified Cloudflare delivery](./cloudflare-delivery.md) for
-binding policy, canary, rollback, and evidence requirements.
+Repositories that deploy to Cloudflare Workers can use the opt-in verified
+delivery workflow with fixed `Preview` and `Production` environments,
+candidate verification, and version-identity promotion. Pin both the reusable
+workflow reference and `runtime-ref` to the same reviewed 40-character commit
+SHA. Provide `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the consumer
+repository and configure environment reviewers separately.
 
-The legacy `cloudflare-deploy.yml` workflow remains available for direct
-(unverified) deployments. It runs `wrangler versions upload` for previews and
-`wrangler deploy` for production, records a GitHub deployment plus status, and
-respects `CI_BILLING_PAUSED`. Its legacy-compatible Wrangler default is `latest`;
-callers should prefer `local` or provide an exact `wrangler-version` for
-reproducibility. Bun consumers may pass `build-script`, `install-working-directory`, and `bun-version`;
-the runtime installs the frozen lockfile and builds the Worker before invoking
-Wrangler. Bun-backed callers invoke Wrangler through `bunx` so OpenNext's
-production delegation resolves the workspace-local `opennextjs-cloudflare`
-binary; callers without `build-script` retain the npm/npx path.
+The legacy `cloudflare-deploy.yml` workflow remains available for direct,
+unverified deployments. Prefer `local` or an exact Wrangler version over its
+compatibility default of `latest`. See [Verified Cloudflare delivery](cloudflare-delivery.md).

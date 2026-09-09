@@ -54,9 +54,9 @@ Adopt those requirements in consumer repositories before requiring them here.
 ## Commands
 
 ```sh
-code-foundry fleet status --root /path/to/fleet
-code-foundry fleet upgrade --root /path/to/fleet --source /path/to/release-checkout --dry-run
-code-foundry fleet upgrade --root /path/to/fleet --source /path/to/release-checkout --create-pr
+npx code-foundry fleet status --root /path/to/fleet
+npx code-foundry fleet upgrade --root /path/to/fleet --source /path/to/release-checkout --dry-run
+npx code-foundry fleet upgrade --root /path/to/fleet --source /path/to/release-checkout --create-pr
 ```
 
 Use `--source` to provide the clean Code Foundry release checkout used for the

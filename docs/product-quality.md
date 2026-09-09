@@ -20,16 +20,15 @@ Commit a version-1 JSON manifest and use the installed, pinned Foundry runtime:
 
 Wire these scripts into the consumer's existing validation entrypoints. The
 Foundry runtime discovers only `performance:check`/`perf:check` and
-`test:e2e`/`e2e`; if those names do not already exist, they can run
-`bun run quality:build` and `bun run quality:browser`. If they do exist, preserve their current
-commands and compose the quality command after them rather than replacing the
-existing performance or E2E checks. The standalone entrypoint deliberately avoids
-changing the public CLI dispatch being introduced in the separate agent-validation
-PR. Install the reviewed Foundry version in the consumer's existing dependency
-manager and lockfile, not an unpinned network invocation. Add `.code-foundry/` to
-Git/package ignores and retain selected evidence through the consumer workflow's
-artifact uploader. Reports and browser traces may contain application data; review
-retention and never upload authenticated traces publicly without sanitization.
+`test:e2e`/`e2e`. If those names do not already exist, they can run
+`bun run quality:build` and `bun run quality:browser`. If they do exist, preserve
+their current commands and compose the quality command after them rather than
+replacing the existing performance or E2E checks. Install the reviewed Foundry
+version in the consumer's existing dependency manager and lockfile, not through
+an unpinned network invocation. Add `.code-foundry/` to Git/package ignores and
+retain selected evidence through the consumer workflow's artifact uploader.
+Reports and browser traces may contain application data; review retention and
+never upload authenticated traces publicly without sanitization.
 
 ```json
 {

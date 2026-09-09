@@ -1,9 +1,8 @@
 # Performance budgets and baselines
 
-Code Foundry measures its source runtime with `bun run performance:check`. The
-check writes `performance-results.json` for CI artifact upload and fails when a
-budget is exceeded. Generated reports are ignored by Git because measurements
-belong to the run that produced them, not the source tree.
+Code Foundry measures its own runtime with `bun run performance:check`. The
+check writes `performance-results.json` for artifact upload and fails when a
+budget is exceeded. Reports are generated-run evidence and are ignored by Git.
 
 ## Enforced budgets
 
@@ -19,61 +18,51 @@ belong to the run that produced them, not the source tree.
 | Unpacked artifact                   | 991 kB | Bound installed footprint                            |
 | Packed files                        |    115 | Detect accidental release contents                   |
 
+The source-of-truth budgets live in `scripts/performance-check.mjs`. When those
+limits change, update this table and include before/after measurements in the
+same change.
+
 The performance workflow disables build-cache reads and writes for this task.
-That makes timing comparisons independent of a warm protected-branch cache and
-prevents benchmark code from populating shared cache entries.
+Timing comparisons therefore do not depend on a warm protected-branch cache, and
+benchmark code cannot populate shared cache entries.
 
-The merged candidate includes the release-integrity verifier, fleet eligibility,
-consumer qualification harness, product-quality profiles, qualified publication
-workflow, and opt-in merge-queue verifier. The automatic self-publication change
-measured 257,574 packed bytes, 989,943 unpacked bytes, and 112 files on Node
-24.18.0; the corresponding release metadata measures 990,507 unpacked bytes.
-The 260 kB, 991 kB, and 115-file limits retain measured margin while continuing
-to bound package growth.
+## Package profile
 
-## v1.6.1 baseline
+The reusable performance job also supports the opt-in `node-package` profile.
+Configure it in `.github/code-foundry.yml`:
 
-Measurements were taken on 2026-09-08 with Node 24.18.0. Process startup used
-30 measured samples after four warmups; before and after samples were
-interleaved on the same host.
+```yaml
+performance: true
+performance_profile: node-package
+performance_budget_file: performance-package-budgets.json
+```
 
-| Measurement                |   Before |                   After |   Change |
-| -------------------------- | -------: | ----------------------: | -------: |
-| CLI help median            | 36.11 ms |                29.57 ms |   -18.1% |
-| CLI help p95               | 38.11 ms |                31.56 ms |   -17.2% |
-| Runtime mode median        |        - |                35.94 ms | baseline |
-| Focused runtime tests      |        - |                  2.08 s | baseline |
-| Local CI checks            |        - |                  0.50 s | baseline |
-| Packed / unpacked artifact |        - | 160,114 / 616,887 bytes | baseline |
-| Packed files               |        - |                      74 | baseline |
-
-The startup reduction comes from loading command implementations only after
-argument parsing selects a command. `--help` no longer imports sync, release,
-fleet, doctor, and CI command modules.
-
-The first isolated full hosted audit completed in 3 minutes 2 seconds. Its
-longest jobs were TypeScript CodeQL (66 s), dependency audit (62 s), and unit
-tests (46 s); all other suite jobs completed in 20 seconds or less. Those
-measurements identify the three lanes to optimize before adding more CI fanout.
-
-## Release path
-
-Treat budget changes like source changes: explain the measured reason in a
-pull request, run the complete validation gate, and merge only when the new
-result artifact is available. A Release Please PR then carries the change into
-the next version. Never raise a budget solely to clear CI; include before/after
-measurements and the expected effect on local feedback, hosted runner time,
-package transfer, or installed footprint. The current budget covers the measured
-combined release-integrity, fleet, consumer-qualification, and product-quality
-package footprint described above.
+The profile measures cold imports, memory, package size, file counts, and
+production dependency count according to a repository-owned JSON budget file.
+It writes `performance-results/node-package.json`. Every run also writes
+`performance-results/summary.json`, which records repository-owned commands and
+configured performance commands under one stable artifact contract.
 
 ## Native Rust test batching
 
-Each Rust test category invokes Cargo once with tracked targets:
-units use `--lib`/`--bin <package>`; integration, E2E and smoke use repeated
-`--test <target>`. Cargo shares setup without competing processes.
+Each Rust test category invokes Cargo once with tracked targets: unit tests use
+`--lib`/`--bin <package>`, while integration, E2E, and smoke tests use repeated
+`--test <target>` arguments. Cargo shares setup without competing processes.
 
-Discovery, category boundaries, fallback, scripts, Python checks, flags and
-receipts stay unchanged. `--tests`/`--all-targets` stay avoided to prevent
-broader or repeated coverage. Executables may run serially; measure cold/warm
-runs, including compile and cache transfer, before claiming speedup.
+Discovery, category boundaries, fallback behavior, scripts, Python checks, flags,
+and receipts remain unchanged. `--tests` and `--all-targets` stay avoided to
+prevent broader or repeated coverage. Measure cold and warm runs, including
+compilation and cache transfer, before claiming a speedup.
+
+## Changing a budget
+
+Treat budget changes like source changes:
+
+1. capture before/after measurements;
+2. explain the effect on local feedback, runner time, package transfer, or
+   installed footprint;
+3. run the complete validation gate; and
+4. inspect the resulting performance artifact.
+
+Never raise a limit solely to clear CI. Keep network-dependent checks, live
+endpoints, and post-deployment probes in separate repository-owned workflows.

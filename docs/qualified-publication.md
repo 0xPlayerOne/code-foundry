@@ -1,79 +1,77 @@
-# Qualified Publication
+# Qualified publication
 
-Publish only the same immutable Code Foundry archive that passed consumer qualification.
+Code Foundry publishes only the same immutable archive that passed consumer
+qualification. This path is used by Code Foundry's own release caller; generated
+consumer release callers keep the ordinary `release.yml` behavior.
 
-**Dependencies:** Consumer qualification handoff (#556) and the existing release-integrity/publication modules.
-**Activation:** Code Foundry self-caller cutover; consumer release defaults are unchanged. Complete the prerequisites below before merging the self-caller change.
+## Publication contract
 
-The reusable `qualified-foundry-publish.yml` downloads an explicitly named npm
-archive from an already-published immutable release, verifies the release and
-asset attestations against the caller's exact commit, qualifies that same archive
-on Node 20/22/24, and only then admits the npm publication job. The self caller
-has no environment approval gate; all qualification and integrity checks remain
-in place. The final job downloads only reports from its own workflow run **and
-run attempt**, rechecks
-all required fixtures and archive/source identities, repeats cryptographic asset
-verification, validates the package name/version, and publishes the tarball with
-lifecycle scripts disabled. It never publishes a directory or rebuilds the package.
+The self-release pipeline is intentionally staged:
+
+1. `consumer-qualification.yml` packs the candidate once and qualifies it across
+   Node 20, 22, and 24.
+2. Release Please creates a draft release for the qualified source.
+3. The staging job attaches the exact archive and a digest-bound qualification
+   receipt, publishes the immutable GitHub Release, and verifies its identity.
+4. `qualified-foundry-publish.yml` downloads that archive and the reports from
+   its own workflow run and attempt, requalifies all three Node versions, and
+   publishes the tarball.
+
+The reusable publisher downloads an explicitly named npm archive from the
+already-published immutable release, verifies the release and asset attestations
+against the caller's exact commit, and only then admits the npm publication job.
+The final job downloads only reports from its own workflow run and attempt,
+rechecks all required fixtures and archive/source identities, repeats cryptographic
+asset verification, validates the package name/version, and publishes the tarball
+with lifecycle scripts disabled. It never publishes a directory or rebuilds the
+package.
 
 The publishing job serializes publication for a tag and has no dependency
 installation/build step. Qualification has no npm credential. This self-only
-publisher intentionally has no environment approval gate; publication is
-automatic after its completed gates.
-Normal npm trusted publishing is preferred; an explicit optional token supports
-existing consumers. Configure the trusted publisher for the **actual caller and
-reusable-workflow relationship** before enabling this route. Existing version
-publication is not overwritten: retrying an already-published version fails rather
-than treating a registry conflict or network error as proof of identity.
+publisher has no environment approval gate; publication is automatic after its
+completed gates. npm trusted publishing is preferred; an explicit optional token
+supports environments that cannot use it. Configure the trusted publisher for the
+**actual caller and reusable-workflow relationship** before enabling this route.
+Existing version publication is not overwritten: retrying an already-published
+version fails rather than treating a registry conflict or network error as proof
+of identity.
 
-## Release producer contract
+The publisher never rebuilds the package, publishes a directory, or treats an
+already-published version conflict as proof of success. The workflow uses npm
+trusted publishing when no `NPM_TOKEN` is supplied; the optional token is a
+fallback for environments that cannot use trusted publishing.
 
-Build and test a package once, attach its tarball to a **draft** release, then
-publish that release with immutability enabled. The archive must contain the
-Code Foundry CLI/templates; this is intentionally not a generic package harness.
-The candidate's `package.json` name must be `code-foundry` and its version must
-match the explicit tag. All qualification modules must exist in the caller commit.
-A recent GitHub CLI with `release verify` and `release verify-asset` is required;
-missing support or authentication errors fail closed.
+Qualification and publication are gated on `main` push or an explicitly
+requested `workflow_dispatch`. The shared billing pause blocks normal runs. A
+manual release-only dispatch can pass `billing-pause-bypass: true` through the
+publisher, but it does not bypass environment approvals, branch protection, or
+identity checks.
 
-This workflow blocks npm publication, not a GitHub Release that was already
-published. It does **not** add assets after an immutable release is published.
-The `stage` command implements the draft-asset producer: it verifies qualification,
-checks immutability without changing settings, resolves the existing tag to the
-qualified commit, uploads the archive and digest-bound qualification receipt,
-rechecks uploaded digests, then publishes and verifies the release. It requires
-an existing draft and existing tag; it never creates/moves tags or overwrites
-conflicting assets. Settings permission failures block writes. Matching existing
-assets can resume staging; conflicting assets require manual reconciliation.
-The pre-release gate in #544 supplies the required matrix reports.
-The generic Release Please workflow retains direct publication by default.
-Its `config-file` input selects a repository-contained JSON configuration;
-`defer-publication: true` requires a single root package with `draft` and
-`force-tag-creation` enabled. It disables legacy npm, reconciliation and post-release
-jobs together and exposes `release_created`, `tag_name`, and `sha` to the caller.
-The self caller uses this route, followed by:
+## Release producer requirements
 
-```sh
-node src/commands/qualified-publication.mjs stage \
-  "$GITHUB_REPOSITORY" "$TAG" "$SOURCE_SHA" "$ASSET" "$CANDIDATE_DIRECTORY" \
-  "$REPORT_NODE_20" "$REPORT_NODE_22" "$REPORT_NODE_24"
-```
+The producer must:
 
-The stage command needs a credential with immutable-setting read, release
-write, and attestation-read access; a normal Actions token may lack the
-administration-read permission.
-No elevated credential is installed or requested automatically. The producer must
-also prevent concurrent tag mutation (for example with protected release-tag
-rules and a single tag-scoped producer); GitHub does not offer an atomic
-"publish this draft only if the tag still resolves to SHA" operation. The final
-verification blocks npm if that invariant is violated, but cannot undo an
-already-published immutable release.
+- pack the candidate with lifecycle scripts disabled;
+- create or reuse a draft release for the exact package version;
+- attach the package archive before the release is published;
+- keep the tag at the qualified source commit;
+- enable and verify GitHub release immutability before publication; and
+- serialize release-tag mutation so two producers cannot race.
 
-The self caller disables the old npm path with `defer-publication: true` and sends
-no npm credential to the Release Please job. Generic consumer callers are not
-opted in. This code change does not configure production settings or credentials.
+The candidate package must be named `code-foundry`, and its version must match
+the explicit release tag. A recent GitHub CLI with `release verify` and
+`release verify-asset` support is required. Missing support, ambiguous release
+identity, unavailable permissions, changed assets, or conflicting assets fail
+closed.
 
-Example caller job after its release producer (illustrative job IDs):
+The generic reusable `release.yml` supports `defer-publication: true` for this
+producer pattern. That mode suppresses its legacy npm, reconciliation, and
+post-release jobs while exposing the release outputs needed by the self caller.
+Consumer callers do not inherit the self-only qualification and staging jobs.
+
+## Reusable publisher interface
+
+The caller supplies the tag and exact pre-attached archive name:
 
 ```yaml
 permissions:
@@ -81,6 +79,7 @@ permissions:
   attestations: read
   contents: read
   id-token: write
+
 jobs:
   publish:
     needs: release-producer
@@ -92,81 +91,81 @@ jobs:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-Only main-branch `push` and `workflow_dispatch` callers are admitted. Pull-request
-events (including fork PRs) and release-event shortcuts cannot publish through
-this workflow. Billing-paused runs remain blocked unless the main-branch caller
-is an explicit `workflow_dispatch` with `billing-pause-bypass: true`; the self
-caller forwards only its existing `release-while-paused` manual input. The event guard does not itself verify
-branch protection or prohibit a fork's independent main-branch workflow; configure
-branch/environment protections and registry publisher identity separately.
-The tag must resolve to `github.sha`, not a caller-selected old commit. To retry
-an older release after main moves, use a separately reviewed recovery procedure;
-do not weaken the identity gate ad hoc.
+For the self repository, `release_self-ci.yml` supplies the release output and
+uses the protected `npm` environment. Configure trusted publishing for the
+actual caller/reusable-workflow relationship, not only for a similarly named
+workflow. Protect both the `release` and `npm` environments with the intended
+branch restrictions and approvals.
 
-## Local policy tests and trust
+## Identity and retry rules
 
-`node --test test/qualified-publication.test.mjs` uses CLI/verifier fixtures to
-exercise missing matrix members, skipped checks, absent Actionlint, changed
-archives, invalid asset names, wrong package identity, and prevention of npm
-execution before verification. These tests do not establish live GitHub signing,
-OIDC permissions, registry publication, or runner tool availability.
+Every qualification report is bound to the source SHA, archive digest, Node
+version, and workflow attempt. The staging and publish jobs verify:
 
-Qualification reports are not standalone signatures: they are trusted only after
-selection from this workflow's successful jobs in the same run attempt. Supplying
-arbitrary local JSON to the library is not a security boundary. The reusable
-workflow and its caller must be reviewed/trusted and protected; repository-owned
-code executes with the permissions of its job. No credentials or production
-resources were configured by adding this feature.
+- the tag resolves to the current `github.sha`;
+- the archive name and package identity are expected;
+- all required Node reports belong to the same run attempt;
+- the downloaded bytes match the qualified digest; and
+- the release and assets have not been replaced.
 
-## Self-caller activation and recovery
+On a failed or cancelled qualification, use **Re-run all jobs**. A failed-job-only
+rerun cannot safely reuse an earlier pack or combine reports from different
+attempts. Missing or expired artifacts require a fresh run.
 
-`release_self-ci.yml` now sequences qualification and a read-only immutability
-preflight, draft creation, protected asset staging, then the verified publisher.
-`.github/release-please-foundry.json` is self-only: the root template and generated
-consumer configurations keep ordinary release behavior. The staging guard requires
-Release Please's exact SHA/tag, the qualified source/digest, and the current
-run/attempt artifact name to match before downloads or writes. No package is
-rebuilt between the qualification gate, draft staging and npm publication.
-The final publisher independently requalifies the immutable downloaded bytes.
+If Release Please reports that no new release was created, the recovery path may
+reuse an exact draft release only when its tag, version, source SHA, and draft
+state still match the qualified candidate. An already-published release is never
+restaged or overwritten. Inspect the retained staging and publication identity
+receipts when recovery is needed.
 
-**Before merging the cutover**, enable immutable releases and verify the setting
-with the actual `CODE_FOUNDRY_TOKEN` (or workflow credential), then set
-`REQUIRE_IMMUTABLE_RELEASES=true`. Missing permissions, a disabled/unknown setting,
-or a CLI without release verification support fail before Release Please writes.
-Protect release tags against concurrent moves. This self-only publisher has no
-GitHub environment approval gate, so publication follows the completed CI,
-qualification, and integrity gates. A YAML environment reference does not prove
-those protections exist. The staging
-token needs administration-read, contents-write and verification access; it is
-never exposed to the qualification jobs. Preflight and staging reuse the
-producer's validated credential selection, falling back to the workflow token
-only when the configured token is rejected. Configure npm trusted-publisher
-identity for the actual caller/reusable workflow, or explicitly retain the
-optional npm token in the final publisher. None of these settings is changed by
-this PR.
+## Publication prerequisites
+
+Enable immutable releases and verify the setting with the actual
+`CODE_FOUNDRY_TOKEN` (or workflow credential), then set
+`REQUIRE_IMMUTABLE_RELEASES=true`. Missing permissions, a disabled or unknown
+setting, or a CLI without release verification support fail before Release Please
+writes. Protect release tags against concurrent moves. The staging token needs
+administration-read, contents-write, and verification access; it is never exposed
+to qualification jobs. Preflight and staging reuse the producer's validated
+credential selection, falling back to the workflow token only when the configured
+token is rejected. Configure npm trusted-publisher identity for the actual
+caller/reusable-workflow relationship, or explicitly retain the optional npm
+token in the final publisher.
+
+## Trust boundaries
+
+Qualification reports are evidence selected from successful jobs in the same
+workflow attempt; they are not standalone signatures or authorization outside
+the protected workflow. The workflow executes repository-owned code with the
+permissions of its job. Keep credentials out of qualification jobs and review
+release/environment protections separately. A YAML environment reference does
+not prove that approval protections exist.
 
 Run the full locked-toolchain suite, Actionlint contracts, and a disposable-repo
 release/signing/registry rehearsal before production approval. The producer
 serializes the full release workflow and never cancels an active publish. The
-self caller auto-publishes after its gates without bypassing branch/review
+self caller auto-publishes after its gates without bypassing branch or review
 requirements for source changes.
 
-Use **Re-run all jobs** for qualification failures; attempts cannot reuse earlier
-reports. If Release Please returns `release_created: false`, the recovery job
-looks up only the package version's draft release, resolves its tag, and resumes
-only when that tag still points to the newly qualified source. Missing or already
-published releases are a safe no-op; malformed, inaccessible, or source-mismatched
-drafts fail closed. Inspect the retained identity receipts. Once a release is
-published, do not attempt to re-stage or overwrite it: rerun the verified
-publisher from the same source-bound workflow after confirming npm has not already
-accepted that version. Never weaken the SHA guard, move an immutable tag, or treat
-npm's version-conflict response as success.
+The staging command requires release-write, attestation-verification, and
+immutable-setting read access. No elevated credential is installed automatically.
+If the configured automation token is rejected, the producer's documented
+fallback is used only where the workflow permits it; missing permissions fail
+closed.
 
-After rebasing onto the current main release and task-receipt workflows, the
-combined candidate measures 255,195 packed bytes, 981,678 unpacked bytes, and
-112 files. The cutover caps packed bytes at 260,000 and files at 115, and caps
-unpacked bytes at 990,000 to retain measured headroom for its
-workflow/configuration/documentation additions. Startup/test timing and
-dependency budgets remain unchanged. Re-measure after merging independent
-workflow changes; the added policy does not justify a runtime performance
-regression or a dependency increase.
+## Validation
+
+Run the focused local suites before changing this path:
+
+```sh
+node --test test/consumer-qualification.test.mjs
+node --test test/consumer-qualification-workflow.test.mjs
+node --test test/qualification-handoff.test.mjs
+node --test test/qualified-publication.test.mjs
+node --test test/release-cutover.test.mjs
+```
+
+These tests use fixtures and do not establish live GitHub signing, OIDC
+permissions, registry publication, environment approvals, or runner tool
+availability. Exercise those controls in a disposable repository before changing
+production release settings.
