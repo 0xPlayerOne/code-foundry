@@ -106,7 +106,10 @@ This repository uses the `direct` workflow. Topic pull requests target `main`.
 - Keep ordinary pull requests in draft while preparing them. The generated
   Draft Guard converts ready ordinary pull requests to draft when they are
   opened or reopened, and runner-heavy validation starts only after an
-  explicit `ready_for_review` transition.
+  explicit `ready_for_review` transition unless `draft_protection: false` is
+  configured for generated callers. That opt-out does not disable Draft Guard
+  or draft-PR automation. Cloudflare reusable callers use
+  `draft-protection: false`.
 - Run local validation and finish review preparation before marking an ordinary
   pull request ready. Ready pull requests stay ready when new commits arrive,
   and validation reruns for the current head; draft updates allocate no

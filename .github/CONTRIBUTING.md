@@ -44,7 +44,10 @@ This repository uses the `direct` workflow. Topic pull requests target `main`.
 - Keep ordinary pull requests in draft while preparing them. The generated
   Draft Guard converts ready ordinary pull requests to draft when they are
   opened or reopened, and runner-heavy validation starts only after an
-  explicit `ready_for_review` transition.
+  explicit `ready_for_review` transition unless `draft_protection: false` is
+  configured for generated callers. That opt-out does not disable Draft Guard
+  or draft-PR automation. Cloudflare reusable callers use
+  `draft-protection: false`.
 - Run local validation and finish review preparation before marking an ordinary
   pull request ready. Ready pull requests stay ready when new commits arrive,
   and validation reruns for the current head; draft updates allocate no
@@ -184,7 +187,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 | Push to a working branch                           | Draft PR workflow                                                                     |
 | Push to `main`                                     | Release workflow plus default-branch CodeQL scan; validation ran on the merged PR     |
 
-Draft pull requests do not start validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft runs only the lightweight cancellation control.
+Draft pull requests do not start validation unless `draft_protection: false` is configured. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner while protection is enabled. Converting a pull request to draft runs only the lightweight cancellation control.
 
 Pull-request validation keys concurrency by event and pull-request head, so a newer update cancels its superseded run. Scheduled and manual audits use a separate caller pinned to the protected default branch; this prevents caller-selected runtime code from executing with default-branch cache access. Pull-request and scheduled/manual callers use the mode-aware orchestrator, which fans out only the required jobs and concludes with the stable aggregate gate. Main pushes run the default-branch CodeQL lane separately.
 

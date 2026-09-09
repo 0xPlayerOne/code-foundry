@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: preview
+      draft-protection:
+        description: 'Skip draft pull requests by default; set false to run candidate gates for drafts.'
+        required: false
+        type: boolean
+        default: true
       working-directory:
         required: false
         type: string
@@ -113,6 +118,7 @@ jobs:
   candidate:
     if: >-
       vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       github.event_name != 'pull_request_target' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -239,6 +245,7 @@ jobs:
     needs: candidate
     if: >-
       vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       inputs.mode == 'production' && needs.candidate.outputs.verified == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30

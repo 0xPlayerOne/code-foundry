@@ -6,24 +6,27 @@ budget is exceeded. Reports are generated-run evidence and are ignored by Git.
 
 ## Enforced budgets
 
-| Metric                              | Budget | Why it is bounded                                    |
-| ----------------------------------- | -----: | ---------------------------------------------------- |
-| CLI help startup p95                | 250 ms | Detect eager imports and startup regressions         |
-| Runtime mode startup p95            | 250 ms | Detect baseline runtime initialization regressions   |
-| Focused runtime tests               |   10 s | Keep the representative runtime contract inexpensive |
-| Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
-| Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
-| Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 260 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 995 kB | Bound installed footprint                            |
-| Packed files                        |    115 | Detect accidental release contents                   |
+| Metric                              |   Budget | Why it is bounded                                    |
+| ----------------------------------- | -------: | ---------------------------------------------------- |
+| CLI help startup p95                |   250 ms | Detect eager imports and startup regressions         |
+| Runtime mode startup p95            |   250 ms | Detect baseline runtime initialization regressions   |
+| Focused runtime tests               |     10 s | Keep the representative runtime contract inexpensive |
+| Format, lint, type-check, and build |     15 s | Bound the local CI feedback loop                     |
+| Runtime dependencies                |        0 | Keep the installed CLI dependency-free               |
+| Development dependencies            |        4 | Prevent unreviewed toolchain growth                  |
+| Packed artifact                     |   260 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 1,000 kB | Bound installed footprint                            |
+| Packed files                        |      115 | Detect accidental release contents                   |
 
 The source-of-truth budgets live in `scripts/performance-check.mjs`. When those
 limits change, update this table and include before/after measurements in the
-same change. The Cloudflare delivery and qualified-publication changes in this
-release moved the measured artifact from 990,481 to 994,555 unpacked bytes
-(257,384 to 258,647 packed bytes, with 112 files in both measurements), so the unpacked budget
-is 995 kB while the packed and file-count budgets remain unchanged.
+same change. The Cloudflare delivery and qualified-publication changes in this release
+moved the measured artifact from 990,481 to 994,555 unpacked bytes (257,384 to
+258,647 packed bytes, with 112 files in both measurements). Draft protection
+configuration, reusable-workflow inputs, documentation, and regression tests
+increased the measured artifact to 998,348 unpacked bytes (259,532 packed bytes,
+with 112 files). The unpacked budget is therefore 1,000 kB; the packed and
+file-count budgets remain unchanged.
 
 The performance workflow disables build-cache reads and writes for this task.
 Timing comparisons therefore do not depend on a warm protected-branch cache, and

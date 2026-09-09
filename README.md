@@ -82,9 +82,11 @@ PRs: it converts them to drafts without checking out PR code. It verifies the
 event head and update timestamp before changing state, and excludes Release
 Please version PRs whose release workflow owns readiness. Pull-request
 validation runs on the ready-for-review transition and on new commits while a
-PR remains ready; draft updates allocate no validation runner. Converting a PR
-to draft runs only the lightweight cancellation control. Scheduled and manually
-dispatched audits are unaffected.
+PR remains ready; draft updates allocate no validation runner by default. Set
+`draft_protection: false` in generated consumer configuration, or pass
+`draft-protection: false` to a Cloudflare reusable workflow, to run those gates
+for drafts. Converting a PR to draft runs only the lightweight cancellation
+control. Scheduled and manually dispatched audits are unaffected.
 
 Jobs are language-aware and skip irrelevant setup inside the applicable
 aggregate checks. TypeScript uses Oxlint, Oxfmt, and Bun's native

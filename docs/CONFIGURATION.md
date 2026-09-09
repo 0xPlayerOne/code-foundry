@@ -44,6 +44,7 @@ to require an existing mise configuration.
 | `runtime_repository`    | `OWNER/REPO`                                 | Source of reusable workflows and runtime code.                       |
 | `runtime_ref`           | tag or commit                                | Runtime version used by generated callers.                           |
 | `features`              | `all` or a list                              | See [Feature selection](#feature-selection).                         |
+| `draft_protection`      | `true`, `false`                              | Skip generated runner-heavy gates for draft PRs when false.          |
 | `codeql`                | `auto`, `true`, `false`                      | Enable CodeQL when the repository and GitHub plan support it.        |
 | `dependency_review`     | `auto`, `true`, `false`                      | Enable Dependency Review when supported.                             |
 | `runner` and `*_runner` | GitHub runner labels                         | Override the default runner per workflow.                            |
@@ -53,6 +54,13 @@ available GitHub security checks and private repositories require the relevant
 capability. Set either key to `false` when the check is unavailable or not
 wanted. CodeQL is omitted from the generated validation caller; Dependency
 Review remains a conditional step inside Security rather than a separate check.
+
+Code Foundry runner-heavy validation, security, qualification, and Cloudflare
+Deployment jobs protect draft pull requests by default. The `draft_protection`
+configuration key defaults to `true`; set it to `false` only when the repository
+intentionally runs generated gates for draft PRs. Cloudflare reusable-workflow
+callers use their equivalent `draft-protection` input. These opt-outs affect
+CI/deployment gates only and do not disable Draft Guard or draft-PR automation.
 
 ## Feature selection
 

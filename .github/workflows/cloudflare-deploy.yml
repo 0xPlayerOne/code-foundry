@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: preview
+      draft-protection:
+        description: 'Skip draft pull requests by default; set false to run deployments for drafts.'
+        required: false
+        type: boolean
+        default: true
       working-directory:
         required: false
         type: string
@@ -68,6 +73,7 @@ jobs:
     name: Cloudflare Deploy / ${{ inputs.mode }}
     if: >-
       vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       github.event_name != 'pull_request_target' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ inputs.runner }}
