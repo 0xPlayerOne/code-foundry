@@ -1,0 +1,56 @@
+name: Attest verified build artifacts
+description: Generate checksums and signed provenance for explicitly selected build outputs.
+inputs:
+  artifacts:
+    description: 'JSON array of nonempty regular artifact files relative to the workspace.'
+    required: true
+outputs:
+  manifest-path:
+    description: Path to the generated SHA-256 JSON manifest.
+    value: ${{ steps.manifest.outputs.manifest-path }}
+  bundle-path:
+    description: Path to the signed provenance bundle.
+    value: ${{ steps.attest.outputs.bundle-path }}
+  attestation-url:
+    description: URL of the published attestation.
+    value: ${{ steps.attest.outputs.attestation-url }}
+runs:
+  using: composite
+  steps:
+    - name: Select and hash build outputs
+      id: manifest
+      shell: bash
+      env:
+        ARTIFACTS: ${{ inputs.artifacts }}
+      run: |
+        set -euo pipefail
+        [[ "$GITHUB_EVENT_NAME" != pull_request && "$GITHUB_EVENT_NAME" != pull_request_target ]]
+        node --input-type=module <<'NODE'
+        import { appendFileSync, mkdtempSync, writeFileSync } from 'node:fs'
+        import { join, resolve } from 'node:path'
+        import { pathToFileURL } from 'node:url'
+        const helper = pathToFileURL(resolve(process.env.GITHUB_ACTION_PATH, '../../../src/commands/release-integrity.mjs'))
+        const { assetManifest } = await import(helper.href)
+        const files = JSON.parse(process.env.ARTIFACTS)
+        if (!Array.isArray(files) || files.some(file => typeof file !== 'string')) throw new Error('artifacts must be a JSON string array')
+        const manifest = assetManifest(process.env.GITHUB_WORKSPACE, files)
+        const directory = mkdtempSync(join(process.env.RUNNER_TEMP, 'foundry-attestation-'))
+        const manifestPath = join(directory, 'manifest.json')
+        const sumsPath = join(directory, 'SHA256SUMS')
+        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+        writeFileSync(sumsPath, manifest.checksums)
+        appendFileSync(process.env.GITHUB_OUTPUT, `manifest-path=${manifestPath}\nchecksums-path=${sumsPath}\n`)
+        NODE
+    - name: Sign build provenance
+      id: attest
+      uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      with:
+        subject-checksums: ${{ steps.manifest.outputs.checksums-path }}
+    - name: Verify artifacts were not changed during signing
+      shell: bash
+      env:
+        CHECKSUMS_PATH: ${{ steps.manifest.outputs.checksums-path }}
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE"
+        sha256sum --check "$CHECKSUMS_PATH"
