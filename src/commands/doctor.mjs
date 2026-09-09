@@ -181,10 +181,15 @@ export function doctor(root, options = {}) {
         'validation caller is missing the Validation job; the Validation / Gate aggregate check cannot form.'
       )
     }
-    if (!/types:\n\s+- ready_for_review/.test(caller)) {
-      error('validation caller must wait for the ready_for_review transition.')
+    if (
+      !/types:\n\s+- ready_for_review\n\s+- synchronize/.test(caller) ||
+      !/github\.event\.pull_request\.draft == false/.test(caller)
+    ) {
+      error(
+        'validation caller must run for ready pull requests and their new commits while ignoring drafts.'
+      )
     }
-    if (/\s+- (?:opened|synchronize|reopened|converted_to_draft)\s*$/.test(caller)) {
+    if (/^\s+- (?:opened|reopened|converted_to_draft)\s*$/m.test(caller)) {
       error('validation caller registers draft-time checks; run code-foundry sync.')
     }
     if (
