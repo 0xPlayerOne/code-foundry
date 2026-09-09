@@ -23,7 +23,11 @@ unit_runner: ubuntu-slim
 performance_runner: ubuntu-latest
 cache_packages: auto
 cache_build: auto
+required_capabilities:
+coverage_enforcement: auto
 coverage_minimum: 80
+coverage_metrics: lines
+coverage_report:
 turbo_remote: auto
 ci_runner: ubuntu-latest
 test_runner: ubuntu-latest

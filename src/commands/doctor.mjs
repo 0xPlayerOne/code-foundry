@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
+import { packageManagerForLockfile } from '../lib/lockfiles.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
 import { isGeneratedEventCaller } from './sync.mjs'
 
@@ -69,9 +70,7 @@ export function doctor(root, options = {}) {
     if (lockfiles.length > 1) error('multiple JavaScript lockfiles found; keep one package manager')
     if (packageJson.packageManager && lockfiles.length) {
       const declared = String(packageJson.packageManager).split('@')[0]
-      const actual = lockfiles[0]?.startsWith('bun')
-        ? 'bun'
-        : lockfiles[0]?.split('-')[0].replace('.yaml', '')
+      const actual = packageManagerForLockfile(lockfiles[0])
       if (actual && declared !== actual)
         error(`packageManager (${declared}) does not match ${actual} lockfile`)
     }

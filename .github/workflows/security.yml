@@ -88,6 +88,7 @@ jobs:
           sparse-checkout: |
             .github/actions
             src/lib
+            src/runtime-core.mjs
             src/runtime.mjs
       - name: Install runtime
         run: |
@@ -210,6 +211,7 @@ jobs:
           sparse-checkout: |
             .github/actions
             src/lib
+            src/runtime-core.mjs
             src/runtime.mjs
       - name: Install runtime
         run: |
