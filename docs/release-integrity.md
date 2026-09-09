@@ -23,7 +23,7 @@ assets must review their attachment ordering before enabling immutability.
 A release workflow can run this preflight before publication:
 
 ```sh
-node src/commands/release-integrity.mjs settings --repo owner/repository
+npx code-foundry release-integrity settings --repo owner/repository
 ```
 
 The setting endpoint needs an authenticated identity with repository
@@ -36,7 +36,7 @@ in the verifier.
 ## Verify published releases and local assets
 
 ```sh
-node src/commands/release-integrity.mjs release \
+npx code-foundry release-integrity release \
   --repo owner/repository --tag v1.2.3 \
   --expected-sha FULL_40_CHARACTER_COMMIT_SHA \
   --asset dist/package.tgz
@@ -118,7 +118,7 @@ change does not replace or require an npm token.
 Generate a local unsigned manifest without GitHub/network access with:
 
 ```sh
-node src/commands/release-integrity.mjs manifest --asset dist/package.tgz
+npx code-foundry release-integrity manifest --asset dist/package.tgz
 ```
 
 That command makes no provenance or authenticity claim.
