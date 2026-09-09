@@ -129,17 +129,22 @@ jobs:
           }
           const version = JSON.parse(readFileSync("package.json", "utf8")).version
           const tag = `v${version}`
-          const endpoint = `repos/${process.env.GITHUB_REPOSITORY}/releases/tags/${encodeURIComponent(tag)}`
-          const response = runGh(["api", "--include", endpoint])
-          if (response.status !== 0 && /HTTP\/\d(?:\.\d)? 404\b/.test(response.stdout)) {
-            write("false")
-            process.exit(0)
-          }
+          // GitHub's get-by-tag endpoint does not return draft releases. Use
+          // the authenticated release list and inspect every page instead.
+          const endpoint = `repos/${process.env.GITHUB_REPOSITORY}/releases?per_page=100`
+          const response = runGh(["api", "--paginate", "--slurp", endpoint])
           if (response.status !== 0) throw new Error("Could not inspect the expected draft release; recovery remains blocked")
-          const separator = response.stdout.indexOf("\r\n\r\n")
-          if (separator < 0) throw new Error("GitHub returned an invalid release response; recovery remains blocked")
-          const release = JSON.parse(response.stdout.slice(separator + 4))
-          if (release.draft !== true) {
+          let pages
+          try {
+            pages = JSON.parse(response.stdout)
+          } catch {
+            throw new Error("GitHub returned an invalid release response; recovery remains blocked")
+          }
+          if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) {
+            throw new Error("GitHub returned an invalid release list; recovery remains blocked")
+          }
+          const release = pages.flat().find((entry) => entry?.tag_name === tag)
+          if (!release || release.draft !== true) {
             write("false")
             process.exit(0)
           }

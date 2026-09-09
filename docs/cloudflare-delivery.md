@@ -85,7 +85,10 @@ and new production workflows active.
 Outputs include preview URL, exact version ID, source SHA, declared build-tree
 SHA-256 digest, Cloudflare deployment ID, and GitHub application deployment ID.
 Explicit application deployment records receive in-progress and success/failure
-statuses, in addition to GitHub's environment-job records. Sanitized candidate and
+statuses, in addition to GitHub's environment-job records. For pull requests,
+the deployment record is associated with `github.event.pull_request.head.sha`,
+not GitHub Actions' merge commit, so GitHub can display the preview in the PR's
+Deployments section. Direct pushes use `github.sha`. Sanitized candidate and
 production JSON evidence is uploaded even on failure. Binding values, API bodies,
 and credentials are not copied into those reports. Forced runner termination may
 prevent final status steps; the GitHub job still reflects cancellation/failure.
@@ -166,11 +169,16 @@ the deployment API intentionally changes version routing only.
 
 `cloudflare-deploy.yml` uses real job environments, non-cancelling concurrency,
 structured Wrangler output, exact/local Wrangler selection, reusable outputs, and
-in-progress/failure deployment records. Its compatibility default remains
-`latest`; callers should prefer `local` or an exact version for reproducibility. A
-production URL can be supplied with `deployment-url` when API output contains only
-route patterns. It is still a **direct, unverified deployment**; use
-`cloudflare-delivery.yml` for candidate verification and guarded promotion.
+in-progress/failure deployment records. Its preview deployment records use the
+pull request head SHA when called from a PR, so completed previews appear in that
+PR's Deployments section; direct pushes use the workflow SHA. Its compatibility
+default remains `latest`; callers should prefer `local` or an exact version for
+reproducibility. A production URL can be supplied with `deployment-url` when API
+output contains only route patterns. It is still a **direct, unverified deployment**;
+adopt `cloudflare-delivery.yml` for candidate verification and
+guarded promotion. Consumers pinned to an older Code Foundry release must update
+their reusable workflow reference; existing deployments are not retroactively
+re-associated with the PR head commit.
 
 ## References and testing
 

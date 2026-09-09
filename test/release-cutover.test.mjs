@@ -269,6 +269,8 @@ test('failed release creation reruns recover only an exact source-bound draft', 
   assert.match(recovery, /needs: \[qualification, release\]/)
   assert.match(recovery, /RELEASE_CREATED/)
   assert.match(recovery, /resolveTagCommit/)
+  assert.match(recovery, /releases\?per_page=100/)
+  assert.match(recovery, /--paginate.*--slurp/)
   assert.match(recovery, /release\.draft !== true/)
   assert.match(recovery, /sourceSha\.toLowerCase\(\) !== process\.env\.SOURCE_SHA\.toLowerCase\(\)/)
   assert.match(caller, /needs\.recovery\.outputs\.found == 'true'/)

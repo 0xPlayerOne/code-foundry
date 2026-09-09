@@ -98,9 +98,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ inputs.mode }}
           ENVIRONMENT: ${{ inputs.environment || (inputs.mode == 'production' && 'Production' || 'Preview') }}
+          GITHUB_DEPLOYMENT_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          body=$(jq -n --arg ref "$GITHUB_SHA" --arg environment "$ENVIRONMENT" \
+          body=$(jq -n --arg ref "$GITHUB_DEPLOYMENT_REF" --arg environment "$ENVIRONMENT" \
             --argjson production "$([ "$MODE" = production ] && echo true || echo false)" \
             '{ref: $ref, environment: $environment, auto_merge: false, production_environment: $production, required_contexts: []}')
           id=$(gh api "repos/$GITHUB_REPOSITORY/deployments" --input - <<< "$body" --jq .id)

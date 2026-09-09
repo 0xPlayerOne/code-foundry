@@ -252,15 +252,28 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
     )
   }
   checkTag()
-  const endpoint = `${prefix}/releases/tags/${encodeURIComponent(candidate.tag)}`
-  const release = api(endpoint)
-  ensure(
-    Number.isSafeInteger(release.id) &&
-      release.draft === true &&
-      release.tag_name === candidate.tag &&
-      Array.isArray(release.assets),
-    'An existing draft release with the exact tag is required'
-  )
+  const listEndpoint = `${prefix}/releases?per_page=100`
+  const findDraftRelease = () => {
+    const pages = JSON.parse(
+      run('gh', ['api', '--hostname', 'github.com', '--paginate', '--slurp', listEndpoint])
+    )
+    ensure(
+      Array.isArray(pages) && pages.every((page) => Array.isArray(page)),
+      'GitHub returned an invalid release list'
+    )
+    const release = pages.flat().find((entry) => entry?.tag_name === candidate.tag)
+    ensure(
+      Number.isSafeInteger(release?.id) &&
+        release.draft === true &&
+        release.tag_name === candidate.tag &&
+        Array.isArray(release.assets),
+      'An existing draft release with the exact tag is required'
+    )
+    return release
+  }
+  // GitHub's get-by-tag endpoint does not return draft releases. Enumerate the
+  // authenticated release list instead, including all pages, before any write.
+  const release = findDraftRelease()
   const temporary = mkdtempSync(join(tmpdir(), 'foundry-release-receipt-'))
   try {
     const receipt = join(temporary, 'qualification.json')
@@ -288,7 +301,7 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
           candidate.repository,
         ])
     }
-    const uploaded = api(endpoint)
+    const uploaded = findDraftRelease()
     ensure(
       uploaded.id === release.id && uploaded.draft === true && uploaded.tag_name === candidate.tag,
       'Draft changed during staging'
