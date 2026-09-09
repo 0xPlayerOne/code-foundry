@@ -239,9 +239,9 @@ test('all legacy downstream jobs are disabled together during external publicati
   assert.doesNotMatch(producer, /NPM_TOKEN/)
   assert.match(producer, /needs: \[qualification, preflight\]/)
 })
-test('staging consumes verified current-attempt bytes without a rebuild and uses a protected job', () => {
+test('staging consumes verified current-attempt bytes without a rebuild and keeps publication automatic', () => {
   const stage = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
-  assert.match(stage, /environment: release/)
+  assert.doesNotMatch(stage, /environment: release/)
   assert.match(stage, /needs: \[qualification, release, recovery\]/)
   assert.match(stage, /needs\.qualification\.outputs\.candidate-artifact/)
   assert.match(stage, /test "\$\(sha256sum .*\)" = "\$CANDIDATE_SHA256"/)
@@ -250,7 +250,9 @@ test('staging consumes verified current-attempt bytes without a rebuild and uses
   assert.doesNotMatch(stage, /npm (pack|publish|install)|bun install|secrets.NPM_TOKEN/)
   assert.match(caller, /needs: \[qualification, release, recovery, stage\]/)
   assert.match(caller, /uses: \.\/\.github\/workflows\/qualified-foundry-publish.yml/)
+  assert.doesNotMatch(caller, /environment: npm/)
   assert.match(caller, /cancel-in-progress: false/)
+  assert.doesNotMatch(publisher, /environment:/)
 })
 test('post-release hook arguments are passed through environment variables', () => {
   const postRelease = release.split('\n  post-release:\n')[1].split('\n  npm:\n')[0]

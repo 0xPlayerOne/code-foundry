@@ -155,7 +155,6 @@ jobs:
     if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: release
     permissions:
       actions: read
       attestations: read
@@ -238,7 +237,6 @@ jobs:
     with:
       tag: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
       asset: ${{ needs.qualification.outputs.filename }}
-      environment: npm
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
