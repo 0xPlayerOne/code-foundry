@@ -15,18 +15,18 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 225 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 860 kB | Bound installed footprint                            |
-| Packed files                        |    100 | Detect accidental release contents                   |
+| Packed artifact                     | 245 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 920 kB | Bound installed footprint                            |
+| Packed files                        |    110 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
 That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
 
-The package budget includes the release-integrity verifier and fleet eligibility
-modules. The merged source measured 221,372 packed bytes, 849,060 unpacked bytes,
-and 99 files on Node 24.18.0; the small margin above those measurements leaves
-room for ordinary metadata changes without permitting unbounded growth.
+The merged candidate includes the release-integrity verifier, fleet eligibility,
+consumer qualification harness, and product-quality profiles. It measured
+237,421 packed bytes, 905,185 unpacked bytes, and 106 files on Node 24.18.0;
+the budgets leave a small margin while continuing to bound package growth.
 
 ## v1.6.1 baseline
 
@@ -60,6 +60,6 @@ pull request, run the complete validation gate, and merge only when the new
 result artifact is available. A Release Please PR then carries the change into
 the next version. Never raise a budget solely to clear CI; include before/after
 measurements and the expected effect on local feedback, hosted runner time,
-package transfer, or installed footprint. The fleet budget change is limited to
-the measured package footprint of the dependent release-integrity and fleet
-additions above.
+package transfer, or installed footprint. The current budget covers the measured
+combined release-integrity, fleet, consumer-qualification, and product-quality
+package footprint described above.
