@@ -78,7 +78,7 @@ for (const args of [
 test('plan is read-only and discovers all requirements even for a fast subset', (t) => {
   const { root, paths, options } = fixture(t)
   const plan = planChecks(options, paths)
-  assert.equal(plan.tasks.length, 9)
+  assert.equal(plan.tasks.length, 10)
   assert.equal(plan.tasks.find((entry) => entry.task === 'e2e').selected, false)
   assert.equal(plan.tasks.find((entry) => entry.task === 'performance').selected, true)
   assert.equal(plan.remoteValidationRequired, true)
@@ -115,7 +115,7 @@ test('changed plan includes staged, unstaged, and untracked paths without prunin
   options.changed = true
   const plan = planChecks(options, paths)
   assert.deepEqual(plan.changedFiles, ['package.json', 'staged.txt', 'untracked name.txt'])
-  assert.equal(plan.tasks.length, 9)
+  assert.equal(plan.tasks.length, 10)
   assert.equal(plan.dirty, true)
 })
 

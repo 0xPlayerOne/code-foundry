@@ -5,8 +5,9 @@ Optional task discovery remains available. Configure scalar values in
 `.github/code-foundry.yml`:
 
 ```yaml
-required_capabilities: type_check,unit,e2e,performance,coverage
+required_capabilities: type_check,unit,e2e,eval,performance,coverage
 performance: true
+eval: true
 coverage_enforcement: required
 coverage_minimum: 80
 coverage_metrics: lines,branches
@@ -14,10 +15,11 @@ coverage_report: coverage/coverage-summary.json
 ```
 
 Supported task capabilities are `format`, `lint`, `type_check`, `build`, `unit`,
-`integration`, `e2e`, `smoke`, and `performance`. `coverage` additionally requires
+`integration`, `e2e`, `smoke`, `eval`, and `performance`. `coverage` additionally requires
 unit tests. Unknown names, contradictory requirements, and invalid thresholds
-are errors. `performance: true` means required, not merely enabled when a
-script happens to exist. Use `performance: auto` to retain optional discovery.
+are errors. `performance: true` and `eval: true` mean required, not merely
+enabled when a script happens to exist. Use `performance: auto` or
+`eval: auto` to retain optional discovery.
 
 The public `src/runtime.mjs` entrypoint delegates ecosystem execution to the
 private `src/runtime-core.mjs`. Keep both files and `src/lib` when vendoring the

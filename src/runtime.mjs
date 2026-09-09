@@ -186,6 +186,8 @@ export function runRuntime(args, root = process.cwd(), entry = core) {
       report.coverage = evaluateCoverage(root, policy, before)
       report.artifacts.push(...report.coverage.artifacts)
     }
+    if (task === 'eval')
+      report.artifacts.push('eval-results/summary.json', 'eval-results/result.json')
     if (task === 'performance') report.artifacts.push('performance-results/summary.json')
     report.status = 'passed'
     return 0

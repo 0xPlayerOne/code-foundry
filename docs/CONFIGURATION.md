@@ -89,22 +89,28 @@ See [Merge queue validation](merge-queues.md) before enabling it.
 
 ## Validation and quality
 
-| Key                       | Values                                         | Purpose                                                                         |
-| ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------- |
-| `performance`             | `auto`, `true`, `false`                        | Discover, require, or disable performance checks.                               |
-| `performance_command`     | JSON argv array or array of argv arrays        | Ordered commands for a non-package performance harness.                         |
-| `performance_profile`     | empty or `node-package`                        | Shared package import, memory, archive, and dependency audit.                   |
-| `performance_budget_file` | repository-relative path                       | Budget file for `node-package`; defaults to `performance-package-budgets.json`. |
-| `required_capabilities`   | comma-separated task names                     | Fail closed when a required task or coverage evidence is unavailable.           |
-| `coverage_enforcement`    | `auto`, `required`, `off`                      | Shared coverage-report policy.                                                  |
-| `coverage_minimum`        | `0`–`100`                                      | Minimum percentage; defaults to `80`.                                           |
-| `coverage_metrics`        | `lines`, `functions`, `branches`, `statements` | Metrics checked by the coverage gate.                                           |
-| `coverage_report`         | comma-separated repository paths               | Istanbul JSON summary or LCOV evidence files.                                   |
+| Key                       | Values                                         | Purpose                                                                             |
+| ------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `performance`             | `auto`, `true`, `false`                        | Discover, require, or disable performance checks.                                   |
+| `performance_command`     | JSON argv array or array of argv arrays        | Ordered commands for a non-package performance harness.                             |
+| `performance_profile`     | empty or `node-package`                        | Shared package import, memory, archive, and dependency audit.                       |
+| `performance_budget_file` | repository-relative path                       | Budget file for `node-package`; defaults to `performance-package-budgets.json`.     |
+| `eval`                    | `auto`, `true`, `false`                        | Discover, require, or disable the deterministic eval tier.                          |
+| `eval_command`            | JSON argv array                                | Explicit harness command when there is no `eval` package script.                    |
+| `eval_report_file`        | repository-relative path                       | Report validated against the eval contract; defaults to `eval-results/result.json`. |
+| `eval_budget_file`        | repository-relative path                       | Optional budget file; defaults to `eval-budgets.json`.                              |
+| `required_capabilities`   | comma-separated task names                     | Fail closed when a required task or coverage evidence is unavailable.               |
+| `coverage_enforcement`    | `auto`, `required`, `off`                      | Shared coverage-report policy.                                                      |
+| `coverage_minimum`        | `0`–`100`                                      | Minimum percentage; defaults to `80`.                                               |
+| `coverage_metrics`        | `lines`, `functions`, `branches`, `statements` | Metrics checked by the coverage gate.                                               |
+| `coverage_report`         | comma-separated repository paths               | Istanbul JSON summary or LCOV evidence files.                                       |
 
 Supported task capabilities are `format`, `lint`, `type_check`, `build`, `unit`,
-`integration`, `e2e`, `smoke`, and `performance`. `coverage` is a policy
+`integration`, `e2e`, `smoke`, `eval`, and `performance`. `coverage` is a policy
 capability that also requires unit tests. See [Required capabilities and task
-evidence](required-capabilities.md).
+evidence](required-capabilities.md). The eval tier runs the repository's own
+harness against the shared report contract and optional budgets; see
+[Evals](EVALS.md).
 
 The shared performance job discovers `performance:check`, then `perf:check`,
 in JavaScript repositories. Other repositories can provide one command or an
