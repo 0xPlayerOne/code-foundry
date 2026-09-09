@@ -15,13 +15,19 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 210 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 800 kB | Bound installed footprint                            |
-| Packed files                        |     90 | Detect accidental release contents                   |
+| Packed artifact                     | 225 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 860 kB | Bound installed footprint                            |
+| Packed files                        |    100 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
 That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
+
+The package budget includes the release-integrity verifier and fleet eligibility
+modules added by the dependent release-integrity change and this fleet change.
+The projected combined package measured 220,975 packed bytes, 847,249 unpacked
+bytes, and 99 files on Node 24.18.0; the small margin above those measurements
+leaves room for ordinary metadata changes without permitting unbounded growth.
 
 ## v1.6.1 baseline
 
@@ -55,4 +61,6 @@ pull request, run the complete validation gate, and merge only when the new
 result artifact is available. A Release Please PR then carries the change into
 the next version. Never raise a budget solely to clear CI; include before/after
 measurements and the expected effect on local feedback, hosted runner time,
-package transfer, or installed footprint.
+package transfer, or installed footprint. The fleet budget change is limited to
+the measured package footprint of the dependent release-integrity and fleet
+additions above.
