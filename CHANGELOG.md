@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.13.0...v1.14.0) (2026-09-09)
+
+
+### Features
+
+* **cli:** add shared validation plans and agent check evidence ([#538](https://github.com/0xPlayerOne/code-foundry/issues/538)) ([95af9ed](https://github.com/0xPlayerOne/code-foundry/commit/95af9ed42682ff3ed1dc74609ea4628d0c95a799))
+
 ## [1.13.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.12.0...v1.13.0) (2026-09-09)
 
 

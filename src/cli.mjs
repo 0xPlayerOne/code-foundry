@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** @typedef {{ target: string, root: string, source: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, versionExplicit: boolean, releaseSubcommand?: string, fleetSubcommand?: string, ciSubcommand?: 'pause'|'resume'|'status' }} Options */
+/** @typedef {{ target: string, root: string, source: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, versionExplicit: boolean, repository: string, expectedSha: string, assets: string[], rootProvided: boolean, releaseSubcommand?: string, fleetSubcommand?: string, integritySubcommand?: 'settings'|'release'|'manifest', ciSubcommand?: 'pause'|'resume'|'status' }} Options */
 /** @typedef {{ command: string, options: Options }} ParsedArgs */
 
 const usage = `code-foundry — initialize and maintain agent-ready repositories
@@ -16,9 +16,14 @@ Usage:
   npx code-foundry init [--target PATH]
   npx code-foundry sync [--target PATH]
   npx code-foundry doctor [--target PATH]
+  npx code-foundry plan [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--json]
+  npx code-foundry check [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--timeout SECONDS] [--json]
   npx code-foundry ci pause|resume|status [--target PATH]
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW
+  npx code-foundry release-integrity settings --repo OWNER/REPO
+  npx code-foundry release-integrity release --repo OWNER/REPO --tag TAG
+  npx code-foundry release-integrity manifest --asset PATH [--root PATH]
   npx code-foundry fleet status [--root PATH]
   npx code-foundry fleet upgrade [--root PATH] [--source PATH] [--dry-run] [--create-pr]
 
@@ -36,6 +41,9 @@ Options:
   --tag TAG       Published release tag for a post-release hook
   --workflow FILE  Workflow to dispatch for a post-release hook
   --mode MODE     auto, workflow-dispatch, release-event, or disabled
+  --repo OWNER/REPO  GitHub repository for release-integrity commands
+  --expected-sha SHA  Expected source commit for release-integrity verification
+  --asset PATH    Selected release-integrity artifact (repeatable)
   --root PATH     Fleet root containing repositories (default: current directory)
   --source PATH   Clean Code Foundry release checkout used for fleet upgrades
   --create-pr     Create isolated upgrade branches and pull requests
@@ -72,6 +80,10 @@ function parseArgs(argv) {
     mode: 'auto',
     version: `v${readPackageVersion(packageRoot)}`,
     versionExplicit: false,
+    repository: '',
+    expectedSha: '',
+    assets: [],
+    rootProvided: false,
   }
 
   if (command === 'release') {
@@ -81,6 +93,13 @@ function parseArgs(argv) {
         `unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, release validate-prs, or release recovery-plan`
       )
     options.releaseSubcommand = subcommand
+  } else if (command === 'release-integrity') {
+    const subcommand = argv.shift() ?? ''
+    if (!['settings', 'release', 'manifest'].includes(subcommand))
+      fail(
+        `unknown release-integrity command: ${subcommand || '(missing)'}; use release-integrity settings, release, or manifest`
+      )
+    options.integritySubcommand = /** @type {'settings'|'release'|'manifest'} */ (subcommand)
   } else if (command === 'fleet') {
     const subcommand = argv.shift() ?? ''
     if (subcommand !== 'status' && subcommand !== 'upgrade')
@@ -111,12 +130,26 @@ function parseArgs(argv) {
     else if (arg === '--base') options.base = argv.shift() ?? fail('--base requires a branch')
     else if (arg === '--head') options.head = argv.shift() ?? fail('--head requires a branch')
     else if (arg === '--tag') options.tag = argv.shift() ?? fail('--tag requires a tag')
-    else if (arg === '--workflow')
+    else if (arg === '--repo') {
+      if (command !== 'release-integrity')
+        fail('--repo is only supported by release-integrity commands')
+      options.repository = argv.shift() ?? fail('--repo requires OWNER/REPO')
+    } else if (arg === '--expected-sha') {
+      if (command !== 'release-integrity')
+        fail('--expected-sha is only supported by release-integrity commands')
+      options.expectedSha = argv.shift() ?? fail('--expected-sha requires a commit SHA')
+    } else if (arg === '--asset') {
+      if (command !== 'release-integrity')
+        fail('--asset is only supported by release-integrity commands')
+      options.assets.push(argv.shift() ?? fail('--asset requires a path'))
+    } else if (arg === '--workflow')
       options.workflow = argv.shift() ?? fail('--workflow requires a workflow')
     else if (arg === '--mode')
       options.mode = argv.shift() ?? fail('--mode requires a delivery mode')
-    else if (arg === '--root') options.root = argv.shift() ?? fail('--root requires a path')
-    else if (arg === '--source') {
+    else if (arg === '--root') {
+      options.root = argv.shift() ?? fail('--root requires a path')
+      options.rootProvided = true
+    } else if (arg === '--source') {
       if (command !== 'fleet' || options.fleetSubcommand !== 'upgrade')
         fail('--source is only supported by fleet upgrade')
       const value = argv.shift()
@@ -135,6 +168,11 @@ function parseArgs(argv) {
 }
 
 async function main() {
+  if (['plan', 'check'].includes(process.argv[2])) {
+    const { agentCommand } = await import('./commands/agent-check.mjs')
+    process.exitCode = agentCommand(process.argv.slice(2))
+    return
+  }
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
 
@@ -180,6 +218,32 @@ async function main() {
       else reconcileRelease(target, options)
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
+    }
+  } else if (command === 'release-integrity') {
+    try {
+      const { integrityCommand } = await import('./commands/release-integrity.mjs')
+      const integrityArgs = /** @type {string[]} */ ([options.integritySubcommand])
+      if (options.repository) integrityArgs.push('--repo', options.repository)
+      if (options.tag) integrityArgs.push('--tag', options.tag)
+      if (options.expectedSha) integrityArgs.push('--expected-sha', options.expectedSha)
+      if (options.rootProvided || options.integritySubcommand !== 'settings')
+        integrityArgs.push('--root', options.root)
+      for (const asset of options.assets) integrityArgs.push('--asset', asset)
+      console.log(JSON.stringify(integrityCommand(integrityArgs), null, 2))
+    } catch (error) {
+      console.log(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            kind: 'code-foundry-release-integrity',
+            status: 'failed',
+            reason: error instanceof Error ? error.message : String(error),
+          },
+          null,
+          2
+        )
+      )
+      process.exitCode = 1
     }
   } else if (command === 'fleet') {
     try {

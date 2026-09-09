@@ -1,0 +1,63 @@
+name: Code Foundry Release Integrity
+on:
+  workflow_call:
+    inputs:
+      runtime-ref:
+        description: Exact Code Foundry tag or SHA containing the verifier.
+        required: true
+        type: string
+      tag:
+        description: Exact published release tag in the caller repository.
+        required: true
+        type: string
+      expected-sha:
+        description: Optional full expected source commit SHA.
+        required: false
+        type: string
+        default: ''
+    outputs:
+      source-sha:
+        description: Verified immutable tag commit.
+        value: ${{ jobs.verify.outputs.source-sha }}
+permissions:
+  contents: read
+  attestations: read
+jobs:
+  verify:
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      source-sha: ${{ steps.verify.outputs.source-sha }}
+    steps:
+      - name: Validate runtime pin
+        env:
+          RUNTIME_REF: ${{ inputs.runtime-ref }}
+        run: '[[ "$RUNTIME_REF" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+|[0-9a-fA-F]{40})$ ]]'
+      - name: Checkout verifier, not release-owned executable code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: 0xPlayerOne/code-foundry
+          ref: ${{ inputs.runtime-ref }}
+          persist-credentials: false
+          sparse-checkout: src/commands
+      - name: Verify immutable release and signed attestation
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_SHA: ${{ inputs.expected-sha }}
+        run: |
+          set -euo pipefail
+          args=(release --repo "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG")
+          if [ -n "$EXPECTED_SHA" ]; then args+=(--expected-sha "$EXPECTED_SHA"); fi
+          node src/commands/release-integrity.mjs "${args[@]}" > "$RUNNER_TEMP/release-integrity.json"
+          node -e 'const fs = require("node:fs"); const r = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/release-integrity.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, "source-sha=" + r.sourceSha + "\n")'
+      - name: Preserve verification evidence
+        if: always() && steps.verify.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-integrity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-integrity.json
+          if-no-files-found: error
+          retention-days: 30
