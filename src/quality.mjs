@@ -6,7 +6,8 @@ import { ownedPath, runProductQuality } from './lib/product-quality.mjs'
 
 try {
   const [configPath, phase = 'build', ...extra] = process.argv.slice(2)
-  if (!configPath || extra.length) throw new Error('Usage: node quality.mjs MANIFEST.json [build|browser|deployed]')
+  if (!configPath || extra.length)
+    throw new Error('Usage: node quality.mjs MANIFEST.json [build|browser|deployed]')
   const root = resolve(process.cwd())
   const config = JSON.parse(readFileSync(ownedPath(root, configPath), 'utf8'))
   console.log(JSON.stringify(runProductQuality(root, config, phase)))

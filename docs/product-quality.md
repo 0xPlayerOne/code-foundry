@@ -12,37 +12,42 @@ Commit a version-1 JSON manifest and use the installed, pinned Foundry runtime:
 ```json
 {
   "scripts": {
-    "performance:check": "node node_modules/code-foundry/src/quality.mjs .github/product-quality.json build",
-    "test:e2e": "node node_modules/code-foundry/src/quality.mjs .github/product-quality.json browser"
+    "quality:build": "node node_modules/code-foundry/src/quality.mjs .github/product-quality.json build",
+    "quality:browser": "node node_modules/code-foundry/src/quality.mjs .github/product-quality.json browser"
   }
 }
 ```
 
-These names are discovered by the existing Foundry runtime; use required
-capabilities to make missing entrypoints a configuration failure. The standalone
-entrypoint deliberately avoids changing the public CLI dispatch being introduced
-in the separate agent-validation PR. Install the reviewed Foundry version in the
-consumer's existing dependency manager and lockfile, not an unpinned network
-invocation. Add `.code-foundry/` to Git/package ignores and retain selected evidence
-through the consumer workflow's artifact uploader. Reports and browser traces may
-contain application data; review retention and never upload authenticated traces
-publicly without sanitization.
+Wire these scripts into the consumer's existing validation entrypoints. The
+Foundry runtime discovers only `performance:check`/`perf:check` and
+`test:e2e`/`e2e`; if those names do not already exist, they can run
+`bun run quality:build` and `bun run quality:browser`. If they do exist, preserve their current
+commands and compose the quality command after them rather than replacing the
+existing performance or E2E checks. The standalone entrypoint deliberately avoids
+changing the public CLI dispatch being introduced in the separate agent-validation
+PR. Install the reviewed Foundry version in the consumer's existing dependency
+manager and lockfile, not an unpinned network invocation. Add `.code-foundry/` to
+Git/package ignores and retain selected evidence through the consumer workflow's
+artifact uploader. Reports and browser traces may contain application data; review
+retention and never upload authenticated traces publicly without sanitization.
 
 ```json
 {
   "schema_version": 1,
   "prepare": { "build": [["bun", "run", "build"]] },
-  "profiles": [{
-    "id": "marketing",
-    "type": "static-site",
-    "dist": "dist",
-    "origin": "https://example.com",
-    "routes": [{ "path": "/", "html": "index.html", "javascriptAssets": [] }],
-    "budgets": { "htmlBytes": 100000, "javascriptBytes": 80000, "imageBytes": 600000 },
-    "sitemap": "sitemap.xml",
-    "robots": "robots.txt",
-    "redirects": { "file": "_redirects", "rules": [{ "from": "/old", "to": "/", "status": 301 }] }
-  }]
+  "profiles": [
+    {
+      "id": "marketing",
+      "type": "static-site",
+      "dist": "dist",
+      "origin": "https://example.com",
+      "routes": [{ "path": "/", "html": "index.html", "javascriptAssets": [] }],
+      "budgets": { "htmlBytes": 100000, "javascriptBytes": 80000, "imageBytes": 600000 },
+      "sitemap": "sitemap.xml",
+      "robots": "robots.txt",
+      "redirects": { "file": "_redirects", "rules": [{ "from": "/old", "to": "/", "status": 301 }] }
+    }
+  ]
 }
 ```
 
@@ -86,8 +91,10 @@ checks prove the artifact declaration, not production routing behavior.
 }
 ```
 
-Use the repository's locked `@playwright/test`, `@axe-core/playwright`, and matching
-Chromium installation. No browser tooling is silently downloaded. The runner
+`baseURL` must be an HTTP(S) origin without a path, query, or fragment; routes
+are root-relative paths on that origin. Use the repository's locked
+`@playwright/test`, `@axe-core/playwright`, and matching Chromium installation.
+No browser tooling is silently downloaded. The runner
 imports the consumer's journey module and requires at least one additional real
 passing test beyond its generated route tests. Skips, flakes, expected-failure
 annotations, incomplete results, and missing routes fail the evidence check.
