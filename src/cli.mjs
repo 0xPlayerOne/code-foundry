@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** @typedef {{ target: string, root: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, releaseSubcommand?: string, fleetSubcommand?: string, ciSubcommand?: 'pause'|'resume'|'status' }} Options */
+/** @typedef {{ target: string, root: string, source: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, versionExplicit: boolean, releaseSubcommand?: string, fleetSubcommand?: string, ciSubcommand?: 'pause'|'resume'|'status' }} Options */
 /** @typedef {{ command: string, options: Options }} ParsedArgs */
 
 const usage = `code-foundry — initialize and maintain agent-ready repositories
@@ -20,7 +20,7 @@ Usage:
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW
   npx code-foundry fleet status [--root PATH]
-  npx code-foundry fleet upgrade [--root PATH] [--dry-run] [--create-pr]
+  npx code-foundry fleet upgrade [--root PATH] [--source PATH] [--dry-run] [--create-pr]
 
 The repository configuration lives in .github/code-foundry.yml.
 init detects the repository, creates that file, and renders the baseline.
@@ -37,6 +37,7 @@ Options:
   --workflow FILE  Workflow to dispatch for a post-release hook
   --mode MODE     auto, workflow-dispatch, release-event, or disabled
   --root PATH     Fleet root containing repositories (default: current directory)
+  --source PATH   Clean Code Foundry release checkout used for fleet upgrades
   --create-pr     Create isolated upgrade branches and pull requests
   --version TAG   Runtime tag to report in fleet upgrade branches
   --exclude NAME  Skip a repository path or owner/name in fleet operations
@@ -58,6 +59,7 @@ function parseArgs(argv) {
   const options = {
     target: process.cwd(),
     root: process.cwd(),
+    source: packageRoot,
     dryRun: false,
     force: false,
     github: false,
@@ -69,6 +71,7 @@ function parseArgs(argv) {
     workflow: '',
     mode: 'auto',
     version: `v${readPackageVersion(packageRoot)}`,
+    versionExplicit: false,
   }
 
   if (command === 'release') {
@@ -113,9 +116,17 @@ function parseArgs(argv) {
     else if (arg === '--mode')
       options.mode = argv.shift() ?? fail('--mode requires a delivery mode')
     else if (arg === '--root') options.root = argv.shift() ?? fail('--root requires a path')
-    else if (arg === '--create-pr') options.createPr = true
-    else if (arg === '--version') options.version = argv.shift() ?? fail('--version requires a tag')
-    else if (arg === '--exclude')
+    else if (arg === '--source') {
+      if (command !== 'fleet' || options.fleetSubcommand !== 'upgrade')
+        fail('--source is only supported by fleet upgrade')
+      const value = argv.shift()
+      if (!value || value.startsWith('-')) fail('--source requires a path')
+      options.source = value
+    } else if (arg === '--create-pr') options.createPr = true
+    else if (arg === '--version') {
+      options.version = argv.shift() ?? fail('--version requires a tag')
+      options.versionExplicit = true
+    } else if (arg === '--exclude')
       options.exclude.push(argv.shift() ?? fail('--exclude requires a name'))
     else fail(`unknown option: ${arg}; run --help for the supported options`)
   }
@@ -177,11 +188,13 @@ async function main() {
       if (options.fleetSubcommand === 'status')
         console.log(JSON.stringify(discoverRepositories(root), null, 2))
       else
-        upgradeFleet(root, packageRoot, {
+        upgradeFleet(root, resolve(options.source), {
           createPr: options.createPr,
           dryRun: options.dryRun,
           force: options.force,
-          version: options.version,
+          version: options.versionExplicit
+            ? options.version
+            : `v${readPackageVersion(resolve(options.source))}`,
           exclude: options.exclude,
         })
     } catch (error) {

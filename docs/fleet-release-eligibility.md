@@ -67,7 +67,9 @@ are possible after eligibility passes.
 
 First release and validate the qualification/verification producer and confirm
 real workflow/job identities. Then opt a consumer workspace into this policy and
-exercise `fleet upgrade --dry-run --source <clean-release-checkout>`. Older mutable
+exercise `fleet upgrade --dry-run --root <fleet-root> --source <clean-release-checkout>`.
+When `--source` is omitted, the installed package is used and an enabled policy
+will reject it unless that installation is itself a clean Git checkout. Older mutable
 releases or unavailable permissions should fail; do not weaken the policy just to
 make an old release eligible. No real fleet inventory is fabricated by this PR.
 

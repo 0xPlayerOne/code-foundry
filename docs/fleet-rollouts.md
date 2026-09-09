@@ -55,11 +55,12 @@ Adopt those requirements in consumer repositories before requiring them here.
 
 ```sh
 code-foundry fleet status --root /path/to/fleet
-code-foundry fleet upgrade --root /path/to/fleet --dry-run
-code-foundry fleet upgrade --root /path/to/fleet --create-pr
+code-foundry fleet upgrade --root /path/to/fleet --source /path/to/release-checkout --dry-run
+code-foundry fleet upgrade --root /path/to/fleet --source /path/to/release-checkout --create-pr
 ```
 
-Run from the intended released Code Foundry installation/checkout. The existing
+Use `--source` to provide the clean Code Foundry release checkout used for the
+upgrade; when omitted, the installed Code Foundry package is used. The existing
 source-version guard still rejects mismatched `--version` requests. Manifest mode
 requires `--create-pr` or `--dry-run` and never syncs original checkouts in place.
 `--force` does not bypass dirty-tree safety in manifest mode. Dry-run reports
