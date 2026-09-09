@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ubuntu-latest
+      artifact-prefix:
+        description: Prefix for task receipts; use a unique value when calling this workflow more than once.
+        required: false
+        type: string
+        default: task-result
     secrets:
       TURBO_TOKEN:
         required: false
@@ -86,8 +91,22 @@ jobs:
           cache-build: 'false'
           task: format
       - name: Format
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci format
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/format.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-format
+          path: .code-foundry/results/format.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   lint:
     name: Lint
@@ -126,8 +145,22 @@ jobs:
           cache-lint: 'true'
           task: lint
       - name: Lint
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci lint
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/lint.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-lint
+          path: .code-foundry/results/lint.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   type-check:
     name: Type-Check
@@ -166,8 +199,22 @@ jobs:
           cache-build: 'true'
           task: type_check
       - name: Type-Check
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci type_check
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/type_check.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-type_check
+          path: .code-foundry/results/type_check.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   build:
     name: Build
@@ -211,5 +258,19 @@ jobs:
           cache-build: 'true'
           task: build
       - name: Build
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/build.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-build
+          path: .code-foundry/results/build.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
