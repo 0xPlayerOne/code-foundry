@@ -19,8 +19,15 @@ permissions:
   id-token: write
 
 jobs:
+  qualification:
+    name: Qualify consumers
+    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)
+    uses: ./.github/workflows/consumer-qualification.yml
+    permissions:
+      contents: read
   release:
     name: Release
+    needs: qualification
     if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)
     uses: ./.github/workflows/release.yml
     with:
