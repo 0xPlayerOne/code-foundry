@@ -1,9 +1,24 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { describeTask, evidencePath, evaluateCoverage, fingerprint, parseCoverage, readTaskPolicy } from '../src/lib/task-policy.mjs'
+import {
+  describeTask,
+  evidencePath,
+  evaluateCoverage,
+  fingerprint,
+  parseCoverage,
+  readTaskPolicy,
+} from '../src/lib/task-policy.mjs'
 import { runRuntime } from '../src/runtime.mjs'
 
 function fixture(t, config = '') {
@@ -15,7 +30,8 @@ function fixture(t, config = '') {
   return root
 }
 
-const summary = (covered = 80) => JSON.stringify({ total: { lines: { total: 100, covered, pct: 100 } } })
+const summary = (covered = 80) =>
+  JSON.stringify({ total: { lines: { total: 100, covered, pct: 100 } } })
 
 for (const config of [
   'required_capabilities: typo',
@@ -45,7 +61,30 @@ test('required task fails discovery rather than becoming inapplicable', (t) => {
 test('JS project without a build command is not a passing native build', (t) => {
   const root = fixture(t)
   writeFileSync(join(root, 'package.json'), '{"name":"fixture"}')
-  assert.equal(describeTask(root, 'build', { applicable: 'true', javascript: 'true' }).applicable, false)
+  assert.equal(
+    describeTask(root, 'build', { applicable: 'true', javascript: 'true' }).applicable,
+    false
+  )
+})
+
+test('native formatter and linter discovery matches the executor', (t) => {
+  const root = fixture(t)
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({
+      name: 'fixture',
+      scripts: { check: 'oxfmt --check .' },
+      peerDependencies: { oxlint: '^1.0.0' },
+    })
+  )
+  assert.equal(
+    describeTask(root, 'format', { applicable: 'true', javascript: 'true' }).applicable,
+    true
+  )
+  assert.equal(
+    describeTask(root, 'lint', { applicable: 'true', javascript: 'true' }).applicable,
+    true
+  )
 })
 
 test('repository scripts remain authoritative', (t) => {
@@ -63,7 +102,12 @@ test('LCOV totals are aggregated over source records', () => {
   assert.equal(parseCoverage(report, 'lcov').lines.percent, 90)
 })
 
-for (const value of ['{}', summary(-1), summary(101), '{"total":{"lines":{"total":0,"covered":0}}}']) {
+for (const value of [
+  '{}',
+  summary(-1),
+  summary(101),
+  '{"total":{"lines":{"total":0,"covered":0}}}',
+]) {
   test(`malformed or empty coverage is rejected: ${value}`, () => {
     assert.throws(() => parseCoverage(value, 'json'))
   })
@@ -90,9 +134,13 @@ test('fresh threshold equality passes and stale evidence fails', (t) => {
   const file = join(root, 'coverage/coverage-summary.json')
   writeFileSync(file, summary())
   assert.equal(evaluateCoverage(root, readTaskPolicy(root), {}).status, 'passed')
-  assert.throws(() => evaluateCoverage(root, readTaskPolicy(root), {
-    'coverage/coverage-summary.json': fingerprint(file),
-  }), /not refreshed/)
+  assert.throws(
+    () =>
+      evaluateCoverage(root, readTaskPolicy(root), {
+        'coverage/coverage-summary.json': fingerprint(file),
+      }),
+    /not refreshed/
+  )
 })
 
 test('evidence cannot escape by traversal or symlink', (t) => {
@@ -101,14 +149,22 @@ test('evidence cannot escape by traversal or symlink', (t) => {
   assert.throws(() => evidencePath(root, '/tmp/report'), /relative/)
   symlinkSync('/etc/hosts', join(root, 'coverage/outside'))
   assert.throws(() => evidencePath(root, 'coverage/outside'), /symlink/)
+  symlinkSync('/tmp', join(root, 'coverage/outside-directory'))
+  assert.throws(() => evidencePath(root, 'coverage/outside-directory/missing.json'), /symlink/)
 })
 
-for (const [exitCode, expected] of [[0, 'passed'], [7, 'failed']]) {
+for (const [exitCode, expected] of [
+  [0, 'passed'],
+  [7, 'failed'],
+]) {
   test(`runtime preserves exit ${exitCode} and records ${expected}`, (t) => {
     const root = fixture(t)
     writeFileSync(join(root, 'package.json'), '{"scripts":{"build":"fake"}}')
     const core = join(root, 'executor.mjs')
-    writeFileSync(core, `if (process.argv[3] === 'task_profile') console.log('applicable=true'); else process.exit(${exitCode})\n`)
+    writeFileSync(
+      core,
+      `if (process.argv[3] === 'task_profile') console.log('applicable=true'); else process.exit(${exitCode})\n`
+    )
     assert.equal(runRuntime(['ci', 'build'], root, core), exitCode)
     const result = JSON.parse(readFileSync(join(root, '.code-foundry/results/build.json'), 'utf8'))
     assert.equal(result.status, expected)
@@ -119,7 +175,10 @@ for (const [exitCode, expected] of [[0, 'passed'], [7, 'failed']]) {
 test('runtime records optional skip without running executor', (t) => {
   const root = fixture(t)
   const core = join(root, 'executor.mjs')
-  writeFileSync(core, "if (process.argv[3] === 'task_profile') console.log('applicable=false'); else process.exit(99)")
+  writeFileSync(
+    core,
+    "if (process.argv[3] === 'task_profile') console.log('applicable=false'); else process.exit(99)"
+  )
   assert.equal(runRuntime(['ci', 'e2e'], root, core), 0)
   const result = JSON.parse(readFileSync(join(root, '.code-foundry/results/e2e.json'), 'utf8'))
   assert.equal(result.status, 'skipped')
@@ -140,6 +199,9 @@ test('discovery checks other required tasks before allowing scheduling', (t) => 
   const root = fixture(t, 'required_capabilities: e2e')
   const core = join(root, 'executor.mjs')
   writeFileSync(core, "console.log('applicable=false')")
-  assert.throws(() => runRuntime(['ci', 'task_profile', 'integration'], root, core), /Required capability e2e/)
+  assert.throws(
+    () => runRuntime(['ci', 'task_profile', 'integration'], root, core),
+    /Required capability e2e/
+  )
   assert.equal(existsSync(join(root, '.code-foundry/results/integration.json')), false)
 })

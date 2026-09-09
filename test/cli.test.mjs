@@ -4399,6 +4399,28 @@ jobs:
     assert.match(setup, /inputs\.task == 'unit' \|\| inputs\.task == 'performance'/)
   })
 
+  it('includes the split runtime executor in every runtime sparse checkout', () => {
+    const workflowFiles = [
+      'ci.yml',
+      'codeql.yml',
+      'security.yml',
+      'test.yml',
+      'validation-no-codeql.yml',
+      'validation.yml',
+      'validation_self-ci.yml',
+    ]
+
+    for (const file of workflowFiles) {
+      const workflow = readFileSync(`.github/workflows/${file}`, 'utf8')
+      const sparseCheckouts = [
+        ...workflow.matchAll(/sparse-checkout:\s*\|([\s\S]*?)(?=\n\s{6}\S|$)/g),
+      ]
+      for (const [, block] of sparseCheckouts) {
+        if (block.includes('src/runtime.mjs')) assert.match(block, /src\/runtime-core\.mjs/)
+      }
+    }
+  })
+
   it('enforces source performance budgets and keeps run reports untracked', () => {
     const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
     const audit = readFileSync('scripts/performance-check.mjs', 'utf8')

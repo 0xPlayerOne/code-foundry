@@ -1,12 +1,21 @@
 // @ts-check
 
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { createHash } from 'node:crypto'
 import { listValue, readConfig } from './config.mjs'
 
 export const TASKS = Object.freeze([
-  'format', 'lint', 'type_check', 'build', 'unit', 'integration', 'e2e', 'smoke', 'performance',
+  'format',
+  'lint',
+  'type_check',
+  'build',
+  'unit',
+  'integration',
+  'e2e',
+  'smoke',
+  'performance',
 ])
 
 /** @type {Readonly<Record<string, readonly string[]>>} */
@@ -39,14 +48,20 @@ export function readTaskPolicy(root) {
     throw new Error('Required coverage cannot use coverage_enforcement: off')
   if (required.includes('performance') && config.performance === 'false')
     throw new Error('Required performance cannot use performance: false')
-  if (config.performance === 'true' && !required.includes('performance')) required.push('performance')
+  if (config.performance === 'true' && !required.includes('performance'))
+    required.push('performance')
   const coverageRequired = required.includes('coverage') || coverageMode === 'required'
   if (coverageRequired && !required.includes('unit')) required.push('unit')
   const minimum = Number(config.coverage_minimum ?? '80')
   if (!Number.isFinite(minimum) || minimum < 0 || minimum > 100)
     throw new Error('coverage_minimum must be a finite percentage between 0 and 100')
   const metrics = listValue(config.coverage_metrics ?? 'lines')
-  if (!metrics.length || metrics.some((metric) => !['lines', 'functions', 'branches', 'statements'].includes(metric)))
+  if (
+    !metrics.length ||
+    metrics.some(
+      (metricName) => !['lines', 'functions', 'branches', 'statements'].includes(metricName)
+    )
+  )
     throw new Error('coverage_metrics must select lines, functions, branches, or statements')
   return { config, required, coverageMode, coverageRequired, minimum, metrics }
 }
@@ -82,24 +97,59 @@ export function describeTask(root, task, profile) {
   if (script && applicable) reason = `package-script:${script}`
   if (applicable && !script && ['format', 'lint', 'type_check', 'build'].includes(task)) {
     const rust = profile.rust === 'true' && existsSync(resolve(root, 'Cargo.toml'))
-    const python = profile.python === 'true' && (
-      existsSync(resolve(root, 'pyproject.toml')) || existsSync(resolve(root, 'requirements.txt')) ||
-      existsSync(resolve(root, 'uv.lock'))
-    )
-    const dependencies = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies }
+    const python =
+      profile.python === 'true' &&
+      (existsSync(resolve(root, 'pyproject.toml')) ||
+        existsSync(resolve(root, 'requirements.txt')) ||
+        existsSync(resolve(root, 'uv.lock')))
     const js = profile.javascript === 'true' && existsSync(resolve(root, 'package.json'))
-    const native = rust ||
+    const native =
+      rust ||
       (['format', 'lint'].includes(task) && python) ||
       (task === 'type_check' && existsSync(resolve(root, 'tsconfig.json'))) ||
-      (js && task === 'format' && (dependencies.oxfmt || existsSync(resolve(root, '.oxfmtrc.json')))) ||
-      (js && task === 'lint' && (dependencies.oxlint || existsSync(resolve(root, '.oxlintrc.json'))))
+      (js && task === 'format' && hasNativeToolSetup(root, pkg, 'oxfmt')) ||
+      (js && task === 'lint' && hasNativeToolSetup(root, pkg, 'oxlint'))
     if (!native) {
       applicable = false
       reason = 'repository detected, but no executable script or supported native fallback exists'
     }
   }
   if (required && !applicable) throw new Error(`Required capability ${task}: ${reason}`)
-  return { task, applicable, required, reason, source: script ? `package-script:${script}` : 'runtime' }
+  return {
+    task,
+    applicable,
+    required,
+    reason,
+    source: script ? `package-script:${script}` : 'runtime',
+  }
+}
+
+/** @param {string} root @returns {string[]} */
+function repositoryFiles(root) {
+  const result = spawnSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.split(/\r?\n/).filter(Boolean) : []
+}
+
+/** @param {string} root @param {Record<string, any>} pkg @param {'oxfmt'|'oxlint'} tool */
+function hasNativeToolSetup(root, pkg, tool) {
+  const dependencies = {
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+    ...pkg.optionalDependencies,
+    ...pkg.peerDependencies,
+  }
+  if (dependencies[tool]) return true
+  if (
+    Object.values(pkg.scripts ?? {}).some((value) =>
+      new RegExp(`\\b${tool}\\b`).test(String(value))
+    )
+  )
+    return true
+  const config =
+    tool === 'oxfmt'
+      ? /(^|\/)(\.oxfmtrc\.json|oxfmt\.config\.[^/]*)$/
+      : /(^|\/)(\.oxlintrc\.json|oxlint\.config\.[^/]*)$/
+  return repositoryFiles(root).some((file) => config.test(file))
 }
 
 /** Repository-owned evidence must never escape the checkout through paths or symlinks.
@@ -110,20 +160,31 @@ export function evidencePath(root, file) {
   const base = realpathSync(root)
   const target = resolve(base, file)
   const inside = relative(base, target)
-  if (inside === '..' || inside.startsWith(`..${sep}`)) throw new Error(`Evidence path escapes repository: ${file}`)
-  if (existsSync(target)) {
-    const actual = relative(base, realpathSync(target))
-    if (actual === '..' || actual.startsWith(`..${sep}`)) throw new Error(`Evidence symlink escapes repository: ${file}`)
-    if (!statSync(target).isFile()) throw new Error(`Evidence must be a regular file: ${file}`)
+  if (inside === '..' || inside.startsWith(`..${sep}`))
+    throw new Error(`Evidence path escapes repository: ${file}`)
+
+  // Resolve the deepest existing ancestor so a missing report cannot hide
+  // behind a symlinked directory outside the checkout.
+  let existing = target
+  while (!existsSync(existing)) {
+    const parent = resolve(existing, '..')
+    if (parent === existing) break
+    existing = parent
   }
+  const actual = relative(base, realpathSync(existing))
+  if (actual === '..' || actual.startsWith(`..${sep}`))
+    throw new Error(`Evidence symlink escapes repository: ${file}`)
+  if (existsSync(target) && !statSync(target).isFile())
+    throw new Error(`Evidence must be a regular file: ${file}`)
   return target
 }
 
 /** @param {string} root @param {ReturnType<typeof readTaskPolicy>} policy */
 export function coverageFiles(root, policy) {
   const configured = listValue(policy.config.coverage_report ?? '')
-  return (configured.length ? configured : ['coverage/coverage-summary.json', 'coverage/lcov.info'])
-    .map((file) => ({ file, path: evidencePath(root, file) }))
+  return (
+    configured.length ? configured : ['coverage/coverage-summary.json', 'coverage/lcov.info']
+  ).map((file) => ({ file, path: evidencePath(root, file) }))
 }
 
 /** @param {string} path */
@@ -135,9 +196,15 @@ export function fingerprint(path) {
 
 /** @param {number} total @param {number} covered @param {string} label */
 function metric(total, covered, label) {
-  if (!Number.isSafeInteger(total) || !Number.isSafeInteger(covered) || total < 0 || covered < 0 || covered > total)
+  if (
+    !Number.isSafeInteger(total) ||
+    !Number.isSafeInteger(covered) ||
+    total < 0 ||
+    covered < 0 ||
+    covered > total
+  )
     throw new Error(`Invalid coverage counts for ${label}`)
-  return { total, covered, percent: total ? covered * 100 / total : null }
+  return { total, covered, percent: total ? (covered * 100) / total : null }
 }
 
 /** @param {string} content @param {'json'|'lcov'} format */
@@ -146,9 +213,11 @@ export function parseCoverage(content, format) {
   const metrics = {}
   if (format === 'json') {
     const report = JSON.parse(content)
-    if (!report?.total || typeof report.total !== 'object') throw new Error('Coverage summary is missing total')
+    if (!report?.total || typeof report.total !== 'object')
+      throw new Error('Coverage summary is missing total')
     for (const name of ['lines', 'functions', 'branches', 'statements']) {
-      if (report.total[name]) metrics[name] = metric(report.total[name].total, report.total[name].covered, name)
+      if (report.total[name])
+        metrics[name] = metric(report.total[name].total, report.total[name].covered, name)
     }
   } else {
     const fields = { lines: ['LF', 'LH'], functions: ['FNF', 'FNH'], branches: ['BRF', 'BRH'] }
@@ -163,7 +232,11 @@ export function parseCoverage(content, format) {
         if (!totalMatch || !hitMatch) throw new Error(`Incomplete LCOV ${name} counts`)
         const current = metric(Number(totalMatch[1]), Number(hitMatch[1]), name)
         const previous = metrics[name] ?? { total: 0, covered: 0 }
-        metrics[name] = metric(previous.total + current.total, previous.covered + current.covered, name)
+        metrics[name] = metric(
+          previous.total + current.total,
+          previous.covered + current.covered,
+          name
+        )
       }
     }
   }
@@ -179,22 +252,39 @@ export function parseCoverage(content, format) {
  * @param {Record<string, string|null>} before
  */
 export function evaluateCoverage(root, policy, before) {
-  if (policy.coverageMode === 'off') return { status: 'skipped', reason: 'coverage enforcement explicitly disabled', artifacts: [] }
+  if (policy.coverageMode === 'off')
+    return { status: 'skipped', reason: 'coverage enforcement explicitly disabled', artifacts: [] }
   const files = coverageFiles(root, policy).filter(({ path }) => existsSync(path))
   if (!files.length) {
     if (policy.coverageRequired) throw new Error('Required coverage report was not produced')
-    return { status: 'skipped', reason: 'no coverage report; set coverage_enforcement: required to require evidence', artifacts: [] }
+    return {
+      status: 'skipped',
+      reason: 'no coverage report; set coverage_enforcement: required to require evidence',
+      artifacts: [],
+    }
   }
   const reports = files.map(({ file, path }) => {
-    if (fingerprint(path) === before[file]) throw new Error(`Coverage report was not refreshed by this run: ${file}`)
-    const metrics = parseCoverage(readFileSync(path, 'utf8'), file.endsWith('.info') ? 'lcov' : 'json')
+    if (fingerprint(path) === before[file])
+      throw new Error(`Coverage report was not refreshed by this run: ${file}`)
+    const metrics = parseCoverage(
+      readFileSync(path, 'utf8'),
+      file.endsWith('.info') ? 'lcov' : 'json'
+    )
     for (const name of policy.metrics) {
       const value = metrics[name]
-      if (!value || value.percent === null) throw new Error(`Coverage report has no measured ${name}: ${file}`)
+      if (!value || value.percent === null)
+        throw new Error(`Coverage report has no measured ${name}: ${file}`)
       if (value.percent < policy.minimum)
-        throw new Error(`${name} coverage ${value.percent.toFixed(2)}% is below ${policy.minimum}% (${file})`)
+        throw new Error(
+          `${name} coverage ${value.percent.toFixed(2)}% is below ${policy.minimum}% (${file})`
+        )
     }
     return { file, metrics }
   })
-  return { status: 'passed', reason: 'fresh coverage meets configured thresholds', artifacts: files.map(({ file }) => file), reports }
+  return {
+    status: 'passed',
+    reason: 'fresh coverage meets configured thresholds',
+    artifacts: files.map(({ file }) => file),
+    reports,
+  }
 }

@@ -43,6 +43,7 @@ jobs:
           path: .github/.code-foundry
           sparse-checkout: |
             src/lib
+            src/runtime-core.mjs
             src/runtime.mjs
       - name: Install runtime
         run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"

@@ -13,6 +13,7 @@ its own names, environments, and deployment details.
 - [Publishing packages](PUBLISHING.md)
 - [Caching and remote caching](CACHING.md)
 - [Performance budgets and baselines](PERFORMANCE.md)
+- [Required capabilities and task evidence](required-capabilities.md)
 
 ## Repository-specific documentation
 

@@ -1,11 +1,25 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { appendFileSync, existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  realpathSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { coverageFiles, describeTask, evaluateCoverage, fingerprint, readTaskPolicy, TASKS } from './lib/task-policy.mjs'
+import {
+  coverageFiles,
+  describeTask,
+  evaluateCoverage,
+  fingerprint,
+  readTaskPolicy,
+  TASKS,
+} from './lib/task-policy.mjs'
 
 const core = fileURLToPath(new URL('./runtime-core.mjs', import.meta.url))
 
@@ -18,11 +32,14 @@ export function taskProfile(root, task, entry = core) {
   })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(result.stderr.trim() || `Task discovery failed: ${task}`)
-  const profile = Object.fromEntries(result.stdout.split(/\r?\n/).flatMap((line) => {
-    const match = line.match(/^([a-z_]+)=(.*)$/)
-    return match ? [[match[1], match[2]]] : []
-  }))
-  if (!['true', 'false'].includes(profile.applicable)) throw new Error(`Task discovery returned no applicability: ${task}`)
+  const profile = Object.fromEntries(
+    result.stdout.split(/\r?\n/).flatMap((line) => {
+      const match = line.match(/^([a-z_]+)=(.*)$/)
+      return match ? [[match[1], match[2]]] : []
+    })
+  )
+  if (!['true', 'false'].includes(profile.applicable))
+    throw new Error(`Task discovery returned no applicability: ${task}`)
   return {
     ...describeTask(root, task, profile),
     javascript: profile.javascript ?? 'false',
@@ -46,8 +63,14 @@ function saveResult(root, task, result) {
   writeFileSync(temporary, `${JSON.stringify(result, null, 2)}\n`, { flag: 'wx' })
   renameSync(temporary, destination)
   if (process.env.GITHUB_STEP_SUMMARY) {
-    const json = JSON.stringify(result, null, 2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n<details><summary>Code Foundry: ${task}</summary><pre>${json}</pre></details>\n`)
+    const json = JSON.stringify(result, null, 2)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+    appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      `\n<details><summary>Code Foundry: ${task}</summary><pre>${json}</pre></details>\n`
+    )
   }
 }
 
@@ -72,19 +95,35 @@ export function runRuntime(args, root = process.cwd(), entry = core) {
   }
   const policy = readTaskPolicy(root)
   if (task === 'plan') {
-    console.log(JSON.stringify({ schemaVersion: 1, tasks: TASKS.map((name) => taskProfile(root, name, entry)) }, null, 2))
+    console.log(
+      JSON.stringify(
+        { schemaVersion: 1, tasks: TASKS.map((name) => taskProfile(root, name, entry)) },
+        null,
+        2
+      )
+    )
     return 0
   }
   if (task === 'should_run' || task === 'task_profile') {
     const profile = taskProfile(root, selected, entry)
-    for (const name of policy.required.filter((name) => name !== 'coverage' && name !== selected))
-      taskProfile(root, name, entry)
+    for (const requiredName of policy.required.filter(
+      (name) => name !== 'coverage' && name !== selected
+    ))
+      taskProfile(root, requiredName, entry)
     if (!profile.applicable) {
       const now = new Date().toISOString()
       saveResult(root, selected, {
-        schemaVersion: 1, kind: 'code-foundry-task-result', task: selected,
-        sourceSha: sourceSha(root), startedAt: now, completedAt: now,
-        status: 'skipped', reason: profile.reason, required: false, commands: [], artifacts: [],
+        schemaVersion: 1,
+        kind: 'code-foundry-task-result',
+        task: selected,
+        sourceSha: sourceSha(root),
+        startedAt: now,
+        completedAt: now,
+        status: 'skipped',
+        reason: profile.reason,
+        required: false,
+        commands: [],
+        artifacts: [],
       })
     }
     for (const [key, value] of Object.entries({
@@ -122,15 +161,25 @@ export function runRuntime(args, root = process.cwd(), entry = core) {
       report.status = 'skipped'
       return 0
     }
-    const before = task === 'unit' && policy.coverageMode !== 'off'
-      ? Object.fromEntries(coverageFiles(root, policy).map(({ file, path }) => [file, fingerprint(path)]))
-      : {}
+    const before =
+      task === 'unit' && policy.coverageMode !== 'off'
+        ? Object.fromEntries(
+            coverageFiles(root, policy).map(({ file, path }) => [file, fingerprint(path)])
+          )
+        : {}
     const argv = [process.execPath, entry, 'ci', task]
     const result = spawnSync(argv[0], argv.slice(1), { cwd: root, stdio: 'inherit' })
-    report.commands.push({ argv, source: profile.source, status: result.status, signal: result.signal })
+    report.commands.push({
+      argv,
+      source: profile.source,
+      status: result.status,
+      signal: result.signal,
+    })
     if (result.error) throw result.error
     if (result.status !== 0) {
-      report.reason = result.signal ? `executor terminated by ${result.signal}` : `executor exited ${result.status}`
+      report.reason = result.signal
+        ? `executor terminated by ${result.signal}`
+        : `executor exited ${result.status}`
       return result.status ?? 1
     }
     if (task === 'unit') {
