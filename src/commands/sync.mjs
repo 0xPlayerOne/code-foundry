@@ -48,6 +48,7 @@ const standardFiles = [
   '.github/workflows/draft-pr.yml',
   '.github/workflows/release-pr.yml',
   '.github/workflows/release.yml',
+  '.github/workflows/release-integrity.yml',
   '.github/workflows/opencode-security.yml',
 ]
 
@@ -105,7 +106,7 @@ const legacyFiles = [
   '.github/licenses/AGPL-3.0-or-later.txt',
 ]
 
-/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean, runtimeRef?: string }} SyncOptions */
+/** @typedef {{ target: string, source: string, dryRun?: boolean, force?: boolean, init?: boolean, runtimeRef?: string, configureHooks?: boolean }} SyncOptions */
 
 /** @param {SyncOptions} options */
 export function syncRepository(options) {
@@ -115,6 +116,7 @@ export function syncRepository(options) {
   const force = options.force ?? false
   const configPath = join(target, '.github/code-foundry.yml')
   const existingConfig = readConfig(configPath)
+  const changed = []
   if (!Object.keys(existingConfig).length && !options.init)
     throw new Error('Missing .github/code-foundry.yml; run init first.')
   const defaults = createDefaultConfig(target, source, existingConfig.git_workflow)
@@ -141,12 +143,14 @@ export function syncRepository(options) {
     throw new Error(`Unsupported license: ${license}; use ${supported}.`)
   }
   if (!Object.keys(existingConfig).length) {
+    changed.push('.github/code-foundry.yml')
     writeOrReport(configPath, renderConfig(config), dryRun)
   } else {
     const missing = Object.keys(defaults).filter((key) => !(key in existingConfig))
     const original = readFileSync(configPath, 'utf8')
     const normalized = removeConfigKeys(original, obsoleteConfigKeys).trimEnd()
     if (missing.length || normalized !== original.trimEnd()) {
+      changed.push('.github/code-foundry.yml')
       const additions = missing.map((key) => renderConfigLine(key, defaults[key])).join('\n')
       writeOrReport(configPath, `${normalized}${additions ? `\n${additions}` : ''}\n`, dryRun)
     }
@@ -197,8 +201,6 @@ export function syncRepository(options) {
       )
     }
   }
-  const changed = []
-
   // Keep normal semver pins current during sync while preserving intentional
   // refs such as `main`, `staging`, or a custom immutable SHA. An explicit
   // runtime ref (fleet upgrade) is authoritative and overrides even those so
@@ -415,7 +417,11 @@ export function syncRepository(options) {
       }
     }
   }
-  if (!dryRun && existsSync(join(target, '.githooks/pre-commit'))) {
+  if (
+    !dryRun &&
+    options.configureHooks !== false &&
+    existsSync(join(target, '.githooks/pre-commit'))
+  ) {
     chmodSync(join(target, '.githooks/pre-commit'), 0o755)
     git(target, ['config', 'core.hooksPath', '.githooks'])
   }
@@ -487,6 +493,7 @@ function shouldInclude(file, languages, features, config) {
   // without a configuration change. The detect job keeps the scan off unless
   // the configuration or the variable enables it and the API key exists.
   if (file === '.github/workflows/opencode-security.yml') return true
+  if (file === '.github/workflows/release-integrity.yml') return true
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
   if (workflow === 'draft-control' || workflow === 'draft-enforcement') {
     return (
@@ -809,8 +816,8 @@ const DIRECT_DOC_REPLACEMENTS = {
       '| Change                    | Target | Merge method                      | Merge gate                              |\n| ------------------------- | ------ | --------------------------------- | --------------------------------------- |\n| Working branch            | `main` | Squash                            | All applicable required checks pass     |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |\n',
     ],
     [
-      'Draft pull requests do not start runner-heavy validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head; converting it back to draft cancels in-flight validation, and no replacement starts until it is ready again.',
-      'Draft pull requests do not start validation. The lightweight Draft Guard also converts ordinary pull requests opened, reopened, or updated while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier. Convert it back to draft after an update, then mark it ready again after every update so the required checks attach to the current head. Converting it to draft runs only the lightweight cancellation control.',
+      'Draft pull requests do not start runner-heavy validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft cancels in-flight validation through the lightweight cancellation control.',
+      'Draft pull requests do not start validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft runs only the lightweight cancellation control.',
     ],
     ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],

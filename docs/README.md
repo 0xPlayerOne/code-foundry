@@ -10,11 +10,14 @@ its own names, environments, and deployment details.
 - [Configuration reference](CONFIGURATION.md)
 - [Workflow and CI conventions](WORKFLOWS.md)
 - [Release management](RELEASES.md)
+- [Release integrity and build provenance](release-integrity.md)
 - [Publishing packages](PUBLISHING.md)
 - [Caching and remote caching](CACHING.md)
 - [Performance budgets and baselines](PERFORMANCE.md)
 - [Required capabilities and task evidence](required-capabilities.md)
 - [Product quality profiles](product-quality.md)
+- [Agent-facing validation commands](agent-validation.md)
+- [Declarative fleet inventory and staged rollouts](fleet-rollouts.md)
 
 ## Repository-specific documentation
 

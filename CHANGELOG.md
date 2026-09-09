@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.15.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.14.0...v1.15.0) (2026-09-09)
+
+
+### Features
+
+* **releases:** verify immutable releases and attest selected build artifacts ([#537](https://github.com/0xPlayerOne/code-foundry/issues/537)) ([099aa57](https://github.com/0xPlayerOne/code-foundry/commit/099aa577227ab067a9a554e4cfc286aa2f5eb38e))
+
+## [1.14.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.13.0...v1.14.0) (2026-09-09)
+
+
+### Features
+
+* **cli:** add shared validation plans and agent check evidence ([#538](https://github.com/0xPlayerOne/code-foundry/issues/538)) ([95af9ed](https://github.com/0xPlayerOne/code-foundry/commit/95af9ed42682ff3ed1dc74609ea4628d0c95a799))
+
+## [1.13.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.12.0...v1.13.0) (2026-09-09)
+
+
+### Features
+
+* **fleet:** add declared inventory and resumable canary rollouts ([#536](https://github.com/0xPlayerOne/code-foundry/issues/536)) ([6aa86d4](https://github.com/0xPlayerOne/code-foundry/commit/6aa86d4cd85cdbd4041c70d8c01d8e351e21fc0b))
+
 ## [1.12.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.11.0...v1.12.0) (2026-09-09)
 
 
