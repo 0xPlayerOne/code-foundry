@@ -70,7 +70,7 @@ when present and otherwise uses native language tooling; choose `native` or
 
 The standard workflow triggers are:
 
-- Pushes to `main` (and `staging` when `git_workflow: staging-release` is configured).
+- Pushes to `main` (and `staging` when `git_workflow: staging-release` is configured); main pushes also run the default-branch CodeQL scan.
 - Pull requests targeting `main` (and `staging` in the staging-release topology).
 - Draft PR automation for supported feature/fix branches.
 
