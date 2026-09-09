@@ -10,6 +10,13 @@ import { classifyTestFiles } from './lib/test-discovery.mjs'
 import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
 import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
 import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
+import {
+  EVAL_BUDGET_FILE_DEFAULT,
+  EVAL_REPORT_FILE,
+  EVAL_SUMMARY_FILE,
+  evaluateEvalBudgets,
+  validateEvalReport,
+} from './lib/eval-envelope.mjs'
 
 const root = process.cwd()
 const config = readConfig(resolve(root, '.github/code-foundry.yml'))
@@ -55,6 +62,26 @@ function readPackage() {
 
 function performanceEnabled() {
   return configured(config.performance, 'auto') !== 'false'
+}
+
+function evalEnabled() {
+  return configured(config.eval, 'auto') !== 'false'
+}
+
+function evalCommand() {
+  const raw = configured(config.eval_command, '').trim()
+  if (!raw) return null
+  let command
+  try {
+    command = JSON.parse(raw)
+  } catch {
+    throw new Error('eval_command must be a JSON argv array.')
+  }
+  if (!Array.isArray(command) || command.length === 0)
+    throw new Error('eval_command must be a non-empty JSON array.')
+  if (!command.every((argument) => typeof argument === 'string' && argument.length > 0))
+    throw new Error('eval_command must contain only non-empty strings.')
+  return /** @type {string[]} */ (command)
 }
 
 function performanceCommands() {
@@ -126,6 +153,122 @@ function writePerformanceSummary(startedAt, status, commands, artifacts, error =
       2
     )}\n`
   )
+}
+
+const evalResultsDirectory = 'eval-results'
+
+/** @returns {{source: string, argv: string[]}[]} */
+function selectedEvalCommands() {
+  const name = ['eval'].find((candidate) => hasScript(candidate))
+  if (name) {
+    const [manager, args] = packageCommand(['run', name])
+    if (!manager) throw new Error(`Cannot run ${name}: select a supported package_manager.`)
+    return [{ source: `package-script:${name}`, argv: [manager, ...args] }]
+  }
+  const command = evalCommand()
+  if (!command) throw new Error('No eval script or eval_command was discovered.')
+  return [{ source: 'configuration', argv: command }]
+}
+
+/** @param {string} startedAt @param {'passed'|'failed'} status @param {{source: string, argv: string[], status: number}[]} commands @param {string[]} artifacts @param {string|null} error @param {{file: string, applied: boolean, failures: string[]}|null} budgets */
+function writeEvalSummary(startedAt, status, commands, artifacts, error = null, budgets = null) {
+  const directory = resolve(root, evalResultsDirectory)
+  mkdirSync(directory, { recursive: true })
+  writeFileSync(
+    resolve(directory, 'summary.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        kind: 'code-foundry-eval-summary',
+        status,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        commands,
+        report: configured(config.eval_report_file, EVAL_REPORT_FILE),
+        budgets,
+        artifacts,
+        error,
+      },
+      null,
+      2
+    )}\n`
+  )
+}
+
+function runEval() {
+  if (!evalEnabled()) return
+  const startedAt = new Date().toISOString()
+  /** @type {{source: string, argv: string[], status: number}[]} */
+  const records = []
+  const artifacts = [EVAL_REPORT_FILE, EVAL_SUMMARY_FILE]
+  const budgetFile = configured(config.eval_budget_file, EVAL_BUDGET_FILE_DEFAULT)
+  /** @type {{file: string, applied: boolean, failures: string[]}|null} */
+  let budgets = null
+  try {
+    for (const command of selectedEvalCommands()) {
+      const result = spawnSync(command.argv[0], command.argv.slice(1), {
+        cwd: root,
+        stdio: 'inherit',
+        env: process.env,
+      })
+      if (result.error) throw result.error
+      const status = result.status ?? 1
+      records.push({ ...command, status })
+      if (status !== 0) {
+        writeEvalSummary(
+          startedAt,
+          'failed',
+          records,
+          artifacts,
+          `command exited ${status}`,
+          budgets
+        )
+        process.exitCode = status
+        return
+      }
+    }
+    const reportFile = resolve(root, configured(config.eval_report_file, EVAL_REPORT_FILE))
+    if (!existsSync(reportFile))
+      throw new Error(
+        `Eval report was not produced: ${configured(config.eval_report_file, EVAL_REPORT_FILE)}`
+      )
+    let report
+    try {
+      report = JSON.parse(readFileSync(reportFile, 'utf8'))
+    } catch (error) {
+      throw new Error(
+        `Eval report is not valid JSON: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    const envelope = validateEvalReport(report)
+    if (!envelope.valid)
+      throw new Error(`Eval report violates the contract: ${envelope.errors.join('; ')}`)
+    if (existsSync(resolve(root, budgetFile))) {
+      const raw = JSON.parse(readFileSync(resolve(root, budgetFile), 'utf8'))
+      const gate = evaluateEvalBudgets(report, raw)
+      budgets = { file: budgetFile, applied: true, failures: gate.failures }
+      if (!gate.passed) {
+        for (const failure of gate.failures) console.error(`::error::${failure}`)
+        writeEvalSummary(
+          startedAt,
+          'failed',
+          records,
+          artifacts,
+          `eval budgets failed: ${gate.failures.join('; ')}`,
+          budgets
+        )
+        process.exitCode = 1
+        return
+      }
+    } else {
+      budgets = { file: budgetFile, applied: false, failures: [] }
+    }
+    writeEvalSummary(startedAt, 'passed', records, artifacts, null, budgets)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    writeEvalSummary(startedAt, 'failed', records, artifacts, message, budgets)
+    throw error
+  }
 }
 
 function runPerformance() {
@@ -391,8 +534,15 @@ function relevant(task) {
     integration: ['test:integration'],
     e2e: ['test:e2e', 'e2e'],
     smoke: ['test:smoke', 'smoke'],
+    eval: ['eval'],
     performance: ['performance:check', 'perf:check'],
   }[task]
+  if (task === 'eval') {
+    if (!evalEnabled()) return false
+    return Boolean(
+      (scripted && scripted.some((candidate) => hasScript(candidate))) || evalCommand()
+    )
+  }
   if (task === 'performance') {
     if (!performanceEnabled()) return false
     return Boolean(
@@ -562,6 +712,9 @@ function ci(task) {
     if (!scripted && hasLanguage('rust') && hasRootRustProject())
       run('cargo', ['build', '--all-targets'])
     return
+  }
+  if (task === 'eval') {
+    return runEval()
   }
   if (task === 'performance') {
     return runPerformance()

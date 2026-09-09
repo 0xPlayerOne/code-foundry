@@ -15,6 +15,7 @@ export const TASKS = Object.freeze([
   'integration',
   'e2e',
   'smoke',
+  'eval',
   'performance',
 ])
 
@@ -28,6 +29,7 @@ export const TASK_SCRIPTS = Object.freeze({
   integration: ['test:integration'],
   e2e: ['test:e2e', 'e2e'],
   smoke: ['test:smoke', 'smoke'],
+  eval: ['eval'],
   performance: ['performance:check', 'perf:check'],
 })
 
@@ -41,6 +43,8 @@ export function readTaskPolicy(root) {
   }
   if (!['true', 'false', 'auto'].includes(config.performance ?? 'auto'))
     throw new Error('performance must be true, false, or auto')
+  if (!['true', 'false', 'auto'].includes(config.eval ?? 'auto'))
+    throw new Error('eval must be true, false, or auto')
   const coverageMode = config.coverage_enforcement ?? 'auto'
   if (!['auto', 'required', 'off'].includes(coverageMode))
     throw new Error('coverage_enforcement must be auto, required, or off')
@@ -50,6 +54,9 @@ export function readTaskPolicy(root) {
     throw new Error('Required performance cannot use performance: false')
   if (config.performance === 'true' && !required.includes('performance'))
     required.push('performance')
+  if (required.includes('eval') && config.eval === 'false')
+    throw new Error('Required eval cannot use eval: false')
+  if (config.eval === 'true' && !required.includes('eval')) required.push('eval')
   const coverageRequired = required.includes('coverage') || coverageMode === 'required'
   if (coverageRequired && !required.includes('unit')) required.push('unit')
   const minimum = Number(config.coverage_minimum ?? '80')
