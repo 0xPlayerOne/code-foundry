@@ -16,8 +16,8 @@ Usage:
   npx code-foundry init [--target PATH]
   npx code-foundry sync [--target PATH]
   npx code-foundry doctor [--target PATH]
-  npx code-foundry plan [--target PATH] [--changed] [--json]
-  npx code-foundry check [--target PATH] [--tier fast|audit] [--json]
+  npx code-foundry plan [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--json]
+  npx code-foundry check [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--timeout SECONDS] [--json]
   npx code-foundry ci pause|resume|status [--target PATH]
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW

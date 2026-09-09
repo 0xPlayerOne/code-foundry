@@ -24,11 +24,12 @@ Repository-owned scripts remain authoritative. Missing required tasks fail
 planning instead of returning a misleading successful subset.
 
 `--changed` includes paths changed from the selected base, staged changes,
-unstaged changes, and untracked files. `--base` defaults to HEAD and requires
-`--changed`. Invalid or unavailable base revisions fail rather than being treated
-as no changes. Paths use Git's NUL-separated format, preserving whitespace and
-unusual filenames. Generated `.code-foundry/` evidence is excluded from change
-annotations. Change awareness is **annotation-only**: without a verified dependency
+unstaged changes, and untracked files. Committed paths use the merge-base with
+that ref, so an independently advanced base branch does not make base-only
+changes look like head changes. `--base` defaults to HEAD and requires `--changed`.
+Invalid or unavailable base revisions fail rather than being treated as no changes.
+Paths use Git's NUL-separated format, preserving whitespace and unusual filenames.
+Generated `.code-foundry/` evidence is excluded from change annotations. Change awareness is **annotation-only**: without a verified dependency
 graph it does not skip required tasks or assume a documentation change cannot
 affect a custom command.
 

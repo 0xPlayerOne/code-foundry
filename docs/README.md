@@ -14,6 +14,7 @@ its own names, environments, and deployment details.
 - [Caching and remote caching](CACHING.md)
 - [Performance budgets and baselines](PERFORMANCE.md)
 - [Required capabilities and task evidence](required-capabilities.md)
+- [Agent-facing validation commands](agent-validation.md)
 
 ## Repository-specific documentation
 
