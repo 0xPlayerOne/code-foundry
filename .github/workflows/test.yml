@@ -33,6 +33,11 @@ on:
         required: false
         type: boolean
         default: false
+      artifact-prefix:
+        description: Prefix for task receipts; use a unique value when calling this workflow more than once.
+        required: false
+        type: string
+        default: task-result
     secrets:
       TURBO_TOKEN:
         required: false
@@ -104,8 +109,22 @@ jobs:
           task-python: ${{ steps.applicability.outputs.python }}
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Unit
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci unit
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/unit.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-unit
+          path: .code-foundry/results/unit.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload coverage
         if: >-
           always() &&
@@ -171,8 +190,22 @@ jobs:
           task-python: ${{ steps.applicability.outputs.python }}
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Performance
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci performance
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/performance.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-performance
+          path: .code-foundry/results/performance.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload performance results
         if: >-
           always() &&
@@ -236,8 +269,22 @@ jobs:
           task-python: ${{ steps.applicability.outputs.python }}
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Integration
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci integration
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/integration.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-integration
+          path: .code-foundry/results/integration.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   e2e:
     name: E2E
@@ -298,8 +345,22 @@ jobs:
           task-python: ${{ steps.applicability.outputs.python }}
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: E2E
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci e2e
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/e2e.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-e2e
+          path: .code-foundry/results/e2e.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   smoke:
     name: Smoke
@@ -348,5 +409,19 @@ jobs:
           task-python: ${{ steps.applicability.outputs.python }}
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Smoke
+        id: execute
         if: steps.applicability.outputs.applicable == 'true'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci smoke
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/smoke.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-smoke
+          path: .code-foundry/results/smoke.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

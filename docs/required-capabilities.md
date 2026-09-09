@@ -60,9 +60,28 @@ appear in the GitHub job summary when `GITHUB_STEP_SUMMARY` is available.
 The recorded command is the delegated executor invocation, not a transcript of
 all nested package scripts. No environment variables or captured command output
 are copied into the report. Repository scripts remain responsible for sanitizing
-their own logs. Upload `.code-foundry/results/*.json` with `if: always()` and
-`include-hidden-files: true` to retain downloadable reports; only upload this
-specific directory, not arbitrary hidden files or the entire checkout.
+their own logs and command arguments. Receipts are diagnostics, not signatures,
+attestations, or authorization to publish or merge.
+
+The shared CI and Test workflows retain each executed task's receipt, including
+failure, and discovery receipts for explicitly skipped optional tasks. Each upload
+selects exactly `.code-foundry/results/<task>.json`, not the broader hidden
+directory. The artifact name is `task-result-RUN_ID-ATTEMPT-TASK` and retention is
+14 days. The optional `artifact-prefix` workflow input disambiguates multiple
+invocations in the same run; use a different prefix for each such invocation.
+Existing coverage/performance artifact uploads are unchanged.
+
+Missing receipts from an older runtime, a discovery/setup failure, or termination
+before the runtime writes its report do not create an artifact. Missing evidence
+is not success: inspect the task's actual outcome and the validation gate. Uploads
+run after success or failure and do not suppress a failing task exit. When an
+existing receipt disappears during upload, the upload itself fails. A job skipped
+by the workflow's tier or billing policy cannot create a receipt.
+
+These files describe repository-controlled execution and can include paths and
+script-derived reasons. Do not put credentials in command arguments. Artifact
+access follows repository/Actions visibility; receipt retention does not provide
+a sandbox or independently validate repository-authored evidence.
 
 `node src/runtime.mjs ci plan` prints a JSON discovery plan without executing
 checks. Discovery validates every required task before reusable workflows select
