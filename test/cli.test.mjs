@@ -672,6 +672,46 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('protects generated gates from drafts by default with an explicit opt-out', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-draft-policy-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    let config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
+    let validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    let opencode = readFileSync(join(root, '.github/workflows/opencode-security.yml'), 'utf8')
+    assert.match(config, /^draft_protection: true$/m)
+    assert.match(validation, /github\.event\.pull_request\.draft == false/)
+    assert.match(opencode, /github\.event\.pull_request\.draft == false/)
+
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      config.replace(/^draft_protection: true$/m, 'draft_protection: false')
+    )
+    syncRepository({ target: root, source: process.cwd() })
+    config = readFileSync(join(root, '.github/code-foundry.yml'), 'utf8')
+    validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    opencode = readFileSync(join(root, '.github/workflows/opencode-security.yml'), 'utf8')
+    assert.match(config, /^draft_protection: false$/m)
+    assert.doesNotMatch(validation, /github\.event\.pull_request\.draft == false/)
+    assert.doesNotMatch(opencode, /github\.event\.pull_request\.draft == false/)
+
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      config.replace(/^draft_protection: false$/m, 'draft_protection: maybe')
+    )
+    assert.throws(
+      () => syncRepository({ target: root, source: process.cwd() }),
+      /Unsupported draft_protection: maybe/
+    )
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('merges managed pull-request policy into agent-owned documents on resync', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-agent-policy-'))
     mkdirSync(join(root, '.github'), { recursive: true })
@@ -1313,6 +1353,8 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /bun install --frozen-lockfile/)
     assert.match(workflow, /bun run "\$BUILD_SCRIPT"/)
     assert.match(workflow, /deployments: write/)
+    assert.match(workflow, /draft-protection:[\s\S]*?type: boolean[\s\S]*?default: true/)
+    assert.match(workflow, /inputs\['draft-protection'\] != true/)
     assert.match(workflow, /production_environment: \$production/)
     assert.match(
       workflow,

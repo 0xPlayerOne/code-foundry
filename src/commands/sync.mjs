@@ -132,6 +132,10 @@ function synchronize(options) {
   if (!['direct', 'staging-release'].includes(workflow)) {
     throw new Error(`Unsupported git_workflow: ${workflow}; use direct or staging-release.`)
   }
+  const draftProtection = configured(config.draft_protection, 'true')
+  if (!['true', 'false'].includes(draftProtection)) {
+    throw new Error(`Unsupported draft_protection: ${draftProtection}; use true or false.`)
+  }
   const obsoleteConfigKeys = [
     'opencode_security',
     ...(workflow === 'direct' ? ['staging_validation_mode'] : []),
@@ -632,6 +636,11 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     release: config.release_runner ?? config.runner,
   }
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
+  // Generated PR callers protect drafts by default. Consumers that intentionally
+  // run gates while a PR is still draft can opt out in code-foundry.yml.
+  if (configured(config.draft_protection, 'true') === 'false') {
+    rendered = rendered.replaceAll(' && github.event.pull_request.draft == false', '')
+  }
   // Consumer release callers are generic package release workflows. The
   // installed-consumer qualification harness is specific to Code Foundry's
   // own package and must remain in the self workflow rather than being
@@ -892,8 +901,8 @@ const DIRECT_DOC_REPLACEMENTS = {
       '| Change                    | Target | Merge method                      | Merge gate                              |\n| ------------------------- | ------ | --------------------------------- | --------------------------------------- |\n| Working branch            | `main` | Squash                            | All applicable required checks pass     |\n| Release Please version PR | `main` | Squash (`release_merge_strategy`) | Validation gate and release policy pass |\n',
     ],
     [
-      'Draft pull requests do not start runner-heavy validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft cancels in-flight validation through the lightweight cancellation control.',
-      'Draft pull requests do not start validation. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner. Converting a pull request to draft runs only the lightweight cancellation control.',
+      'Draft pull requests do not start runner-heavy validation unless `draft_protection: false` is configured for generated callers. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner while protection is enabled. Converting a pull request to draft cancels in-flight validation through the lightweight cancellation control.',
+      'Draft pull requests do not start validation unless `draft_protection: false` is configured. The lightweight Draft Guard converts ordinary pull requests opened or reopened while ready back to draft; it never checks out pull-request code and it excludes Release Please version heads, whose release workflow owns their state. Marking a pull request ready for review starts the applicable validation tier, and each new commit on a ready pull request reruns that tier for the current head. Draft updates allocate no validation runner while protection is enabled. Converting a pull request to draft runs only the lightweight cancellation control.',
     ],
     ['1. Create a focused branch from `staging`.', '1. Create a focused branch from `main`.'],
   ],
@@ -1365,6 +1374,7 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     toolchain: 'auto',
     ...(stagingRelease ? { staging_validation_mode: 'fast' } : {}),
     performance: 'auto',
+    draft_protection: 'true',
     performance_command: '',
     performance_profile: '',
     performance_budget_file: 'performance-package-budgets.json',

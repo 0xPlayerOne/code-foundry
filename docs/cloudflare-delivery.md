@@ -50,7 +50,11 @@ Wrangler version supporting `WRANGLER_OUTPUT_FILE_PATH` and version-1
 Bun remains the installation path, consistent with the existing deploy workflow.
 
 The repository verification command receives `BASE_URL` and
-`FOUNDRY_DEPLOYMENT_PHASE` (`candidate`, `canary`, or `production`). It must check
+`FOUNDRY_DEPLOYMENT_PHASE` (`candidate`, `canary`, or `production`). Preview
+candidate jobs skip draft pull requests by default. To intentionally deploy
+from drafts, pass `draft-protection: false` in the reusable-workflow call; this
+changes only the CI/deployment gate, not Draft Guard or draft-PR automation. It
+must check
 critical journeys, redirects, assets, and application-specific behavior. The
 built-in smoke probe requires a successful 2xx response and does not follow
 redirects. Deploy credentials are not supplied to verification steps and are

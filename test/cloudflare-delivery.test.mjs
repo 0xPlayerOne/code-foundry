@@ -359,6 +359,8 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
     'utf8'
   )
   assert.match(yaml, /cancel-in-progress: false/)
+  assert.match(yaml, /draft-protection:[\s\S]*?type: boolean[\s\S]*?default: true/)
+  assert.match(yaml, /inputs\['draft-protection'\] != true/)
   assert.match(yaml, /name: Production/)
   assert.match(yaml, /name: Preview/)
   assert.match(
@@ -372,6 +374,7 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
   assert.match(yaml, /needs: candidate/)
   assert.match(yaml, /candidate\.outputs\.verified == 'true'/)
   assert.match(yaml, /pull_request_target/)
+  assert.doesNotMatch(yaml, /CODE_FOUNDRY_DRAFT_PROTECTION/)
   assert.doesNotMatch(yaml, /wrangler deploy|wrangler@latest|continue-on-error: true/)
   assert.equal((yaml.match(/run: node "\$FOUNDRY_EXECUTOR" assert-current/g) ?? []).length, 3)
 })

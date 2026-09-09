@@ -52,6 +52,12 @@ opens those PRs as drafts. Promotion automation listens to `staging` pushes
 automation and default-branch CodeQL listen to `main` pushes.
 Custom deployment, indexing, search, Slither, or other workflows are
 repository-owned extensions and should use the same ready-transition policy.
+Code Foundry's runner-heavy validation, security, qualification, and Cloudflare
+reusable workflows also enforce draft protection at the job boundary. Generated
+callers default to the `draft_protection: true` configuration; set it to `false`
+to run generated gates for drafts. Cloudflare callers use their equivalent
+`draft-protection: false` input. These opt-outs do not remove Draft Guard or
+draft-PR automation; they only allow the protected gates to run for drafts.
 
 ## Billing pause
 
