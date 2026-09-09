@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.10.0...v1.10.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **doctor:** honor shared config and correctly identify npm/Yarn lockfiles ([#533](https://github.com/0xPlayerOne/code-foundry/issues/533)) ([6464409](https://github.com/0xPlayerOne/code-foundry/commit/646440907ad3fc47f63e27b9621c8e0025459964))
+* **validation:** scan default branch with CodeQL on push ([#540](https://github.com/0xPlayerOne/code-foundry/issues/540)) ([98d8241](https://github.com/0xPlayerOne/code-foundry/commit/98d8241522c78e1b6d3f4f29a44053d33888edba))
+
 ## [1.10.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.9.13...v1.10.0) (2026-09-08)
 
 
