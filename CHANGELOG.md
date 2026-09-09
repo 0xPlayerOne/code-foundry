@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.21.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.20.2...v1.21.0) (2026-09-09)
+
+
+### Features
+
+* **release:** wire qualified draft staging and immutable publication ([#558](https://github.com/0xPlayerOne/code-foundry/issues/558)) ([19aea32](https://github.com/0xPlayerOne/code-foundry/commit/19aea32f50c747cdc5642d1752a9f02008c157f6))
+
+
+### Bug Fixes
+
+* **quality:** harden HTML filtering ([#562](https://github.com/0xPlayerOne/code-foundry/issues/562)) ([ea45590](https://github.com/0xPlayerOne/code-foundry/commit/ea45590db24dc05ef12db57e80c7405fa217514f))
+
 ## [1.20.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.20.1...v1.20.2) (2026-09-09)
 
 
