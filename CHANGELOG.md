@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.1...v1.21.2) (2026-09-09)
+
+
+### Documentation
+
+* refresh documentation for current workflows ([#568](https://github.com/0xPlayerOne/code-foundry/issues/568)) ([d0028e0](https://github.com/0xPlayerOne/code-foundry/commit/d0028e096371e1019c466f72f8744bdf832e067c))
+
 ## [1.21.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.0...v1.21.1) (2026-09-09)
 
 
