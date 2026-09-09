@@ -354,7 +354,12 @@ function inspectRollout(run, path, entry, version, base) {
 
 /** @param {Runner} run @param {string} path @param {string[]} files */
 function candidateFingerprint(run, path, files) {
-  const hash = createHash('sha256').update(checked(run, path, ['git', 'diff', '--binary', 'HEAD']))
+  // A validation command can commit its changes and leave an empty diff. Bind the
+  // fingerprint to HEAD as well so resumed candidates cannot publish that commit.
+  const hash = createHash('sha256')
+    .update(checked(run, path, ['git', 'rev-parse', '--verify', 'HEAD']))
+    .update('\0')
+    .update(checked(run, path, ['git', 'diff', '--binary', 'HEAD']))
   // Sorting a copy preserves the caller's tracked file order.
   // oxlint-disable-next-line unicorn/no-array-sort
   for (const file of [...files].sort()) {
