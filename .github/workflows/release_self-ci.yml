@@ -117,8 +117,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # shellcheck disable=SC2016
-          node --input-type=module -e '
+          node --input-type=module <<'NODE'
           import { appendFileSync, readFileSync } from "node:fs"
           import { resolveTagCommit, runGh } from "./src/commands/release-integrity.mjs"
           const output = process.env.GITHUB_OUTPUT
@@ -152,7 +151,7 @@ jobs:
           const sourceSha = resolveTagCommit(process.env.GITHUB_REPOSITORY, tag, runGh)
           if (sourceSha.toLowerCase() !== process.env.SOURCE_SHA.toLowerCase()) throw new Error("Existing draft tag does not match the qualified source SHA")
           write("true", tag, sourceSha)
-          '
+          NODE
 
   stage:
     name: Stage qualified release
