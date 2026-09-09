@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.21.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.0...v1.21.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* release-hook-and-performance-safety ([#565](https://github.com/0xPlayerOne/code-foundry/issues/565)) ([0d410c6](https://github.com/0xPlayerOne/code-foundry/commit/0d410c68abfbc0d9fdd03b7aa81676489e459c19))
+* **release:** automate self publication after CI ([91b2655](https://github.com/0xPlayerOne/code-foundry/commit/91b265585aa03e742e5bfc8a839b2794bf234491))
+
+
+### Performance
+
+* **ci:** batch native Rust test targets by category ([#564](https://github.com/0xPlayerOne/code-foundry/issues/564)) ([6def882](https://github.com/0xPlayerOne/code-foundry/commit/6def8826e90b23d021a4f4587fa843dbb37df0e7))
+
 ## [1.21.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.20.2...v1.21.0) (2026-09-09)
 
 
