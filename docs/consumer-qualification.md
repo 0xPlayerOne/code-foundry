@@ -5,8 +5,8 @@ Release-candidate compatibility checks against the distributable package.
 **Status:** Opt-in reusable workflow; required by Code Foundry's own release caller.
 **Scope:** Package installation, CLI initialization/synchronization, generated workflow contracts.
 
-`consumer-qualification.yml` packs the checked-out candidate once per supported
-Node major, installs that exact archive offline with lifecycle scripts disabled,
+`consumer-qualification.yml` packs the checked-out candidate once, shares that archive across all supported
+Node majors using an artifact scoped to the same run attempt, installs it offline with lifecycle scripts disabled,
 and executes its public CLI from the installed package. The harness does not
 import the source checkout's initializer as a substitute for package testing.
 

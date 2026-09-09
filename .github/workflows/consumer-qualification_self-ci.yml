@@ -6,6 +6,7 @@ on:
     types: [ready_for_review]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
