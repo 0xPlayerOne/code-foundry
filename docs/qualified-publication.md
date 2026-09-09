@@ -115,7 +115,6 @@ workflow and its caller must be reviewed/trusted and protected; repository-owned
 code executes with the permissions of its job. No credentials or production
 resources were configured by adding this feature.
 
-
 ## Self-caller activation and recovery
 
 `release_self-ci.yml` now sequences qualification and a read-only immutability
@@ -135,9 +134,12 @@ Protect release tags against concurrent moves and configure the `release` and
 `npm` environments with the intended main-only deployment rules and approvals.
 A YAML environment reference does not prove those protections exist. The staging
 token needs administration-read, contents-write and verification access; it is
-never exposed to the qualification jobs. Configure npm trusted-publisher identity
-for the actual caller/reusable workflow, or explicitly retain the optional npm
-token in the final publisher. None of these settings is changed by this PR.
+never exposed to the qualification jobs. Preflight and staging reuse the
+producer's validated credential selection, falling back to the workflow token
+only when the configured token is rejected. Configure npm trusted-publisher
+identity for the actual caller/reusable workflow, or explicitly retain the
+optional npm token in the final publisher. None of these settings is changed by
+this PR.
 
 Run the full locked-toolchain suite, Actionlint contracts, and a disposable-repo
 release/signing/registry rehearsal before production approval. The producer
@@ -155,9 +157,10 @@ receipts. If main has moved or the tag/asset identity differs, stop and use a
 separately reviewed source-bound recovery procedure. Never weaken the SHA guard,
 move an immutable tag, or treat npm's version-conflict response as success.
 
-The release cutover raises only the unpacked package ceiling from 945,000 to
-960,000 bytes for the shipped workflow/configuration/documentation additions.
-The compressed ceiling (250,000 bytes), file ceiling (110), startup/test timing,
-and dependency budgets are unchanged. Re-measure the combined candidate after
-merging independent workflow changes; the added policy does not justify a runtime
-performance regression or a dependency increase.
+The combined candidate measures 253,093 packed bytes, 969,033 unpacked bytes,
+and 112 files. The cutover raises only the unpacked ceiling from the current
+965,000 to 970,000 bytes for its workflow/configuration/documentation additions;
+packed bytes remain capped at 255,000 and files at 115. Startup/test timing and
+dependency budgets remain unchanged. Re-measure after merging independent workflow
+changes; the added policy does not justify a runtime performance regression or a
+dependency increase.

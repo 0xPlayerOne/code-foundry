@@ -43,6 +43,9 @@ on:
       sha:
         description: Exact source commit returned by Release Please.
         value: ${{ jobs.release.outputs.sha }}
+      token_source:
+        description: Credential selected for release operations.
+        value: ${{ jobs.release.outputs.token_source }}
     secrets:
       CODE_FOUNDRY_TOKEN:
         required: false

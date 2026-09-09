@@ -801,7 +801,7 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /release-while-paused:[\s\S]*?type: boolean[\s\S]*?default: false/)
     assert.match(
       caller,
-      /if: vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)/
+      /if: \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\) && github\.ref == 'refs\/heads\/main'/
     )
     assert.match(
       caller,
@@ -1567,7 +1567,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /legacyReleaseType = releaseType/)
     assert.match(workflow, /else if \(!fs\.existsSync\('\.release-please-manifest\.json'\)\)/)
     assert.match(workflow, /run code-foundry sync to bootstrap the release manifest/)
-    assert.match(workflow, /config-file: release-please-config\.json/)
+    assert.match(workflow, /default: release-please-config\.json/)
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
     assert.doesNotMatch(workflow, /--admin/)
@@ -1594,7 +1594,7 @@ describe('code-foundry CLI', () => {
     )
     assert.match(
       workflow,
-      /if: \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/
+      /if: inputs\['defer-publication'\] != true && \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/
     )
     assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
@@ -2348,7 +2348,7 @@ jobs:
       /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source == 'configured'/
     )
     assert.match(automationStep, /token: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
-    assert.match(automationStep, /config-file: release-please-config\.json/)
+    assert.match(automationStep, /config-file: \$\{\{ inputs\.config-file \}\}/)
     assert.match(
       automationStep,
       /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/
@@ -2362,7 +2362,7 @@ jobs:
       /if: steps\.profile\.outputs\.release_type != 'none' && steps\.credentials\.outputs\.token_source != 'configured'/
     )
     assert.match(workflowStep, /token: \$\{\{ github\.token \}\}/)
-    assert.match(workflowStep, /config-file: release-please-config\.json/)
+    assert.match(workflowStep, /config-file: \$\{\{ inputs\.config-file \}\}/)
     assert.doesNotMatch(workflowStep, /CODE_FOUNDRY_TOKEN|RELEASE_PLEASE_TOKEN/)
     assert.doesNotMatch(
       workflow,
