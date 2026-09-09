@@ -1,0 +1,19 @@
+name: Qualification
+
+on:
+  pull_request:
+    branches: [main]
+    types: [ready_for_review]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: qualification-${{ github.event_name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  consumers:
+    if: vars.CI_BILLING_PAUSED != 'true' && github.event.pull_request.draft == false
+    uses: ./.github/workflows/consumer-qualification.yml
