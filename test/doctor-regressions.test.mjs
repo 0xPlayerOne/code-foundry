@@ -30,25 +30,45 @@ for (const topology of ['direct', 'staging-release']) {
     t.after(() => rmSync(root, { recursive: true, force: true }))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
     mkdirSync(join(root, 'bin'))
-    writeFileSync(join(root, '.github/code-foundry.yml'), [
-      `git_workflow: '${topology}' # retained by the shared reader`,
-      'release_type: none',
-      'npm_publish: true',
-      'turbo_remote: true',
-      'post_release_mode: workflow-dispatch',
-    ].join('\n'))
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        `git_workflow: '${topology}' # retained by the shared reader`,
+        'release_type: none',
+        'npm_publish: true',
+        'turbo_remote: true',
+        'post_release_mode: workflow-dispatch',
+      ].join('\n')
+    )
     const gh = join(root, 'bin/gh')
-    writeFileSync(gh, `#!${process.execPath}\nconst args = process.argv.slice(2)\nif (args[0] === '--version') process.exit(0)\nif (args[0] === 'api' && args[1] === 'repos/test/repo') {\n  console.log(JSON.stringify(${JSON.stringify({ allow_squash_merge: topology === 'direct', allow_rebase_merge: topology !== 'direct', allow_merge_commit: false, allow_auto_merge: false })}))\n} else console.log('[]')\n`)
+    writeFileSync(
+      gh,
+      `#!${process.execPath}\nconst args = process.argv.slice(2)\nif (args[0] === '--version') process.exit(0)\nif (args[0] === 'api' && args[1] === 'repos/test/repo') {\n  console.log(JSON.stringify(${JSON.stringify({ allow_squash_merge: topology === 'direct', allow_rebase_merge: topology !== 'direct', allow_merge_commit: false, allow_auto_merge: false })}))\n} else console.log('[]')\n`
+    )
     chmodSync(gh, 0o755)
     const entry = new URL('../src/lib/github-doctor.mjs', import.meta.url).href
-    const result = spawnSync(process.execPath, ['--input-type=module', '-e',
-      `import { doctorGithub } from ${JSON.stringify(entry)}; console.log(JSON.stringify(doctorGithub(process.argv[1])))`, root], {
-      encoding: 'utf8',
-      env: { ...process.env, GITHUB_REPOSITORY: 'test/repo', PATH: `${join(root, 'bin')}:${process.env.PATH}` },
-    })
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { doctorGithub } from ${JSON.stringify(entry)}; console.log(JSON.stringify(doctorGithub(process.argv[1])))`,
+        root,
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GITHUB_REPOSITORY: 'test/repo',
+          PATH: `${join(root, 'bin')}:${process.env.PATH}`,
+        },
+      }
+    )
     assert.equal(result.status, 0, result.stderr)
     const report = JSON.parse(result.stdout)
-    assert.deepEqual(report.errors, ['post-release workflow-dispatch mode requires CODE_FOUNDRY_TOKEN to be present.'])
+    assert.deepEqual(report.errors, [
+      'post-release workflow-dispatch mode requires CODE_FOUNDRY_TOKEN to be present.',
+    ])
     assert.ok(report.warnings.some((message) => message.startsWith('npm_publish is enabled')))
     assert.ok(report.warnings.some((message) => message.startsWith('turbo_remote is enabled')))
   })
