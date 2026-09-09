@@ -9,7 +9,10 @@ const workflow = readFileSync(
 
 test('every matrix member consumes one immutable archive from the current run attempt', () => {
   assert.equal([...workflow.matchAll(/npm pack /g)].length, 1)
-  assert.match(workflow, /name: qualification-candidate-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/)
+  assert.match(
+    workflow,
+    /name: qualification-candidate-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/
+  )
   assert.doesNotMatch(workflow, /overwrite: true/)
   const qualify = workflow.slice(workflow.indexOf('\n  qualify:'))
   assert.match(qualify, /needs: pack/)
@@ -31,7 +34,10 @@ test('publication depends on qualification and reduced permissions admit artifac
     release.indexOf('\n  qualification:'),
     release.indexOf('\n  release:')
   )
-  assert.match(qualification, /billing-pause-bypass: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true \}\}/)
+  assert.match(
+    qualification,
+    /billing-pause-bypass: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true \}\}/
+  )
   assert.match(qualification, /actions: read/)
   assert.match(qualification, /contents: read/)
   assert.doesNotMatch(qualification, /secrets:/)

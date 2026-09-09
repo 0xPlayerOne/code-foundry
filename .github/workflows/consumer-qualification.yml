@@ -53,10 +53,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/candidate"
           npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/candidate" > "$RUNNER_TEMP/candidate/pack.json"
           PACKAGE=$(node -e 'const p=require(process.argv[1]); if(p.length!==1 || !/^[A-Za-z0-9._-]+\.tgz$/.test(p[0].filename)) process.exit(1); console.log(p[0].filename)' "$RUNNER_TEMP/candidate/pack.json")
-          echo "filename=$PACKAGE" >> "$GITHUB_OUTPUT"
-          echo "source-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "sha256=$(sha256sum "$RUNNER_TEMP/candidate/$PACKAGE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-          echo "run-attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          {
+            echo "filename=$PACKAGE"
+            echo "source-sha=$(git rev-parse HEAD)"
+            echo "sha256=$(sha256sum "$RUNNER_TEMP/candidate/$PACKAGE" | cut -d' ' -f1)"
+            echo "run-attempt=$GITHUB_RUN_ATTEMPT"
+          } >> "$GITHUB_OUTPUT"
       - name: Retain the shared candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
