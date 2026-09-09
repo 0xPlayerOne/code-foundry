@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.12.0...v1.13.0) (2026-09-09)
+
+
+### Features
+
+* **fleet:** add declared inventory and resumable canary rollouts ([#536](https://github.com/0xPlayerOne/code-foundry/issues/536)) ([6aa86d4](https://github.com/0xPlayerOne/code-foundry/commit/6aa86d4cd85cdbd4041c70d8c01d8e351e21fc0b))
+
 ## [1.12.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.11.0...v1.12.0) (2026-09-09)
 
 
