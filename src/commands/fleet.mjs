@@ -5,11 +5,13 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { readPackageVersion, syncRepository } from './sync.mjs'
+import { discoverManifestRepositories, hasFleetManifest, upgradeManifestFleet } from '../lib/fleet-manifest.mjs'
 
 /** @typedef {{ path: string, repository: string, runtimeRef: string, dirty: boolean, configured: boolean, gitWorkflow: string }} FleetRepository */
 
 /** @param {string} root @returns {FleetRepository[]} */
 export function discoverRepositories(root) {
+  if (hasFleetManifest(root)) return discoverManifestRepositories(root)
   /** @type {FleetRepository[]} */
   const result = []
   const candidates = [root, ...children(root), ...children(join(root, 'NiftyLeague'))]
@@ -39,6 +41,8 @@ export function upgradeFleet(root, source, options) {
       `fleet upgrade target ${options.version} does not match the runtime source checkout (${sourceVersion}); refresh the code-foundry checkout to ${options.version} before upgrading so the rendered callers and the declared runtime agree.`
     )
   }
+  if (hasFleetManifest(root))
+    return upgradeManifestFleet(root, source, { ...options, version }, syncRepository)
   const repositories = discoverRepositories(root)
   const report = []
   for (const repository of repositories) {
@@ -173,6 +177,7 @@ function upgradeRepository(repository, source, version) {
       [
         'pr',
         'create',
+        '--draft',
         '--repo',
         repository.repository,
         '--base',
