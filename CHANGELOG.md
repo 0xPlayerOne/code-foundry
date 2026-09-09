@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.16.0...v1.17.0) (2026-09-09)
+
+
+### Features
+
+* **quality:** add opt-in site, app, Worker, and package acceptance profiles ([#545](https://github.com/0xPlayerOne/code-foundry/issues/545)) ([1201793](https://github.com/0xPlayerOne/code-foundry/commit/1201793805b443c835b608609704bc43bcb035f5))
+
 ## [1.16.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.15.0...v1.16.0) (2026-09-09)
 
 
