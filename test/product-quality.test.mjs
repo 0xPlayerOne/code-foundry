@@ -93,6 +93,67 @@ test('generated HTML ignores comment and raw-script fake metadata and preserves 
   assert.throws(() => readTags('<meta name="one" NAME="two">'), /Duplicate/)
 })
 
+test('malformed comments cannot expose fake tags', () => {
+  const { tags, clean } = readTags('<!-- <meta name="fake">')
+  assert.equal(
+    tags.some((tag) => tag.name === 'meta'),
+    false
+  )
+  assert.doesNotMatch(clean, /<!--/)
+
+  const bangComment = readTags('<!-- <meta name="fake"> --!><meta name="real">')
+  assert.deepEqual(
+    bangComment.tags.filter((tag) => tag.name === 'meta').map((tag) => tag.attrs.name),
+    ['real']
+  )
+})
+
+test('comment markers inside scripts stay script data', () => {
+  const { tags } = readTags(
+    '<script>const marker = "<!--";</script><meta name="real" content="value">'
+  )
+  assert.deepEqual(
+    tags.filter((tag) => tag.name === 'meta').map((tag) => tag.attrs.name),
+    ['real']
+  )
+})
+
+test('malformed title markup is removed conservatively', () => {
+  const { clean } = readTags('<title><script</title>')
+  assert.doesNotMatch(clean, /<script/)
+})
+
+test('inline script budgets recognize forgiving script end tags', (t) => {
+  const root = temp(t)
+  const malformedEnd = `</script${String.fromCharCode(9, 10)} bar>`
+  put(
+    root,
+    'dist/index.html',
+    '<!doctype html><html><head><title>Page</title><meta name="description" content="Text"><link rel="canonical" href="https://example.test/"></head><body><script>const payload = "this must be counted"' +
+      malformedEnd +
+      '</body></html>'
+  )
+  const profile = {
+    id: 'site',
+    type: 'static-site',
+    origin: 'https://example.test',
+    dist: 'dist',
+    routes: [{ path: '/', html: 'index.html' }],
+    budgets: { htmlBytes: 2000, javascriptBytes: 0, imageBytes: 0 },
+  }
+  assert.throws(() => checkStaticSite(root, profile), /resource budget exceeded/)
+})
+
+test('sitemap comments cannot provide route locations', (t) => {
+  const { root, profile } = site(t)
+  put(
+    root,
+    'dist/sitemap.xml',
+    '<urlset><!-- <url><loc>https://example.test/</loc></url><url><loc>https://example.test/about/</loc></url>'
+  )
+  assert.throws(() => checkStaticSite(root, profile), /absent from sitemap/)
+})
+
 test('static routes validate metadata, relative links, anchors, assets, sitemap and redirects', (t) => {
   const { root, profile } = site(t)
   const result = checkStaticSite(root, profile)
