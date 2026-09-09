@@ -67,9 +67,10 @@ The shared CI and Test workflows retain each executed task's receipt, including
 failure, and discovery receipts for explicitly skipped optional tasks. Each upload
 selects exactly `.code-foundry/results/<task>.json`, not the broader hidden
 directory. The artifact name is `task-result-RUN_ID-ATTEMPT-TASK` and retention is
-14 days. The optional `artifact-prefix` workflow input disambiguates multiple
-invocations in the same run; use a different prefix for each such invocation.
-Existing coverage/performance artifact uploads are unchanged.
+14 days. The optional `artifact-prefix` input is exposed by CI, Test, and both
+validation orchestrators; it disambiguates multiple invocations in the same run
+when forwarded to the leaf workflows. Use a different prefix for each such
+invocation. Existing coverage/performance artifact uploads are unchanged.
 
 Missing receipts from an older runtime, a discovery/setup failure, or termination
 before the runtime writes its report do not create an artifact. Missing evidence
