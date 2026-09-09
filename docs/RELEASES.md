@@ -134,7 +134,9 @@ already passed).
 ## Operational checklist
 
 1. Merge tested changes into `main` (direct: feature PRs; staging-release: promote `staging` into `main`).
-2. Review the generated Release Please PR and changelog.
-3. Merge the release PR with squash in the direct topology (`release_merge_strategy: squash`).
-4. Confirm the GitHub Release and any package publication.
-5. staging-release only: synchronize `staging` with the new `main` release commit.
+2. Review the generated Release Please PR and changelog. A validated
+   `CODE_FOUNDRY_TOKEN` lets the release workflow merge it automatically after
+   required checks; without that token, merge it manually with squash in the
+   direct topology (`release_merge_strategy: squash`).
+3. Confirm the GitHub Release and any package publication.
+4. staging-release only: synchronize `staging` with the new `main` release commit.

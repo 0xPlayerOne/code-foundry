@@ -11,11 +11,6 @@ on:
         description: Exact pre-attached Code Foundry npm tarball name.
         required: true
         type: string
-      environment:
-        description: Protected GitHub environment for npm publication.
-        required: false
-        default: npm
-        type: string
       billing-pause-bypass:
         description: Allow only an explicitly dispatched release while shared CI remains paused.
         required: false
@@ -84,7 +79,6 @@ jobs:
     if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['billing-pause-bypass'] == true)) && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: ${{ inputs.environment }}
     concurrency:
       group: qualified-foundry-npm-${{ github.repository }}-${{ inputs.tag }}
       cancel-in-progress: false

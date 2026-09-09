@@ -8,14 +8,18 @@ Publish only the same immutable Code Foundry archive that passed consumer qualif
 The reusable `qualified-foundry-publish.yml` downloads an explicitly named npm
 archive from an already-published immutable release, verifies the release and
 asset attestations against the caller's exact commit, qualifies that same archive
-on Node 20/22/24, and only then admits a protected npm publication job. The final
-job downloads only reports from its own workflow run **and run attempt**, rechecks
+on Node 20/22/24, and only then admits the npm publication job. The self caller
+has no environment approval gate; all qualification and integrity checks remain
+in place. The final job downloads only reports from its own workflow run **and
+run attempt**, rechecks
 all required fixtures and archive/source identities, repeats cryptographic asset
 verification, validates the package name/version, and publishes the tarball with
 lifecycle scripts disabled. It never publishes a directory or rebuilds the package.
 
-The publishing job uses a GitHub environment, serializes publication for a tag,
-and has no dependency installation/build step. Qualification has no npm credential.
+The publishing job serializes publication for a tag and has no dependency
+installation/build step. Qualification has no npm credential. This self-only
+publisher intentionally has no environment approval gate; publication is
+automatic after its completed gates.
 Normal npm trusted publishing is preferred; an explicit optional token supports
 existing consumers. Configure the trusted publisher for the **actual caller and
 reusable-workflow relationship** before enabling this route. Existing version
@@ -84,7 +88,6 @@ jobs:
     with:
       tag: ${{ needs.release-producer.outputs.tag }}
       asset: ${{ needs.release-producer.outputs.npm-asset }}
-      environment: npm
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
@@ -130,9 +133,10 @@ The final publisher independently requalifies the immutable downloaded bytes.
 with the actual `CODE_FOUNDRY_TOKEN` (or workflow credential), then set
 `REQUIRE_IMMUTABLE_RELEASES=true`. Missing permissions, a disabled/unknown setting,
 or a CLI without release verification support fail before Release Please writes.
-Protect release tags against concurrent moves and configure the `release` and
-`npm` environments with the intended main-only deployment rules and approvals.
-A YAML environment reference does not prove those protections exist. The staging
+Protect release tags against concurrent moves. This self-only publisher has no
+GitHub environment approval gate, so publication follows the completed CI,
+qualification, and integrity gates. A YAML environment reference does not prove
+those protections exist. The staging
 token needs administration-read, contents-write and verification access; it is
 never exposed to the qualification jobs. Preflight and staging reuse the
 producer's validated credential selection, falling back to the workflow token
@@ -143,8 +147,9 @@ this PR.
 
 Run the full locked-toolchain suite, Actionlint contracts, and a disposable-repo
 release/signing/registry rehearsal before production approval. The producer
-serializes the full release workflow and never cancels an active publish; it does
-not auto-approve environments or bypass branch/review requirements.
+serializes the full release workflow and never cancels an active publish. The
+self caller auto-publishes after its gates without bypassing branch/review
+requirements for source changes.
 
 Use **Re-run all jobs** for qualification failures; attempts cannot reuse earlier
 reports. If Release Please returns `release_created: false`, the recovery job
