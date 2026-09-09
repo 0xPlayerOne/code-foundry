@@ -17,11 +17,19 @@ belong to the run that produced them, not the source tree.
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
 | Packed artifact                     | 240 kB | Bound registry transfer and install cost             |
 | Unpacked artifact                   | 900 kB | Bound installed footprint                            |
-| Packed files                        |    100 | Detect accidental release contents                   |
+| Packed files                        |    110 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
 That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
+
+The consumer qualification workflow adds the installed-package harness and
+workflow contract to the distributable. The merged candidate measured 221,495
+packed bytes, 853,573 unpacked bytes, and 100 files on Node 24.18.0; the updated
+budgets leave a small margin while continuing to bound package growth. The
+product-quality profiles and consumer qualification workflow measured 232,650
+packed bytes, 890,418 unpacked bytes, and 103 files on Node 24.18.0, so the
+limits remain intentionally bounded while covering both opt-in feature sets.
 
 ## v1.6.1 baseline
 
