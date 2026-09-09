@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.18.0...v1.19.0) (2026-09-09)
+
+
+### Features
+
+* **fleet:** gate upgrades on verified release qualification ([#548](https://github.com/0xPlayerOne/code-foundry/issues/548)) ([3247cc6](https://github.com/0xPlayerOne/code-foundry/commit/3247cc6f2295c65c42bb43e4ec8f87a08f3dd02d))
+
 ## [1.18.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.17.0...v1.18.0) (2026-09-09)
 
 
