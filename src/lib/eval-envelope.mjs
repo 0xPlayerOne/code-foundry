@@ -17,12 +17,12 @@ export const EVAL_SUMMARY_KIND = 'code-foundry-eval-summary'
 const FAILURE_CLASSES = ['harness', 'task']
 const STAT_FIELDS = ['mean', 'p50', 'p95', 'max']
 
-/** @param {unknown} value @returns {boolean} */
+/** @param {unknown} value @returns {value is number} */
 function isNonNegativeInteger(value) {
-  return Number.isSafeInteger(value) && value >= 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
-/** @param {unknown} value @returns {boolean} */
+/** @param {unknown} value @returns {value is number} */
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
 }
@@ -48,6 +48,7 @@ function isStats(value) {
 export function validateEvalReport(report) {
   /** @type {string[]} */
   const errors = []
+  /** @param {string} message */
   const push = (message) => errors.push(message)
   if (!report || typeof report !== 'object' || Array.isArray(report)) {
     return { valid: false, errors: ['report must be a JSON object'] }
@@ -189,16 +190,14 @@ export function evaluateEvalBudgets(report, budgets) {
     if (!known.has(key)) failures.push(`budgets.${key}: unknown budget key`)
   }
   if (failures.length > 0) return { passed: false, failures }
-  const summary = report?.summary ?? {}
   /** @type {Record<string, unknown>} */
+  const summary = report.summary ?? {}
   const rate = budgets.successRate
   if (rate !== undefined) {
     if (!isFiniteNumber(rate) || rate < 0 || rate > 1)
       return { passed: false, failures: ['budgets.successRate: must be between 0 and 1'] }
     if (isFiniteNumber(summary.successRate) && summary.successRate < rate)
-      failures.push(
-        `successRate ${/** @type {number} */ (summary.successRate).toFixed(2)} is below budget ${rate}`
-      )
+      failures.push(`successRate ${summary.successRate.toFixed(2)} is below budget ${rate}`)
   }
   const p95Fields = /** @type {const} */ ([
     ['taskP95Ms', 'taskDurationMs'],
@@ -206,14 +205,16 @@ export function evaluateEvalBudgets(report, budgets) {
     ['stepP95Ms', 'stepDurationMs'],
   ])
   for (const [budgetField, summaryField] of p95Fields) {
-    const budget = budgets[budgetField]
+    const budget = /** @type {unknown} */ (budgets[budgetField])
     if (budget === undefined) continue
     if (!isFiniteNumber(budget) || budget <= 0)
       return { passed: false, failures: [`budgets.${budgetField}: must be a positive number`] }
-    const stats = /** @type {Record<string, unknown> | undefined} */ (summary[summaryField])
-    if (!stats || !isFiniteNumber(stats.p95) || stats.count === 0) continue
-    if (stats.p95 > budget)
-      failures.push(`${summaryField}.p95 ${stats.p95}ms is above budget ${budget}ms`)
+    const stats = summary[summaryField]
+    if (!stats || typeof stats !== 'object') continue
+    const p95 = /** @type {unknown} */ (/** @type {Record<string, unknown>} */ (stats).p95)
+    const count = /** @type {Record<string, unknown>} */ (stats).count
+    if (!isFiniteNumber(p95) || count === 0) continue
+    if (p95 > budget) failures.push(`${summaryField}.p95 ${p95}ms is above budget ${budget}ms`)
   }
   const maxFields = /** @type {const} */ ([
     ['maxHarnessFailures', 'harnessFailures'],
@@ -221,12 +222,13 @@ export function evaluateEvalBudgets(report, budgets) {
     ['maxToolCalls', 'toolCalls'],
   ])
   for (const [budgetField, summaryField] of maxFields) {
-    const budget = budgets[budgetField]
+    const budget = /** @type {unknown} */ (budgets[budgetField])
     if (budget === undefined) continue
     if (!isNonNegativeInteger(budget))
       return { passed: false, failures: [`budgets.${budgetField}: must be a non-negative integer`] }
-    if (isNonNegativeInteger(summary[summaryField]) && summary[summaryField] > budget)
-      failures.push(`${summaryField} ${summary[summaryField]} is above budget ${budget}`)
+    const measured = /** @type {unknown} */ (summary[summaryField])
+    if (isNonNegativeInteger(measured) && measured > budget)
+      failures.push(`${summaryField} ${measured} is above budget ${budget}`)
   }
   return { passed: failures.length === 0, failures }
 }
