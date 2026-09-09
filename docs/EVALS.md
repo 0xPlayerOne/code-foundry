@@ -110,6 +110,8 @@ gate on the measured numbers:
 Supported budgets: `successRate`, `taskP95Ms`, `startupP95Ms`, `stepP95Ms`,
 `maxHarnessFailures`, `maxEvidenceErrors`, `maxToolCalls`. Unknown keys fail
 closed. When the budget file is absent the tier validates the contract only.
+Budget files are committed configuration; only `eval-results/` is a local
+artifact.
 
 The runtime writes `eval-results/summary.json` with the executed commands, the
 budget outcome, and the artifact list, mirroring the performance summary.
