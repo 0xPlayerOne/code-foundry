@@ -16,6 +16,8 @@ Usage:
   npx code-foundry init [--target PATH]
   npx code-foundry sync [--target PATH]
   npx code-foundry doctor [--target PATH]
+  npx code-foundry plan [--target PATH] [--changed] [--json]
+  npx code-foundry check [--target PATH] [--tier fast|audit] [--json]
   npx code-foundry ci pause|resume|status [--target PATH]
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW
@@ -124,6 +126,11 @@ function parseArgs(argv) {
 }
 
 async function main() {
+  if (['plan', 'check'].includes(process.argv[2])) {
+    const { agentCommand } = await import('./commands/agent-check.mjs')
+    process.exitCode = agentCommand(process.argv.slice(2))
+    return
+  }
   const { command, options } = parseArgs(process.argv.slice(2))
   const target = resolve(options.target)
 
