@@ -15,8 +15,8 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 255 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 965 kB | Bound installed footprint                            |
+| Packed artifact                     | 260 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 990 kB | Bound installed footprint                            |
 | Packed files                        |    115 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
@@ -25,9 +25,11 @@ prevents benchmark code from populating shared cache entries.
 
 The merged candidate includes the release-integrity verifier, fleet eligibility,
 consumer qualification harness, product-quality profiles, qualified publication
-workflow, and opt-in merge-queue verifier. It measured 248,464 packed bytes,
-947,310 unpacked bytes, and 111 files on Node 24.18.0; the 255 kB, 965 kB, and
-115-file limits retain a small margin while continuing to bound package growth.
+workflow, and opt-in merge-queue verifier. After the qualified publication
+cutover was rebased onto the current main release and task-receipt workflows, it
+measured 255,195 packed bytes, 981,678 unpacked bytes, and 112 files on Node
+24.18.0. The 260 kB, 990 kB, and 115-file limits retain a measured margin while
+continuing to bound package growth.
 
 ## v1.6.1 baseline
 

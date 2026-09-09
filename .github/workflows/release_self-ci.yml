@@ -12,32 +12,233 @@ on:
         default: false
 
 permissions:
-  actions: write
-  contents: write
-  issues: write
-  pull-requests: write
-  id-token: write
+  contents: read
+
+# One owner for draft staging and npm publication. Never cancel an active release.
+concurrency:
+  group: code-foundry-qualified-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   qualification:
     name: Qualify consumers
-    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
     uses: ./.github/workflows/consumer-qualification.yml
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
     permissions:
       actions: read
       contents: read
+
+  preflight:
+    name: Verify release prerequisites
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Require activation and verify immutability without changing it
+        env:
+          REQUIRE_IMMUTABLE_RELEASES: ${{ vars.REQUIRE_IMMUTABLE_RELEASES }}
+          CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$REQUIRE_IMMUTABLE_RELEASES" = true || { echo 'Enable and review immutable release prerequisites before this cutover.' >&2; exit 1; }
+          gh release verify --help >/dev/null
+          gh release verify-asset --help >/dev/null
+          # Match the reusable producer's credential selection. A rejected
+          # configured token must not make the later staging job use it.
+          if [ -n "$CODE_FOUNDRY_TOKEN" ] && GH_TOKEN="$CODE_FOUNDRY_TOKEN" gh api "repos/${GITHUB_REPOSITORY}" --jq '.full_name' >/dev/null 2>&1; then
+            GH_TOKEN="$CODE_FOUNDRY_TOKEN" node src/commands/release-integrity.mjs settings --repo "$GITHUB_REPOSITORY"
+          else
+            node src/commands/release-integrity.mjs settings --repo "$GITHUB_REPOSITORY"
+          fi
+
   release:
     name: Release
-    needs: qualification
-    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)
+    needs: [qualification, preflight]
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
     uses: ./.github/workflows/release.yml
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
       runner: ubuntu-slim
       runtime-repository: 0xPlayerOne/code-foundry
       runtime-ref: ${{ github.sha }}
+      config-file: .github/release-please-foundry.json
+      defer-publication: true
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+      # Required by the reusable legacy workflow's declared npm job, which is disabled here.
+      id-token: write
     secrets:
       CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
+
+  recovery:
+    name: Recover qualified draft identity
+    needs: [qualification, release]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && needs.qualification.result == 'success' && needs.release.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.recover.outputs.found }}
+      tag: ${{ steps.recover.outputs.tag }}
+      sha: ${{ steps.recover.outputs.sha }}
+    env:
+      RELEASE_CREATED: ${{ needs.release.outputs.release_created }}
+      SOURCE_SHA: ${{ needs.qualification.outputs.source-sha }}
+    steps:
+      - name: Checkout trusted recovery runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Locate an exact existing draft
+        id: recover
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+          import { appendFileSync, readFileSync } from "node:fs"
+          import { resolveTagCommit, runGh } from "./src/commands/release-integrity.mjs"
+          const output = process.env.GITHUB_OUTPUT
+          const write = (found, tag = "", sha = "") => appendFileSync(output, `found=${found}\ntag=${tag}\nsha=${sha}\n`)
+          if (process.env.RELEASE_CREATED === "true") {
+            write("false")
+            process.exit(0)
+          }
+          const version = JSON.parse(readFileSync("package.json", "utf8")).version
+          const tag = `v${version}`
+          const endpoint = `repos/${process.env.GITHUB_REPOSITORY}/releases/tags/${encodeURIComponent(tag)}`
+          const response = runGh(["api", "--include", endpoint])
+          if (response.status !== 0 && /HTTP\/\d(?:\.\d)? 404\b/.test(response.stdout)) {
+            write("false")
+            process.exit(0)
+          }
+          if (response.status !== 0) throw new Error("Could not inspect the expected draft release; recovery remains blocked")
+          const separator = response.stdout.indexOf("\r\n\r\n")
+          if (separator < 0) throw new Error("GitHub returned an invalid release response; recovery remains blocked")
+          const release = JSON.parse(response.stdout.slice(separator + 4))
+          if (release.draft !== true) {
+            write("false")
+            process.exit(0)
+          }
+          if (release.tag_name !== tag) throw new Error("Existing draft tag does not match the expected package version")
+          const sourceSha = resolveTagCommit(process.env.GITHUB_REPOSITORY, tag, runGh)
+          if (sourceSha.toLowerCase() !== process.env.SOURCE_SHA.toLowerCase()) throw new Error("Existing draft tag does not match the qualified source SHA")
+          write("true", tag, sourceSha)
+          '
+
+  stage:
+    name: Stage qualified release
+    needs: [qualification, release, recovery]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      actions: read
+      attestations: read
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
+      RELEASE_SHA: ${{ needs.release.outputs.sha || needs.recovery.outputs.sha }}
+      SOURCE_SHA: ${{ needs.qualification.outputs.source-sha }}
+      PACKAGE: ${{ needs.qualification.outputs.filename }}
+      CANDIDATE_SHA256: ${{ needs.qualification.outputs.sha256 }}
+      CANDIDATE_ARTIFACT: ${{ needs.qualification.outputs.candidate-artifact }}
+    steps:
+      - name: Checkout trusted staging runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Require the release to identify this qualified candidate
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readFileSync } from 'node:fs'
+          const env = process.env
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version
+          assert.match(env.SOURCE_SHA, /^[a-f0-9]{40}$/)
+          assert.equal(env.SOURCE_SHA, env.GITHUB_SHA)
+          assert.equal(env.RELEASE_SHA, env.SOURCE_SHA)
+          assert.equal(env.RELEASE_TAG, `v${version}`)
+          assert.equal(env.PACKAGE, `code-foundry-${version}.tgz`)
+          assert.match(env.CANDIDATE_SHA256, /^[a-f0-9]{64}$/)
+          assert.equal(env.CANDIDATE_ARTIFACT, `qualification-candidate-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}`)
+          NODE
+      - name: Retrieve only this attempt's qualified bytes and reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "$CANDIDATE_ARTIFACT" --dir "$RUNNER_TEMP/candidate"
+          test "$(sha256sum "$RUNNER_TEMP/candidate/$PACKAGE" | cut -d' ' -f1)" = "$CANDIDATE_SHA256"
+          for node in 20 22 24; do
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "consumer-qualification-$GITHUB_RUN_ATTEMPT-node-$node" \
+              --dir "$RUNNER_TEMP/reports/$node"
+          done
+      - name: Stage identical assets then publish and verify the immutable release
+        env:
+          GH_TOKEN: ${{ needs.release.outputs.token_source == 'configured' && secrets.CODE_FOUNDRY_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          node src/commands/qualified-publication.mjs stage \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$SOURCE_SHA" "$PACKAGE" \
+            "$RUNNER_TEMP/candidate" \
+            "$RUNNER_TEMP/reports/20/report.json" \
+            "$RUNNER_TEMP/reports/22/report.json" \
+            "$RUNNER_TEMP/reports/24/report.json" > "$RUNNER_TEMP/staging.json"
+      - name: Retain staging identity
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/staging.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    name: Publish verified package
+    needs: [qualification, release, recovery, stage]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.stage.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
+    uses: ./.github/workflows/qualified-foundry-publish.yml
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+      id-token: write
+    with:
+      tag: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
+      asset: ${{ needs.qualification.outputs.filename }}
+      environment: npm
+      billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
+    secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

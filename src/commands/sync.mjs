@@ -637,8 +637,23 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
   // own package and must remain in the self workflow rather than being
   // rendered into every consumer's release caller.
   if (workflow === 'release' && !selfRepository) {
-    rendered = removeWorkflowBlock(rendered, 'qualification')
-    rendered = removeWorkflowNeed(rendered, 'release', 'qualification')
+    // The self caller owns qualification, immutability preflight, draft
+    // recovery, staging, and qualified publication. Consumer callers must
+    // retain the ordinary reusable Release Please path instead of inheriting
+    // self-only jobs whose outputs and environments do not exist for them.
+    for (const job of ['qualification', 'preflight', 'recovery', 'stage', 'publish'])
+      rendered = removeWorkflowBlock(rendered, job)
+    rendered = rendered.replace(/^    needs: \[qualification, preflight\]\n/m, '')
+    rendered = rendered.replace(/^      config-file: \.github\/release-please-foundry\.json\n/m, '')
+    rendered = rendered.replace(/^      defer-publication: true\n/m, '')
+    rendered = rendered.replace(
+      /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\)\n/m,
+      "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n"
+    )
+    rendered = rendered.replace(
+      /(\n    secrets:\n      CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}\n)/,
+      '$1      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n'
+    )
   }
   // The staging-release topology validates and scans pull requests against
   // both main and the integration branch; direct repositories only ever
@@ -727,26 +742,6 @@ function removeWorkflowBlock(content, blockId) {
   while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
   lines.splice(start, end - start)
   if (content.endsWith('\n') && lines.at(-1) !== '') lines.push('')
-  return lines.join('\n')
-}
-
-/**
- * Remove a single root-job dependency while preserving the rest of the job.
- * @param {string} content
- * @param {string} jobId
- * @param {string} dependency
- * @returns {string}
- */
-function removeWorkflowNeed(content, jobId, dependency) {
-  const lines = content.split('\n')
-  const start = lines.findIndex((line) => line === `  ${jobId}:`)
-  if (start === -1) return content
-  let end = start + 1
-  while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
-  const need = lines.findIndex(
-    (line, index) => index > start && index < end && line === `    needs: ${dependency}`
-  )
-  if (need >= 0) lines.splice(need, 1)
   return lines.join('\n')
 }
 

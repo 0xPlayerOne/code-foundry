@@ -16,6 +16,11 @@ on:
         required: false
         default: npm
         type: string
+      billing-pause-bypass:
+        description: Allow only an explicitly dispatched release while shared CI remains paused.
+        required: false
+        type: boolean
+        default: false
     secrets:
       NPM_TOKEN:
         required: false
@@ -27,7 +32,7 @@ permissions:
 jobs:
   qualify:
     name: Qualify Node ${{ matrix.node }}
-    if: vars.CI_BILLING_PAUSED != 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['billing-pause-bypass'] == true)) && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
@@ -76,7 +81,7 @@ jobs:
   publish:
     name: Publish qualified archive
     needs: qualify
-    if: vars.CI_BILLING_PAUSED != 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['billing-pause-bypass'] == true)) && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: ${{ inputs.environment }}

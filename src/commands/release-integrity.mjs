@@ -140,6 +140,15 @@ function tagCommit(run, repository, tag) {
   return object.sha
 }
 
+/** Resolve a release tag without requiring the release itself to be published.
+ * @param {string} repository @param {string} tag @param {Runner} [run]
+ */
+export function resolveTagCommit(repository, tag, run = runGh) {
+  validateRepository(repository)
+  validateTag(tag)
+  return tagCommit(run, repository, tag)
+}
+
 /** GitHub CLI performs signature/attestation verification, not merely a metadata check.
  * @param {{repository: string, tag: string, root?: string, assets?: string[], expectedSha?: string}} options
  * @param {Runner} [run]
