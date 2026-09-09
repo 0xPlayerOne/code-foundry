@@ -15,8 +15,8 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 245 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 920 kB | Bound installed footprint                            |
+| Packed artifact                     | 250 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 930 kB | Bound installed footprint                            |
 | Packed files                        |    110 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
@@ -24,9 +24,10 @@ That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
 
 The merged candidate includes the release-integrity verifier, fleet eligibility,
-consumer qualification harness, and product-quality profiles. It measured
-237,421 packed bytes, 905,185 unpacked bytes, and 106 files on Node 24.18.0;
-the budgets leave a small margin while continuing to bound package growth.
+consumer qualification harness, product-quality profiles, and qualified
+publication workflow. It measured 243,466 packed bytes, 930,389 unpacked bytes,
+and 109 files on Node 24.18.0; the 250 kB, 945 kB, and 110-file limits retain a
+small margin while continuing to bound package growth.
 
 ## v1.6.1 baseline
 
