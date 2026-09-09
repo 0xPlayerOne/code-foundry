@@ -207,6 +207,17 @@ workflow reference and `runtime-ref` to the same reviewed 40-character commit
 SHA. Provide `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the consumer
 repository and configure environment reviewers separately.
 
-The legacy `cloudflare-deploy.yml` workflow remains available for direct,
-unverified deployments. Prefer `local` or an exact Wrangler version over its
-compatibility default of `latest`. See [Verified Cloudflare delivery](cloudflare-delivery.md).
+The legacy `cloudflare-deploy.yml` workflow remains available for direct
+(unverified) deployments. It runs `wrangler versions upload` for previews and
+`wrangler deploy` for production, records a GitHub deployment plus status, and
+respects `CI_BILLING_PAUSED`. Preview deployment records use the pull request
+head SHA when called from a PR, which lets GitHub show the completed preview in
+the PR's Deployments section; direct pushes use the workflow SHA. Its
+legacy-compatible Wrangler default is `latest`; callers should prefer `local` or
+provide an exact `wrangler-version` for reproducibility. Bun consumers may pass
+`build-script`, `install-working-directory`, and `bun-version`; the runtime
+installs the frozen lockfile and builds the Worker before invoking Wrangler.
+Bun-backed callers invoke Wrangler through `bunx` so OpenNext's production
+delegation resolves the workspace-local `opennextjs-cloudflare` binary; callers
+without `build-script` retain the npm/npx path. See [Verified Cloudflare
+delivery](cloudflare-delivery.md).

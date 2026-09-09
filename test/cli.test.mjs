@@ -1314,6 +1314,11 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /bun run "\$BUILD_SCRIPT"/)
     assert.match(workflow, /deployments: write/)
     assert.match(workflow, /production_environment: \$production/)
+    assert.match(
+      workflow,
+      /GITHUB_DEPLOYMENT_REF: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/
+    )
+    assert.match(workflow, /--arg ref "\$GITHUB_DEPLOYMENT_REF"/)
   })
 
   it('pins the mise binary version across reusable setup paths', () => {

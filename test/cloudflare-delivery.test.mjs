@@ -244,6 +244,25 @@ test('HTTP API failures do not disclose authorization or response bodies', async
   )
 })
 
+test('PR deployment records use the head commit rather than the merge commit', async (t) => {
+  const root = fixture(t)
+  const headSha = 'b'.repeat(40)
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url: String(url), options })
+    return respond(options.method === 'POST' ? { id: 123 } : {})
+  })
+  await deliveryCommand('record-start', {
+    ...environment(root),
+    DEPLOYMENT_ENVIRONMENT: 'Preview',
+    FOUNDRY_PHASE: 'candidate',
+    GITHUB_DEPLOYMENT_REF: headSha,
+  })
+  const body = JSON.parse(calls.find((call) => call.url.endsWith('/deployments')).options.body)
+  assert.equal(body.ref, headSha)
+  assert.equal(JSON.parse(readFileSync(join(root, 'state.json'), 'utf8')).githubDeploymentId, 123)
+})
+
 test('production source freshness rejects newer default-branch commits', async (t) => {
   const root = fixture(t)
   state(root)
@@ -342,6 +361,10 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
   assert.match(yaml, /cancel-in-progress: false/)
   assert.match(yaml, /name: Production/)
   assert.match(yaml, /name: Preview/)
+  assert.match(
+    yaml,
+    /GITHUB_DEPLOYMENT_REF: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/
+  )
   assert.match(yaml, /RUNTIME_REF.*inputs\.runtime-ref/)
   assert.match(yaml, /\^\[0-9a-fA-F\]\{40\}\$/)
   assert.match(yaml, /canary-verify-command/)

@@ -300,8 +300,13 @@ export async function deliveryCommand(command, env = process.env) {
     else if (command === 'rollback') await rollback(env, state)
     else if (command === 'record-start') {
       const production = env.FOUNDRY_PHASE === 'production'
+      // pull_request workflows build the merge ref, while GitHub associates
+      // PR deployments with the head commit. The reusable workflow supplies
+      // that head SHA; direct pushes fall back to the checked-out source SHA.
+      const deploymentRef = env.GITHUB_DEPLOYMENT_REF || state.sourceSha
+      if (!/^[0-9a-f]{40}$/i.test(deploymentRef)) throw new Error('Invalid GitHub deployment ref')
       const deployment = await github(env, 'deployments', {
-        ref: state.sourceSha,
+        ref: deploymentRef,
         environment: required(env, 'DEPLOYMENT_ENVIRONMENT'),
         auto_merge: false,
         required_contexts: [],
