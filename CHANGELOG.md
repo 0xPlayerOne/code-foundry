@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.17.0...v1.18.0) (2026-09-09)
+
+
+### Features
+
+* **releases:** stage qualified assets and publish verified identical archives ([#547](https://github.com/0xPlayerOne/code-foundry/issues/547)) ([dffcb83](https://github.com/0xPlayerOne/code-foundry/commit/dffcb834c8ee8c5c2bcba606350276e6a7de58d0))
+
 ## [1.17.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.16.0...v1.17.0) (2026-09-09)
 
 
