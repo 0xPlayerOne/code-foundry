@@ -8,6 +8,19 @@ on:
         required: false
         type: boolean
         default: false
+    outputs:
+      filename:
+        description: Exact qualified npm archive name.
+        value: ${{ jobs.pack.outputs.filename }}
+      source-sha:
+        description: Commit whose archive passed the complete qualification matrix.
+        value: ${{ jobs.gate.outputs.source-sha }}
+      sha256:
+        description: SHA-256 of the qualified archive, without an algorithm prefix.
+        value: ${{ jobs.gate.outputs.sha256 }}
+      candidate-artifact:
+        description: Candidate artifact scoped to this workflow run and attempt.
+        value: ${{ jobs.gate.outputs.candidate-artifact }}
 
 permissions:
   actions: read
@@ -21,6 +34,9 @@ jobs:
     timeout-minutes: 10
     outputs:
       filename: ${{ steps.pack.outputs.filename }}
+      source-sha: ${{ steps.pack.outputs.source-sha }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+      run-attempt: ${{ steps.pack.outputs.run-attempt }}
     steps:
       - name: Checkout candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -38,13 +54,15 @@ jobs:
           npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/candidate" > "$RUNNER_TEMP/candidate/pack.json"
           PACKAGE=$(node -e 'const p=require(process.argv[1]); if(p.length!==1 || !/^[A-Za-z0-9._-]+\.tgz$/.test(p[0].filename)) process.exit(1); console.log(p[0].filename)' "$RUNNER_TEMP/candidate/pack.json")
           echo "filename=$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "source-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$RUNNER_TEMP/candidate/$PACKAGE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "run-attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - name: Retain the shared candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: qualification-candidate-${{ github.run_id }}
+          name: qualification-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/candidate/*
           if-no-files-found: error
-          overwrite: true
           retention-days: 14
 
   qualify:
@@ -57,6 +75,11 @@ jobs:
       fail-fast: false
       matrix:
         node: ['20', '22', '24']
+    env:
+      PACKAGE: ${{ needs.pack.outputs.filename }}
+      SOURCE_SHA: ${{ needs.pack.outputs.source-sha }}
+      CANDIDATE_SHA256: ${{ needs.pack.outputs.sha256 }}
+      PACK_ATTEMPT: ${{ needs.pack.outputs.run-attempt }}
     steps:
       - name: Checkout qualification runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -70,26 +93,103 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          test "$PACK_ATTEMPT" = "$GITHUB_RUN_ATTEMPT" || { echo 'Rerun all jobs: qualification cannot mix run attempts.' >&2; exit 1; }
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
-            --name "qualification-candidate-$GITHUB_RUN_ID" \
+            --name "qualification-candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --dir "$RUNNER_TEMP/candidate"
+          test "$(sha256sum "$RUNNER_TEMP/candidate/$PACKAGE" | cut -d' ' -f1)" = "$CANDIDATE_SHA256"
       - name: Install pinned workflow validator
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Qualify the exact shared distributable
-        env:
-          PACKAGE: ${{ needs.pack.outputs.filename }}
         run: |
           set -euo pipefail
           node src/lib/consumer-qualification.mjs \
-            "$RUNNER_TEMP/candidate/$PACKAGE" \
-            "$(git rev-parse HEAD)" \
-            "$RUNNER_TEMP/report.json" \
-            "$(go env GOPATH)/bin/actionlint"
+            "$RUNNER_TEMP/candidate/$PACKAGE" "$SOURCE_SHA" \
+            "$RUNNER_TEMP/report.json" "$(go env GOPATH)/bin/actionlint"
       - name: Retain qualification evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: consumer-qualification-${{ github.run_attempt }}-node-${{ matrix.node }}
           path: ${{ runner.temp }}/report.json
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 14
+
+  gate:
+    name: Gate
+    needs: [pack, qualify]
+    if: >-
+      always() && !cancelled() &&
+      (vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      source-sha: ${{ steps.verify.outputs.source-sha }}
+      sha256: ${{ steps.verify.outputs.sha256 }}
+      candidate-artifact: ${{ steps.verify.outputs.candidate-artifact }}
+    env:
+      PACKAGE: ${{ needs.pack.outputs.filename }}
+      SOURCE_SHA: ${{ needs.pack.outputs.source-sha }}
+      CANDIDATE_SHA256: ${{ needs.pack.outputs.sha256 }}
+      PACK_ATTEMPT: ${{ needs.pack.outputs.run-attempt }}
+      PACK_RESULT: ${{ needs.pack.result }}
+      QUALIFY_RESULT: ${{ needs.qualify.result }}
+    steps:
+      - name: Require the complete successful matrix
+        run: |
+          set -euo pipefail
+          test "$PACK_RESULT" = success
+          test "$QUALIFY_RESULT" = success
+          test "$PACK_ATTEMPT" = "$GITHUB_RUN_ATTEMPT" || { echo 'Rerun all jobs: qualification cannot mix run attempts.' >&2; exit 1; }
+      - name: Checkout qualification policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Retrieve this attempt's candidate and reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "qualification-candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --dir "$RUNNER_TEMP/candidate"
+          for node in 20 22 24; do
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "consumer-qualification-$GITHUB_RUN_ATTEMPT-node-$node" \
+              --dir "$RUNNER_TEMP/reports/$node"
+          done
+      - name: Verify source, archive and every fixture before handing off
+        id: verify
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+          import { join } from 'node:path'
+          import { qualifyArchive } from './src/commands/qualified-publication.mjs'
+          const env = process.env
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version
+          const candidate = {
+            repository: env.GITHUB_REPOSITORY, tag: `v${version}`,
+            sourceSha: env.SOURCE_SHA, asset: env.PACKAGE,
+            directory: join(env.RUNNER_TEMP, 'candidate'),
+          }
+          const result = qualifyArchive(candidate, ['20', '22', '24'].map(node => join(env.RUNNER_TEMP, 'reports', node, 'report.json')))
+          assert.equal(result.digest, `sha256:${env.CANDIDATE_SHA256}`)
+          const artifact = `qualification-candidate-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}`
+          writeFileSync(join(env.RUNNER_TEMP, 'qualification.json'), JSON.stringify({ ...result, run_id: env.GITHUB_RUN_ID, run_attempt: env.GITHUB_RUN_ATTEMPT }, null, 2) + '\n')
+          appendFileSync(env.GITHUB_OUTPUT, `source-sha=${result.sourceSha}\nsha256=${env.CANDIDATE_SHA256}\ncandidate-artifact=${artifact}\n`)
+          NODE
+      - name: Retain the qualified handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: qualification-handoff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification.json
+          if-no-files-found: error
           retention-days: 14
