@@ -81,21 +81,226 @@ function decode(value) {
   })
 }
 
+/**
+ * Find an HTML comment terminator, including the parser's comment-end-bang
+ * form. An unterminated comment is treated as extending to the end of input.
+ * @param {string} html
+ * @param {number} start
+ * @returns {{ start: number, length: number } | null}
+ */
+function findCommentEnd(html, start) {
+  const normal = html.indexOf('-->', start + 4)
+  const bang = html.indexOf('--!>', start + 4)
+  if (normal === -1 && bang === -1) return null
+  if (bang !== -1 && (normal === -1 || bang < normal)) return { start: bang, length: 4 }
+  return { start: normal, length: 3 }
+}
+
+/**
+ * Remove comments without leaving an unmatched comment opener that can expose
+ * markup to the lightweight tag reader.
+ * @param {string} html
+ */
+function stripHtmlComments(html) {
+  let clean = ''
+  let cursor = 0
+  while (cursor < html.length) {
+    const start = html.indexOf('<!--', cursor)
+    if (start === -1) return clean + html.slice(cursor)
+    clean += html.slice(cursor, start)
+    const end = findCommentEnd(html, start)
+    if (!end) return clean
+    cursor = end.start + end.length
+  }
+  return clean
+}
+
+/** @param {string} html @param {number} start */
+function findTagEnd(html, start) {
+  let quote = ''
+  for (let index = start + 1; index < html.length; index += 1) {
+    const character = html[index]
+    if (quote) {
+      if (character === quote) quote = ''
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (character === '>') {
+      return index
+    }
+  }
+  return -1
+}
+
+/** @param {string | undefined} character */
+function isTagBoundary(character) {
+  return (
+    character === undefined || character === '>' || character === '/' || character.trim() === ''
+  )
+}
+
+/**
+ * Locate a named HTML tag while accepting parser-tolerated end-tag junk such
+ * as `</script\\t\\n data>`.
+ * @param {string} html
+ * @param {string} name
+ * @param {number} from
+ * @param {boolean} closing
+ * @returns {{ start: number, end: number } | null}
+ */
+function findNamedTag(html, name, from, closing) {
+  const lowerName = name.toLowerCase()
+  for (let start = html.indexOf('<', from); start !== -1; start = html.indexOf('<', start + 1)) {
+    let nameStart = start + 1
+    if (closing) {
+      if (html[nameStart] !== '/') continue
+      nameStart += 1
+    } else if (html[nameStart] === '/' || html[nameStart] === '!' || html[nameStart] === '?') {
+      continue
+    }
+    if (html.slice(nameStart, nameStart + name.length).toLowerCase() !== lowerName) continue
+    if (!isTagBoundary(html[nameStart + name.length])) continue
+    return { start, end: findTagEnd(html, start) }
+  }
+  return null
+}
+
+const RAW_TEXT_TAGS = [
+  'script',
+  'style',
+  'textarea',
+  'template',
+  'xmp',
+  'iframe',
+  'noembed',
+  'noframes',
+  'noscript',
+]
+
+/**
+ * @param {string} html
+ * @param {number} from
+ * @returns {{ start: number, end: number, name: string } | null}
+ */
+function findNextRawTextTag(html, from) {
+  let next = null
+  for (const name of RAW_TEXT_TAGS) {
+    const candidate = findNamedTag(html, name, from, false)
+    if (candidate && (!next || candidate.start < next.start)) {
+      next = { ...candidate, name }
+    }
+  }
+  return next
+}
+
+/**
+ * Remove comments and raw-text contents in document order. Comment markers
+ * inside raw-text elements are data, not document comments.
+ * @param {string} html
+ */
+function stripCommentsAndRawText(html) {
+  let clean = ''
+  let cursor = 0
+  while (cursor < html.length) {
+    const commentStart = html.indexOf('<!--', cursor)
+    const rawText = findNextRawTextTag(html, cursor)
+    if (commentStart === -1 && !rawText) return clean + html.slice(cursor)
+    if (commentStart !== -1 && (!rawText || commentStart < rawText.start)) {
+      clean += html.slice(cursor, commentStart)
+      const commentEnd = findCommentEnd(html, commentStart)
+      if (!commentEnd) return clean
+      cursor = commentEnd.start + commentEnd.length
+      continue
+    }
+    if (!rawText) return clean + html.slice(cursor)
+    clean += html.slice(cursor, rawText.start)
+    if (rawText.end === -1) return clean
+    clean += html.slice(rawText.start, rawText.end + 1)
+    const close = findNamedTag(html, rawText.name, rawText.end + 1, true)
+    if (!close || close.end === -1) return clean
+    cursor = close.end + 1
+  }
+  return clean
+}
+
+/**
+ * Remove angle-bracket markup from title text. A dangling `<` is discarded
+ * through EOF instead of being left as a potentially active tag prefix.
+ * @param {string} value
+ */
+function stripAngleBracketMarkup(value) {
+  let clean = ''
+  let cursor = 0
+  while (cursor < value.length) {
+    const start = value.indexOf('<', cursor)
+    if (start === -1) return clean + value.slice(cursor)
+    clean += value.slice(cursor, start)
+    const end = value.indexOf('>', start + 1)
+    if (end === -1) return clean
+    cursor = end + 1
+  }
+  return clean
+}
+
+/**
+ * Rewrite title bodies without relying on a multi-character HTML-filtering
+ * regexp. Malformed title elements are truncated so their contents cannot be
+ * interpreted as page metadata.
+ * @param {string} html
+ */
+function rewriteTitleMarkup(html) {
+  let clean = ''
+  let cursor = 0
+  while (cursor < html.length) {
+    const open = findNamedTag(html, 'title', cursor, false)
+    if (!open) return clean + html.slice(cursor)
+    clean += html.slice(cursor, open.start)
+    if (open.end === -1) return clean
+    clean += html.slice(open.start, open.end + 1)
+    const close = findNamedTag(html, 'title', open.end + 1, true)
+    if (!close || close.end === -1) return clean
+    clean += stripAngleBracketMarkup(html.slice(open.end + 1, close.start))
+    clean += html.slice(close.start, close.end + 1)
+    cursor = close.end + 1
+  }
+  return clean
+}
+
+/**
+ * Return script bodies while respecting comments and parser-tolerated script
+ * end tags. An unclosed script consumes the remainder of the document.
+ * @param {string} html
+ */
+function readInlineScripts(html) {
+  /** @type {string[]} */
+  const scripts = []
+  let cursor = 0
+  while (cursor < html.length) {
+    const script = findNamedTag(html, 'script', cursor, false)
+    const commentStart = html.indexOf('<!--', cursor)
+    if (commentStart !== -1 && (!script || commentStart < script.start)) {
+      const commentEnd = findCommentEnd(html, commentStart)
+      if (!commentEnd) return scripts
+      cursor = commentEnd.start + commentEnd.length
+      continue
+    }
+    if (!script || script.end === -1) return scripts
+    const contentStart = script.end + 1
+    const candidateClose = findNamedTag(html, 'script', contentStart, true)
+    const close = candidateClose?.end === -1 ? null : candidateClose
+    const contentEnd = close?.start ?? html.length
+    scripts.push(html.slice(contentStart, contentEnd))
+    if (!close || close.end === -1) return scripts
+    cursor = close.end + 1
+  }
+  return scripts
+}
+
 /** Conservative generated-HTML tag reader, not a DOM implementation.
  * Raw-text HTML elements and comments cannot create fake metadata or links.
  * @param {string} html
  */
 export function readTags(html) {
-  const clean = html
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(
-      /(<(script|style|textarea|template|xmp|iframe|noembed|noframes|noscript)\b(?:"[^"]*"|'[^']*'|[^'">])*>)[\s\S]*?<\/\2\s*>/gi,
-      '$1'
-    )
-    .replace(
-      /(<title\b(?:"[^"]*"|'[^']*'|[^'">])*>)([\s\S]*?)<\/title\s*>/gi,
-      (_, open, content) => `${open}${content.replace(/<[^>]*>/g, '')}</title>`
-    )
+  const clean = rewriteTitleMarkup(stripCommentsAndRawText(html))
   /** @type {Array<{ name: string, attrs: Record<string,string> }>} */
   const tags = []
   for (const match of clean.matchAll(/<([a-z][a-z0-9:-]*)\b((?:"[^"]*"|'[^']*'|[^'">])*)>/gi)) {
@@ -245,11 +450,10 @@ export function checkStaticSite(root, profile) {
         requireValue(lstatSync(file).isFile(), 'Budget assets must be regular files')
         return sum + statSync(file).size
       }, 0)
-    const inlineBytes = [
-      ...readFileSync(page.file, 'utf8')
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .matchAll(/<script\b(?:"[^"]*"|'[^']*'|[^'">])*?>([\s\S]*?)<\/script\s*>/gi),
-    ].reduce((sum, match) => sum + Buffer.byteLength(match[1]), 0)
+    const inlineBytes = readInlineScripts(readFileSync(page.file, 'utf8')).reduce(
+      (sum, script) => sum + Buffer.byteLength(script),
+      0
+    )
     const result = {
       route: path,
       htmlBytes: statSync(page.file).size,
@@ -267,7 +471,7 @@ export function checkStaticSite(root, profile) {
   if (profile.sitemap) {
     const sitemap = readFileSync(ownedPath(dist, profile.sitemap), 'utf8')
     requireValue(!/<!DOCTYPE|<!ENTITY/i.test(sitemap), 'Sitemap entities are not supported')
-    const sitemapWithoutComments = sitemap.replace(/<!--[\s\S]*?-->/g, '')
+    const sitemapWithoutComments = stripHtmlComments(sitemap)
     const locations = new Set(
       [
         ...sitemapWithoutComments.matchAll(
