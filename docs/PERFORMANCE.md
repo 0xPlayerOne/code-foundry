@@ -66,3 +66,14 @@ measurements and the expected effect on local feedback, hosted runner time,
 package transfer, or installed footprint. The current budget covers the measured
 combined release-integrity, fleet, consumer-qualification, and product-quality
 package footprint described above.
+
+## Native Rust test batching
+
+Each Rust test category invokes Cargo once with tracked targets:
+units use `--lib`/`--bin <package>`; integration, E2E and smoke use repeated
+`--test <target>`. Cargo shares setup without competing processes.
+
+Discovery, category boundaries, fallback, scripts, Python checks, flags and
+receipts stay unchanged. `--tests`/`--all-targets` stay avoided to prevent
+broader or repeated coverage. Executables may run serially; measure cold/warm
+runs, including compile and cache transfer, before claiming speedup.

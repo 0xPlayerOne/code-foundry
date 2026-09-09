@@ -81,7 +81,7 @@ function sourceSha(root) {
 }
 
 /**
- * Stable public runtime; the original ecosystem executor is kept private and unchanged.
+ * Stable public runtime; the native executor stays separate from policy and evidence.
  * Tests can substitute an executor without installing consumer dependencies.
  * @param {string[]} args @param {string} [root] @param {string} [entry]
  * @returns {number}
