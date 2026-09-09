@@ -100,6 +100,7 @@ function fixture(t, mode) {
           headRefName: identity.branch,
           baseRefName: 'main',
           isCrossRepository: false,
+          isDraft: true,
         })
       )
     throw new Error(`Unexpected fixture command: ${argv}`)
