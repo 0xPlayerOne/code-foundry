@@ -618,7 +618,8 @@ describe('code-foundry CLI', () => {
     syncRepository({ target: root, source: process.cwd() })
     const guard = readFileSync(join(root, '.github/workflows/draft-enforcement.yml'), 'utf8')
     assert.match(guard, /pull_request_target:/)
-    assert.match(guard, /- opened\n\s+- reopened\n\s+- synchronize/)
+    assert.match(guard, /- opened\n\s+- reopened/)
+    assert.doesNotMatch(guard, /types:[\s\S]*- synchronize/)
     assert.match(guard, /pull-requests: write/)
     assert.match(guard, /EVENT_HEAD_SHA/)
     assert.match(guard, /EVENT_UPDATED_AT/)
@@ -1435,13 +1436,14 @@ describe('code-foundry CLI', () => {
       validationCaller,
       /default-branch-codeql:[\s\S]*?uses: \.\/\.github\/workflows\/codeql\.yml/
     )
-    assert.match(validationCaller, /types:\n\s+- ready_for_review/)
-    assert.doesNotMatch(validationCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
-    assert.doesNotMatch(validationCaller, /github\.event\.pull_request\.draft == false/)
+    assert.match(validationCaller, /types:\n\s+- ready_for_review\n\s+- synchronize/)
+    assert.match(validationCaller, /github\.event\.pull_request\.draft == false/)
+    assert.doesNotMatch(validationCaller, /\s+- (opened|reopened|converted_to_draft)/)
 
     const opencodeCaller = readFileSync('.github/workflows/opencode-security_self-ci.yml', 'utf8')
-    assert.match(opencodeCaller, /types:\n\s+- ready_for_review/)
-    assert.doesNotMatch(opencodeCaller, /\s+- (opened|synchronize|reopened|converted_to_draft)/)
+    assert.match(opencodeCaller, /types:\n\s+- ready_for_review\n\s+- synchronize/)
+    assert.match(opencodeCaller, /github\.event\.pull_request\.draft == false/)
+    assert.doesNotMatch(opencodeCaller, /\s+- (opened|reopened|converted_to_draft)/)
     assert.match(opencodeCaller, /OPENCODE_SECURITY: \$\{\{ vars\.OPENCODE_SECURITY \}\}/)
     assert.doesNotMatch(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
     assert.doesNotMatch(opencodeCaller, /opencode_security|grep -Eq/)
@@ -1456,7 +1458,8 @@ describe('code-foundry CLI', () => {
 
     const draftGuard = readFileSync('.github/workflows/draft-enforcement_self-ci.yml', 'utf8')
     assert.match(draftGuard, /pull_request_target:/)
-    assert.match(draftGuard, /- opened\n\s+- reopened\n\s+- synchronize/)
+    assert.match(draftGuard, /- opened\n\s+- reopened/)
+    assert.doesNotMatch(draftGuard, /- synchronize/)
     assert.match(draftGuard, /pull-requests: write/)
     assert.match(draftGuard, /EVENT_HEAD_SHA/)
     assert.match(draftGuard, /EVENT_UPDATED_AT/)
@@ -1731,6 +1734,8 @@ jobs:
 
     const validation = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     assert.match(validation, /branches: \[main\]/)
+    assert.match(validation, /- ready_for_review\n\s+- synchronize/)
+    assert.match(validation, /github\.event\.pull_request\.draft == false/)
     assert.doesNotMatch(validation, /staging/)
 
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
@@ -1883,7 +1888,7 @@ jobs:
     assert.doesNotMatch(contributing, /staging/i)
     assert.match(contributing, /Draft pull request targeting `main`/)
     assert.match(contributing, /Ready pull request targeting `main`/)
-    assert.match(contributing, /mark it ready again after every update/i)
+    assert.match(contributing, /Ready pull requests stay ready when new commits arrive/i)
     const migratedConfig = readFileSync(configPath, 'utf8')
     assert.doesNotMatch(migratedConfig, /^opencode_security:/m)
     assert.doesNotMatch(migratedConfig, /^staging_validation_mode:/m)

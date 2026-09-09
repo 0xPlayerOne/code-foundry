@@ -15,6 +15,7 @@ its own names, environments, and deployment details.
 - [Performance budgets and baselines](PERFORMANCE.md)
 - [Required capabilities and task evidence](required-capabilities.md)
 - [Agent-facing validation commands](agent-validation.md)
+- [Declarative fleet inventory and staged rollouts](fleet-rollouts.md)
 
 ## Repository-specific documentation
 

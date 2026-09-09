@@ -179,15 +179,23 @@ shards. Do not split a single crate by arbitrary non-Rust directories: use
 ## Cloudflare Workers deployments
 
 Repositories that deploy to Cloudflare Workers can opt into GitHub-native
-deployments (Preview/Production environments with deployment statuses, like
-Vercel's integration) by adding a small caller for the runtime's reusable
-`cloudflare-deploy.yml` workflow. The workflow runs `wrangler versions upload`
-for pull-request previews and `wrangler deploy` for production, records a
-GitHub deployment plus status with the workers.dev URL, and respects
-`CI_BILLING_PAUSED`. It requires the `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` secrets in the consumer repository. Bun consumers may
-also pass `build-script`, `install-working-directory`, and `bun-version`; the
-runtime installs the frozen lockfile and builds the Worker before invoking
+verified delivery (fixed `Preview`/`Production` environments, candidate
+verification, and version-identity promotion) by adding a caller for the
+runtime's reusable `cloudflare-delivery.yml` workflow. Use the same immutable
+40-character Code Foundry commit SHA for both the reusable workflow ref and
+`runtime-ref`; configure required reviewers and branch restrictions on the
+`Production` environment. The workflow requires the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets in the consumer
+repository. See [Verified Cloudflare delivery](./cloudflare-delivery.md) for
+binding policy, canary, rollback, and evidence requirements.
+
+The legacy `cloudflare-deploy.yml` workflow remains available for direct
+(unverified) deployments. It runs `wrangler versions upload` for previews and
+`wrangler deploy` for production, records a GitHub deployment plus status, and
+respects `CI_BILLING_PAUSED`. Its legacy-compatible Wrangler default is `latest`;
+callers should prefer `local` or provide an exact `wrangler-version` for
+reproducibility. Bun consumers may pass `build-script`, `install-working-directory`, and `bun-version`;
+the runtime installs the frozen lockfile and builds the Worker before invoking
 Wrangler. Bun-backed callers invoke Wrangler through `bunx` so OpenNext's
 production delegation resolves the workspace-local `opennextjs-cloudflare`
 binary; callers without `build-script` retain the npm/npx path.

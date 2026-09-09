@@ -8,7 +8,6 @@ on:
     types:
       - opened
       - reopened
-      - synchronize
 
 permissions:
   pull-requests: write
@@ -55,8 +54,8 @@ jobs:
               ;;
           esac
 
-          # A newer state transition or commit superseded this event. Do not
-          # undo a user's later explicit readiness decision with a stale event.
+          # A newer state transition superseded this event. Do not undo a
+          # user's later explicit readiness decision with a stale event.
           if [ "$head_sha" != "$EVENT_HEAD_SHA" ] || [ "$updated_at" != "$EVENT_UPDATED_AT" ]; then
             echo 'A newer pull-request state or head commit superseded this draft-guard event; leaving the current state unchanged.'
             exit 0
@@ -76,4 +75,4 @@ jobs:
             "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
             -F draft=true \
             --silent >/dev/null
-          echo "Converted ordinary pull request #$PR_NUMBER to draft; runner-heavy validation waits for ready_for_review."
+          echo "Converted ordinary pull request #$PR_NUMBER to draft; validation waits for ready_for_review."

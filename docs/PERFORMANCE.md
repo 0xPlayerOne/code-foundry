@@ -15,9 +15,9 @@ belong to the run that produced them, not the source tree.
 | Format, lint, type-check, and build |   15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact                     | 200 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 750 kB | Bound installed footprint                            |
-| Packed files                        |     80 | Detect accidental release contents                   |
+| Packed artifact                     | 210 kB | Bound registry transfer and install cost             |
+| Unpacked artifact                   | 800 kB | Bound installed footprint                            |
+| Packed files                        |     90 | Detect accidental release contents                   |
 
 The performance workflow disables build-cache reads and writes for this task.
 That makes timing comparisons independent of a warm protected-branch cache and
