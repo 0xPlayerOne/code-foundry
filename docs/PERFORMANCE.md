@@ -24,7 +24,7 @@ That makes timing comparisons independent of a warm protected-branch cache and
 prevents benchmark code from populating shared cache entries.
 
 The package budget includes the release-integrity verifier and fleet eligibility
-modules. The merged source measured 221,352 packed bytes, 848,782 unpacked bytes,
+modules. The merged source measured 221,372 packed bytes, 849,060 unpacked bytes,
 and 99 files on Node 24.18.0; the small margin above those measurements leaves
 room for ordinary metadata changes without permitting unbounded growth.
 
