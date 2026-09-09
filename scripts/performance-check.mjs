@@ -16,7 +16,7 @@ const budgets = {
   runtimeDependencies: 0,
   developmentDependencies: 4,
   packedBytes: 250_000,
-  unpackedBytes: 945_000,
+  unpackedBytes: 960_000,
   packedFiles: 110,
 }
 

@@ -2,8 +2,8 @@
 
 Publish only the same immutable Code Foundry archive that passed consumer qualification.
 
-**Dependencies:** Consumer qualification (#544) and release integrity (#537).
-**Activation:** Opt-in replacement publisher; no existing publisher is silently changed.
+**Dependencies:** Consumer qualification handoff (#556) and the existing release-integrity/publication modules.
+**Activation:** Code Foundry self-caller cutover; consumer release defaults are unchanged. Complete the prerequisites below before merging the self-caller change.
 
 The reusable `qualified-foundry-publish.yml` downloads an explicitly named npm
 archive from an already-published immutable release, verifies the release and
@@ -42,9 +42,12 @@ an existing draft and existing tag; it never creates/moves tags or overwrites
 conflicting assets. Settings permission failures block writes. Matching existing
 assets can resume staging; conflicting assets require manual reconciliation.
 The pre-release gate in #544 supplies the required matrix reports.
-The legacy Release Please workflow creates releases without
-this archive staging step. Wire the new `stage` command into a draft-producing
-caller instead of pointing the old direct-release caller at the new publisher:
+The generic Release Please workflow retains direct publication by default.
+Its `config-file` input selects a repository-contained JSON configuration;
+`defer-publication: true` requires a single root package with `draft` and
+`force-tag-creation` enabled. It disables legacy npm, reconciliation and post-release
+jobs together and exposes `release_created`, `tag_name`, and `sha` to the caller.
+The self caller uses this route, followed by:
 
 ```sh
 node src/commands/qualified-publication.mjs stage \
@@ -62,9 +65,9 @@ rules and a single tag-scoped producer); GitHub does not offer an atomic
 verification blocks npm if that invariant is violated, but cannot undo an
 already-published immutable release.
 
-Disable the old npm path before
-activating the replacement to prevent racing publishers. None of those production
-settings or existing release workflows are changed in this PR.
+The self caller disables the old npm path with `defer-publication: true` and sends
+no npm credential to the Release Please job. Generic consumer callers are not
+opted in. This code change does not configure production settings or credentials.
 
 Example caller job after its release producer (illustrative job IDs):
 
@@ -87,8 +90,10 @@ jobs:
 ```
 
 Only main-branch `push` and `workflow_dispatch` callers are admitted. Pull-request
-events (including fork PRs), release-event shortcuts, and billing-paused runs
-cannot publish through this workflow. The event guard does not itself verify
+events (including fork PRs) and release-event shortcuts cannot publish through
+this workflow. Billing-paused runs remain blocked unless the main-branch caller
+is an explicit `workflow_dispatch` with `billing-pause-bypass: true`; the self
+caller forwards only its existing `release-while-paused` manual input. The event guard does not itself verify
 branch protection or prohibit a fork's independent main-branch workflow; configure
 branch/environment protections and registry publisher identity separately.
 The tag must resolve to `github.sha`, not a caller-selected old commit. To retry
@@ -109,3 +114,50 @@ arbitrary local JSON to the library is not a security boundary. The reusable
 workflow and its caller must be reviewed/trusted and protected; repository-owned
 code executes with the permissions of its job. No credentials or production
 resources were configured by adding this feature.
+
+
+## Self-caller activation and recovery
+
+`release_self-ci.yml` now sequences qualification and a read-only immutability
+preflight, draft creation, protected asset staging, then the verified publisher.
+`.github/release-please-foundry.json` is self-only: the root template and generated
+consumer configurations keep ordinary release behavior. The staging guard requires
+Release Please's exact SHA/tag, the qualified source/digest, and the current
+run/attempt artifact name to match before downloads or writes. No package is
+rebuilt between the qualification gate, draft staging and npm publication.
+The final publisher independently requalifies the immutable downloaded bytes.
+
+**Before merging the cutover**, enable immutable releases and verify the setting
+with the actual `CODE_FOUNDRY_TOKEN` (or workflow credential), then set
+`REQUIRE_IMMUTABLE_RELEASES=true`. Missing permissions, a disabled/unknown setting,
+or a CLI without release verification support fail before Release Please writes.
+Protect release tags against concurrent moves and configure the `release` and
+`npm` environments with the intended main-only deployment rules and approvals.
+A YAML environment reference does not prove those protections exist. The staging
+token needs administration-read, contents-write and verification access; it is
+never exposed to the qualification jobs. Configure npm trusted-publisher identity
+for the actual caller/reusable workflow, or explicitly retain the optional npm
+token in the final publisher. None of these settings is changed by this PR.
+
+Run the full locked-toolchain suite, Actionlint contracts, and a disposable-repo
+release/signing/registry rehearsal before production approval. The producer
+serializes the full release workflow and never cancels an active publish; it does
+not auto-approve environments or bypass branch/review requirements.
+
+Use **Re-run all jobs** for qualification failures; attempts cannot reuse earlier
+reports. Matching assets on an existing draft can resume through the reviewed
+staging command after fresh qualification. Once a release is published, do not
+attempt to re-stage or overwrite it: rerun the verified publisher from the same
+source-bound workflow after confirming npm has not already accepted that version.
+The normal Release Please caller may return `release_created: false` on a retry;
+that is not proof of completed staging/publication. Inspect the retained identity
+receipts. If main has moved or the tag/asset identity differs, stop and use a
+separately reviewed source-bound recovery procedure. Never weaken the SHA guard,
+move an immutable tag, or treat npm's version-conflict response as success.
+
+The release cutover raises only the unpacked package ceiling from 945,000 to
+960,000 bytes for the shipped workflow/configuration/documentation additions.
+The compressed ceiling (250,000 bytes), file ceiling (110), startup/test timing,
+and dependency budgets are unchanged. Re-measure the combined candidate after
+merging independent workflow changes; the added policy does not justify a runtime
+performance regression or a dependency increase.
