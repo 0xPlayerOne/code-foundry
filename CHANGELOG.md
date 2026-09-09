@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.22.1...v1.23.0) (2026-09-09)
+
+
+### Features
+
+* add ci eval tier with shared report contract and budget gate ([#576](https://github.com/0xPlayerOne/code-foundry/issues/576)) ([7d881dd](https://github.com/0xPlayerOne/code-foundry/commit/7d881dd1bc6ace8e48dffff45b1a22a12bdae1c9))
+
 ## [1.22.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.22.0...v1.22.1) (2026-09-09)
 
 
