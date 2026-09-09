@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.2...v1.21.3) (2026-09-09)
+
+
+### Bug Fixes
+
+* **release:** unblock draft publication and PR deployment links ([#570](https://github.com/0xPlayerOne/code-foundry/issues/570)) ([35ab90f](https://github.com/0xPlayerOne/code-foundry/commit/35ab90f185483b0cd6a9c622b9793e46c90dd60c))
+
 ## [1.21.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.21.1...v1.21.2) (2026-09-09)
 
 
