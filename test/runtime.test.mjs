@@ -87,6 +87,33 @@ test('performance task discovers and runs the repository check script', () => {
   assert.equal(summary.commands[0].source, 'package-script:performance:check')
 })
 
+test('performance script cannot silently pass without a package manager', () => {
+  const root = fixture()
+  writeFileSync(
+    join(root, '.github', 'code-foundry.yml'),
+    'languages: typescript\npackage_manager: none\n'
+  )
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture","private":true,"scripts":{"performance:check":"exit 9"}}\n'
+  )
+  execFileSync('git', ['add', '.'], { cwd: root })
+
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, [runtime.pathname, 'ci', 'performance'], {
+        cwd: root,
+        encoding: 'utf8',
+      }),
+    /select a supported package_manager/
+  )
+  const summary = JSON.parse(
+    readFileSync(join(root, 'performance-results', 'summary.json'), 'utf8')
+  )
+  assert.equal(summary.status, 'failed')
+  assert.match(summary.error, /select a supported package_manager/)
+})
+
 test('performance task runs configured argv without shell interpolation', () => {
   const root = fixture()
   const probe = join(root, 'performance-probe')

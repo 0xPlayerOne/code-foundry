@@ -1288,6 +1288,7 @@ describe('code-foundry CLI', () => {
       'languages: typescript\npackage_manager: bun\n'
     )
     const baseline = readFileSync(join(process.cwd(), 'src/templates/gitignore'), 'utf8')
+    assert.ok(baseline.includes('.code-foundry/'))
     writeFileSync(
       join(root, '.gitignore'),
       `${baseline.trimEnd()}\n\n# Cloudflare OpenNext / Wrangler build output\n.open-next/\n.wrangler/\n`

@@ -98,7 +98,8 @@ function selectedPerformanceCommands() {
   const name = ['performance:check', 'perf:check'].find((candidate) => hasScript(candidate))
   if (name) {
     const [manager, args] = packageCommand(['run', name])
-    return manager ? [{ source: `package-script:${name}`, argv: [manager, ...args] }] : []
+    if (!manager) throw new Error(`Cannot run ${name}: select a supported package_manager.`)
+    return [{ source: `package-script:${name}`, argv: [manager, ...args] }]
   }
   return performanceCommands().map((argv) => ({ source: 'configuration', argv }))
 }
