@@ -2,6 +2,12 @@ name: Consumer Qualification
 
 on:
   workflow_call:
+    inputs:
+      billing-pause-bypass:
+        description: Allow an explicitly dispatched release to qualify while shared CI remains paused.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -10,6 +16,7 @@ permissions:
 jobs:
   pack:
     name: Pack candidate once
+    if: vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -34,14 +41,16 @@ jobs:
       - name: Retain the shared candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: qualification-candidate-${{ github.run_attempt }}
+          name: qualification-candidate-${{ github.run_id }}
           path: ${{ runner.temp }}/candidate/*
           if-no-files-found: error
+          overwrite: true
           retention-days: 14
 
   qualify:
     name: Node ${{ matrix.node }}
     needs: pack
+    if: vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
@@ -62,7 +71,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
-            --name "qualification-candidate-$GITHUB_RUN_ATTEMPT" \
+            --name "qualification-candidate-$GITHUB_RUN_ID" \
             --dir "$RUNNER_TEMP/candidate"
       - name: Install pinned workflow validator
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12

@@ -240,7 +240,15 @@ export function syncRepository(options) {
     }
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
       content = Buffer.from(
-        renderWorkflow(content.toString('utf8'), config, runtimeRepository, runtimeRef, rustCodeql)
+        renderWorkflow(
+          content.toString('utf8'),
+          config,
+          runtimeRepository,
+          runtimeRef,
+          rustCodeql,
+          file,
+          target === source
+        )
       )
     }
     if (file === '.github/dependabot.yml') {
@@ -530,8 +538,10 @@ function sourcePath(source, file) {
  * @param {string} repository
  * @param {string} ref
  * @param {{ shards: string, threads: string, maxParallel: string }} rustCodeql
+ * @param {string} file
+ * @param {boolean} selfRepository
  */
-function renderWorkflow(content, config, repository, ref, rustCodeql) {
+function renderWorkflow(content, config, repository, ref, rustCodeql, file, selfRepository) {
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
@@ -571,7 +581,15 @@ function renderWorkflow(content, config, repository, ref, rustCodeql) {
     'release-pr': config.pr_runner ?? config.runner,
     release: config.release_runner ?? config.runner,
   }
-  const workflow = content.match(/\.github\/workflows\/([^/]+)\.yml/)?.[1]
+  const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
+  // Consumer release callers are generic package release workflows. The
+  // installed-consumer qualification harness is specific to Code Foundry's
+  // own package and must remain in the self workflow rather than being
+  // rendered into every consumer's release caller.
+  if (workflow === 'release' && !selfRepository) {
+    rendered = removeWorkflowBlock(rendered, 'qualification')
+    rendered = removeWorkflowNeed(rendered, 'release', 'qualification')
+  }
   // The staging-release topology validates and scans pull requests against
   // both main and the integration branch; direct repositories only ever
   // target main, so their callers trigger on main alone.
@@ -659,6 +677,26 @@ function removeWorkflowBlock(content, blockId) {
   while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
   lines.splice(start, end - start)
   if (content.endsWith('\n') && lines.at(-1) !== '') lines.push('')
+  return lines.join('\n')
+}
+
+/**
+ * Remove a single root-job dependency while preserving the rest of the job.
+ * @param {string} content
+ * @param {string} jobId
+ * @param {string} dependency
+ * @returns {string}
+ */
+function removeWorkflowNeed(content, jobId, dependency) {
+  const lines = content.split('\n')
+  const start = lines.findIndex((line) => line === `  ${jobId}:`)
+  if (start === -1) return content
+  let end = start + 1
+  while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
+  const need = lines.findIndex(
+    (line, index) => index > start && index < end && line === `    needs: ${dependency}`
+  )
+  if (need >= 0) lines.splice(need, 1)
   return lines.join('\n')
 }
 

@@ -6,7 +6,7 @@ Release-candidate compatibility checks against the distributable package.
 **Scope:** Package installation, CLI initialization/synchronization, generated workflow contracts.
 
 `consumer-qualification.yml` packs the checked-out candidate once, shares that archive across all supported
-Node majors using an artifact scoped to the same run attempt, installs it offline with lifecycle scripts disabled,
+Node majors using an artifact scoped to the same workflow run (including failed-job reruns), installs it offline with lifecycle scripts disabled,
 and executes its public CLI from the installed package. The harness does not
 import the source checkout's initializer as a substitute for package testing.
 
@@ -39,7 +39,10 @@ member. Reports are evidence, not signatures or a substitute for release identit
 verification.
 
 The self release caller cannot start Release Please or npm publication until all
-qualification jobs succeed. This does not yet guarantee that its legacy publishing
-job uses this same archive; the verified-publication workflow handles that separate
+qualification jobs succeed. An explicit `release-while-paused` dispatch is passed
+through to the reusable workflow; ordinary calls remain blocked by the billing pause.
+Consumer-generated release callers do not inherit this Code Foundry-specific
+qualification job. This does not yet guarantee that its legacy publishing job uses
+this same archive; the verified-publication workflow handles that separate
 requirement. No branch protections, repository settings, credentials, or consumer
 runtimes are changed by this feature.

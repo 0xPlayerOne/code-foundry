@@ -23,6 +23,8 @@ jobs:
     name: Qualify consumers
     if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)
     uses: ./.github/workflows/consumer-qualification.yml
+    with:
+      billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
     permissions:
       actions: read
       contents: read
