@@ -1,0 +1,95 @@
+name: Consumer Qualification
+
+on:
+  workflow_call:
+    inputs:
+      billing-pause-bypass:
+        description: Allow an explicitly dispatched release to qualify while shared CI remains paused.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  pack:
+    name: Pack candidate once
+    if: vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      filename: ${{ steps.pack.outputs.filename }}
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup packaging Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Pack the distributable once
+        id: pack
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/candidate"
+          npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/candidate" > "$RUNNER_TEMP/candidate/pack.json"
+          PACKAGE=$(node -e 'const p=require(process.argv[1]); if(p.length!==1 || !/^[A-Za-z0-9._-]+\.tgz$/.test(p[0].filename)) process.exit(1); console.log(p[0].filename)' "$RUNNER_TEMP/candidate/pack.json")
+          echo "filename=$PACKAGE" >> "$GITHUB_OUTPUT"
+      - name: Retain the shared candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: qualification-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate/*
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+
+  qualify:
+    name: Node ${{ matrix.node }}
+    needs: pack
+    if: vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+    steps:
+      - name: Checkout qualification runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Retrieve the shared archive from this attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name "qualification-candidate-$GITHUB_RUN_ID" \
+            --dir "$RUNNER_TEMP/candidate"
+      - name: Install pinned workflow validator
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Qualify the exact shared distributable
+        env:
+          PACKAGE: ${{ needs.pack.outputs.filename }}
+        run: |
+          set -euo pipefail
+          node src/lib/consumer-qualification.mjs \
+            "$RUNNER_TEMP/candidate/$PACKAGE" \
+            "$(git rev-parse HEAD)" \
+            "$RUNNER_TEMP/report.json" \
+            "$(go env GOPATH)/bin/actionlint"
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: consumer-qualification-${{ github.run_attempt }}-node-${{ matrix.node }}
+          path: ${{ runner.temp }}/report.json
+          if-no-files-found: warn
+          retention-days: 14
