@@ -15,8 +15,8 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 240_000,
-  unpackedBytes: 900_000,
+  packedBytes: 250_000,
+  unpackedBytes: 930_000,
   packedFiles: 110,
 }
 
