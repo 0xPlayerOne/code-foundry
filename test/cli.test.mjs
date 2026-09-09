@@ -505,6 +505,33 @@ describe('code-foundry CLI', () => {
     assert.match(result.stderr, /unknown command: unknown-command/)
   })
 
+  it('uses an explicit source checkout for fleet upgrades', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-fleet-root-'))
+    const source = mkdtempSync(join(tmpdir(), 'code-foundry-fleet-source-'))
+    t.after(() => {
+      rmSync(root, { recursive: true, force: true })
+      rmSync(source, { recursive: true, force: true })
+    })
+    writeFileSync(
+      join(source, 'package.json'),
+      JSON.stringify({ name: 'code-foundry-source', version: '2.0.0' })
+    )
+
+    const result = run(
+      'fleet',
+      'upgrade',
+      '--root',
+      root,
+      '--source',
+      source,
+      '--version',
+      'v2.0.0'
+    )
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.deepEqual(JSON.parse(result.stdout), [])
+  })
+
   it('rejects unknown CI billing subcommands', () => {
     const result = run('ci', 'disable')
 

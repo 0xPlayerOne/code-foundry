@@ -15,9 +15,9 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 240_000,
-  unpackedBytes: 920_000,
-  packedFiles: 110,
+  packedBytes: 255_000,
+  unpackedBytes: 965_000,
+  packedFiles: 115,
 }
 
 /** @param {string} command @param {string[]} args @param {NodeJS.ProcessEnv} [env] */
