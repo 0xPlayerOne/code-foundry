@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.14.0...v1.15.0) (2026-09-09)
+
+
+### Features
+
+* **releases:** verify immutable releases and attest selected build artifacts ([#537](https://github.com/0xPlayerOne/code-foundry/issues/537)) ([099aa57](https://github.com/0xPlayerOne/code-foundry/commit/099aa577227ab067a9a554e4cfc286aa2f5eb38e))
+
 ## [1.14.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.13.0...v1.14.0) (2026-09-09)
 
 
