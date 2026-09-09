@@ -153,6 +153,19 @@ If the configured automation token is rejected, the producer's documented
 fallback is used only where the workflow permits it; missing permissions fail
 closed.
 
+Use **Re-run all jobs** for qualification failures; attempts cannot reuse earlier
+reports. If Release Please returns `release_created: false`, the recovery job
+looks up only the package version's draft release through the authenticated,
+paginated release list, resolves its tag, and resumes only when that tag still
+points to the newly qualified source. Staging uses the same list because GitHub's
+get-by-tag endpoint does not return draft releases. Missing or already published
+releases are a safe no-op; malformed, inaccessible, or source-mismatched drafts
+fail closed. Inspect the retained identity receipts. Once a release is
+published, do not attempt to re-stage or overwrite it: rerun the verified
+publisher from the same source-bound workflow after confirming npm has not already
+accepted that version. Never weaken the SHA guard, move an immutable tag, or treat
+npm's version-conflict response as success.
+
 ## Validation
 
 Run the focused local suites before changing this path:

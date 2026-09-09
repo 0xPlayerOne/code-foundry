@@ -227,21 +227,27 @@ function stagingRunner(candidate, overrides = {}) {
   let reads = 0
   const uploaded = []
   const writes = []
+  const apiCalls = []
   const run = (command, args) => {
     if (command === 'tar') return '{"name":"code-foundry","version":"1.2.3"}'
     if (args[0] === 'api') {
+      apiCalls.push(args)
       const path = args.at(-1)
       if (path.endsWith('/immutable-releases'))
         return JSON.stringify({ enabled: overrides.enabled ?? true })
       if (path.includes('/git/ref/'))
         return JSON.stringify({ object: { type: 'commit', sha: overrides.sha ?? sourceSha } })
       reads++
-      return JSON.stringify({
-        id: 12,
-        draft: overrides.draft ?? true,
-        tag_name: candidate.tag,
-        assets: reads === 1 ? (overrides.assets ?? []) : uploaded,
-      })
+      return JSON.stringify([
+        [
+          {
+            id: 12,
+            draft: overrides.draft ?? true,
+            tag_name: candidate.tag,
+            assets: reads === 1 ? (overrides.assets ?? []) : uploaded,
+          },
+        ],
+      ])
     }
     writes.push(args)
     if (args[1] === 'upload')
@@ -252,14 +258,17 @@ function stagingRunner(candidate, overrides = {}) {
       })
     return ''
   }
-  return { run, writes }
+  return { run, writes, apiCalls }
 }
 
 test('staging attaches both qualified assets before publishing and never clobbers', async (t) => {
   const { candidate, reportPaths, verify } = seeded(t)
-  const { run, writes } = stagingRunner(candidate)
+  const { run, writes, apiCalls } = stagingRunner(candidate)
   const result = await stageQualifiedRelease(candidate, reportPaths, { run, verify })
   assert.equal(result.status, 'release-published-and-verified')
+  const releaseListCall = apiCalls.find((args) => args.at(-1)?.includes('/releases?per_page=100'))
+  assert.ok(releaseListCall?.includes('--paginate'))
+  assert.ok(releaseListCall?.includes('--slurp'))
   assert.deepEqual(
     writes.map((args) => args[1]),
     ['upload', 'upload', 'edit']
