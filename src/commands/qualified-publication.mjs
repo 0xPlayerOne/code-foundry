@@ -111,7 +111,10 @@ export function validateQualificationReports(reports, sourceSha, artifactSha256)
         `Missing successful fixture: ${fixture}`
       )
   }
-  return { nodes: [...seen].sort(), fixtures: [...REQUIRED_FIXTURES] }
+  return {
+    nodes: REQUIRED_NODES.filter((node) => seen.has(node)),
+    fixtures: [...REQUIRED_FIXTURES],
+  }
 }
 /** @param {Candidate} candidate */
 async function verifier(candidate) {
