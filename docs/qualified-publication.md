@@ -157,7 +157,7 @@ receipts. If main has moved or the tag/asset identity differs, stop and use a
 separately reviewed source-bound recovery procedure. Never weaken the SHA guard,
 move an immutable tag, or treat npm's version-conflict response as success.
 
-The combined candidate measures 253,093 packed bytes, 969,033 unpacked bytes,
+The combined candidate measures 253,095 packed bytes, 969,033 unpacked bytes,
 and 112 files. The cutover raises only the unpacked ceiling from the current
 965,000 to 970,000 bytes for its workflow/configuration/documentation additions;
 packed bytes remain capped at 255,000 and files at 115. Startup/test timing and
