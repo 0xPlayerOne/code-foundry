@@ -18,7 +18,8 @@ const profile = release
   .split('\n')
   .map((line) => line.slice(10))
   .join('\n')
-const identity = caller
+const stage = caller.split('\n  stage:\n')[1]
+const identity = stage
   .match(/node --input-type=module <<'NODE'\n([\s\S]*?)\n          NODE/)[1]
   .split('\n')
   .map((line) => line.slice(10))
@@ -278,6 +279,14 @@ test('failed release creation reruns recover only an exact source-bound draft', 
     caller,
     /tag: \$\{\{ needs\.release\.outputs\.tag_name \|\| needs\.recovery\.outputs\.tag \}\}/
   )
+})
+test('release recovery uses a shell-safe Node heredoc', () => {
+  const recovery = caller.split('\n  recovery:\n')[1].split('\n  stage:\n')[0]
+  const script = recovery
+    .split("node --input-type=module <<'NODE'\n")[1]
+    ?.split('\n          NODE')[0]
+  assert.ok(script, 'recovery must contain its inline Node heredoc')
+  assert.match(script, /GitHub's get-by-tag endpoint/)
 })
 test('immutable activation is checked before release writes and can never toggle the setting', () => {
   const preflight = caller.split('\n  preflight:\n')[1].split('\n  release:\n')[0]
