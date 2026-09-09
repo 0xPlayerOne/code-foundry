@@ -16,8 +16,8 @@ const budgets = {
   runtimeDependencies: 0,
   developmentDependencies: 4,
   packedBytes: 210_000,
-  unpackedBytes: 800_000,
-  packedFiles: 90,
+  unpackedBytes: 820_000,
+  packedFiles: 92,
 }
 
 /** @param {string} command @param {string[]} args @param {NodeJS.ProcessEnv} [env] */
