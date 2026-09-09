@@ -15,12 +15,15 @@ budget is exceeded. Reports are generated-run evidence and are ignored by Git.
 | Runtime dependencies                |      0 | Keep the installed CLI dependency-free               |
 | Development dependencies            |      4 | Prevent unreviewed toolchain growth                  |
 | Packed artifact                     | 260 kB | Bound registry transfer and install cost             |
-| Unpacked artifact                   | 991 kB | Bound installed footprint                            |
+| Unpacked artifact                   | 995 kB | Bound installed footprint                            |
 | Packed files                        |    115 | Detect accidental release contents                   |
 
 The source-of-truth budgets live in `scripts/performance-check.mjs`. When those
 limits change, update this table and include before/after measurements in the
-same change.
+same change. The Cloudflare delivery and qualified-publication changes in this
+release moved the measured artifact from 990,481 to 994,555 unpacked bytes
+(257,384 to 258,647 packed bytes, with 112 files in both measurements), so the unpacked budget
+is 995 kB while the packed and file-count budgets remain unchanged.
 
 The performance workflow disables build-cache reads and writes for this task.
 Timing comparisons therefore do not depend on a warm protected-branch cache, and
