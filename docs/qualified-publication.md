@@ -79,11 +79,14 @@ jobs:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-Only protected-main `push` and `workflow_dispatch` callers are admitted; PRs,
-forks, release-event shortcuts, and billing-paused runs cannot publish through
-this workflow. The tag must resolve to `github.sha`, not a caller-selected old
-commit. To retry an older release after main moves, use a separately reviewed
-recovery procedure; do not weaken the identity gate ad hoc.
+Only main-branch `push` and `workflow_dispatch` callers are admitted. Pull-request
+events (including fork PRs), release-event shortcuts, and billing-paused runs
+cannot publish through this workflow. The event guard does not itself verify
+branch protection or prohibit a fork's independent main-branch workflow; configure
+branch/environment protections and registry publisher identity separately.
+The tag must resolve to `github.sha`, not a caller-selected old commit. To retry
+an older release after main moves, use a separately reviewed recovery procedure;
+do not weaken the identity gate ad hoc.
 
 ## Local policy tests and trust
 
