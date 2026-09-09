@@ -76,12 +76,13 @@ The standard workflow triggers are:
 
 Automated feature/fix and staging-promotion pull requests open as drafts.
 The trusted Draft Guard is a fallback for manually created or reopened ready
-PRs and for new commits to ordinary ready PRs: it converts them to drafts
-without checking out PR code. It verifies the event head and update timestamp
-before changing state, and excludes Release Please version PRs whose release
-workflow owns readiness. Pull-request validation runs only on the
-ready-for-review transition. Converting a PR to draft runs only the lightweight
-cancellation control. Scheduled and manually dispatched audits are unaffected.
+PRs: it converts them to drafts without checking out PR code. It verifies the
+event head and update timestamp before changing state, and excludes Release
+Please version PRs whose release workflow owns readiness. Pull-request
+validation runs on the ready-for-review transition and on new commits while a
+PR remains ready; draft updates allocate no validation runner. Converting a PR
+to draft runs only the lightweight cancellation control. Scheduled and manually
+dispatched audits are unaffected.
 
 Jobs are language-aware and skip irrelevant setup inside the applicable
 aggregate checks. TypeScript uses Oxlint, Oxfmt, and Bun's native

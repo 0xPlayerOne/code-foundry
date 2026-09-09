@@ -14,6 +14,7 @@ its own names, environments, and deployment details.
 - [Caching and remote caching](CACHING.md)
 - [Performance budgets and baselines](PERFORMANCE.md)
 - [Required capabilities and task evidence](required-capabilities.md)
+- [Declarative fleet inventory and staged rollouts](fleet-rollouts.md)
 
 ## Repository-specific documentation
 

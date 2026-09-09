@@ -7,6 +7,7 @@ on:
     branches: [main, staging]
     types:
       - ready_for_review
+      - synchronize
 
 # Default every caller job to no repository permissions. Individual jobs grant
 # only the scopes their own validation path consumes.
@@ -20,9 +21,10 @@ concurrency:
 jobs:
   mode:
     name: Mode
-    # The mode classifier is only needed for pull requests. Main pushes use
-    # the dedicated default-branch CodeQL lane below.
-    if: vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request'
+    # The mode classifier is only needed for ready pull requests. Main pushes
+    # use the dedicated default-branch CodeQL lane below; draft updates do not
+    # allocate a validation runner.
+    if: vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-slim
     timeout-minutes: 10
     permissions:
@@ -62,7 +64,7 @@ jobs:
   validation:
     name: Validation
     needs: mode
-    if: vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request'
+    if: vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     # Reusable workflows can only maintain or reduce the caller job's scopes.
     # The audit tier needs security-events: write for CodeQL uploads.
     permissions:
