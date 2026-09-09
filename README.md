@@ -39,6 +39,8 @@ contract. For normal updates, edit that file and run `npx code-foundry sync`.
   audits, Draft Guard, Draft PR, Release PR, and Release.
 - A deterministic performance lane with ordered command support, stable result
   artifacts, and an optional shared Node package budget profile.
+- An opt-in product-quality runner for static sites, web apps, Workers, and
+  published packages.
 - A small `.githooks/pre-commit` launcher with language-aware formatting and
   linting.
 - An optional `.mise.toml`/`mise.lock`, repository profile configuration, and
