@@ -484,6 +484,18 @@ describe('code-foundry CLI', () => {
 
     assert.equal(result.status, 0)
     assert.match(result.stdout, /code-foundry .* initialize and maintain/)
+    assert.match(result.stdout, /release-integrity manifest/)
+  })
+
+  it('exposes release integrity through the CLI', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-cli-integrity-'))
+    mkdirSync(join(root, 'dist'))
+    writeFileSync(join(root, 'dist/app.tgz'), 'artifact')
+
+    const result = run('release-integrity', 'manifest', '--root', root, '--asset', 'dist/app.tgz')
+    assert.equal(result.status, 0)
+    assert.equal(JSON.parse(result.stdout).assets[0].file, 'dist/app.tgz')
+    rmSync(root, { recursive: true, force: true })
   })
 
   it('rejects unknown commands with a useful exit code', () => {
