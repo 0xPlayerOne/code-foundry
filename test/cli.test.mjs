@@ -1355,7 +1355,15 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /deployments: write/)
     assert.match(workflow, /draft-protection:[\s\S]*?type: boolean[\s\S]*?default: true/)
     assert.match(workflow, /inputs\['draft-protection'\] != true/)
+    assert.match(workflow, /deployment: false/)
+    assert.match(
+      workflow,
+      /inputs\.mode != 'preview' \|\| !startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
+    )
     assert.match(workflow, /production_environment: \$production/)
+    assert.match(workflow, /MODE: \$\{\{ inputs\.mode \}\}/)
+    assert.match(workflow, /\[ "\$MODE" = preview \] && \[ "\$state" = success \]/)
+    assert.match(workflow, /args\+=\(-F auto_inactive=true\)/)
     assert.match(
       workflow,
       /GITHUB_DEPLOYMENT_REF: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/

@@ -119,12 +119,17 @@ jobs:
     if: >-
       vars.CI_BILLING_PAUSED != 'true' &&
       (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'pull_request' || inputs.mode != 'preview' || !startsWith(github.event.pull_request.head.ref, 'release-please--branches--main')) &&
       github.event_name != 'pull_request_target' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The explicit deployment record below is the sole GitHub deployment record.
+    # Keep the environment for approvals, secrets, and branch protection without
+    # creating a second, competing PR timeline entry.
     environment:
       name: Preview
+      deployment: false
       url: ${{ steps.upload.outputs.url }}
     defaults:
       run:
@@ -251,6 +256,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: Production
+      deployment: false
       url: ${{ inputs.production-url }}
     defaults:
       run:

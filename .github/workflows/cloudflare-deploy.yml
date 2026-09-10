@@ -74,12 +74,17 @@ jobs:
     if: >-
       vars.CI_BILLING_PAUSED != 'true' &&
       (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'pull_request' || inputs.mode != 'preview' || !startsWith(github.event.pull_request.head.ref, 'release-please--branches--main')) &&
       github.event_name != 'pull_request_target' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
+    # The explicit deployment record below is the sole GitHub deployment record.
+    # Keep the environment for approvals, secrets, and branch protection without
+    # creating a second, competing PR timeline entry.
     environment:
       name: ${{ inputs.environment || (inputs.mode == 'production' && 'Production' || 'Preview') }}
+      deployment: false
       url: ${{ steps.deploy.outputs.url }}
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -182,10 +187,17 @@ jobs:
           DEPLOYMENT_ID: ${{ steps.start.outputs.id }}
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
           JOB_STATUS: ${{ job.status }}
+          MODE: ${{ inputs.mode }}
         run: |
           set -euo pipefail
           state=failure
           if [ "$JOB_STATUS" = success ]; then state=success; fi
           args=(-f "state=$state" -F auto_inactive=false)
+          # Preview environments are persistent per application. Once a new
+          # preview succeeds, retire the previous successful preview record;
+          # failed previews must not take a working preview offline.
+          if [ "$MODE" = preview ] && [ "$state" = success ]; then
+            args+=(-F auto_inactive=true)
+          fi
           if [ -n "$DEPLOY_URL" ]; then args+=(-f "environment_url=$DEPLOY_URL"); fi
           gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" "${args[@]}" --silent

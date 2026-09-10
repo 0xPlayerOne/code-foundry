@@ -363,6 +363,11 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
   assert.match(yaml, /inputs\['draft-protection'\] != true/)
   assert.match(yaml, /name: Production/)
   assert.match(yaml, /name: Preview/)
+  assert.equal((yaml.match(/deployment: false/g) ?? []).length, 2)
+  assert.match(
+    yaml,
+    /inputs\.mode != 'preview' \|\| !startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
+  )
   assert.match(
     yaml,
     /GITHUB_DEPLOYMENT_REF: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/
