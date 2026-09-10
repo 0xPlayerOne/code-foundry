@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { syncRepository } from '../src/commands/sync.mjs'
+import { REQUIRED_NODES } from '../src/commands/qualified-publication.mjs'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -260,6 +261,21 @@ test('staging consumes verified current-attempt bytes without a rebuild and keep
   assert.doesNotMatch(caller, /environment: npm/)
   assert.match(caller, /cancel-in-progress: false/)
   assert.doesNotMatch(publisher, /environment:/)
+})
+test('staging and publication download and pass one report per required node', () => {
+  // The report arguments are hand-maintained next to the download loops, so
+  // both must track REQUIRED_NODES or publication rejects the evidence set.
+  for (const workflow of [caller, publisher]) {
+    const loops = [...workflow.matchAll(/for node in ([\d ]+); do/g)].map((match) =>
+      match[1].trim().split(/ +/)
+    )
+    assert.ok(loops.length >= 1)
+    for (const nodes of loops) assert.deepEqual(nodes, [...REQUIRED_NODES])
+    const reports = [...workflow.matchAll(/\$RUNNER_TEMP\/reports\/(\d+)\/report\.json/g)].map(
+      (match) => match[1]
+    )
+    assert.deepEqual(reports, [...REQUIRED_NODES])
+  }
 })
 test('post-release hook arguments are passed through environment variables', () => {
   const postRelease = release.split('\n  post-release:\n')[1].split('\n  npm:\n')[0]
