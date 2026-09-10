@@ -3,6 +3,8 @@ import test from 'node:test'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { syncRepository } from '../src/commands/sync.mjs'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -243,6 +245,7 @@ test('all legacy downstream jobs are disabled together during external publicati
   assert.match(producer, /needs: \[preflight\]/)
   assert.doesNotMatch(producer, /needs: \[qualification/)
 })
+
 test('staging consumes verified current-attempt bytes without a rebuild and keeps publication automatic', () => {
   const stageBlock = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
   assert.doesNotMatch(stageBlock, /environment: release/)
@@ -312,4 +315,22 @@ test('pause override is explicit, manual-only and never permits non-main publica
   assert.equal([...publisher.matchAll(/github\.ref == 'refs\/heads\/main'/g)].length, 2)
   assert.match(publisher, /billing-pause-bypass:\n(?:[^\n]*\n){3}        default: false/)
   assert.equal([...caller.matchAll(/if: github\.ref == 'refs\/heads\/main'/g)].length, 3)
+})
+
+test('consumer release callers keep a standalone release job', (t) => {
+  const consumerRoot = mkdtempSync(join(tmpdir(), 'release-cutover-consumer-'))
+  t.after(() => rmSync(consumerRoot, { recursive: true, force: true }))
+  mkdirSync(join(consumerRoot, '.github'), { recursive: true })
+  writeFileSync(join(consumerRoot, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+  writeFileSync(
+    join(consumerRoot, '.github/code-foundry.yml'),
+    'languages: typescript\npackage_manager: bun\nfeatures: release\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n'
+  )
+  execFileSync('git', ['init', '-q'], { cwd: consumerRoot })
+  syncRepository({ target: consumerRoot, source: process.cwd() })
+  const consumer = readFileSync(join(consumerRoot, '.github/workflows/release.yml'), 'utf8')
+  const job = consumer.split('\n  release:\n')[1].split(/\n  [a-z-]+:\n/)[0]
+  assert.doesNotMatch(job, /needs: \[qualification/)
+  assert.doesNotMatch(job, /needs: \[preflight\]/)
+  assert.match(job, /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/release\.yml@v/)
 })

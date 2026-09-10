@@ -652,7 +652,7 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     // self-only jobs whose outputs and environments do not exist for them.
     for (const job of ['qualification', 'preflight', 'recovery', 'stage', 'publish'])
       rendered = removeWorkflowBlock(rendered, job)
-    rendered = rendered.replace(/^    needs: \[qualification, preflight\]\n/m, '')
+    rendered = rendered.replace(/^    needs: \[preflight\]\n/m, '')
     rendered = rendered.replace(/^      config-file: \.github\/release-please-foundry\.json\n/m, '')
     rendered = rendered.replace(/^      defer-publication: true\n/m, '')
     rendered = rendered.replace(
