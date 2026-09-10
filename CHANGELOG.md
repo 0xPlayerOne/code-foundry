@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.1...v1.25.2) (2026-09-10)
+
+
+### Bug Fixes
+
+* **release:** retry integrity verification through the publication consistency window ([#585](https://github.com/0xPlayerOne/code-foundry/issues/585)) ([5b997dd](https://github.com/0xPlayerOne/code-foundry/commit/5b997dda7e272b59a386eeeda115e60ad284f6ce))
+
 ## [1.25.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.0...v1.25.1) (2026-09-10)
 
 
