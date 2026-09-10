@@ -46,6 +46,24 @@ export function runCommand(command, args, cwd) {
   )
   return result.stdout
 }
+
+/** Default tolerant runner: GitHub CLI failures surface as retryable misses
+ * instead of aborting the publication flow.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {string} [cwd]
+ * @returns {{status: number, stdout: string}}
+ */
+function defaultRunTolerant(command, args, cwd) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    timeout: 180_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1' },
+  })
+  return { status: result.error ? 1 : (result.status ?? 1), stdout: result.stdout ?? '' }
+}
 /** @param {Candidate} candidate */
 export function validateCandidate(candidate) {
   ensure(
@@ -225,10 +243,50 @@ export async function publishQualifiedArchive(candidate, reports, adapters = {})
   return { ...before, status: 'published' }
 }
 
+/** @typedef {(command:string, args:string[], cwd?:string) => {status: number, stdout: string}} RunTolerant */
+
+/** Poll the releases-by-tag endpoint through its eventual-consistency window.
+ * Immediately after `gh release edit --draft=false` the endpoint can still
+ * return 404; a strict verification in that window aborts an otherwise
+ * healthy publication. Bounded retries keep the flow strict: it only proceeds
+ * once the endpoint serves the published release with the exact tag.
+ * @param {Candidate} candidate
+ * @param {{runTolerant?: RunTolerant, delay?: (ms:number)=>Promise<void>, attempts?: number}} [adapters]
+ * @returns {Promise<Record<string, any>>}
+ */
+async function waitForPublishedRelease(candidate, adapters = {}) {
+  const runTolerant = adapters.runTolerant ?? defaultRunTolerant
+  const delay = adapters.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+  const attempts = adapters.attempts ?? 15
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = runTolerant('gh', [
+      'api',
+      '--hostname',
+      'github.com',
+      `repos/${candidate.repository}/releases/tags/${encodeURIComponent(candidate.tag)}`,
+    ])
+    if (result.status === 0) {
+      /** @type {Record<string, any> | null} */
+      let release = null
+      try {
+        release = JSON.parse(result.stdout)
+      } catch {
+        release = null
+      }
+      if (release?.draft === false && release?.tag_name === candidate.tag) return release
+    }
+    if (attempt === attempts) break
+    await delay(2_000)
+  }
+  throw new Error(
+    'The published release was not retrievable via the tag endpoint within the consistency window'
+  )
+}
+
 /** Stage only a previously-created draft: never move tags, overwrite assets, or
  * treat an API/permissions failure as an absent release. Authentication needs
  * immutable-settings read and release write; no setting is mutated.
- * @param {Candidate} candidate @param {string[]} reports @param {{run?:Run, verify?:Verify}} [adapters]
+ * @param {Candidate} candidate @param {string[]} reports @param {{run?:Run, runTolerant?:RunTolerant, delay?:(ms:number)=>Promise<void>, attempts?:number, verify?:Verify}} [adapters]
  */
 export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
   const run = adapters.run ?? runCommand
@@ -332,6 +390,14 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
       '--repo',
       candidate.repository,
     ])
+    // GitHub's release index is eventually consistent right after a draft is
+    // published; a strict verification a second later can observe a 404 and
+    // abort the publication even though the release is live.
+    await waitForPublishedRelease(candidate, {
+      runTolerant: adapters.runTolerant,
+      delay: adapters.delay,
+      attempts: adapters.attempts,
+    })
     const identity = await (adapters.verify ?? verifier)(candidate)
     ensure(
       identity.status === 'passed' &&

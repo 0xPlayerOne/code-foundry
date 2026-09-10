@@ -237,6 +237,8 @@ function stagingRunner(candidate, overrides = {}) {
         return JSON.stringify({ enabled: overrides.enabled ?? true })
       if (path.includes('/git/ref/'))
         return JSON.stringify({ object: { type: 'commit', sha: overrides.sha ?? sourceSha } })
+      if (path.includes('/releases/tags/'))
+        return JSON.stringify({ draft: false, tag_name: candidate.tag, assets: uploaded })
       reads++
       return JSON.stringify([
         [
@@ -258,13 +260,21 @@ function stagingRunner(candidate, overrides = {}) {
       })
     return ''
   }
-  return { run, writes, apiCalls }
+  // The by-tag consistency probe tolerates misses; the fixture serves the
+  // published release immediately.
+  const runTolerant = (command, args) => ({ status: 0, stdout: run(command, args) })
+  return { run, runTolerant, writes, apiCalls }
 }
 
 test('staging attaches both qualified assets before publishing and never clobbers', async (t) => {
   const { candidate, reportPaths, verify } = seeded(t)
-  const { run, writes, apiCalls } = stagingRunner(candidate)
-  const result = await stageQualifiedRelease(candidate, reportPaths, { run, verify })
+  const { run, runTolerant, writes, apiCalls } = stagingRunner(candidate)
+  const result = await stageQualifiedRelease(candidate, reportPaths, {
+    run,
+    runTolerant,
+    delay: async () => {},
+    verify,
+  })
   assert.equal(result.status, 'release-published-and-verified')
   const releaseListCall = apiCalls.find((args) => args.at(-1)?.includes('/releases?per_page=100'))
   assert.ok(releaseListCall?.includes('--paginate'))
@@ -275,6 +285,46 @@ test('staging attaches both qualified assets before publishing and never clobber
   )
   assert.ok(writes.every((args) => !args.includes('--clobber')))
   assert.ok(writes[2].includes('--verify-tag'))
+})
+
+test('staging retries the by-tag read through the consistency window', async (t) => {
+  const { candidate, reportPaths, verify } = seeded(t)
+  const { run, runTolerant } = stagingRunner(candidate)
+  let misses = 0
+  const flakyTolerant = (command, args) => {
+    if (args.at(-1)?.includes('/releases/tags/') && misses < 2) {
+      misses += 1
+      return { status: 1, stdout: '' }
+    }
+    return runTolerant(command, args)
+  }
+  const delays = []
+  const result = await stageQualifiedRelease(candidate, reportPaths, {
+    run,
+    runTolerant: flakyTolerant,
+    delay: async (ms) => delays.push(ms),
+    verify,
+  })
+  assert.equal(result.status, 'release-published-and-verified')
+  assert.equal(misses, 2)
+  assert.deepEqual(delays, [2000, 2000])
+})
+
+test('staging gives up when the tag endpoint never serves the release', async (t) => {
+  const { candidate, reportPaths, verify } = seeded(t)
+  const { run, writes } = stagingRunner(candidate)
+  await assert.rejects(
+    () =>
+      stageQualifiedRelease(candidate, reportPaths, {
+        run,
+        runTolerant: () => ({ status: 1, stdout: '' }),
+        delay: async () => {},
+        attempts: 3,
+        verify,
+      }),
+    /consistency window/
+  )
+  assert.equal(writes.length, 3)
 })
 for (const [name, overrides] of [
   ['disabled immutability', { enabled: false }],
