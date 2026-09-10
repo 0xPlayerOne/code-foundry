@@ -42,3 +42,34 @@ test('publication depends on qualification and reduced permissions admit artifac
   assert.match(qualification, /contents: read/)
   assert.doesNotMatch(qualification, /secrets:/)
 })
+
+test('qualification runs only when a release or a stuck draft needs it', () => {
+  const caller = readFileSync(
+    new URL('../.github/workflows/release_self-ci.yml', import.meta.url),
+    'utf8'
+  )
+  const qualification = caller.slice(
+    caller.indexOf('\n  qualification:'),
+    caller.indexOf('\n  preflight:')
+  )
+  // Feature merges only pay for the cheap release-please and recovery
+  // probes; the matrix runs when this push created a release or recovery
+  // found a stuck draft.
+  assert.match(qualification, /needs: \[release, recovery\]/)
+  assert.match(
+    qualification,
+    /needs\.release\.outputs\.release_created == 'true' \|\| needs\.recovery\.outputs\.found == 'true'/
+  )
+  // Release Please consumes no qualification outputs, so it runs first.
+  const release = caller.slice(caller.indexOf('\n  release:'), caller.indexOf('\n  recovery:'))
+  assert.match(release, /needs: \[preflight\]/)
+  assert.doesNotMatch(release, /needs: \[qualification/)
+  // Recovery computes its own source SHA instead of depending on
+  // qualification; the stage still requires qualification success.
+  const recovery = caller.slice(caller.indexOf('\n  recovery:'), caller.indexOf('\n  stage:'))
+  assert.match(recovery, /needs: \[release\]/)
+  assert.doesNotMatch(recovery, /needs\.qualification/)
+  assert.match(recovery, /SOURCE_SHA: \$\{\{ github\.sha \}\}/)
+  const stage = caller.slice(caller.indexOf('\n  stage:'), caller.indexOf('\n  publish:'))
+  assert.match(stage, /needs\.qualification\.result == 'success'/)
+})

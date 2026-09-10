@@ -50,6 +50,11 @@ the bytes selected from the same workflow run and attempt. See [Consumer
 qualification](consumer-qualification.md) and [Qualified publication](qualified-publication.md)
 for the complete contract, retries, and recovery rules.
 
+The main-push pipeline runs Release Please first, then qualifies only when the
+push created a release or recovery found a stuck draft. Feature merges pay for
+the cheap release-please and recovery probes; the runner-heavy matrix runs on
+release merges, which re-qualify the exact tree they publish.
+
 ## GitHub Releases and GitHub Packages
 
 A GitHub Release is metadata attached to a Git tag. It is independent of npm and

@@ -41,7 +41,7 @@ describe('CI billing pause workflow invariant', () => {
     const failures = []
     const workflowFiles = readdirSync(workflowsDirectory)
       .filter((file) => file.endsWith('.yml'))
-      .sort()
+      .toSorted()
 
     for (const file of workflowFiles) {
       const source = readFileSync(new URL(file, workflowsDirectory), 'utf8')

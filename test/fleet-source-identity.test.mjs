@@ -18,6 +18,15 @@ function git(cwd, ...args) {
   }).trim()
 }
 
+/** @param {string} [stdout] */
+function okResult(stdout = '') {
+  return { status: 0, stdout, stderr: '' }
+}
+
+function throwOnResync() {
+  throw new Error('Resuming a recorded candidate must not synchronize again')
+}
+
 function fixture(t, mode) {
   const root = mkdtempSync(join(tmpdir(), 'foundry-source-identity-'))
   const exitCode = process.exitCode
@@ -82,7 +91,7 @@ function fixture(t, mode) {
   const calls = []
   const run = (cwd, argv) => {
     calls.push(argv)
-    const ok = (stdout = '') => ({ status: 0, stdout, stderr: '' })
+    const ok = okResult
     if (argv.slice(0, 4).join(' ') === 'git remote get-url origin')
       return ok('https://github.com/test/app.git')
     if (argv[0] !== 'gh') return executeFleetCommand(cwd, argv)
@@ -105,10 +114,7 @@ function fixture(t, mode) {
       )
     throw new Error(`Unexpected fixture command: ${argv}`)
   }
-  const sync = () => {
-    throw new Error('Resuming a recorded candidate must not synchronize again')
-  }
-  return { root, path, identity, main, candidate, version, run, calls, sync }
+  return { root, path, identity, main, candidate, version, run, calls, sync: throwOnResync }
 }
 
 for (const mode of ['commit-source', 'empty-commit']) {

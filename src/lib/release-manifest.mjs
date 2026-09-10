@@ -61,7 +61,7 @@ export function detectReleasePackages(root) {
       })
     }
   })
-  return packages.sort((a, b) => a.directory.localeCompare(b.directory))
+  return packages.toSorted((a, b) => a.directory.localeCompare(b.directory))
 }
 
 /**

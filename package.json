@@ -42,7 +42,7 @@
     "build": "node --check src/cli.mjs",
     "format:check": "oxfmt --check .",
     "fmt": "oxfmt .",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "performance:check": "node scripts/performance-check.mjs",
     "test": "node --test",
     "test:unit": "node --test",

@@ -256,7 +256,7 @@ export async function publishQualifiedArchive(candidate, reports, adapters = {})
  */
 async function waitForPublishedRelease(candidate, adapters = {}) {
   const runTolerant = adapters.runTolerant ?? defaultRunTolerant
-  const delay = adapters.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+  const delay = adapters.delay ?? ((ms) => new Promise((done) => setTimeout(done, ms)))
   const attempts = adapters.attempts ?? 15
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const result = runTolerant('gh', [
@@ -408,7 +408,7 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
         break
       } catch (error) {
         if (attempt >= 10) throw error
-        await (adapters.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(5_000)
+        await (adapters.delay ?? ((ms) => new Promise((done) => setTimeout(done, ms))))(5_000)
       }
     }
     ensure(

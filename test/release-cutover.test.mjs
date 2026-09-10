@@ -3,6 +3,8 @@ import test from 'node:test'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { syncRepository } from '../src/commands/sync.mjs'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -238,17 +240,21 @@ test('all legacy downstream jobs are disabled together during external publicati
   const producer = caller.split('\n  release:\n')[1].split('\n  stage:\n')[0]
   assert.match(producer, /defer-publication: true/)
   assert.doesNotMatch(producer, /NPM_TOKEN/)
-  assert.match(producer, /needs: \[qualification, preflight\]/)
+  // Release Please consumes no qualification outputs: the producer runs first
+  // and qualification executes only when a release (or a stuck draft) needs it.
+  assert.match(producer, /needs: \[preflight\]/)
+  assert.doesNotMatch(producer, /needs: \[qualification/)
 })
+
 test('staging consumes verified current-attempt bytes without a rebuild and keeps publication automatic', () => {
-  const stage = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
-  assert.doesNotMatch(stage, /environment: release/)
-  assert.match(stage, /needs: \[qualification, release, recovery\]/)
-  assert.match(stage, /needs\.qualification\.outputs\.candidate-artifact/)
-  assert.match(stage, /test "\$\(sha256sum .*\)" = "\$CANDIDATE_SHA256"/)
-  assert.match(stage, /consumer-qualification-\$GITHUB_RUN_ATTEMPT-node-/)
-  assert.match(stage, /qualified-publication.mjs stage/)
-  assert.doesNotMatch(stage, /npm (pack|publish|install)|bun install|secrets.NPM_TOKEN/)
+  const stageBlock = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
+  assert.doesNotMatch(stageBlock, /environment: release/)
+  assert.match(stageBlock, /needs: \[qualification, release, recovery\]/)
+  assert.match(stageBlock, /needs\.qualification\.outputs\.candidate-artifact/)
+  assert.match(stageBlock, /test "\$\(sha256sum .*\)" = "\$CANDIDATE_SHA256"/)
+  assert.match(stageBlock, /consumer-qualification-\$GITHUB_RUN_ATTEMPT-node-/)
+  assert.match(stageBlock, /qualified-publication.mjs stage/)
+  assert.doesNotMatch(stageBlock, /npm (pack|publish|install)|bun install|secrets.NPM_TOKEN/)
   assert.match(caller, /needs: \[qualification, release, recovery, stage\]/)
   assert.match(caller, /uses: \.\/\.github\/workflows\/qualified-foundry-publish.yml/)
   assert.doesNotMatch(caller, /environment: npm/)
@@ -267,7 +273,10 @@ test('post-release hook arguments are passed through environment variables', () 
 })
 test('failed release creation reruns recover only an exact source-bound draft', () => {
   const recovery = caller.split('\n  recovery:\n')[1].split('\n  stage:\n')[0]
-  assert.match(recovery, /needs: \[qualification, release\]/)
+  // Recovery runs on the release result alone and computes its own source
+  // SHA, so it can gate qualification for a stuck draft from an earlier push.
+  assert.match(recovery, /needs: \[release\]/)
+  assert.doesNotMatch(recovery, /needs: \[qualification/)
   assert.match(recovery, /RELEASE_CREATED/)
   assert.match(recovery, /resolveTagCommit/)
   assert.match(recovery, /releases\?per_page=100/)
@@ -306,4 +315,22 @@ test('pause override is explicit, manual-only and never permits non-main publica
   assert.equal([...publisher.matchAll(/github\.ref == 'refs\/heads\/main'/g)].length, 2)
   assert.match(publisher, /billing-pause-bypass:\n(?:[^\n]*\n){3}        default: false/)
   assert.equal([...caller.matchAll(/if: github\.ref == 'refs\/heads\/main'/g)].length, 3)
+})
+
+test('consumer release callers keep a standalone release job', (t) => {
+  const consumerRoot = mkdtempSync(join(tmpdir(), 'release-cutover-consumer-'))
+  t.after(() => rmSync(consumerRoot, { recursive: true, force: true }))
+  mkdirSync(join(consumerRoot, '.github'), { recursive: true })
+  writeFileSync(join(consumerRoot, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+  writeFileSync(
+    join(consumerRoot, '.github/code-foundry.yml'),
+    'languages: typescript\npackage_manager: bun\nfeatures: release\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n'
+  )
+  execFileSync('git', ['init', '-q'], { cwd: consumerRoot })
+  syncRepository({ target: consumerRoot, source: process.cwd() })
+  const consumer = readFileSync(join(consumerRoot, '.github/workflows/release.yml'), 'utf8')
+  const job = consumer.split('\n  release:\n')[1].split(/\n  [a-z-]+:\n/)[0]
+  assert.doesNotMatch(job, /needs: \[qualification/)
+  assert.doesNotMatch(job, /needs: \[preflight\]/)
+  assert.match(job, /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/release\.yml@v/)
 })

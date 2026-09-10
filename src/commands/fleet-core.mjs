@@ -33,7 +33,7 @@ export function discoverRepositories(root) {
       gitWorkflow: config.git_workflow ?? 'direct',
     })
   }
-  return result.sort((a, b) => a.path.localeCompare(b.path))
+  return result.toSorted((a, b) => a.path.localeCompare(b.path))
 }
 
 /** @param {string} root @param {string} source @param {{ createPr?: boolean, dryRun?: boolean, force?: boolean, version: string, exclude?: string[] }} options */

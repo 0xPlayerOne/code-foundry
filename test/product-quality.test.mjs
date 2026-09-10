@@ -34,12 +34,10 @@ function put(root, name, text) {
 }
 function site(t) {
   const root = temp(t)
-  const html = (path, body) =>
-    `<!doctype html><html><head><title>Page</title><meta content="Text > other" name="description"><link href="https://example.test${path}" rel="canonical"></head><body>${body}</body></html>`
   put(
     root,
     'dist/index.html',
-    html(
+    pageHtml(
       '/',
       '<a href="about/#section">About</a><script src="/app.js"></script><img src="/a.png"><img srcset="/a.png 1x, /b.png 2x">'
     )
@@ -47,7 +45,7 @@ function site(t) {
   put(
     root,
     'dist/about/index.html',
-    html('/about/', '<h1 id="section">About</h1><a href="../">Home</a>')
+    pageHtml('/about/', '<h1 id="section">About</h1><a href="../">Home</a>')
   )
   put(root, 'dist/app.js', 'export const value = 1')
   put(root, 'dist/chunk.js', 'export const other = 2')
@@ -82,6 +80,20 @@ function site(t) {
 function replace(root, name, from, to) {
   const file = join(root, name)
   writeFileSync(file, readFileSync(file, 'utf8').replace(from, to))
+}
+
+/** @param {string} path @param {string} body */
+function pageHtml(path, body) {
+  return `<!doctype html><html><head><title>Page</title><meta content="Text > other" name="description"><link href="https://example.test${path}" rel="canonical"></head><body>${body}</body></html>`
+}
+
+/** @param {string} title */
+function passingSpec(title) {
+  return {
+    title,
+    ok: true,
+    tests: [{ expectedStatus: 'passed', status: 'expected', results: [{ status: 'passed' }] }],
+  }
 }
 
 test('generated HTML ignores comment and raw-script fake metadata and preserves quoted >', () => {
@@ -371,14 +383,9 @@ test('manifest runner creates fresh failure evidence and does not treat inapplic
 })
 
 test('browser evidence rejects absent routes, expected failures and empty results', () => {
-  const spec = (title) => ({
-    title,
-    ok: true,
-    tests: [{ expectedStatus: 'passed', status: 'expected', results: [{ status: 'passed' }] }],
-  })
   const report = {
     stats: { unexpected: 0, flaky: 0, skipped: 0, expected: 2 },
-    suites: [{ specs: [spec('quality: home'), spec('real checkout journey')] }],
+    suites: [{ specs: [passingSpec('quality: home'), passingSpec('real checkout journey')] }],
   }
   validateBrowserReport(report, ['quality: home'])
   assert.throws(() => validateBrowserReport(report, ['quality: missing']), /Missing/)
