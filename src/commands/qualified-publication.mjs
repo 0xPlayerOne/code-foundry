@@ -392,13 +392,25 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
     ])
     // GitHub's release index is eventually consistent right after a draft is
     // published; a strict verification a second later can observe a 404 and
-    // abort the publication even though the release is live.
+    // abort the publication even though the release is live. Poll until the
+    // index serves the release, then verify; the verification cycle itself
+    // retries through the same window and still fails closed in the end.
     await waitForPublishedRelease(candidate, {
       runTolerant: adapters.runTolerant,
       delay: adapters.delay,
-      attempts: adapters.attempts,
+      attempts: 5,
     })
-    const identity = await (adapters.verify ?? verifier)(candidate)
+    /** @type {Record<string, any>} */
+    let identity
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        identity = await (adapters.verify ?? verifier)(candidate)
+        break
+      } catch (error) {
+        if (attempt >= 3) throw error
+        await (adapters.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(2_000)
+      }
+    }
     ensure(
       identity.status === 'passed' &&
         identity.immutable === true &&
