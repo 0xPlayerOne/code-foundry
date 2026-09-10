@@ -1,8 +1,9 @@
 # Declarative fleet inventory and staged rollouts
 
 Place `code-foundry-fleet.json` in the directory passed to `--root`. Its presence
-opts that fleet into inventory-based discovery and controlled upgrades, without
-changing legacy directory discovery for existing users.
+opts that fleet into inventory-based discovery and controlled upgrades. The
+runtime has no organization-specific fleet inventory; legacy discovery is limited
+to the explicitly supplied root and its immediate children.
 
 ```json
 {
