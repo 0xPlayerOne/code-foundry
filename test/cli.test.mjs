@@ -4449,6 +4449,13 @@ jobs:
     )
     assert.match(audit, /^\s+runtime-ref: main$/m)
     assert.doesNotMatch(audit, /inputs\.runtime-ref|github\.sha|github\.event\.inputs/)
+    // Bot-authored pull requests only validate on an explicit ready
+    // transition; dependency pushes never allocate validation runners.
+    // Release Please heads are managed by the release workflow.
+    assert.match(
+      caller,
+      /github\.event\.pull_request\.user\.type != 'Bot' \|\| github\.event\.sender\.type != 'Bot' \|\| startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
+    )
   })
 
   it('renders a protected scheduled and manual audit caller for consumers', () => {

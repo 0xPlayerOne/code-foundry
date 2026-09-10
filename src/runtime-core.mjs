@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
 import { configured, readConfig } from './lib/config.mjs'
 import { classifyTestFiles } from './lib/test-discovery.mjs'
+import { docsOnlyPullRequest } from './lib/docs-only.mjs'
 import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
 import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
 import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
@@ -316,17 +317,37 @@ function runPerformance() {
   }
 }
 
+/**
+ * Audit-mode pull requests whose diff is docs-only run the fast tier instead.
+ * Scheduled and manual audits always keep the full tier; release pull requests
+ * are classified separately and always run their lane.
+ * @param {string} mode
+ */
+function downgradeDocsOnlyPullRequest(mode) {
+  if (mode !== 'audit') return mode
+  if ((process.env.FOUNDRY_EVENT_NAME ?? '') !== 'pull_request') return mode
+  const baseRef = process.env.FOUNDRY_BASE_REF ?? ''
+  if (!baseRef) return mode
+  try {
+    return docsOnlyPullRequest(root, baseRef) ? 'fast' : mode
+  } catch {
+    return mode
+  }
+}
+
 /** @param {string} task */
 function validation(task) {
   if (task === 'mode') {
     writeOutput(
       'mode',
-      classifyValidationMode({
-        eventName: process.env.FOUNDRY_EVENT_NAME ?? '',
-        baseRef: process.env.FOUNDRY_BASE_REF ?? '',
-        headRef: process.env.FOUNDRY_HEAD_REF ?? '',
-        stagingMode: config.staging_validation_mode,
-      })
+      downgradeDocsOnlyPullRequest(
+        classifyValidationMode({
+          eventName: process.env.FOUNDRY_EVENT_NAME ?? '',
+          baseRef: process.env.FOUNDRY_BASE_REF ?? '',
+          headRef: process.env.FOUNDRY_HEAD_REF ?? '',
+          stagingMode: config.staging_validation_mode,
+        })
+      )
     )
     return
   }

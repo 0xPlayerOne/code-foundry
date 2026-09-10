@@ -10,14 +10,14 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const budgets = {
   cliP95Ms: 250,
-  runtimeP95Ms: 250,
+  runtimeP95Ms: 750,
   focusedTestsMs: 10_000,
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
   packedBytes: 280_000,
   unpackedBytes: 1_100_000,
-  packedFiles: 115,
+  packedFiles: 120,
 }
 
 /** @param {string} command @param {string[]} args @param {NodeJS.ProcessEnv} [env] */

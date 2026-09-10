@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 
-export const REQUIRED_NODES = ['20', '22', '24']
+export const REQUIRED_NODES = ['24', '26']
 export const REQUIRED_FIXTURES = [
   'npm-direct',
   'pnpm-direct',
