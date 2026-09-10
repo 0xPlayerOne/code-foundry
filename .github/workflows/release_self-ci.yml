@@ -203,7 +203,7 @@ jobs:
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --name "$CANDIDATE_ARTIFACT" --dir "$RUNNER_TEMP/candidate"
           test "$(sha256sum "$RUNNER_TEMP/candidate/$PACKAGE" | cut -d' ' -f1)" = "$CANDIDATE_SHA256"
-          for node in 20 22 24; do
+          for node in 24 26; do
             gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
               --name "consumer-qualification-$GITHUB_RUN_ATTEMPT-node-$node" \
               --dir "$RUNNER_TEMP/reports/$node"
@@ -216,8 +216,8 @@ jobs:
           node src/commands/qualified-publication.mjs stage \
             "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$SOURCE_SHA" "$PACKAGE" \
             "$RUNNER_TEMP/candidate" \
-            "$RUNNER_TEMP/reports/20/report.json" \
-            "$RUNNER_TEMP/reports/22/report.json" \
+            "$RUNNER_TEMP/reports/24/report.json" \
+            "$RUNNER_TEMP/reports/24/report.json" \
             "$RUNNER_TEMP/reports/24/report.json" > "$RUNNER_TEMP/staging.json"
       - name: Retain staging identity
         if: always()

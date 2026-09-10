@@ -37,7 +37,7 @@ registry version and its provenance link before treating the setup as complete.
 The self-hosted package follows a stricter contract than generated consumer
 callers:
 
-1. Pack the candidate once and qualify that archive across Node 20, 22, and 24.
+1. Pack the candidate once and qualify that archive across Node 24 and 26.
 2. Create a draft GitHub Release and attach the exact qualified archive plus its
    qualification receipt.
 3. Publish the immutable GitHub Release after verifying the tag, source commit,

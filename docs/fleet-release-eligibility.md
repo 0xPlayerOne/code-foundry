@@ -16,11 +16,7 @@ guard, and `--force` cannot bypass source identity or qualification.
   "repository": "owner/code-foundry",
   "workflow": ".github/workflows/release_self-ci.yml",
   "branch": "main",
-  "required_jobs": [
-    "Qualify consumers / Node 20",
-    "Qualify consumers / Node 22",
-    "Qualify consumers / Node 24"
-  ]
+  "required_jobs": ["Qualify consumers / Node 24", "Qualify consumers / Node 26"]
 }
 ```
 

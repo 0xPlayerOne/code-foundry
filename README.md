@@ -135,7 +135,7 @@ is merged; npm publication is opt-in through `npm_publish: true` and supports
 npm trusted publishing or an `NPM_TOKEN` fallback.
 
 Code Foundry's own release caller is stricter: it qualifies the package across
-Node 20, 22, and 24, stages the exact qualified archive, publishes the
+Node 24 and 26, stages the exact qualified archive, publishes the
 immutable GitHub Release, and publishes that archive through the verified
 publisher. See
 [Consumer qualification](docs/consumer-qualification.md) and [Qualified

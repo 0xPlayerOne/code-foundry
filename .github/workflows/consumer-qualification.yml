@@ -76,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['20', '22', '24']
+        node: ['24', '26']
     env:
       PACKAGE: ${{ needs.pack.outputs.filename }}
       SOURCE_SHA: ${{ needs.pack.outputs.source-sha }}
@@ -162,7 +162,7 @@ jobs:
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
             --name "qualification-candidate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --dir "$RUNNER_TEMP/candidate"
-          for node in 20 22 24; do
+          for node in 24 26; do
             gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
               --name "consumer-qualification-$GITHUB_RUN_ATTEMPT-node-$node" \
               --dir "$RUNNER_TEMP/reports/$node"
@@ -182,7 +182,7 @@ jobs:
             sourceSha: env.SOURCE_SHA, asset: env.PACKAGE,
             directory: join(env.RUNNER_TEMP, 'candidate'),
           }
-          const result = qualifyArchive(candidate, ['20', '22', '24'].map(node => join(env.RUNNER_TEMP, 'reports', node, 'report.json')))
+          const result = qualifyArchive(candidate, ['24', '26'].map(node => join(env.RUNNER_TEMP, 'reports', node, 'report.json')))
           assert.equal(result.digest, `sha256:${env.CANDIDATE_SHA256}`)
           const artifact = `qualification-candidate-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT}`
           writeFileSync(join(env.RUNNER_TEMP, 'qualification.json'), JSON.stringify({ ...result, run_id: env.GITHUB_RUN_ID, run_attempt: env.GITHUB_RUN_ATTEMPT }, null, 2) + '\n')
