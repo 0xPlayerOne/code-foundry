@@ -920,7 +920,7 @@ describe('code-foundry CLI', () => {
 
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
-    assert.match(orchestrator, /needs: \[ci, test, security\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, eval\]/)
     assert.doesNotThrow(() => doctor(root))
     rmSync(root, { recursive: true, force: true })
   })
@@ -4257,11 +4257,11 @@ jobs:
 
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
-    assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql'])
+    assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql', 'eval'])
     assert.deepEqual(requiredValidationJobs('release'), ['ci', 'test', 'codeql'])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
-    assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql'])
+    assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql', 'eval'])
     assert.equal(AGGREGATE_CHECK_NAME, 'Validation / Gate')
     assert.throws(() => requiredValidationJobs('unknown'), /Unknown validation mode/)
     assert.throws(() => requiredValidationJobs(), /Unknown validation mode/)
@@ -4280,11 +4280,17 @@ jobs:
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'audit',
-        results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' },
+        results: {
+          ci: 'success',
+          test: 'success',
+          security: 'success',
+          codeql: 'success',
+          eval: 'success',
+        },
       }),
       {
         valid: true,
-        required: ['ci', 'test', 'security', 'codeql'],
+        required: ['ci', 'test', 'security', 'codeql', 'eval'],
         failures: [],
       }
     )
@@ -4312,7 +4318,13 @@ jobs:
     assert.equal(
       evaluateValidationGate({
         mode: 'audit',
-        results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' },
+        results: {
+          ci: 'success',
+          test: 'success',
+          security: 'success',
+          codeql: 'success',
+          eval: 'success',
+        },
       }).valid,
       true
     )
@@ -4362,7 +4374,13 @@ jobs:
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'audit',
-        results: { ci: 'success', test: 'success', security: 'success', codeql: 'cancelled' },
+        results: {
+          ci: 'success',
+          test: 'success',
+          security: 'success',
+          codeql: 'cancelled',
+          eval: 'success',
+        },
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
@@ -4395,6 +4413,7 @@ jobs:
       { job: 'test', result: 'missing' },
       { job: 'security', result: 'missing' },
       { job: 'codeql', result: 'missing' },
+      { job: 'eval', result: 'missing' },
     ])
     assert.deepEqual(
       evaluateValidationGate({ mode: 'fast', results: { ci: 'success', test: null } }).failures,
@@ -4693,10 +4712,11 @@ jobs:
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     assert.match(caller, /^  validation:\n    name: Validation/m)
     assert.match(orchestrator, /^  gate:\n    name: Gate/m)
-    assert.match(orchestrator, /needs: \[ci, test, security, codeql\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, codeql, eval\]/)
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && always\(\)/)
     assert.match(orchestrator, /validation gate/)
     assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
+    assert.match(orchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
     assert.doesNotMatch(orchestrator, /release-policy:/)
     assert.doesNotMatch(orchestrator, /FOUNDRY_RELEASE_POLICY/)
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
@@ -4705,7 +4725,7 @@ jobs:
   it('runs the lean release lane in both orchestrators', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     const noCodeqlOrchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
-    for (const job of ['ci', 'test', 'security', 'codeql']) {
+    for (const job of ['ci', 'test', 'security', 'codeql', 'eval']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
     // No release-policy job exists: release diff validation runs inside the
@@ -4730,6 +4750,14 @@ jobs:
       orchestrator,
       /unit-only: \$\{\{ inputs.mode == 'fast' \|\| inputs.mode == 'release' \}\}/
     )
+    // The eval lane covers content-bearing audits only and needs a
+    // Chrome-capable runner for browser harnesses.
+    assert.match(orchestrator, /^  eval:\n    name: Eval\n    #/m)
+    assert.match(
+      orchestrator,
+      /name: Eval\n[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/
+    )
+    assert.match(orchestrator, /eval-runner:\n[\s\S]*?default: ubuntu-latest/)
     assert.match(orchestrator, /validation release_diff/)
     assert.match(
       orchestrator,
@@ -4755,8 +4783,10 @@ jobs:
       noCodeqlOrchestrator,
       /security:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/m
     )
+    assert.match(noCodeqlOrchestrator, /^  eval:\n    name: Eval\n    #/m)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
-    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security\]/)
+    assert.match(noCodeqlOrchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
+    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval\]/)
   })
 
   it('pins all external workflow/action refs to approved immutable SHAs', () => {
@@ -4892,6 +4922,7 @@ jobs:
       FOUNDRY_TEST: 'success',
       FOUNDRY_SECURITY: 'success',
       FOUNDRY_CODEQL: 'success',
+      FOUNDRY_EVAL: 'success',
     })
     assert.equal(audit.status, 0)
     assert.match(audit.stdout, /gate passed/)
@@ -4901,6 +4932,7 @@ jobs:
       FOUNDRY_TEST: 'success',
       FOUNDRY_SECURITY: 'skipped',
       FOUNDRY_CODEQL: 'skipped',
+      FOUNDRY_EVAL: 'skipped',
     })
     assert.equal(fast.status, 0)
     const release = run({
@@ -4909,6 +4941,7 @@ jobs:
       FOUNDRY_TEST: 'success',
       FOUNDRY_SECURITY: 'success',
       FOUNDRY_CODEQL: 'success',
+      FOUNDRY_EVAL: 'skipped',
     })
     assert.equal(release.status, 0)
     const failed = run({
@@ -4917,6 +4950,7 @@ jobs:
       FOUNDRY_TEST: 'success',
       FOUNDRY_SECURITY: 'skipped',
       FOUNDRY_CODEQL: 'skipped',
+      FOUNDRY_EVAL: 'skipped',
     })
     assert.notEqual(failed.status, 0)
     assert.match(failed.stderr, /::error::ci: failure/)
@@ -4926,6 +4960,7 @@ jobs:
       FOUNDRY_TEST: 'success',
       FOUNDRY_SECURITY: 'success',
       FOUNDRY_CODEQL: 'cancelled',
+      FOUNDRY_EVAL: 'success',
     })
     assert.notEqual(cancelled.status, 0)
     assert.match(cancelled.stderr, /::error::codeql: cancelled/)
@@ -4935,6 +4970,7 @@ jobs:
       FOUNDRY_TEST: 'success',
       FOUNDRY_SECURITY: 'success',
       FOUNDRY_CODEQL: 'success',
+      FOUNDRY_EVAL: 'success',
     })
     assert.notEqual(unknown.status, 0)
     assert.match(unknown.stderr, /Unknown validation mode/)

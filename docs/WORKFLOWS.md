@@ -27,7 +27,9 @@ ready transition. Release Please version heads are excluded because the
 release workflow owns their state. A separate draft-control caller listens for
 `converted_to_draft` and cancels queued or running pull-request workflows.
 Marking a pull request ready starts validation, and each new commit on a ready
-pull request starts it again for the current head.
+pull request starts it again for the current head. Audit-mode runs additionally
+execute the eval lane (`Validation / Eval`) for repositories that ship an eval
+harness; see [Evals](EVALS.md).
 
 The separate `validation-audit.yml` caller is pinned to the configured released
 runtime and handles scheduled and manual audits:

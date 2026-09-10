@@ -1,0 +1,116 @@
+name: Code Foundry Eval
+
+on:
+  workflow_call:
+    inputs:
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: false
+        type: string
+        default: 0xPlayerOne/code-foundry
+      runtime-ref:
+        description: Code Foundry runtime tag or ref.
+        required: false
+        type: string
+        default: v1.0.5
+      runner:
+        description: >-
+          Runner used by the eval harness. Browser evals need a
+          Chrome-capable runner such as ubuntu-latest; ubuntu-slim does not
+          ship a browser.
+        required: false
+        type: string
+        default: ubuntu-latest
+      artifact-prefix:
+        description: Prefix for task receipts; use a unique value when calling this workflow more than once.
+        required: false
+        type: string
+        default: task-result
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
+  REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
+  REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
+  REPO_FOUNDRY_PACKAGE_MANAGER: ${{ vars.REPO_FOUNDRY_PACKAGE_MANAGER }}
+  REPO_FOUNDRY_RUNNER: ${{ vars.REPO_FOUNDRY_RUNNER }}
+  REPO_FOUNDRY_CACHE_PACKAGES: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+  REPO_FOUNDRY_CACHE_BUILD: ${{ vars.REPO_FOUNDRY_CACHE_BUILD || 'auto' }}
+
+concurrency:
+  group: code-foundry-eval-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: Eval
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run eval >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true'
+        uses: ./.github/actions/setup
+        with:
+          # Eval harnesses run through the repository's own package scripts and
+          # need their dependencies installed before the task executes.
+          install: 'true'
+          cache-build: 'true'
+          task: eval
+      - name: Eval
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci eval
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false') &&
+          hashFiles('.code-foundry/results/eval.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval
+          path: .code-foundry/results/eval.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain eval report
+        if: >-
+          always() &&
+          steps.execute.outcome == 'failure' &&
+          hashFiles('eval-results/result.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval-report
+          path: |
+            eval-results/result.json
+            eval-results/summary.json
+          if-no-files-found: error
+          retention-days: 14

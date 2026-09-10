@@ -714,6 +714,7 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       'codeql-runner': config.codeql_runner ?? config.runner,
       'unit-runner': config.unit_runner,
       'performance-runner': config.performance_runner ?? config.test_runner ?? config.runner,
+      'eval-runner': config.eval_runner ?? config.runner,
     }
     for (const [input, value] of Object.entries(runnerInputs)) {
       if (!value) continue

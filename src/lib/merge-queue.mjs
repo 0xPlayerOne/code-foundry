@@ -153,6 +153,7 @@ jobs:
       unit-runner: ${runner('unit_runner', 'ubuntu-slim')}
       performance-runner: ${runner('performance_runner')}
       security-runner: ${runner('security_runner', 'ubuntu-slim')}
+      eval-runner: ${runner('eval_runner')}
       codeql-runner: ${runner('codeql_runner')}
       rust-shards: '${JSON.stringify(shards)}'
       rust-threads: '${threads}'
