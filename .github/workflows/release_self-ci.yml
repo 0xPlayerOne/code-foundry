@@ -232,8 +232,7 @@ jobs:
             "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$SOURCE_SHA" "$PACKAGE" \
             "$RUNNER_TEMP/candidate" \
             "$RUNNER_TEMP/reports/24/report.json" \
-            "$RUNNER_TEMP/reports/24/report.json" \
-            "$RUNNER_TEMP/reports/24/report.json" > "$RUNNER_TEMP/staging.json"
+            "$RUNNER_TEMP/reports/26/report.json" > "$RUNNER_TEMP/staging.json"
       - name: Retain staging identity
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
