@@ -398,7 +398,7 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
     await waitForPublishedRelease(candidate, {
       runTolerant: adapters.runTolerant,
       delay: adapters.delay,
-      attempts: 5,
+      attempts: 10,
     })
     /** @type {Record<string, any>} */
     let identity
@@ -407,8 +407,8 @@ export async function stageQualifiedRelease(candidate, reports, adapters = {}) {
         identity = await (adapters.verify ?? verifier)(candidate)
         break
       } catch (error) {
-        if (attempt >= 3) throw error
-        await (adapters.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(2_000)
+        if (attempt >= 10) throw error
+        await (adapters.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(5_000)
       }
     }
     ensure(
