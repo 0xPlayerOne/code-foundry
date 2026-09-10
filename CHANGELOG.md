@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.3...v1.26.0) (2026-09-10)
+
+
+### Features
+
+* **node:** support Node 24 and 26, drop 20 and 22 ([#589](https://github.com/0xPlayerOne/code-foundry/issues/589)) ([ee3e294](https://github.com/0xPlayerOne/code-foundry/commit/ee3e2943889ffd06a8d4cd4ccb75a3f36c46c0fd))
+
 ## [1.25.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.2...v1.25.3) (2026-09-10)
 
 
