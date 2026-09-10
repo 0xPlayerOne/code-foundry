@@ -197,6 +197,17 @@ export function verifyRelease(options, run = runGh) {
   }
 }
 
+/** Sync pause used by the post-publication verifier while the release index
+ * catches up with a just-published release.
+ * @param {number} ms
+ */
+function sleepSync(ms) {
+  if (ms <= 0) return
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+const RELEASE_VERIFICATION_ATTEMPTS = 3
+
 /** @param {string[]} argv @param {Runner} [run] */
 export function integrityCommand(argv, run = runGh) {
   const [command, ...args] = argv
@@ -228,17 +239,29 @@ export function integrityCommand(argv, run = runGh) {
     throw new Error('An argument is not supported by this integrity command')
   if (command === 'settings') return verifyImmutableSetting(values['--repo'] ?? '', run)
   if (command === 'manifest') return assetManifest(values['--root'] ?? process.cwd(), assets)
-  if (command === 'release')
-    return verifyRelease(
-      {
-        repository: values['--repo'] ?? '',
-        tag: values['--tag'] ?? '',
-        root: values['--root'],
-        expectedSha: values['--expected-sha'],
-        assets,
-      },
-      run
-    )
+  if (command === 'release') {
+    const options = {
+      repository: values['--repo'] ?? '',
+      tag: values['--tag'] ?? '',
+      root: values['--root'],
+      expectedSha: values['--expected-sha'],
+      assets,
+    }
+    // The lane fires the instant GitHub marks the release published, while the
+    // releases-by-tag index can still lag behind. Retry through that window;
+    // every strict check still runs on every attempt and the command fails
+    // closed once the bounded window is exhausted.
+    let lastError
+    for (let attempt = 1; attempt <= RELEASE_VERIFICATION_ATTEMPTS; attempt += 1) {
+      try {
+        return verifyRelease(options, run)
+      } catch (error) {
+        lastError = error
+        if (attempt < RELEASE_VERIFICATION_ATTEMPTS) sleepSync(2_000)
+      }
+    }
+    throw lastError
+  }
   throw new Error('Use release-integrity settings, release, or manifest')
 }
 
