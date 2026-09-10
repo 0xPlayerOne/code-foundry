@@ -82,10 +82,14 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql'],
-  // Release Please pull requests run the full audit suite so every registered
-  // validation check succeeds rather than appearing as an expected skip. The
-  // gate additionally validates the generated release diff.
-  release: ['ci', 'test', 'security', 'codeql'],
+  // Release Please pull requests change version metadata only, and the gate
+  // validates that diff against the release policy before anything publishes.
+  // The content tree was already fully audited by the pull requests that
+  // merged into main, and the scheduled audit lane re-covers drift. The
+  // release tier therefore requires the fast suite plus CodeQL, whose
+  // per-pull-request code scanning results some repository rulesets require
+  // to keep the release from deadlocking.
+  release: ['ci', 'test', 'codeql'],
 }
 
 /**
