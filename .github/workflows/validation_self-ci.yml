@@ -64,7 +64,12 @@ jobs:
   validation:
     name: Validation
     needs: mode
-    if: vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    # Bot-authored pull requests (Dependabot and friends) validate only on an
+    # explicit ready transition: dependency pushes never allocate validation
+    # runners by themselves. A human pushing to a bot branch also runs, since
+    # the sender is no longer a bot. Release Please heads are managed by the
+    # release workflow and always validate.
+    if: vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'pull_request' && github.event.pull_request.draft == false && (github.event.pull_request.user.type != 'Bot' || github.event.sender.type != 'Bot' || startsWith(github.event.pull_request.head.ref, 'release-please--branches--main'))
     # Reusable workflows can only maintain or reduce the caller job's scopes.
     # The audit tier needs security-events: write for CodeQL uploads.
     permissions:

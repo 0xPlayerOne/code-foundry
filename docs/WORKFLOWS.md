@@ -31,6 +31,21 @@ pull request starts it again for the current head. Audit-mode runs additionally
 execute the eval lane (`Validation / Eval`) for repositories that ship an eval
 harness; see [Evals](EVALS.md).
 
+Two waste-avoidance rules keep validation minutes honest without weakening
+confidence:
+
+- **Docs-only pull requests run the fast tier.** When an audit-classified pull
+  request changes only markdown, `docs/`, and license roots, the mode
+  classifier downgrades it to fast. Any code, lockfile, workflow,
+  configuration, or packaging change — or any diff that cannot be computed
+  deterministically — keeps the audit tier. Scheduled and manual audits always
+  run the full tier.
+- **Bot-authored pull requests validate only on ready transitions.**
+  Dependabot and other bot pushes never allocate validation runners; a
+  maintainer marks the (Guard-drafted) pull request ready — or pushes to its
+  branch, which changes the sender — to run validation. Release Please heads
+  are exempt because the release workflow merges them through its own lane.
+
 The separate `validation-audit.yml` caller is pinned to the configured released
 runtime and handles scheduled and manual audits:
 
