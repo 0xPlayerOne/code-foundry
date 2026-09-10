@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.3...v1.28.4) (2026-09-10)
+
+
+### Bug Fixes
+
+* **release:** scope reconciliation to staging topology ([bfba0c1](https://github.com/0xPlayerOne/code-foundry/commit/bfba0c147ea6281c47754938d6711d3e5e0335a2))
+
 ## [1.28.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.2...v1.28.3) (2026-09-10)
 
 
