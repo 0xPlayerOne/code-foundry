@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import test from 'node:test'
+import { discoverRepositories } from '../src/commands/fleet-core.mjs'
 import { upgradeFleet } from '../src/commands/fleet.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 import {
@@ -375,6 +376,16 @@ test('orphan pushed managed branch resumes after PR creation failure without for
     fake.calls.some((call) => call.argv.includes('push') && call.argv.includes('--force')),
     false
   )
+})
+
+test('legacy discovery does not inspect organization-specific nested directories', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'foundry-fleet-legacy-discovery-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const nested = join(root, 'NiftyLeague', 'consumer')
+  mkdirSync(join(nested, '.git'), { recursive: true })
+  writeFileSync(join(nested, '.github-placeholder'), '')
+
+  assert.deepEqual(discoverRepositories(root), [])
 })
 
 test('legacy fleet resumes a pushed branch after pull request creation failure', (t) => {

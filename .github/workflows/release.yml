@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: v1.0.5
+      git-workflow:
+        description: Repository topology; staging reconciliation is opt-in for staging-release.
+        required: false
+        type: string
+        default: direct
       billing-pause-bypass:
         description: Allow this explicitly dispatched release to run while other CI remains paused.
         required: false
@@ -73,7 +78,7 @@ jobs:
     name: Version
     if: vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 45
     concurrency:
       group: code-foundry-release-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
@@ -172,11 +177,11 @@ jobs:
           GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
         run: |
           set -euo pipefail
-          # NiftyLeague rejects long-lived fine-grained automation tokens with
-          # HTTP 403 even on REST (observed in the release-pr promotion flow),
-          # so the configured automation token is validated against the current
-          # repository before any write. gh api authenticates through the
-          # GH_TOKEN environment variable and never prints the token; the
+          # Some organizations reject long-lived fine-grained automation tokens
+          # with HTTP 403 even on REST, so the configured automation token is
+          # validated against the current repository before any write. gh api
+          # authenticates through the GH_TOKEN environment variable and never
+          # prints the token; the
           # response body is discarded and only the exit status selects the
           # credential for the rest of the job.
           if [ "$HAS_AUTOMATION_TOKEN" = true ] && gh api "repos/${GITHUB_REPOSITORY}" --jq '.full_name' >/dev/null 2>&1; then
@@ -315,7 +320,7 @@ jobs:
             echo "Waiting for release PR #$pr to become mergeable under branch policy"
             merge_state=UNKNOWN
             mergeable=UNKNOWN
-            for attempt in $(seq 1 30); do
+            for attempt in $(seq 1 90); do
               : "$attempt"
               if read -r merge_state mergeable < <(
                 gh pr view "$pr" \
@@ -372,16 +377,18 @@ jobs:
     # creating a release. Reconciliation is only meaningful after a release
     # commit/tag is actually created; otherwise the promotion's source changes
     # are incorrectly rejected as non-metadata commits.
-    if: inputs['defer-publication'] != true && (vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true) && needs.release.result == 'success' && needs.release.outputs.release_created == 'true'
+    if: inputs['git-workflow'] == 'staging-release' && inputs['defer-publication'] != true && (vars.CI_BILLING_PAUSED != 'true' || inputs['billing-pause-bypass'] == true) && needs.release.result == 'success' && needs.release.outputs.release_created == 'true'
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
     env:
-      # Reconciliation is the sole staging-ruleset bypass. Keep GH_TOKEN scoped to
-      # the repository's own GitHub Actions integration token; deploy key use is
-      # optional and only activated when STAGING_DEPLOY_KEY is provided.
+      # Reconciliation is the sole staging-ruleset bypass and is enabled only
+      # for repositories that explicitly opt into the staging-release topology.
+      # Keep GH_TOKEN scoped to the repository's own GitHub Actions integration
+      # token; deploy key use is optional and only activated when
+      # STAGING_DEPLOY_KEY is provided.
       GH_TOKEN: ${{ github.token }}
       STAGING_DEPLOY_KEY_PRESENT: ${{ secrets.STAGING_DEPLOY_KEY != '' }}
     steps:

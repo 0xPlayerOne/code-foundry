@@ -74,8 +74,11 @@ The generated commit preserves the staged tip's conventional subject so
 Release Please still detects the appropriate release type after promotion.
 
 The `staging` → `main` reconciliation exists only in the `staging-release`
-topology. Patch-equivalent divergence between `main` and `staging` is treated
-as aligned. When `staging` has pending commits that are not yet represented on
+topology. The reusable release workflow defaults to `direct` and requires its
+caller to opt into `staging-release`, so a stale remote `staging` branch cannot
+activate reconciliation in a direct repository. Patch-equivalent divergence
+between `main` and `staging` is treated as aligned. When `staging` has pending
+commits that are not yet represented on
 `main`, the release workflow replays those staging-only commits in order onto a
 detached worktree rooted at `main`, and then updates `staging` with an exact
 `--force-with-lease` to prevent
@@ -144,6 +147,8 @@ already passed).
    topology method: squash for `direct`, rebase for `staging-release`.
 3. For a generated consumer caller, confirm the GitHub Release and any package
    publication.
-4. For Code Foundry itself, confirm qualification, draft staging, immutable
+4. For Code Foundry itself, do not advance the self-referencing runtime pin as
+   part of a release; self-sync preserves that compatibility pin and avoids a
+   self-update release loop. Confirm qualification, draft staging, immutable
    publication, and the retained identity receipts.
 5. In `staging-release`, synchronize `staging` with the new `main` release commit.

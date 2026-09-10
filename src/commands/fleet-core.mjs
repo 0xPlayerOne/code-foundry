@@ -18,7 +18,11 @@ export function discoverRepositories(root) {
   if (hasFleetManifest(root)) return discoverManifestRepositories(root)
   /** @type {FleetRepository[]} */
   const result = []
-  const candidates = [root, ...children(root), ...children(join(root, 'NiftyLeague'))]
+  // Legacy discovery is intentionally limited to the explicitly supplied root
+  // and its immediate children. Consumer-fleet inventories belong in an
+  // explicit code-foundry-fleet.json manifest; the runtime must not know about
+  // any organization's repositories or directory names.
+  const candidates = [root, ...children(root)]
   for (const candidate of new Set(candidates)) {
     if (!existsSync(join(candidate, '.git'))) continue
     const configured = existsSync(join(candidate, '.github/code-foundry.yml'))

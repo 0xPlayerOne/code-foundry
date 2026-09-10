@@ -814,6 +814,7 @@ describe('code-foundry CLI', () => {
     assert.match(caller, /^\s+ref: v1\.4\.1$/m)
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
     assert.match(release, /release\.yml@v1\.4\.1/)
+    assert.match(release, /git-workflow: direct/)
     assert.doesNotMatch(caller, /v1\.3\.2/)
   })
 
@@ -1637,6 +1638,10 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /default: release-please-config\.json/)
     assert.match(workflow, /release-type: \$\{\{ steps\.profile\.outputs\.legacy_release_type \}\}/)
     assert.match(workflow, /release validate-prs/)
+    assert.match(
+      workflow,
+      /git-workflow:\n\s+description:.*staging reconciliation is opt-in for staging-release/
+    )
     assert.doesNotMatch(workflow, /--admin/)
     assert.match(workflow, /release_merge_strategy must be "\$\{gitWorkflow/)
     assert.match(
@@ -1661,7 +1666,7 @@ describe('code-foundry CLI', () => {
     )
     assert.match(
       workflow,
-      /if: inputs\['defer-publication'\] != true && \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/
+      /if: inputs\['git-workflow'\] == 'staging-release' && inputs\['defer-publication'\] != true && \(vars\.CI_BILLING_PAUSED != 'true' \|\| inputs\['billing-pause-bypass'\] == true\) && needs\.release\.result == 'success' && needs\.release\.outputs\.release_created == 'true'/
     )
     assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
@@ -1698,11 +1703,11 @@ describe('code-foundry CLI', () => {
       /\{ \[ "\$merge_state" != CLEAN \] && \[ "\$merge_state" != UNSTABLE \]; \} \|\| \[ "\$mergeable" != MERGEABLE \]/
     )
 
-    // The guard must be bounded: 30 attempts at a 10 second interval, and a
+    // The guard must be bounded: 90 attempts at a 10 second interval, and a
     // useful fail-closed error when the PR never reaches an accepted state.
     // Transient gh failures reset the state to UNKNOWN instead of dropping it
     // to empty.
-    assert.match(workflow, /for attempt in \$\(seq 1 30\)/)
+    assert.match(workflow, /for attempt in \$\(seq 1 90\)/)
     assert.match(workflow, /sleep 10/)
     assert.match(
       workflow,
@@ -2039,6 +2044,7 @@ jobs:
     assert.match(draft, /base: staging/)
 
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(release, /git-workflow: staging-release/)
     assert.match(release, /STAGING_DEPLOY_KEY: \$\{\{ secrets\.STAGING_DEPLOY_KEY \}\}/)
 
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')

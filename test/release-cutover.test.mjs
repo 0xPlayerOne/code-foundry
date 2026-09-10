@@ -236,7 +236,7 @@ test('staging reuses the producer credential selection', () => {
 test('all legacy downstream jobs are disabled together during external publication', () => {
   for (const job of ['reconcile', 'post-release', 'npm']) {
     const block = release.split(`\n  ${job}:\n`)[1].split(/\n  [a-z-]+:\n/)[0]
-    assert.match(block, /if: inputs\['defer-publication'\] != true &&/)
+    assert.match(block, /if: .*inputs\['defer-publication'\] != true &&/)
   }
   const producer = caller.split('\n  release:\n')[1].split('\n  stage:\n')[0]
   assert.match(producer, /defer-publication: true/)

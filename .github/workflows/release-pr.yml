@@ -41,9 +41,9 @@ jobs:
         # The partial clone (filter: blob:none) defers blob downloads, so the
         # merge-base/diff comparison below can trigger a promisor fetch. With
         # persist-credentials disabled, git has no auth for that fetch; configure
-        # the credential helper with the short-lived workflow token. NiftyLeague
-        # rejects long-lived fine-grained automation tokens with HTTP 403 even
-        # on REST, so all read-only operations use github.token. It is used
+        # the credential helper with the short-lived workflow token. Some
+        # organizations reject long-lived fine-grained automation tokens with
+        # HTTP 403 even on REST, so all read-only operations use github.token. It is used
         # only for GitHub operations owned by this workflow. The job's
         # contents: write permission is required later for the isolated,
         # deterministic promotion ref; protected main and staging are never
@@ -59,11 +59,11 @@ jobs:
         run: |
           set -euo pipefail
           # Every lookup in this step is read-only and uses the short-lived
-          # workflow token: NiftyLeague rejects long-lived fine-grained
-          # automation tokens with HTTP 403 even on REST. The
+          # workflow token because some organizations reject long-lived
+          # fine-grained automation tokens with HTTP 403 even on REST. The
           # existing-promotion-PR lookup uses authenticated REST (gh api)
-          # rather than gh pr list, which issues a GraphQL query that
-          # NiftyLeague's long-lived fine-grained token policy rejects. The
+          # rather than gh pr list, which issues a GraphQL query that an
+          # organization's long-lived fine-grained token policy rejects. The
           # REST query qualifies head as owner:branch; GitHub otherwise ignores
           # the incomplete head filter and can count an unrelated open PR. The
           # exact base/head/state filter and per_page=1 cap keep existing at 0
@@ -247,8 +247,8 @@ jobs:
           EOF
 
           # Creation uses authenticated REST (gh api POST) rather than
-          # `gh pr create`, which issues a GraphQL mutation that
-          # NiftyLeague's long-lived fine-grained token policy rejects. The
+          # `gh pr create`, which issues a GraphQL mutation that an
+          # organization's long-lived fine-grained token policy rejects. The
           # REST payload keeps the exact base/head/title/body fields, always
           # opens the automated promotion as a draft, and stays fail-closed
           # through the create-race fallback below.
@@ -263,8 +263,8 @@ jobs:
           )
           echo "::notice title=Manual PR readiness required::Created a draft promotion PR. Mark it ready for review to start validation."
 
-          # Prefer the configured automation token for the write, but
-          # NiftyLeague rejects long-lived fine-grained tokens with HTTP 403
+          # Prefer the configured automation token for the write, but some
+          # organizations reject long-lived fine-grained tokens with HTTP 403
           # even on REST, so retry the POST once with the short-lived workflow
           # token before the create-race fallback. With no automation token
           # configured, the first attempt already runs as github.token, so the
@@ -286,7 +286,7 @@ jobs:
             # the first attempt already ran as github.token. The lookup uses
             # the same authenticated REST query as the Check step, always with
             # the short-lived workflow token; gh pr list issues a GraphQL query
-            # that NiftyLeague's long-lived fine-grained token policy rejects.
+            # that an organization's long-lived fine-grained token policy rejects.
             EXISTING_NUMBER=$(GH_TOKEN="${{ github.token }}" gh api --method GET \
               "repos/${GITHUB_REPOSITORY}/pulls" \
               --field base=main \

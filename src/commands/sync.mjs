@@ -119,6 +119,7 @@ const legacyFiles = [
 function synchronize(options) {
   const target = resolve(options.target)
   const source = resolve(options.source)
+  const selfRepository = target === source
   const dryRun = options.dryRun ?? false
   const force = options.force ?? false
   const configPath = join(target, '.github/code-foundry.yml')
@@ -212,14 +213,17 @@ function synchronize(options) {
       )
     }
   }
-  // Keep normal semver pins current during sync while preserving intentional
-  // refs such as `main`, `staging`, or a custom immutable SHA. An explicit
-  // runtime ref (fleet upgrade) is authoritative and overrides even those so
-  // the rendered callers and the config pin land on the same runtime.
+  // Keep normal semver pins current during consumer syncs while preserving
+  // intentional refs such as `main`, `staging`, or a custom immutable SHA. An
+  // explicit runtime ref (fleet upgrade) is authoritative and overrides even
+  // those so the rendered callers and the config pin land on the same runtime.
+  // The runtime source itself is excluded from automatic pin advancement so a
+  // self-referencing config cannot create a release loop.
   if (
     existingConfig.runtime_ref &&
     existingConfig.runtime_ref !== targetRuntimeRef &&
-    (options.runtimeRef !== undefined || /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref))
+    (options.runtimeRef !== undefined ||
+      (!selfRepository && /^v\d+\.\d+\.\d+$/.test(existingConfig.runtime_ref)))
   ) {
     runtimeRef = targetRuntimeRef
     const current = readFileSync(configPath, 'utf8')
@@ -260,7 +264,7 @@ function synchronize(options) {
           runtimeRef,
           rustCodeql,
           file,
-          target === source
+          selfRepository
         )
       )
     }
@@ -636,6 +640,12 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     release: config.release_runner ?? config.runner,
   }
   const workflow = file.match(/^\.github\/workflows\/([^/]+)\.yml$/)?.[1]
+  if (workflow === 'release' && !selfRepository) {
+    rendered = rendered.replace(
+      /^(\s+runtime-ref:)\s+.*$/m,
+      `$1 ${ref}\n      git-workflow: ${isStagingRelease(config.git_workflow) ? 'staging-release' : 'direct'}`
+    )
+  }
   // Generated PR callers protect drafts by default. Consumers that intentionally
   // run gates while a PR is still draft can opt out in code-foundry.yml.
   if (configured(config.draft_protection, 'true') === 'false') {

@@ -165,7 +165,9 @@ release_merge_strategy: rebase
 Use `simple` with `version.txt` when no package manifest exists. Use `none` to
 skip automated releases. `npm_publish` affects generated consumer release
 callers; Code Foundry's own repository uses the qualified publication path
-described in [Qualified publication](qualified-publication.md).
+described in [Qualified publication](qualified-publication.md). A self-sync of
+the Code Foundry source does not advance its own `runtime_ref`; this prevents a
+self-referencing runtime pin from creating a release loop.
 
 ## Synchronization and extensions
 
