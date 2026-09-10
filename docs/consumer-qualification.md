@@ -6,7 +6,7 @@ Release-candidate compatibility checks against the distributable package.
 **Scope:** Package installation, CLI initialization/synchronization, generated workflow contracts.
 
 `consumer-qualification.yml` packs the checked-out candidate once, shares that
-archive across Node 20, 22, and 24 using an artifact scoped to the same workflow
+archive across Node 24 and 26 using an artifact scoped to the same workflow
 run **and attempt**, and installs it offline with lifecycle scripts disabled,
 and executes its public CLI from the installed package. The harness does not
 import the source checkout's initializer as a substitute for package testing.

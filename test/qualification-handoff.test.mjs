@@ -55,7 +55,7 @@ function fixture(t) {
     GITHUB_OUTPUT: join(directory, 'outputs'),
   }
   writeFileSync(env.GITHUB_OUTPUT, '')
-  for (const major of ['20', '22', '24']) {
+  for (const major of ['24', '26']) {
     const path = join(directory, 'reports', major)
     mkdirSync(path, { recursive: true })
     writeFileSync(
@@ -91,7 +91,7 @@ test('gate executes the real publication policy and exports a source/digest-boun
   assert.equal(receipt.digest, `sha256:${env.CANDIDATE_SHA256}`)
   assert.equal(receipt.run_attempt, '2')
   assert.equal(receipt.run_id, '123')
-  assert.deepEqual(receipt.qualification.nodes, ['20', '22', '24'])
+  assert.deepEqual(receipt.qualification.nodes, ['24', '26'])
   assert.match(
     readFileSync(env.GITHUB_OUTPUT, 'utf8'),
     /candidate-artifact=qualification-candidate-123-2\n/
@@ -124,7 +124,7 @@ const mutations = {
 for (const [name, mutate] of Object.entries(mutations)) {
   test(`gate refuses ${name} evidence before exporting eligibility`, (t) => {
     const { directory, env } = fixture(t)
-    const path = join(directory, 'reports/22/report.json')
+    const path = join(directory, 'reports/24/report.json')
     const report = JSON.parse(readFileSync(path, 'utf8'))
     mutate(report)
     writeFileSync(path, JSON.stringify(report))

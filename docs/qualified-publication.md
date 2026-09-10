@@ -9,7 +9,7 @@ consumer release callers keep the ordinary `release.yml` behavior.
 The self-release pipeline is intentionally staged:
 
 1. `consumer-qualification.yml` packs the candidate once and qualifies it across
-   Node 20, 22, and 24.
+   Node 24 and 26.
 2. Release Please creates a draft release for the qualified source.
 3. The staging job attaches the exact archive and a digest-bound qualification
    receipt, publishes the immutable GitHub Release, and verifies its identity.
