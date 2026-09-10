@@ -37,7 +37,7 @@ registry version and its provenance link before treating the setup as complete.
 The self-hosted package follows a stricter contract than generated consumer
 callers:
 
-1. Pack the candidate once and qualify that archive across Node 20, 22, and 24.
+1. Pack the candidate once and qualify that archive across Node 24 and 26.
 2. Create a draft GitHub Release and attach the exact qualified archive plus its
    qualification receipt.
 3. Publish the immutable GitHub Release after verifying the tag, source commit,
@@ -49,6 +49,11 @@ The final publisher does not rebuild or reinstall the package. It publishes only
 the bytes selected from the same workflow run and attempt. See [Consumer
 qualification](consumer-qualification.md) and [Qualified publication](qualified-publication.md)
 for the complete contract, retries, and recovery rules.
+
+The main-push pipeline runs Release Please first, then qualifies only when the
+push created a release or recovery found a stuck draft. Feature merges pay for
+the cheap release-please and recovery probes; the runner-heavy matrix runs on
+release merges, which re-qualify the exact tree they publish.
 
 ## GitHub Releases and GitHub Packages
 

@@ -22,7 +22,13 @@ concurrency:
 jobs:
   qualification:
     name: Qualify consumers
-    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
+    # Qualification feeds staging and publication, so it runs only when this
+    # push created a release or recovery found a stuck one. Feature merges
+    # only pay for the cheap release-please and recovery probes below; the
+    # content they merge was already audited on its pull request, and the
+    # release merge re-qualifies the exact tree it publishes.
+    needs: [release, recovery]
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     uses: ./.github/workflows/consumer-qualification.yml
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
@@ -65,7 +71,11 @@ jobs:
 
   release:
     name: Release
-    needs: [qualification, preflight]
+    # Release Please consumes no qualification outputs; it runs first so the
+    # qualification below only executes when a release (or a stuck draft) needs
+    # it. Version pull requests keep flowing even when the candidate is broken;
+    # publication stays gated on qualification success in the stage job.
+    needs: [preflight]
     if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
     uses: ./.github/workflows/release.yml
     with:
@@ -87,8 +97,8 @@ jobs:
 
   recovery:
     name: Recover qualified draft identity
-    needs: [qualification, release]
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && needs.qualification.result == 'success' && needs.release.result == 'success'
+    needs: [release]
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && needs.release.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -99,7 +109,9 @@ jobs:
       sha: ${{ steps.recover.outputs.sha }}
     env:
       RELEASE_CREATED: ${{ needs.release.outputs.release_created }}
-      SOURCE_SHA: ${{ needs.qualification.outputs.source-sha }}
+      # The qualification source SHA is git rev-parse HEAD of the push, so
+      # recovery computes it directly instead of depending on qualification.
+      SOURCE_SHA: ${{ github.sha }}
     steps:
       - name: Checkout trusted recovery runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -156,7 +168,10 @@ jobs:
   stage:
     name: Stage qualified release
     needs: [qualification, release, recovery]
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
+    # Qualification only runs when this push created a release or recovery
+    # found a stuck one; staging additionally requires its success so an
+    # unqualified tree can never reach publication.
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.qualification.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

@@ -238,7 +238,10 @@ test('all legacy downstream jobs are disabled together during external publicati
   const producer = caller.split('\n  release:\n')[1].split('\n  stage:\n')[0]
   assert.match(producer, /defer-publication: true/)
   assert.doesNotMatch(producer, /NPM_TOKEN/)
-  assert.match(producer, /needs: \[qualification, preflight\]/)
+  // Release Please consumes no qualification outputs: the producer runs first
+  // and qualification executes only when a release (or a stuck draft) needs it.
+  assert.match(producer, /needs: \[preflight\]/)
+  assert.doesNotMatch(producer, /needs: \[qualification/)
 })
 test('staging consumes verified current-attempt bytes without a rebuild and keeps publication automatic', () => {
   const stage = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
@@ -267,7 +270,10 @@ test('post-release hook arguments are passed through environment variables', () 
 })
 test('failed release creation reruns recover only an exact source-bound draft', () => {
   const recovery = caller.split('\n  recovery:\n')[1].split('\n  stage:\n')[0]
-  assert.match(recovery, /needs: \[qualification, release\]/)
+  // Recovery runs on the release result alone and computes its own source
+  // SHA, so it can gate qualification for a stuck draft from an earlier push.
+  assert.match(recovery, /needs: \[release\]/)
+  assert.doesNotMatch(recovery, /needs: \[qualification/)
   assert.match(recovery, /RELEASE_CREATED/)
   assert.match(recovery, /resolveTagCommit/)
   assert.match(recovery, /releases\?per_page=100/)
