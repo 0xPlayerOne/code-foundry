@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.24.0...v1.25.0) (2026-09-10)
+
+
+### Features
+
+* **eval:** run the eval tier as a managed Validation / Eval lane ([#580](https://github.com/0xPlayerOne/code-foundry/issues/580)) ([9414889](https://github.com/0xPlayerOne/code-foundry/commit/94148894da9a627a6bd7c71c846848c198c1dfec))
+
 ## [1.24.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.23.0...v1.24.0) (2026-09-10)
 
 
