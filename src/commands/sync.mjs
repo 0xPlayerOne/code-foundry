@@ -354,7 +354,7 @@ function synchronize(options) {
     const mergedManifest = {}
     for (const directory of [
       ...new Set([...Object.keys(releaseManifest), ...Object.keys(existingManifest)]),
-    ].sort()) {
+    ].toSorted()) {
       mergedManifest[directory] = existingManifest[directory] ?? releaseManifest[directory]
     }
     const content = `${JSON.stringify(mergedManifest, null, 2)}\n`

@@ -9,6 +9,11 @@ import { packageManagerForLockfile } from '../lib/lockfiles.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
 import { isGeneratedEventCaller } from './sync.mjs'
 
+/** @param {string} message */
+function warn(message) {
+  console.warn(`WARN: ${message}`)
+}
+
 /** @param {string} root @param {{ github?: boolean }} [options] */
 export function doctor(root, options = {}) {
   const target = resolve(root)
@@ -21,8 +26,6 @@ export function doctor(root, options = {}) {
     console.error(`ERROR: ${message}`)
     errors += 1
   }
-  /** @param {string} message */
-  const warn = (message) => console.warn(`WARN: ${message}`)
 
   const toolchain = config.toolchain ?? 'auto'
   if (!['auto', 'native', 'mise'].includes(toolchain)) error(`unsupported toolchain: ${toolchain}`)

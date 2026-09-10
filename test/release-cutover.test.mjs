@@ -244,14 +244,14 @@ test('all legacy downstream jobs are disabled together during external publicati
   assert.doesNotMatch(producer, /needs: \[qualification/)
 })
 test('staging consumes verified current-attempt bytes without a rebuild and keeps publication automatic', () => {
-  const stage = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
-  assert.doesNotMatch(stage, /environment: release/)
-  assert.match(stage, /needs: \[qualification, release, recovery\]/)
-  assert.match(stage, /needs\.qualification\.outputs\.candidate-artifact/)
-  assert.match(stage, /test "\$\(sha256sum .*\)" = "\$CANDIDATE_SHA256"/)
-  assert.match(stage, /consumer-qualification-\$GITHUB_RUN_ATTEMPT-node-/)
-  assert.match(stage, /qualified-publication.mjs stage/)
-  assert.doesNotMatch(stage, /npm (pack|publish|install)|bun install|secrets.NPM_TOKEN/)
+  const stageBlock = caller.split('\n  stage:\n')[1].split('\n  publish:\n')[0]
+  assert.doesNotMatch(stageBlock, /environment: release/)
+  assert.match(stageBlock, /needs: \[qualification, release, recovery\]/)
+  assert.match(stageBlock, /needs\.qualification\.outputs\.candidate-artifact/)
+  assert.match(stageBlock, /test "\$\(sha256sum .*\)" = "\$CANDIDATE_SHA256"/)
+  assert.match(stageBlock, /consumer-qualification-\$GITHUB_RUN_ATTEMPT-node-/)
+  assert.match(stageBlock, /qualified-publication.mjs stage/)
+  assert.doesNotMatch(stageBlock, /npm (pack|publish|install)|bun install|secrets.NPM_TOKEN/)
   assert.match(caller, /needs: \[qualification, release, recovery, stage\]/)
   assert.match(caller, /uses: \.\/\.github\/workflows\/qualified-foundry-publish.yml/)
   assert.doesNotMatch(caller, /environment: npm/)

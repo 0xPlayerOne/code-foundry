@@ -295,8 +295,8 @@ export function buildReleaseRecoveryPlan(input) {
   const orphanGitHubReleases = releaseTags.filter(
     (tag) => !tagSet.has(tag) && !tagSet.has(tag.replace(/^v/, ''))
   )
-  const latestTag = [...tags].sort(compareVersions).at(-1) ?? ''
-  const latestPackageVersion = [...input.packageVersions].sort(compareVersions).at(-1) ?? ''
+  const latestTag = [...tags].toSorted(compareVersions).at(-1) ?? ''
+  const latestPackageVersion = [...input.packageVersions].toSorted(compareVersions).at(-1) ?? ''
   return {
     latestTag,
     latestPackageVersion,

@@ -237,7 +237,8 @@ function runEval() {
       report = JSON.parse(readFileSync(reportFile, 'utf8'))
     } catch (error) {
       throw new Error(
-        `Eval report is not valid JSON: ${error instanceof Error ? error.message : String(error)}`
+        `Eval report is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
     const envelope = validateEvalReport(report)
