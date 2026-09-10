@@ -367,6 +367,7 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
   assert.match(yaml, /name: Check Turbo delivery impact/)
   assert.match(yaml, /name: Resolve Turbo package/)
   assert.match(yaml, /TURBO_FILTER: \$\{\{ inputs\.turbo-filter \}\}/)
+  assert.match(yaml, /turbo query affected \\\n\s+--packages/)
   assert.match(yaml, /github\.event_name == 'push'/)
   assert.match(yaml, /github\.event\.before/)
   assert.match(yaml, /fetch-depth: 0/)

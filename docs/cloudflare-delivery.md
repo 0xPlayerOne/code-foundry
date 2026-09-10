@@ -41,7 +41,7 @@ selects the lockfile root. For Turbo monorepos, filtering is automatic when
 `working-directory` points to the application package and the lockfile root
 contains `turbo.json` or `turbo.jsonc`. The workflow resolves the package name,
 then compares pull-request base/head commits or push before/after commits with
-`turbo query affected --tasks build`; shared-package changes therefore retain
+`turbo query affected --packages`; shared-package changes therefore retain
 dependent app deployments. Unaffected app calls skip the build and Cloudflare
 deployment. Set `turbo-filter` only to override the detected package name; set
 it to an empty string to disable filtering. Full history is fetched for the

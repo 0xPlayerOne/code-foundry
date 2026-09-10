@@ -1354,6 +1354,7 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /name: Check Turbo deployment impact/)
     assert.match(workflow, /name: Resolve Turbo package/)
     assert.match(workflow, /TURBO_FILTER: \$\{\{ inputs\.turbo-filter \}\}/)
+    assert.match(workflow, /turbo query affected \\\n\s+--packages/)
     assert.match(workflow, /github\.event_name == 'push'/)
     assert.match(workflow, /github\.event\.before/)
     assert.match(workflow, /fetch-depth: 0/)

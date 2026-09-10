@@ -174,17 +174,17 @@ jobs:
             exit 0
           fi
           bunx --bun --no-install turbo query affected \
-            --tasks build \
+            --packages \
             --base="$TURBO_BASE_SHA" \
             --head="$TURBO_HEAD_SHA" \
             --no-update-notifier > "$RUNNER_TEMP/turbo-affected.json"
           node --input-type=module <<'NODE'
           import { appendFileSync, readFileSync } from 'node:fs'
           const result = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/turbo-affected.json', 'utf8'))
-          const items = result?.data?.affectedTasks?.items
-          if (!Array.isArray(items)) throw new Error('Turbo affected query returned no task items')
+          const items = result?.data?.affectedPackages?.items ?? result?.data?.affectedTasks?.items
+          if (!Array.isArray(items)) throw new Error('Turbo affected query returned no package/task items')
           const packageName = process.env.TURBO_PACKAGE
-          const affected = items.some((item) => item?.package?.name === packageName || item?.fullName?.startsWith(`${packageName}#`))
+          const affected = items.some((item) => item?.name === packageName || item?.package?.name === packageName || item?.fullName?.startsWith(`${packageName}#`))
           console.log(`${packageName}: ${affected ? 'affected' : 'unaffected'}`)
           appendFileSync(process.env.GITHUB_OUTPUT, `should_deploy=${affected}\n`)
           NODE
