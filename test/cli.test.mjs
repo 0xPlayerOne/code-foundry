@@ -2307,8 +2307,8 @@ jobs:
 
   it('documents that GitHub Stacks is outside the merge topology', () => {
     const workflows = readFileSync('docs/WORKFLOWS.md', 'utf8')
-    assert.match(workflows, /Release Please pull requests.*run the full audit tier/s)
-    assert.match(workflows, /without exposing neutral or skipped suite checks/)
+    assert.match(workflows, /Release Please pull requests into `main` run a lean release lane/)
+    assert.match(workflows, /the content was fully audited on the pull requests that/)
     assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)
     assert.match(workflows, /does\s+not reduce required workflow runs/)
@@ -4258,7 +4258,7 @@ jobs:
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
     assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql'])
-    assert.deepEqual(requiredValidationJobs('release'), ['ci', 'test', 'security', 'codeql'])
+    assert.deepEqual(requiredValidationJobs('release'), ['ci', 'test', 'codeql'])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
     assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql'])
@@ -4291,11 +4291,11 @@ jobs:
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
-        results: { ci: 'success', test: 'success', security: 'success', codeql: 'success' },
+        results: { ci: 'success', test: 'success', codeql: 'success' },
       }),
       {
         valid: true,
-        required: ['ci', 'test', 'security', 'codeql'],
+        required: ['ci', 'test', 'codeql'],
         failures: [],
       }
     )
@@ -4322,6 +4322,22 @@ jobs:
         results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'success' },
       }).valid,
       false
+    )
+    // The release lane skips security by design; a skipped security job never
+    // blocks it, but a missing CodeQL analysis does.
+    assert.equal(
+      evaluateValidationGate({
+        mode: 'release',
+        results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'skipped' },
+      }).valid,
+      false
+    )
+    assert.equal(
+      evaluateValidationGate({
+        mode: 'release',
+        results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'success' },
+      }).valid,
+      true
     )
     // Non-required jobs never influence the gate, even when they fail.
     assert.equal(
@@ -4350,7 +4366,8 @@ jobs:
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
-    // Release mode requires the complete suite and rejects every skipped gate.
+    // The release lane requires the fast suite plus CodeQL and rejects every
+    // skipped required gate.
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
@@ -4358,7 +4375,7 @@ jobs:
       }),
       {
         valid: false,
-        required: ['ci', 'test', 'security', 'codeql'],
+        required: ['ci', 'test', 'codeql'],
         failures: [{ job: 'codeql', result: 'skipped' }],
       }
     )
@@ -4685,7 +4702,7 @@ jobs:
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
   })
 
-  it('runs every registered tier job for release pull requests', () => {
+  it('runs the lean release lane in both orchestrators', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     const noCodeqlOrchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     for (const job of ['ci', 'test', 'security', 'codeql']) {
@@ -4698,12 +4715,21 @@ jobs:
       orchestrator,
       /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
     )
+    // CodeQL stays on release pull requests so code-scanning rulesets never
+    // deadlock the release; the security job is audit-only.
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
+      /codeql:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs\.mode == 'audit' \|\| inputs\.mode == 'release'\)/
+    )
+    assert.match(
+      orchestrator,
+      /security:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/m
     )
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
-    assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
+    assert.match(
+      orchestrator,
+      /unit-only: \$\{\{ inputs.mode == 'fast' \|\| inputs.mode == 'release' \}\}/
+    )
     assert.match(orchestrator, /validation release_diff/)
     assert.match(
       orchestrator,
@@ -4719,12 +4745,16 @@ jobs:
       /FOUNDRY_HEAD_REPO: \$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}/
     )
     assert.match(orchestrator, /FOUNDRY_REPOSITORY: \$\{\{ github\.repository \}\}/)
-    for (const job of ['ci', 'test', 'security']) {
+    for (const job of ['ci', 'test']) {
       assert.match(
         noCodeqlOrchestrator,
         new RegExp(`^  ${job}:[\\s\\S]*?inputs\\.mode == 'release'`, 'm')
       )
     }
+    assert.match(
+      noCodeqlOrchestrator,
+      /security:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/m
+    )
     assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
     assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security\]/)
   })

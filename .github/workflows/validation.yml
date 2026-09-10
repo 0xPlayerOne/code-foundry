@@ -106,14 +106,17 @@ jobs:
       runner: ${{ inputs.test-runner }}
       unit-runner: ${{ inputs.unit-runner }}
       performance-runner: ${{ inputs.performance-runner }}
-      unit-only: ${{ inputs.mode == 'fast' }}
+      # Release pull requests change version metadata only; their content was
+      # audited on the pull requests that merged into main. Integration, E2E,
+      # smoke, and performance lanes stay in the audit and scheduled lanes.
+      unit-only: ${{ inputs.mode == 'fast' || inputs.mode == 'release' }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
   security:
     name: Security
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
     uses: ./.github/workflows/security.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -136,8 +139,10 @@ jobs:
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
-  # The release tier runs the full audit suite so Release Please pull requests
-  # expose no neutral suite checks. Its generated release diff policy executes
+  # The release tier requires the fast suite plus CodeQL: its diff is version
+  # metadata (validated against the release policy below), its content was
+  # audited on the pull requests that merged into main, and the scheduled
+  # audit lane re-covers drift. Its generated release diff policy executes
   # as a conditional step below, so ordinary pull requests still render no
   # skipped release-policy row.
   gate:
