@@ -16,7 +16,7 @@ export function customWorkflowFiles(root, standardFiles) {
     .filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'))
     .map((file) => `.github/workflows/${file}`)
     .filter((file) => !isManagedPath(standardFiles, file))
-    .sort()
+    .toSorted()
 }
 
 /** @param {string} root @param {Record<string, string>} config */

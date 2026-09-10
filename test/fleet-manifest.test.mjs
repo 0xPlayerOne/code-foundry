@@ -91,20 +91,24 @@ function synchronize({ target, runtimeRef }) {
   return { changed: ['.github/code-foundry.yml'] }
 }
 
+/** @param {string} [stdout] */
+function okResult(stdout = '') {
+  return { status: 0, stdout, stderr: '' }
+}
+
 function runner(prs = new Map()) {
   const calls = []
   let failCreate = false
-  const run = (cwd, argv) => {
+  const invoke = (cwd, argv) => {
     calls.push({ cwd, argv })
-    const ok = (stdout = '') => ({ status: 0, stdout, stderr: '' })
     if (argv[0] === 'git' && argv[1] === 'remote' && argv[2] === 'get-url')
-      return ok(`https://github.com/test/${cwd.split('/').at(-1)}.git`)
+      return okResult(`https://github.com/test/${cwd.split('/').at(-1)}.git`)
     if (argv[0] !== 'gh') return executeFleetCommand(cwd, argv)
     const repo = argv[argv.indexOf('--repo') + 1]
-    if (argv[1] === 'pr' && argv[2] === 'list') return ok(JSON.stringify(prs.get(repo) ?? []))
+    if (argv[1] === 'pr' && argv[2] === 'list') return okResult(JSON.stringify(prs.get(repo) ?? []))
     if (argv[1] === 'pr' && argv[2] === 'view') {
       const pullRequest = (prs.get(repo) ?? []).find((item) => item.url === argv[3])
-      return ok(JSON.stringify(pullRequest ?? {}))
+      return okResult(JSON.stringify(pullRequest ?? {}))
     }
     if (argv[1] === 'pr' && argv[2] === 'create') {
       if (failCreate) return { status: 1, stdout: '', stderr: 'simulated PR outage' }
@@ -122,10 +126,10 @@ function runner(prs = new Map()) {
         statusCheckRollup: [],
       }
       prs.set(repo, [pr])
-      return ok(pr.url)
+      return okResult(pr.url)
     }
     if (argv[1] === 'api')
-      return ok(
+      return okResult(
         JSON.stringify({
           encoding: 'base64',
           content: Buffer.from(`runtime_ref: ${version}\ngit_workflow: direct\n`).toString(
@@ -136,7 +140,7 @@ function runner(prs = new Map()) {
     throw new Error(`Unexpected fixture command ${argv}`)
   }
   return {
-    run,
+    run: invoke,
     calls,
     prs,
     failCreate: (value) => {

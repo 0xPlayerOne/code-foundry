@@ -238,7 +238,8 @@ function runEval() {
       report = JSON.parse(readFileSync(reportFile, 'utf8'))
     } catch (error) {
       throw new Error(
-        `Eval report is not valid JSON: ${error instanceof Error ? error.message : String(error)}`
+        `Eval report is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       )
     }
     const envelope = validateEvalReport(report)
@@ -713,10 +714,11 @@ function ci(task) {
       hasRootJavascriptProject() &&
       hasOxlintSetup()
     ) {
-      // Oxlint is the baseline's linter. Repositories that use a different
-      // linter keep full control through their own `lint` script, which the
-      // runScript fallback above already honors.
-      runTool('oxlint', [])
+      // Oxlint is the baseline's linter. Warnings are denied so lint debt
+      // never accumulates silently. Repositories that use a different linter
+      // keep full control through their own `lint` script, which the runScript
+      // fallback above already honors.
+      runTool('oxlint', ['--deny-warnings'])
     }
     if (hasLanguage('python') && hasRootPythonProject()) runTool('ruff', ['check', '.'])
     if (hasLanguage('rust') && hasRootRustProject())

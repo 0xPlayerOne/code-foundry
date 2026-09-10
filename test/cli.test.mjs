@@ -113,10 +113,10 @@ describe('Rust doctor discovery', () => {
  * @param {string} context.head
  */
 function assertRemoteMainAncestor(context) {
-  const { run, base, head } = context
-  const fetched = run(['fetch', 'origin', base, head])
+  const { run: runRemote, base, head } = context
+  const fetched = runRemote(['fetch', 'origin', base, head])
   assert.equal(fetched.status, 0, fetched.stderr)
-  const ancestor = run(['merge-base', '--is-ancestor', `origin/${base}`, `origin/${head}`])
+  const ancestor = runRemote(['merge-base', '--is-ancestor', `origin/${base}`, `origin/${head}`])
   assert.equal(ancestor.status, 0, ancestor.stderr)
 }
 
@@ -233,12 +233,12 @@ function createReconcileWorkspace() {
   const remote = mkdtempSync(join(tmpdir(), 'code-foundry-remote-'))
   const root = mkdtempSync(join(tmpdir(), 'code-foundry-workspace-'))
   git(remote, ['init', '--bare'])
-  const run = (args) => git(root, args)
-  run(['init', '-q'])
-  run(['config', 'user.email', 'test@example.com'])
-  run(['config', 'user.name', 'Test'])
-  run(['remote', 'add', 'origin', remote])
-  return { root, remote, run }
+  const runWorkspace = (args) => git(root, args)
+  runWorkspace(['init', '-q'])
+  runWorkspace(['config', 'user.email', 'test@example.com'])
+  runWorkspace(['config', 'user.name', 'Test'])
+  runWorkspace(['remote', 'add', 'origin', remote])
+  return { root, remote, run: runWorkspace }
 }
 
 /**
@@ -250,14 +250,14 @@ function createReconcileWorkspace() {
  * @returns {{ root: string, remote: string, run: (args: string[]) => import('node:child_process').SpawnSyncReturns<string>, readRef: (ref: string) => string, commit: (message: string) => string }}
  */
 function createPolicyBlockedReconcileWorkspace({ withStagingCommit = false } = {}) {
-  const { root, remote, run } = createReconcileWorkspace()
+  const { root, remote, run: runPolicy } = createReconcileWorkspace()
   const readRef = (ref) => {
-    const result = run(['rev-parse', ref])
+    const result = runPolicy(['rev-parse', ref])
     assert.equal(result.status, 0, result.stderr)
     return result.stdout.trim()
   }
   const commit = (message) => {
-    const result = run(['commit', '-m', message])
+    const result = runPolicy(['commit', '-m', message])
     assert.equal(result.status, 0, result.stderr)
     return readRef('HEAD')
   }
@@ -266,27 +266,27 @@ function createPolicyBlockedReconcileWorkspace({ withStagingCommit = false } = {
   writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
   writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
   writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
-  run(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
+  runPolicy(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
   commit('chore: initial')
-  run(['branch', '-M', 'main'])
+  runPolicy(['branch', '-M', 'main'])
 
-  run(['checkout', '-q', '-b', 'staging'])
+  runPolicy(['checkout', '-q', '-b', 'staging'])
   if (withStagingCommit) {
     writeFileSync(join(root, 'src/feature-pending.ts'), 'export const pending = 1\n')
-    run(['add', 'src/feature-pending.ts'])
+    runPolicy(['add', 'src/feature-pending.ts'])
     commit('feat: pending work')
   }
 
-  run(['checkout', '-q', 'main'])
+  runPolicy(['checkout', '-q', 'main'])
   writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
   appendFileSync(join(root, 'CHANGELOG.md'), '\n## 1.0.1\n', 'utf8')
-  run(['add', 'package.json', 'CHANGELOG.md'])
+  runPolicy(['add', 'package.json', 'CHANGELOG.md'])
   commit('chore(main): release 1.0.1')
 
-  run(['push', '-u', 'origin', 'main'])
-  run(['checkout', '-q', 'staging'])
-  run(['push', '-u', 'origin', 'staging'])
-  return { root, remote, run, readRef, commit }
+  runPolicy(['push', '-u', 'origin', 'main'])
+  runPolicy(['checkout', '-q', 'staging'])
+  runPolicy(['push', '-u', 'origin', 'staging'])
+  return { root, remote, run: runPolicy, readRef, commit }
 }
 
 const POLICY_PUSH_FAILURE =
@@ -476,6 +476,31 @@ function withReconcileGh(seed, fn) {
 
 function run(...args) {
   return spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' })
+}
+
+/**
+ * Run fn while capturing one console stream, restoring it afterwards.
+ * @param {'warn'|'error'} method
+ * @param {() => void} fn
+ */
+function captureConsole(method, fn) {
+  /** @type {string[]} */
+  const messages = []
+  const original = console[method]
+  console[method] = (message) => messages.push(String(message))
+  try {
+    fn()
+  } catch {
+    /* doctor throws only a summary; details are captured */
+  } finally {
+    console[method] = original
+  }
+  return messages
+}
+
+/** @param {string} language */
+function buildLanguageEntry(language) {
+  return { language, 'build-mode': 'none', changed: true }
 }
 
 describe('code-foundry CLI', () => {
@@ -1055,8 +1080,8 @@ describe('code-foundry CLI', () => {
       readFileSync(join(root, '.github/code-foundry.yml'), 'utf8'),
       'languages: none\npackage_manager: none\nlicense: bsd-3-clause\n'
     )
-    assert.deepEqual(readdirSync(root).sort(), ['.github'])
-    assert.deepEqual(readdirSync(join(root, '.github')).sort(), ['code-foundry.yml'])
+    assert.deepEqual(readdirSync(root).toSorted(), ['.github'])
+    assert.deepEqual(readdirSync(join(root, '.github')).toSorted(), ['code-foundry.yml'])
   })
 
   it('rejects unsafe Rust CodeQL parallelism configuration', () => {
@@ -1440,32 +1465,8 @@ describe('code-foundry CLI', () => {
     )
     syncRepository({ target: root, source: process.cwd() })
     const callerPath = join(root, '.github/workflows/validation.yml')
-    const captureWarnings = (fn) => {
-      /** @type {string[]} */
-      const warnings = []
-      const original = console.warn
-      console.warn = (message) => warnings.push(String(message))
-      try {
-        fn()
-      } finally {
-        console.warn = original
-      }
-      return warnings
-    }
-    const captureErrors = (fn) => {
-      /** @type {string[]} */
-      const errors = []
-      const original = console.error
-      console.error = (message) => errors.push(String(message))
-      try {
-        fn()
-      } catch {
-        /* doctor throws only a summary; details are in errors */
-      } finally {
-        console.error = original
-      }
-      return errors
-    }
+    const captureWarnings = (fn) => captureConsole('warn', fn)
+    const captureErrors = (fn) => captureConsole('error', fn)
     writeFileSync(join(root, '.github/workflows/ci.yml'), legacyCaller('ci'))
     const stale = captureWarnings(() => doctor(root))
     assert.ok(
@@ -1727,20 +1728,7 @@ describe('code-foundry CLI', () => {
   it('doctor and sync enforce topology-specific merge strategies', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-merge-policy-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
-    const captureErrors = (fn) => {
-      /** @type {string[]} */
-      const errors = []
-      const original = console.error
-      console.error = (message) => errors.push(String(message))
-      try {
-        fn()
-      } catch {
-        /* doctor throws only a summary; details are in errors */
-      } finally {
-        console.error = original
-      }
-      return errors
-    }
+    const captureErrors = (fn) => captureConsole('error', fn)
 
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
@@ -2211,23 +2199,26 @@ jobs:
       )
       return values.matrix
     }
-    const entry = (language) => ({ language, 'build-mode': 'none', changed: true })
     assert.deepEqual(
-      build([entry('actions'), entry('javascript-typescript')]).map((item) => item.category),
+      build([buildLanguageEntry('actions'), buildLanguageEntry('javascript-typescript')]).map(
+        (item) => item.category
+      ),
       ['/language:actions', '/language:javascript-typescript']
     )
     assert.deepEqual(
-      build([entry('actions'), entry('python')]).map((item) => item.category),
+      build([buildLanguageEntry('actions'), buildLanguageEntry('python')]).map(
+        (item) => item.category
+      ),
       ['/language:actions', '/language:python']
     )
-    const rust = build([entry('actions'), entry('rust')])
+    const rust = build([buildLanguageEntry('actions'), buildLanguageEntry('rust')])
     assert.deepEqual(
       rust.map((item) => item.display),
       ['Actions', 'Rust']
     )
     assert.equal(rust[1].language, 'rust')
     assert.equal(rust[1].shard, 'all')
-    const sharded = build([entry('rust')], ['crates/api', 'crates/worker'])
+    const sharded = build([buildLanguageEntry('rust')], ['crates/api', 'crates/worker'])
     assert.deepEqual(
       sharded.map((item) => item.display),
       ['Rust (crates/api)', 'Rust (crates/worker)']
@@ -2704,31 +2695,31 @@ jobs:
   })
 
   it('plans local synchronization for validated main-only source changes', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
-      return run(['rev-parse', 'HEAD']).stdout.trim()
+      return runWorkspace(['rev-parse', 'HEAD']).stdout.trim()
     }
 
     mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
-    run(['add', 'package.json', 'CHANGELOG.md'])
+    runWorkspace(['add', 'package.json', 'CHANGELOG.md'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'src', 'index.ts'), 'export const x = 1\n')
-    run(['add', 'src/index.ts'])
+    runWorkspace(['add', 'src/index.ts'])
     commit('chore(main): touch source')
 
     assert.deepEqual(
       reconcileRelease(root, { github: false, dryRun: false, base: 'main', head: 'staging' }),
       {
         action: 'fast-forward',
-        targetSha: run(['rev-parse', 'main']).stdout.trim(),
+        targetSha: runWorkspace(['rev-parse', 'main']).stdout.trim(),
         reason: 'main contains validated changes that staging must inherit.',
       }
     )
@@ -2752,52 +2743,52 @@ jobs:
 
   it('plans a rebase for the promotion-copy deadlock topology', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-reconcile-deadlock-'))
-    const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+    const runGitCmd = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' })
     const readRef = (ref) => {
-      const result = git(['rev-parse', ref])
+      const result = runGitCmd(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = git(['commit', '-m', message])
+      const result = runGitCmd(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
     const cherryPick = (sha) => {
-      const result = git(['cherry-pick', sha])
+      const result = runGitCmd(['cherry-pick', sha])
       assert.equal(result.status, 0, result.stderr)
     }
 
-    git(['init', '-q'])
-    git(['config', 'user.email', 'test@example.com'])
-    git(['config', 'user.name', 'Test'])
+    runGitCmd(['init', '-q'])
+    runGitCmd(['config', 'user.email', 'test@example.com'])
+    runGitCmd(['config', 'user.name', 'Test'])
     mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
     writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
-    git(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
+    runGitCmd(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
     commit('chore: initial')
-    git(['branch', '-M', 'main'])
+    runGitCmd(['branch', '-M', 'main'])
 
-    git(['checkout', '-q', '-b', 'staging'])
+    runGitCmd(['checkout', '-q', '-b', 'staging'])
     writeFileSync(join(root, 'src/feature-a.ts'), 'export const a = 1\n')
-    git(['add', 'src/feature-a.ts'])
+    runGitCmd(['add', 'src/feature-a.ts'])
     const featureAOnStaging = commit('feat: add a')
     writeFileSync(join(root, 'src/feature-b.ts'), 'export const b = 1\n')
-    git(['add', 'src/feature-b.ts'])
+    runGitCmd(['add', 'src/feature-b.ts'])
     const featureBOnStaging = commit('feat: add b')
 
-    git(['checkout', '-q', 'main'])
+    runGitCmd(['checkout', '-q', 'main'])
     cherryPick(featureAOnStaging)
     cherryPick(featureBOnStaging)
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
     appendFileSync(join(root, 'CHANGELOG.md'), '\n## 1.0.1\n', 'utf8')
-    git(['add', 'package.json', 'CHANGELOG.md'])
+    runGitCmd(['add', 'package.json', 'CHANGELOG.md'])
     const releaseCommitSha = commit('chore(main): release 1.0.1')
 
-    git(['checkout', '-q', 'staging'])
+    runGitCmd(['checkout', '-q', 'staging'])
     writeFileSync(join(root, 'src/feature-c.ts'), 'export const c = 1\n')
-    git(['add', 'src/feature-c.ts'])
+    runGitCmd(['add', 'src/feature-c.ts'])
     const featureOnlySha = commit('feat: add c')
 
     const beforeMain = readRef('main')
@@ -2818,14 +2809,14 @@ jobs:
   })
 
   it('replays pending staging-only work on a bare remote', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
+      const result = runWorkspace(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
@@ -2834,24 +2825,24 @@ jobs:
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
     writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
-    run(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
+    runWorkspace(['add', 'package.json', 'CHANGELOG.md', 'src/index.ts'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
     writeFileSync(join(root, 'src/feature-pending.ts'), 'export const pending = 1\n')
-    run(['add', 'src/feature-pending.ts'])
+    runWorkspace(['add', 'src/feature-pending.ts'])
     commit('feat: pending work')
 
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
     appendFileSync(join(root, 'CHANGELOG.md'), '\n## 1.0.1\n', 'utf8')
-    run(['add', 'package.json', 'CHANGELOG.md'])
+    runWorkspace(['add', 'package.json', 'CHANGELOG.md'])
     commit('chore(main): release 1.0.1')
 
-    run(['push', '-u', 'origin', 'main'])
-    run(['checkout', '-q', 'staging'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['checkout', '-q', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const before = remoteHeadSha(root, 'staging')
     const plan = withGitHubEnv(
@@ -2866,22 +2857,22 @@ jobs:
     assert.equal(plan.action, 'rebase-staging')
     assert.equal(plan.synchronization, 'replay')
     assert.notEqual(before, after)
-    assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
-    const replayFile = run(['show', `${after}:src/feature-pending.ts`])
+    assertRemoteMainAncestor({ run: runWorkspace, base: 'main', head: 'staging' })
+    const replayFile = runWorkspace(['show', `${after}:src/feature-pending.ts`])
     assert.equal(replayFile.status, 0)
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
   })
 
   it('does not mutate remote staging when replay conflicts and leaves it unchanged', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
+      const result = runWorkspace(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
@@ -2889,25 +2880,25 @@ jobs:
     mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
-    run(['add', 'package.json', 'CHANGELOG.md'])
+    runWorkspace(['add', 'package.json', 'CHANGELOG.md'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1-staging"}\n')
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\n## 1.0.1-staging\n')
-    run(['add', 'package.json', 'CHANGELOG.md'])
+    runWorkspace(['add', 'package.json', 'CHANGELOG.md'])
     commit('feat: pending release-only change')
 
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1-main"}\n')
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\n## 1.0.1-main\n')
-    run(['add', 'package.json', 'CHANGELOG.md'])
+    runWorkspace(['add', 'package.json', 'CHANGELOG.md'])
     commit('chore(main): release patch')
 
-    run(['push', '-u', 'origin', 'main'])
-    run(['checkout', '-q', 'staging'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['checkout', '-q', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const before = remoteHeadSha(root, 'staging')
     const runReconcile = () =>
@@ -2926,14 +2917,14 @@ jobs:
   })
 
   it('retries stale leases without clobbering concurrent remote updates', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
+      const result = runWorkspace(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
@@ -2941,23 +2932,23 @@ jobs:
     mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
-    run(['add', 'package.json', 'src/index.ts'])
+    runWorkspace(['add', 'package.json', 'src/index.ts'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
     writeFileSync(join(root, 'src/feature-pending.ts'), 'export const pending = 1\n')
-    run(['add', 'src/feature-pending.ts'])
+    runWorkspace(['add', 'src/feature-pending.ts'])
     commit('feat: pending work')
 
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
-    run(['add', 'package.json'])
+    runWorkspace(['add', 'package.json'])
     commit('chore(main): release 1.0.1')
 
-    run(['push', '-u', 'origin', 'main'])
-    run(['checkout', '-q', 'staging'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['checkout', '-q', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const toolDir = mkdtempSync(join(tmpdir(), 'code-foundry-git-wrapper-'))
     const wrapperScript = join(toolDir, 'git')
@@ -2997,21 +2988,21 @@ jobs:
     assert.equal(plan.synchronization, 'replay')
     const after = remoteHeadSha(root, 'staging')
     assert.notEqual(before, after)
-    assert.equal(run(['show', `${after}:src/concurrent.ts`]).status, 0)
+    assert.equal(runWorkspace(['show', `${after}:src/concurrent.ts`]).status, 0)
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
     rmSync(toolDir, { recursive: true, force: true })
   })
 
   it('classifies push authentication failures from raw diagnostic output', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
+      const result = runWorkspace(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
@@ -3019,19 +3010,19 @@ jobs:
     mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
     writeFileSync(join(root, 'src/index.ts'), 'export const base = 1\n')
-    run(['add', 'package.json', 'src/index.ts'])
+    runWorkspace(['add', 'package.json', 'src/index.ts'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
-    run(['add', 'package.json'])
+    runWorkspace(['add', 'package.json'])
     commit('chore(main): release 1.0.1')
 
-    run(['push', '-u', 'origin', 'main'])
-    run(['checkout', '-q', 'staging'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['checkout', '-q', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const failure =
       'fatal: Authentication failed for https://abc123:secrets@github.com/owner/repo.git/'
@@ -3167,36 +3158,36 @@ jobs:
   })
 
   it('keeps exact-lease stale failure detail in diagnostics', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
+      const result = runWorkspace(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
 
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
-    run(['add', 'package.json'])
+    runWorkspace(['add', 'package.json'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
     writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n')
-    run(['add', 'CHANGELOG.md'])
+    runWorkspace(['add', 'CHANGELOG.md'])
     commit('feat: unreleased docs')
 
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.1"}\n')
-    run(['add', 'package.json'])
+    runWorkspace(['add', 'package.json'])
     commit('chore(main): release 1.0.1')
 
-    run(['push', '-u', 'origin', 'main'])
-    run(['checkout', '-q', 'staging'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['checkout', '-q', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const failure = '! [remote rejected] staging -> staging (non-fast-forward)'
     let caught
@@ -3357,12 +3348,12 @@ jobs:
   })
 
   it('refreshes a stale reconciliation pull request head and body to the exact reconciled tree', () => {
-    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace()
+    const { root, remote, run: runPolicy, readRef } = createPolicyBlockedReconcileWorkspace()
     const branch = reconciliationPullRequestBranch('main', 'staging')
     const mainSha = readRef('main')
     const staleSha = readRef('staging')
     // The previous run predates the latest release: branch and PR head are stale.
-    run(['push', 'origin', `staging:refs/heads/${branch}`])
+    runPolicy(['push', 'origin', `staging:refs/heads/${branch}`])
     const execute = () =>
       withFakeStagingPolicyPushFailure(
         () =>
@@ -3412,7 +3403,12 @@ jobs:
   })
 
   it('replays staging-only commits into the reconciliation pull request head', () => {
-    const { root, remote, run, readRef } = createPolicyBlockedReconcileWorkspace({
+    const {
+      root,
+      remote,
+      run: runPolicy,
+      readRef,
+    } = createPolicyBlockedReconcileWorkspace({
       withStagingCommit: true,
     })
     const branch = reconciliationPullRequestBranch('main', 'staging')
@@ -3445,7 +3441,7 @@ jobs:
     // the replayed target, including the pending staging work.
     assert.equal(readRef(`${headTip}^`), stagingBefore)
     assert.equal(readRef(`${headTip}^{tree}`), readRef(`${result.replaySha}^{tree}`))
-    assert.equal(run(['show', `${headTip}:src/feature-pending.ts`]).status, 0)
+    assert.equal(runPolicy(['show', `${headTip}:src/feature-pending.ts`]).status, 0)
     assert.match(state.prs[0].body, /rebase-staging/)
     assert.match(log, /pr create/)
     rmSync(root, { recursive: true, force: true })
@@ -3526,33 +3522,33 @@ jobs:
   )
 
   it('is idempotent when patch-equivalent branches are already synchronized', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const readRef = (ref) => {
-      const result = run(['rev-parse', ref])
+      const result = runWorkspace(['rev-parse', ref])
       assert.equal(result.status, 0, result.stderr)
       return result.stdout.trim()
     }
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
       return readRef('HEAD')
     }
 
     writeFileSync(join(root, 'src.txt'), 'base\n')
-    run(['add', 'src.txt'])
+    runWorkspace(['add', 'src.txt'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
 
-    run(['checkout', '-q', '-b', 'staging'])
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'src.txt'), 'main\n')
-    run(['add', 'src.txt'])
+    runWorkspace(['add', 'src.txt'])
     const mainCommit = commit('chore(main): release patch')
 
-    run(['checkout', '-q', 'staging'])
-    run(['cherry-pick', mainCommit])
-    run(['push', '-u', 'origin', 'main'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['checkout', '-q', 'staging'])
+    runWorkspace(['cherry-pick', mainCommit])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const firstPlan = withGitHubEnv(
       {
@@ -3562,7 +3558,7 @@ jobs:
       () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
     )
     assert.equal(firstPlan.action, 'aligned')
-    assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
+    assertRemoteMainAncestor({ run: runWorkspace, base: 'main', head: 'staging' })
 
     const secondPlan = withGitHubEnv(
       {
@@ -3572,35 +3568,35 @@ jobs:
       () => reconcileRelease(root, { github: true, dryRun: false, base: 'main', head: 'staging' })
     )
     assert.equal(secondPlan.action, 'aligned')
-    assertRemoteMainAncestor({ run, base: 'main', head: 'staging' })
+    assertRemoteMainAncestor({ run: runWorkspace, base: 'main', head: 'staging' })
     assert.equal(remoteHeadSha(root, 'staging'), remoteHeadSha(root, 'main'))
     rmSync(root, { recursive: true, force: true })
     rmSync(remote, { recursive: true, force: true })
   })
 
   it('does not open a misleading pull request when policy blocks history-only alignment', () => {
-    const { root, remote, run } = createReconcileWorkspace()
+    const { root, remote, run: runWorkspace } = createReconcileWorkspace()
     const commit = (message) => {
-      const result = run(['commit', '-m', message])
+      const result = runWorkspace(['commit', '-m', message])
       assert.equal(result.status, 0, result.stderr)
-      return run(['rev-parse', 'HEAD']).stdout.trim()
+      return runWorkspace(['rev-parse', 'HEAD']).stdout.trim()
     }
 
     writeFileSync(join(root, 'src.txt'), 'base\n')
-    run(['add', 'src.txt'])
+    runWorkspace(['add', 'src.txt'])
     commit('chore: initial')
-    run(['branch', '-M', 'main'])
-    run(['checkout', '-q', '-b', 'staging'])
-    run(['checkout', '-q', 'main'])
+    runWorkspace(['branch', '-M', 'main'])
+    runWorkspace(['checkout', '-q', '-b', 'staging'])
+    runWorkspace(['checkout', '-q', 'main'])
     writeFileSync(join(root, 'src.txt'), 'released\n')
-    run(['add', 'src.txt'])
+    runWorkspace(['add', 'src.txt'])
     const mainCommit = commit('chore(main): release patch')
-    run(['checkout', '-q', 'staging'])
+    runWorkspace(['checkout', '-q', 'staging'])
     writeFileSync(join(root, 'src.txt'), 'released\n')
-    run(['add', 'src.txt'])
+    runWorkspace(['add', 'src.txt'])
     commit(`chore(staging): apply ${mainCommit.slice(0, 8)}`)
-    run(['push', '-u', 'origin', 'main'])
-    run(['push', '-u', 'origin', 'staging'])
+    runWorkspace(['push', '-u', 'origin', 'main'])
+    runWorkspace(['push', '-u', 'origin', 'staging'])
 
     const stagingBefore = remoteHeadSha(root, 'staging')
     assert.notEqual(remoteHeadSha(root, 'main'), stagingBefore)
@@ -3847,9 +3843,9 @@ jobs:
 
   it('keys runtime concurrency by event so promotion PRs do not cancel push checks', () => {
     for (const workflow of ['ci', 'codeql', 'security', 'test']) {
-      const runtime = readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')
+      const workflowSource = readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')
       assert.match(
-        runtime,
+        workflowSource,
         /code-foundry-\w+-\$\{\{ github\.event_name \}\}-\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \|\| github\.repository \}\}/
       )
     }
@@ -4887,13 +4883,13 @@ jobs:
   })
 
   it('classifies real event metadata through the runtime mode task', () => {
-    const run = (env) =>
+    const runMode = (env) =>
       spawnSync(process.execPath, [runtime, 'validation', 'mode'], {
         encoding: 'utf8',
         env: { ...testEnv, ...env },
       })
     assert.match(
-      run({
+      runMode({
         FOUNDRY_EVENT_NAME: 'pull_request',
         FOUNDRY_BASE_REF: 'staging',
         FOUNDRY_HEAD_REF: 'feature/x',
@@ -4901,7 +4897,7 @@ jobs:
       /^mode=fast$/m
     )
     assert.match(
-      run({
+      runMode({
         FOUNDRY_EVENT_NAME: 'pull_request',
         FOUNDRY_BASE_REF: 'main',
         FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.2.3',
@@ -4909,7 +4905,7 @@ jobs:
       /^mode=release$/m
     )
     assert.match(
-      run({
+      runMode({
         FOUNDRY_EVENT_NAME: 'pull_request',
         FOUNDRY_BASE_REF: 'main',
         FOUNDRY_HEAD_REF: 'staging',
@@ -4917,16 +4913,16 @@ jobs:
       /^mode=audit$/m
     )
     assert.match(
-      run({
+      runMode({
         FOUNDRY_EVENT_NAME: 'pull_request',
         FOUNDRY_BASE_REF: 'main',
         FOUNDRY_HEAD_REF: 'feature/x',
       }).stdout,
       /^mode=audit$/m
     )
-    assert.match(run({ FOUNDRY_EVENT_NAME: 'workflow_dispatch' }).stdout, /^mode=audit$/m)
-    assert.match(run({ FOUNDRY_EVENT_NAME: 'schedule' }).stdout, /^mode=audit$/m)
-    const push = run({
+    assert.match(runMode({ FOUNDRY_EVENT_NAME: 'workflow_dispatch' }).stdout, /^mode=audit$/m)
+    assert.match(runMode({ FOUNDRY_EVENT_NAME: 'schedule' }).stdout, /^mode=audit$/m)
+    const push = runMode({
       FOUNDRY_EVENT_NAME: 'push',
       FOUNDRY_BASE_REF: 'main',
       FOUNDRY_HEAD_REF: 'staging',
@@ -4936,12 +4932,12 @@ jobs:
   })
 
   it('evaluates the aggregate gate through the runtime gate task', () => {
-    const run = (env) =>
+    const runGate = (env) =>
       spawnSync(process.execPath, [runtime, 'validation', 'gate'], {
         encoding: 'utf8',
         env: { ...testEnv, ...env },
       })
-    const audit = run({
+    const audit = runGate({
       FOUNDRY_MODE: 'audit',
       FOUNDRY_CI: 'success',
       FOUNDRY_TEST: 'success',
@@ -4951,7 +4947,7 @@ jobs:
     })
     assert.equal(audit.status, 0)
     assert.match(audit.stdout, /gate passed/)
-    const fast = run({
+    const fast = runGate({
       FOUNDRY_MODE: 'fast',
       FOUNDRY_CI: 'success',
       FOUNDRY_TEST: 'success',
@@ -4960,7 +4956,7 @@ jobs:
       FOUNDRY_EVAL: 'skipped',
     })
     assert.equal(fast.status, 0)
-    const release = run({
+    const release = runGate({
       FOUNDRY_MODE: 'release',
       FOUNDRY_CI: 'success',
       FOUNDRY_TEST: 'success',
@@ -4969,7 +4965,7 @@ jobs:
       FOUNDRY_EVAL: 'skipped',
     })
     assert.equal(release.status, 0)
-    const failed = run({
+    const failed = runGate({
       FOUNDRY_MODE: 'fast',
       FOUNDRY_CI: 'failure',
       FOUNDRY_TEST: 'success',
@@ -4979,7 +4975,7 @@ jobs:
     })
     assert.notEqual(failed.status, 0)
     assert.match(failed.stderr, /::error::ci: failure/)
-    const cancelled = run({
+    const cancelled = runGate({
       FOUNDRY_MODE: 'audit',
       FOUNDRY_CI: 'success',
       FOUNDRY_TEST: 'success',
@@ -4989,7 +4985,7 @@ jobs:
     })
     assert.notEqual(cancelled.status, 0)
     assert.match(cancelled.stderr, /::error::codeql: cancelled/)
-    const unknown = run({
+    const unknown = runGate({
       FOUNDRY_MODE: 'bogus',
       FOUNDRY_CI: 'success',
       FOUNDRY_TEST: 'success',
@@ -5100,25 +5096,25 @@ jobs:
 
   it('validates generated release diffs through the runtime release_diff task', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-diff-'))
-    const git = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' })
-    git(['init', '-q'])
-    git(['config', 'user.email', 'test@example.com'])
-    git(['config', 'user.name', 'Test'])
+    const runGitCmd = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+    runGitCmd(['init', '-q'])
+    runGitCmd(['config', 'user.email', 'test@example.com'])
+    runGitCmd(['config', 'user.name', 'Test'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
-    git(['add', '-A'])
-    git(['commit', '-q', '-m', 'base'])
-    const baseSha = git(['rev-parse', 'HEAD']).stdout.trim()
-    git(['checkout', '-q', '-b', 'release-please--branches--main--v1.0.0'])
+    runGitCmd(['add', '-A'])
+    runGitCmd(['commit', '-q', '-m', 'base'])
+    const baseSha = runGitCmd(['rev-parse', 'HEAD']).stdout.trim()
+    runGitCmd(['checkout', '-q', '-b', 'release-please--branches--main--v1.0.0'])
     writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.1.0"}\n')
-    git(['add', '-A'])
-    git(['commit', '-q', '-m', 'chore(main): release 1.1.0'])
-    const run = (env) =>
+    runGitCmd(['add', '-A'])
+    runGitCmd(['commit', '-q', '-m', 'chore(main): release 1.1.0'])
+    const runReleaseDiff = (env) =>
       spawnSync(process.execPath, [runtime, 'validation', 'release_diff'], {
         cwd: root,
         encoding: 'utf8',
         env: { ...testEnv, ...env },
       })
-    const valid = run({
+    const valid = runReleaseDiff({
       FOUNDRY_BASE_SHA: baseSha,
       FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0',
       FOUNDRY_HEAD_REPO: 'owner/repo',
@@ -5128,9 +5124,9 @@ jobs:
     assert.match(valid.stdout, /Release policy passed/)
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/index.ts'), 'export const value = 1\n')
-    git(['add', '-A'])
-    git(['commit', '-q', '-m', 'sneak'])
-    const sneaky = run({
+    runGitCmd(['add', '-A'])
+    runGitCmd(['commit', '-q', '-m', 'sneak'])
+    const sneaky = runReleaseDiff({
       FOUNDRY_BASE_SHA: baseSha,
       FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0',
       FOUNDRY_HEAD_REPO: 'owner/repo',
@@ -5138,7 +5134,7 @@ jobs:
     })
     assert.notEqual(sneaky.status, 0)
     assert.match(sneaky.stderr, /unexpected paths: src\/index\.ts/)
-    const fork = run({
+    const fork = runReleaseDiff({
       FOUNDRY_BASE_SHA: baseSha,
       FOUNDRY_HEAD_REF: 'release-please--branches--main--v1.0.0',
       FOUNDRY_HEAD_REPO: 'evil/fork',

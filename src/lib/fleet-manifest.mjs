@@ -277,14 +277,18 @@ export function verifiedPullRequest(pr, required) {
     return false
   const checks = pr.statusCheckRollup
   if (!Array.isArray(checks) || !checks.length) return false
-  /** @param {any} check */
-  const state = (check) =>
-    check.status === 'COMPLETED' ? check.conclusion : (check.state ?? check.status)
-  if (checks.some((check) => !['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(state(check))))
+  if (checks.some((check) => !['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(checkState(check))))
     return false
   return required.every((name) =>
-    checks.some((check) => (check.name ?? check.context) === name && state(check) === 'SUCCESS')
+    checks.some(
+      (check) => (check.name ?? check.context) === name && checkState(check) === 'SUCCESS'
+    )
   )
+}
+
+/** @param {any} check */
+function checkState(check) {
+  return check.status === 'COMPLETED' ? check.conclusion : (check.state ?? check.status)
 }
 
 /** @param {string} text */

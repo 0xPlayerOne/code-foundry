@@ -1,6 +1,6 @@
 {
   "name": "code-foundry",
-  "version": "1.27.0",
+  "version": "1.28.0",
   "description": "A fast, language-aware repository factory for agent-ready workflows, testing, security, and release automation.",
   "homepage": "https://github.com/0xPlayerOne/code-foundry#readme",
   "bugs": {
@@ -42,7 +42,7 @@
     "build": "node --check src/cli.mjs",
     "format:check": "oxfmt --check .",
     "fmt": "oxfmt .",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "performance:check": "node scripts/performance-check.mjs",
     "test": "node --test",
     "test:unit": "node --test",
