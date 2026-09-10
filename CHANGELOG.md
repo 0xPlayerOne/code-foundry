@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.0...v1.25.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **release:** wait for the release index before verifying a published release ([#583](https://github.com/0xPlayerOne/code-foundry/issues/583)) ([7823c14](https://github.com/0xPlayerOne/code-foundry/commit/7823c1473d8c5e7c17b039dc755ff5c8d1dba39c))
+
 ## [1.25.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.24.0...v1.25.0) (2026-09-10)
 
 
