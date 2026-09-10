@@ -78,6 +78,11 @@ function runDocsOnly(root) {
 test('validation mode downgrades docs-only pull requests to fast', (t) => {
   const docs = gitFixture(t, { 'README.md': '# updated\n' })
   const code = gitFixture(t, { 'src/index.ts': 'export const x = 1\n' })
+  // Mirror the shared test env: without stripping GITHUB_OUTPUT the runtime
+  // writes the mode to the runner file and stdout stays empty in CI.
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT')
+  )
   const run = (cwd, env) =>
     spawnSync(
       process.execPath,
@@ -86,7 +91,7 @@ test('validation mode downgrades docs-only pull requests to fast', (t) => {
         cwd,
         encoding: 'utf8',
         env: {
-          ...process.env,
+          ...cleanEnv,
           FOUNDRY_EVENT_NAME: 'pull_request',
           FOUNDRY_BASE_REF: 'main',
           FOUNDRY_HEAD_REF: 'feature/x',
