@@ -7,7 +7,7 @@ import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-/** @typedef {(argv: string[]) => {status: number|null, stdout: string}} Runner */
+/** @typedef {(argv: string[]) => {status: number|null, stdout: string, stderr?: string}} Runner */
 
 /** @type {Runner} */
 export function runGh(argv) {
@@ -18,7 +18,7 @@ export function runGh(argv) {
     env: { ...process.env, GH_PROMPT_DISABLED: '1', GH_HOST: 'github.com' },
   })
   if (result.error) throw new Error(`GitHub CLI unavailable: ${result.error.name}`)
-  return { status: result.status, stdout: result.stdout ?? '' }
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
 }
 
 /** @param {string} repository */
@@ -56,7 +56,7 @@ function json(run, argv) {
   const result = run(argv)
   if (result.status !== 0)
     throw new Error(
-      `GitHub verification command failed (${result.status ?? 'signal'}); state is unverified`
+      `GitHub verification command failed (${result.status ?? 'signal'}); state is unverified: ${String(result.stderr ?? '').slice(0, 300) || 'no stderr captured'}`
     )
   try {
     return JSON.parse(result.stdout)
@@ -206,7 +206,7 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-const RELEASE_VERIFICATION_ATTEMPTS = 3
+const RELEASE_VERIFICATION_ATTEMPTS = 6
 
 /** @param {string[]} argv @param {Runner} [run] */
 export function integrityCommand(argv, run = runGh) {
@@ -257,7 +257,7 @@ export function integrityCommand(argv, run = runGh) {
         return verifyRelease(options, run)
       } catch (error) {
         lastError = error
-        if (attempt < RELEASE_VERIFICATION_ATTEMPTS) sleepSync(2_000)
+        if (attempt < RELEASE_VERIFICATION_ATTEMPTS) sleepSync(5_000)
       }
     }
     throw lastError
