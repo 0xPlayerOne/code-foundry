@@ -363,6 +363,13 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
   assert.match(yaml, /inputs\['draft-protection'\] != true/)
   assert.match(yaml, /name: Production/)
   assert.match(yaml, /name: Preview/)
+  assert.match(yaml, /turbo-filter:[\s\S]*?type: string[\s\S]*?default: ''/)
+  assert.match(yaml, /name: Check Turbo delivery impact/)
+  assert.match(yaml, /github\.event_name == 'push'/)
+  assert.match(yaml, /github\.event\.before/)
+  assert.match(yaml, /fetch-depth: 0/)
+  assert.match(yaml, /needs: affected/)
+  assert.match(yaml, /needs\.affected\.outputs\.should_deploy == 'true'/)
   assert.equal((yaml.match(/deployment: false/g) ?? []).length, 2)
   assert.match(
     yaml,

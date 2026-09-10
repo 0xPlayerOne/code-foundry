@@ -31,13 +31,24 @@ jobs:
       smoke-path: /health
       canary-percentage: 10
       canary-verify-command: '["bun", "run", "test:canary"]'
+      # Optional: skip this app when its Turbo build task is unaffected.
+      turbo-filter: '@repo/company-site'
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
 `artifact-path` is relative to `working-directory`; `install-working-directory`
-selects the lockfile root. The selected output tree is hashed before and after
+selects the lockfile root. For Turbo monorepos, set `turbo-filter` to the exact
+package name for the application (for example, `@repo/company-site`). The
+workflow compares pull-request base/head commits or push before/after commits
+with `turbo query affected --tasks build`; shared-package changes therefore
+retain dependent app deployments. Unaffected app calls skip the build and
+Cloudflare deployment. Full history is fetched for the comparison. If the input
+is omitted, deployment behavior is unchanged; manual dispatches deploy
+conservatively because they do not provide a reliable comparison range.
+
+The selected output tree is hashed before and after
 upload; changes during upload fail. Include all built code/assets in that tree
 and disable duplicate custom build steps. This digest identifies the declared
 local build tree, not a Cloudflare-signed digest of every uploaded configuration
@@ -186,8 +197,11 @@ which are merged and closed by release automation rather than being application
 previews. Its compatibility
 default remains `latest`; callers should prefer `local` or an exact version for
 reproducibility. A production URL can be supplied with `deployment-url` when API
-output contains only route patterns. It is still a **direct, unverified deployment**;
-adopt `cloudflare-delivery.yml` for candidate verification and guarded promotion.
+output contains only route patterns. For Turbo monorepos, pass the same
+`turbo-filter` package name; production pushes use the previous and current
+commit to skip unaffected applications. It is still a **direct, unverified
+deployment**; adopt `cloudflare-delivery.yml` for candidate verification and
+guarded promotion.
 Consumers pinned to an older Code Foundry release must update their reusable
 workflow reference; existing deployments are not retroactively re-associated
 with the PR head commit.
