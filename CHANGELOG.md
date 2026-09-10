@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.27.0...v1.28.0) (2026-09-10)
+
+
+### Features
+
+* **release:** qualify only when a release or a stuck draft needs it ([#591](https://github.com/0xPlayerOne/code-foundry/issues/591)) ([4cce045](https://github.com/0xPlayerOne/code-foundry/commit/4cce045228648e6e705ad1e89c59eaf20a72a538))
+
 ## [1.27.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.26.0...v1.27.0) (2026-09-10)
 
 
