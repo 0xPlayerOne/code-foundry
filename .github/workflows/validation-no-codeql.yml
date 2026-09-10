@@ -42,6 +42,14 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+      eval-runner:
+        description: >-
+          Runner used by the eval harness. Browser evals need a
+          Chrome-capable runner such as ubuntu-latest; ubuntu-slim does not
+          ship a browser.
+        required: false
+        type: string
+        default: ubuntu-latest
       codeql-runner:
         description: Runner used by CodeQL jobs.
         required: false
@@ -123,6 +131,19 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.security-runner }}
 
+  eval:
+    name: Eval
+    # Behavior evals cover content changes; the lean release lane skips them
+    # because its diff is version metadata only. The reusable workflow skips
+    # cleanly when the repository has no eval harness.
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    uses: ./.github/workflows/eval.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.eval-runner }}
+      artifact-prefix: ${{ inputs.artifact-prefix }}
+
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
   # The release tier requires the available fast suite; its diff is version
@@ -133,7 +154,7 @@ jobs:
   # skipped checks on ordinary pull requests.
   gate:
     name: Gate
-    needs: [ci, test, security]
+    needs: [ci, test, security, eval]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
     runs-on: ubuntu-slim
     timeout-minutes: 10
@@ -142,6 +163,7 @@ jobs:
       FOUNDRY_CI: ${{ needs.ci.result }}
       FOUNDRY_TEST: ${{ needs.test.result }}
       FOUNDRY_SECURITY: ${{ needs.security.result }}
+      FOUNDRY_EVAL: ${{ needs.eval.result }}
       # This workflow is selected only for repositories whose canonical
       # configuration explicitly disables unavailable CodeQL. Treat that
       # policy decision as satisfied without registering a skipped PR check.

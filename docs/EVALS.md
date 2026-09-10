@@ -21,8 +21,17 @@ special case of the same pattern.
 Both mechanisms use `eval: auto` by default: the tier runs when a subject is
 present and skips cleanly otherwise. Set `eval: true` to require it (the
 validation policy then treats a missing subject as an error), or `eval: false`
-to disable discovery. Performance's task profile and gating rules apply
-unchanged; evals are an optional, non-gating tier like performance.
+to disable discovery.
+
+In managed validation the eval tier runs as its own `Validation / Eval` lane
+during audit-mode runs, with the receipt retained as a task artifact. Browser
+eval harnesses need a Chrome-capable runner: set `eval_runner: ubuntu-latest`
+in `.github/code-foundry.yml` (the default when unset is the repository's
+default runner, which may not ship a browser). The lane uploads the eval
+report alongside the task receipt whenever a run fails, so reviewers get the
+measured numbers with the red check. Performance's task profile and gating
+rules apply unchanged; evals are an optional, non-gating tier like
+performance.
 
 | Config key         | Values                            | Meaning                                                          |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------- |

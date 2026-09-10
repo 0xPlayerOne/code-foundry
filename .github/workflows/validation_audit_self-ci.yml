@@ -34,6 +34,7 @@ jobs:
       unit-runner: ubuntu-slim
       performance-runner: ubuntu-latest
       security-runner: ubuntu-slim
+      eval-runner: ubuntu-latest
       codeql-runner: ubuntu-latest
       rust-shards: '["all"]'
       rust-threads: '1'

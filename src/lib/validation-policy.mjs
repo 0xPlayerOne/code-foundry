@@ -22,7 +22,7 @@ export const AGGREGATE_CHECK_NAME = 'Validation / Gate'
 /** Job ids owned by the validation orchestrator. Release runs the full audit
  * suite and validates its generated diff inside the gate, so no separate
  * release-policy job id exists. */
-export const VALIDATION_JOBS = ['ci', 'test', 'security', 'codeql']
+export const VALIDATION_JOBS = ['ci', 'test', 'security', 'codeql', 'eval']
 
 /** Events that may trigger canonical validation. */
 export const VALIDATION_EVENTS = ['pull_request', 'schedule', 'workflow_dispatch']
@@ -81,7 +81,7 @@ export function classifyValidationMode(input) {
 /** @type {Record<'fast'|'audit'|'release', string[]>} */
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
-  audit: ['ci', 'test', 'security', 'codeql'],
+  audit: ['ci', 'test', 'security', 'codeql', 'eval'],
   // Release Please pull requests change version metadata only, and the gate
   // validates that diff against the release policy before anything publishes.
   // The content tree was already fully audited by the pull requests that

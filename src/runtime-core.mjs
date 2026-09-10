@@ -338,6 +338,7 @@ function validation(task) {
         test: process.env.FOUNDRY_TEST,
         security: process.env.FOUNDRY_SECURITY,
         codeql: process.env.FOUNDRY_CODEQL,
+        eval: process.env.FOUNDRY_EVAL,
       },
     })
     if (gate.valid) {
