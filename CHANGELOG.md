@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.26.0...v1.27.0) (2026-09-10)
+
+
+### Features
+
+* **validation:** downgrade docs-only PRs to fast and gate bot pushes ([#590](https://github.com/0xPlayerOne/code-foundry/issues/590)) ([df774f5](https://github.com/0xPlayerOne/code-foundry/commit/df774f5d1e4a8a6c5f174219eb2b24ef012f6fd3))
+
 ## [1.26.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.3...v1.26.0) (2026-09-10)
 
 
