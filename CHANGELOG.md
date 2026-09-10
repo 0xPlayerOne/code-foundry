@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.1...v1.28.2) (2026-09-10)
+
+
+### Bug Fixes
+
+* **release:** pass one qualification report per required node ([#597](https://github.com/0xPlayerOne/code-foundry/issues/597)) ([5ceb92c](https://github.com/0xPlayerOne/code-foundry/commit/5ceb92cab3afc97145ef068e6b5e33399d99b9e5))
+
 ## [1.28.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.0...v1.28.1) (2026-09-10)
 
 
