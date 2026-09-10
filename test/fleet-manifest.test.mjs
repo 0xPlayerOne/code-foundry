@@ -1,19 +1,10 @@
 import assert from 'node:assert/strict'
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import test from 'node:test'
 import { discoverRepositories } from '../src/commands/fleet-core.mjs'
-import { upgradeFleet } from '../src/commands/fleet.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 import {
   configDrift,
@@ -378,71 +369,14 @@ test('orphan pushed managed branch resumes after PR creation failure without for
   )
 })
 
-test('legacy discovery does not inspect organization-specific nested directories', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'foundry-fleet-legacy-discovery-'))
+test('fleet discovery requires an explicit manifest', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'foundry-fleet-no-manifest-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
-  const nested = join(root, 'NiftyLeague', 'consumer')
-  mkdirSync(join(nested, '.git'), { recursive: true })
-  writeFileSync(join(nested, '.github-placeholder'), '')
 
-  assert.deepEqual(discoverRepositories(root), [])
-})
-
-test('legacy fleet resumes a pushed branch after pull request creation failure', (t) => {
-  const { root } = fixture(t)
-  rmSync(join(root, 'code-foundry-fleet.json'))
-  repository(root, 'a')
-  const toolDir = mkdtempSync(join(tmpdir(), 'code-foundry-fake-gh-'))
-  const gh = join(toolDir, 'gh')
-  writeFileSync(
-    gh,
-    `#!/bin/sh
-if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
-  printf '[]\\n'
-  exit 0
-fi
-if [ "$1" = "pr" ] && [ "$2" = "create" ]; then
-  if [ "\${FAIL_CREATE:-0}" = "1" ]; then
-    printf 'simulated PR outage\\n' >&2
-    exit 1
-  fi
-  printf 'https://github.com/test/a/pull/1\\n'
-  exit 0
-fi
-if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
-  sha=$(git -C "\${FLEET_REPO}" rev-parse "\${FLEET_BRANCH}")
-  printf '{"headRefOid":"%s","headRefName":"%s","baseRefName":"main","isCrossRepository":false,"isDraft":true}\\n' "$sha" "\${FLEET_BRANCH}"
-  exit 0
-fi
-printf 'unexpected gh command: %s\\n' "$*" >&2
-exit 1
-`
+  assert.throws(
+    () => discoverRepositories(root),
+    /Missing code-foundry-fleet\.json; fleet discovery requires an explicit manifest\./
   )
-  chmodSync(gh, 0o755)
-  const originalPath = process.env.PATH
-  const runtimeVersion = `v${JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')).version}`
-  const branch = `codex/code-foundry-upgrade-${runtimeVersion.replace(/^v/, '')}`
-  const repositoryPath = join(root, 'a')
-  process.env.PATH = `${toolDir}:${originalPath}`
-  process.env.FAIL_CREATE = '1'
-  process.env.FLEET_REPO = repositoryPath
-  process.env.FLEET_BRANCH = branch
-  try {
-    const first = upgradeFleet(root, process.cwd(), { version: runtimeVersion, createPr: true })
-    assert.equal(first[0].status, 'failed')
-    const pushed = git(repositoryPath, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`)
-    assert.match(pushed, /\b[0-9a-f]{40}\b/)
-
-    process.env.FAIL_CREATE = '0'
-    const second = upgradeFleet(root, process.cwd(), { version: runtimeVersion, createPr: true })
-    assert.equal(second[0].status, 'pr-resumed')
-  } finally {
-    process.env.PATH = originalPath
-    delete process.env.FAIL_CREATE
-    delete process.env.FLEET_REPO
-    delete process.env.FLEET_BRANCH
-    rmSync(toolDir, { recursive: true, force: true })
-  }
 })
 
 test('verified merged canary and current matching config unlock next cohort', (t) => {

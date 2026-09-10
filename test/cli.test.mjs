@@ -541,6 +541,41 @@ describe('code-foundry CLI', () => {
       join(source, 'package.json'),
       JSON.stringify({ name: 'code-foundry-source', version: '2.0.0' })
     )
+    const consumer = join(root, 'consumer')
+    mkdirSync(join(consumer, '.github'), { recursive: true })
+    writeFileSync(
+      join(consumer, '.github/code-foundry.yml'),
+      'runtime_ref: v1.28.4\\ngit_workflow: direct\\n'
+    )
+    spawnSync('git', ['init', '-q', consumer])
+    spawnSync('git', ['-C', consumer, 'config', 'user.email', 'test@example.com'])
+    spawnSync('git', ['-C', consumer, 'config', 'user.name', 'Test'])
+    spawnSync('git', [
+      '-C',
+      consumer,
+      'remote',
+      'add',
+      'origin',
+      'https://github.com/test/consumer.git',
+    ])
+    spawnSync('git', ['-C', consumer, 'add', '.'])
+    spawnSync('git', ['-C', consumer, 'commit', '-qm', 'init'])
+    writeFileSync(
+      join(root, 'code-foundry-fleet.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        cohorts: ['canary'],
+        repositories: [
+          {
+            repository: 'test/consumer',
+            path: 'consumer',
+            cohort: 'canary',
+            validation: [[process.execPath, '-e', 'process.exit(0)']],
+            requiredChecks: ['Validation / Gate'],
+          },
+        ],
+      })
+    )
 
     const result = run(
       'fleet',
@@ -550,11 +585,14 @@ describe('code-foundry CLI', () => {
       '--source',
       source,
       '--version',
-      'v2.0.0'
+      'v2.0.0',
+      '--dry-run'
     )
 
     assert.equal(result.status, 0, result.stderr)
-    assert.deepEqual(JSON.parse(result.stdout), [])
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'preview')
+    assert.equal(report.repositories[0].status, 'preview')
   })
 
   it('rejects unknown CI billing subcommands', () => {

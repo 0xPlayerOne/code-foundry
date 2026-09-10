@@ -1,9 +1,9 @@
 # Declarative fleet inventory and staged rollouts
 
-Place `code-foundry-fleet.json` in the directory passed to `--root`. Its presence
-opts that fleet into inventory-based discovery and controlled upgrades. The
-runtime has no organization-specific fleet inventory; legacy discovery is limited
-to the explicitly supplied root and its immediate children.
+Place `code-foundry-fleet.json` in the directory passed to `--root`. Fleet
+discovery and controlled upgrades require this explicit inventory. The runtime
+has no organization-specific fleet inventory and never scans arbitrary
+repositories from the filesystem.
 
 ```json
 {
@@ -107,8 +107,8 @@ branches or commits with mismatched tree markers are preserved and blocked for
 manual review. Local managed refs preserve committed work after a failed push.
 The marker is an ownership/recovery guard, not a cryptographic signature.
 
-PR creation is draft-first in both manifest and legacy discovery modes. A PR that
-a human has already made ready is not silently converted back or modified.
+PR creation is draft-first in manifest mode. A PR that a human has already made
+ready is not silently converted back or modified.
 
 An entry may include a reviewed time-limited exception:
 
