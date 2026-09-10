@@ -31,22 +31,22 @@ jobs:
       smoke-path: /health
       canary-percentage: 10
       canary-verify-command: '["bun", "run", "test:canary"]'
-      # Optional: skip this app when its Turbo build task is unaffected.
-      turbo-filter: '@repo/company-site'
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
 `artifact-path` is relative to `working-directory`; `install-working-directory`
-selects the lockfile root. For Turbo monorepos, set `turbo-filter` to the exact
-package name for the application (for example, `@repo/company-site`). The
-workflow compares pull-request base/head commits or push before/after commits
-with `turbo query affected --tasks build`; shared-package changes therefore
-retain dependent app deployments. Unaffected app calls skip the build and
-Cloudflare deployment. Full history is fetched for the comparison. If the input
-is omitted, deployment behavior is unchanged; manual dispatches deploy
-conservatively because they do not provide a reliable comparison range.
+selects the lockfile root. For Turbo monorepos, filtering is automatic when
+`working-directory` points to the application package and the lockfile root
+contains `turbo.json` or `turbo.jsonc`. The workflow resolves the package name,
+then compares pull-request base/head commits or push before/after commits with
+`turbo query affected --tasks build`; shared-package changes therefore retain
+dependent app deployments. Unaffected app calls skip the build and Cloudflare
+deployment. Set `turbo-filter` only to override the detected package name; set
+it to an empty string to disable filtering. Full history is fetched for the
+comparison. Manual dispatches deploy conservatively because they do not provide
+a reliable comparison range.
 
 The selected output tree is hashed before and after
 upload; changes during upload fail. Include all built code/assets in that tree
@@ -197,9 +197,9 @@ which are merged and closed by release automation rather than being application
 previews. Its compatibility
 default remains `latest`; callers should prefer `local` or an exact version for
 reproducibility. A production URL can be supplied with `deployment-url` when API
-output contains only route patterns. For Turbo monorepos, pass the same
-`turbo-filter` package name; production pushes use the previous and current
-commit to skip unaffected applications. It is still a **direct, unverified
+output contains only route patterns. Turbo filtering also applies to production
+pushes, which use the previous and current commit to skip unaffected
+applications. It is still a **direct, unverified
 deployment**; adopt `cloudflare-delivery.yml` for candidate verification and
 guarded promotion.
 Consumers pinned to an older Code Foundry release must update their reusable

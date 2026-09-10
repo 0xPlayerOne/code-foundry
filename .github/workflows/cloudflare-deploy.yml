@@ -22,10 +22,10 @@ on:
         type: string
         default: '.'
       turbo-filter:
-        description: 'Optional Turbo package name; skip this deployment when its build task is unaffected.'
+        description: 'Optional Turbo package name override; auto detects it from working-directory by default.'
         required: false
         type: string
-        default: ''
+        default: auto
       build-script:
         required: false
         type: string
@@ -89,7 +89,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      should_deploy: ${{ steps.check.outputs.should_deploy }}
+      should_deploy: ${{ steps.check.outputs.should_deploy || steps.resolve.outputs.should_deploy }}
     steps:
       - name: Checkout full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -97,18 +97,71 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Resolve Turbo package
+        id: resolve
+        working-directory: ${{ inputs.install-working-directory }}
+        env:
+          TURBO_FILTER: ${{ inputs.turbo-filter }}
+          WORKSPACE: ${{ github.workspace }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+          import { isAbsolute, relative, resolve, sep } from 'node:path'
+          const output = (name, value) => appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`)
+          const conservative = (reason) => {
+            console.log(`${reason}; deploying conservatively.`)
+            output('turbo_enabled', 'false')
+            output('should_deploy', 'true')
+          }
+          const filter = process.env.TURBO_FILTER
+          if (!filter || /[\r\n\0]/.test(filter)) throw new Error('Invalid turbo-filter')
+          const workspace = process.env.WORKSPACE
+          const appDirectory = resolve(workspace, process.env.WORKING_DIRECTORY)
+          const workspaceRelative = relative(workspace, appDirectory)
+          const outsideWorkspace =
+            isAbsolute(workspaceRelative) ||
+            workspaceRelative === '..' ||
+            workspaceRelative.startsWith(`..${sep}`)
+          if (!existsSync('turbo.json') && !existsSync('turbo.jsonc')) {
+            conservative('Turbo config not found')
+          } else if (outsideWorkspace) {
+            conservative('working-directory is outside the workspace')
+          } else if (filter !== 'auto') {
+            output('turbo_package', filter)
+            output('turbo_enabled', 'true')
+          } else {
+            const manifest = resolve(appDirectory, 'package.json')
+            let packageName = ''
+            try {
+              packageName = JSON.parse(readFileSync(manifest, 'utf8')).name ?? ''
+            } catch {
+              packageName = ''
+            }
+            if (typeof packageName !== 'string' || !packageName || /[\s\r\n\0]/.test(packageName)) {
+              conservative('Application package name could not be resolved')
+            } else {
+              console.log(`Resolved Turbo package: ${packageName}`)
+              output('turbo_package', packageName)
+              output('turbo_enabled', 'true')
+            }
+          }
+          NODE
       - name: Set up Bun
+        if: steps.resolve.outputs.turbo_enabled == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ inputs.bun-version }}
       - name: Install dependencies for Turbo
+        if: steps.resolve.outputs.turbo_enabled == 'true'
         working-directory: ${{ inputs.install-working-directory }}
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Check affected build task
+        if: steps.resolve.outputs.turbo_enabled == 'true'
         id: check
         working-directory: ${{ inputs.install-working-directory }}
         env:
-          TURBO_PACKAGE: ${{ inputs.turbo-filter }}
+          TURBO_PACKAGE: ${{ steps.resolve.outputs.turbo_package }}
           TURBO_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           TURBO_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
