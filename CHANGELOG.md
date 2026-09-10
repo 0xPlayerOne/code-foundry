@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.2...v1.25.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* **release:** cover the attestation lag in publication retries ([#587](https://github.com/0xPlayerOne/code-foundry/issues/587)) ([7ae5e4b](https://github.com/0xPlayerOne/code-foundry/commit/7ae5e4bb95f68cbf4e2b48778776a0396c877271))
+
 ## [1.25.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.25.1...v1.25.2) (2026-09-10)
 
 
