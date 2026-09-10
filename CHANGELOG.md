@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.5...v1.28.6) (2026-09-10)
+
+
+### Bug Fixes
+
+* **sync:** preserve non-CodeQL workflow triggers ([#605](https://github.com/0xPlayerOne/code-foundry/issues/605)) ([e215207](https://github.com/0xPlayerOne/code-foundry/commit/e215207d596361f283072d4f43f8ab58676e13c8))
+
 ## [1.28.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.4...v1.28.5) (2026-09-10)
 
 
