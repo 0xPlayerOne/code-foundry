@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.23.0...v1.24.0) (2026-09-10)
+
+
+### Features
+
+* **validation:** run a lean release lane for Release Please pull requests ([#579](https://github.com/0xPlayerOne/code-foundry/issues/579)) ([a38ca75](https://github.com/0xPlayerOne/code-foundry/commit/a38ca75c7da577af8368467b8b026d0ec563fc41))
+
 ## [1.23.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.22.1...v1.23.0) (2026-09-09)
 
 
