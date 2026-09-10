@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.4...v1.28.5) (2026-09-10)
+
+
+### Bug Fixes
+
+* **fleet:** require explicit inventory manifest ([#603](https://github.com/0xPlayerOne/code-foundry/issues/603)) ([1345331](https://github.com/0xPlayerOne/code-foundry/commit/13453318ba4fb21e6df6d978f1d51119148300ba))
+
 ## [1.28.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.3...v1.28.4) (2026-09-10)
 
 
