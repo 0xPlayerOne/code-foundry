@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.0...v1.28.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **cloudflare:** remove duplicate deployment records ([#595](https://github.com/0xPlayerOne/code-foundry/issues/595)) ([d9a2a4b](https://github.com/0xPlayerOne/code-foundry/commit/d9a2a4b0363bb9a9ded91d3368bdb7b9b580330f))
+
 ## [1.28.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.27.0...v1.28.0) (2026-09-10)
 
 
