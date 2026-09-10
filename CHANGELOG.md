@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.2...v1.28.3) (2026-09-10)
+
+
+### Maintenance
+
+* **config:** pin Code Foundry runtime to v1.28.2 ([#599](https://github.com/0xPlayerOne/code-foundry/issues/599)) ([ed61358](https://github.com/0xPlayerOne/code-foundry/commit/ed6135813e12e1f5410066a92183f2f2d18dcc8c))
+
 ## [1.28.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.1...v1.28.2) (2026-09-10)
 
 
