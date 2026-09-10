@@ -1375,12 +1375,30 @@ describe('code-foundry CLI', () => {
     const workflow = readFileSync('.github/workflows/cloudflare-deploy.yml', 'utf8')
     assert.match(workflow, /build-script:/)
     assert.match(workflow, /install-working-directory:/)
+    assert.match(workflow, /turbo-filter:[\s\S]*?type: string[\s\S]*?default: auto/)
+    assert.match(workflow, /name: Check Turbo deployment impact/)
+    assert.match(workflow, /name: Resolve Turbo package/)
+    assert.match(workflow, /TURBO_FILTER: \$\{\{ inputs\.turbo-filter \}\}/)
+    assert.match(workflow, /turbo query affected \\\n\s+--packages/)
+    assert.match(workflow, /github\.event_name == 'push'/)
+    assert.match(workflow, /github\.event\.before/)
+    assert.match(workflow, /fetch-depth: 0/)
+    assert.match(workflow, /needs: affected/)
+    assert.match(workflow, /needs\.affected\.outputs\.should_deploy == 'true'/)
     assert.match(workflow, /bun install --frozen-lockfile/)
     assert.match(workflow, /bun run "\$BUILD_SCRIPT"/)
     assert.match(workflow, /deployments: write/)
     assert.match(workflow, /draft-protection:[\s\S]*?type: boolean[\s\S]*?default: true/)
     assert.match(workflow, /inputs\['draft-protection'\] != true/)
+    assert.match(workflow, /deployment: false/)
+    assert.match(
+      workflow,
+      /inputs\.mode != 'preview' \|\| !startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
+    )
     assert.match(workflow, /production_environment: \$production/)
+    assert.match(workflow, /MODE: \$\{\{ inputs\.mode \}\}/)
+    assert.match(workflow, /\[ "\$MODE" = preview \] && \[ "\$state" = success \]/)
+    assert.match(workflow, /args\+=\(-F auto_inactive=true\)/)
     assert.match(
       workflow,
       /GITHUB_DEPLOYMENT_REF: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/

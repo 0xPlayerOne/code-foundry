@@ -36,6 +36,11 @@ on:
         required: false
         type: string
         default: '.'
+      turbo-filter:
+        description: 'Optional Turbo package name override; auto detects it from working-directory by default.'
+        required: false
+        type: string
+        default: auto
       build-script:
         required: false
         type: string
@@ -115,16 +120,143 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  candidate:
+  affected:
+    name: Check Turbo delivery impact
     if: >-
+      inputs['turbo-filter'] != '' &&
+      (github.event_name == 'pull_request' || github.event_name == 'push') &&
       vars.CI_BILLING_PAUSED != 'true' &&
       (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'pull_request' || inputs.mode != 'preview' || !startsWith(github.event.pull_request.head.ref, 'release-please--branches--main')) &&
       github.event_name != 'pull_request_target' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy || steps.resolve.outputs.should_deploy }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve Turbo package
+        id: resolve
+        working-directory: ${{ inputs.install-working-directory }}
+        env:
+          TURBO_FILTER: ${{ inputs.turbo-filter }}
+          WORKSPACE: ${{ github.workspace }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+          import { isAbsolute, relative, resolve, sep } from 'node:path'
+          const output = (name, value) => appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${value}\n`)
+          const conservative = (reason) => {
+            console.log(`${reason}; deploying conservatively.`)
+            output('turbo_enabled', 'false')
+            output('should_deploy', 'true')
+          }
+          const filter = process.env.TURBO_FILTER
+          if (!filter || /[\r\n\0]/.test(filter)) throw new Error('Invalid turbo-filter')
+          const workspace = process.env.WORKSPACE
+          const appDirectory = resolve(workspace, process.env.WORKING_DIRECTORY)
+          const workspaceRelative = relative(workspace, appDirectory)
+          const outsideWorkspace =
+            isAbsolute(workspaceRelative) ||
+            workspaceRelative === '..' ||
+            workspaceRelative.startsWith(`..${sep}`)
+          if (!existsSync('turbo.json') && !existsSync('turbo.jsonc')) {
+            conservative('Turbo config not found')
+          } else if (outsideWorkspace) {
+            conservative('working-directory is outside the workspace')
+          } else if (filter !== 'auto') {
+            output('turbo_package', filter)
+            output('turbo_enabled', 'true')
+          } else {
+            const manifest = resolve(appDirectory, 'package.json')
+            let packageName = ''
+            try {
+              packageName = JSON.parse(readFileSync(manifest, 'utf8')).name ?? ''
+            } catch {
+              packageName = ''
+            }
+            if (typeof packageName !== 'string' || !packageName || /[\s\r\n\0]/.test(packageName)) {
+              conservative('Application package name could not be resolved')
+            } else {
+              console.log(`Resolved Turbo package: ${packageName}`)
+              output('turbo_package', packageName)
+              output('turbo_enabled', 'true')
+            }
+          }
+          NODE
+      - name: Set up Bun
+        if: steps.resolve.outputs.turbo_enabled == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+      - name: Install dependencies for Turbo
+        if: steps.resolve.outputs.turbo_enabled == 'true'
+        working-directory: ${{ inputs.install-working-directory }}
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Check affected build task
+        if: steps.resolve.outputs.turbo_enabled == 'true'
+        id: check
+        working-directory: ${{ inputs.install-working-directory }}
+        env:
+          TURBO_PACKAGE: ${{ steps.resolve.outputs.turbo_package }}
+          TURBO_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          TURBO_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TURBO_PACKAGE" != *$'\n'* && "$TURBO_PACKAGE" != *$'\r'* && "$TURBO_PACKAGE" != *$'\0'* ]]
+          [[ "$TURBO_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          if [[ ! "$TURBO_BASE_SHA" =~ ^[0-9a-fA-F]{40}$ || "$TURBO_BASE_SHA" =~ ^0+$ ]]; then
+            echo 'No comparable base commit; deploying conservatively.'
+            echo 'should_deploy=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bunx --bun --no-install turbo query affected \
+            --packages \
+            --base="$TURBO_BASE_SHA" \
+            --head="$TURBO_HEAD_SHA" \
+            --no-update-notifier > "$RUNNER_TEMP/turbo-affected.json"
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs'
+          const result = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/turbo-affected.json', 'utf8'))
+          const items = result?.data?.affectedPackages?.items ?? result?.data?.affectedTasks?.items
+          if (!Array.isArray(items)) throw new Error('Turbo affected query returned no package/task items')
+          const packageName = process.env.TURBO_PACKAGE
+          const affected = items.some((item) => item?.name === packageName || item?.package?.name === packageName || item?.fullName?.startsWith(`${packageName}#`))
+          console.log(`${packageName}: ${affected ? 'affected' : 'unaffected'}`)
+          appendFileSync(process.env.GITHUB_OUTPUT, `should_deploy=${affected}\n`)
+          NODE
+
+  candidate:
+    needs: affected
+    if: >-
+      always() &&
+      vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'pull_request' || inputs.mode != 'preview' || !startsWith(github.event.pull_request.head.ref, 'release-please--branches--main')) &&
+      github.event_name != 'pull_request_target' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (
+        inputs['turbo-filter'] == '' ||
+        needs.affected.result == 'skipped' ||
+        needs.affected.outputs.should_deploy == 'true'
+      )
+    runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The explicit deployment record below is the sole GitHub deployment record.
+    # Keep the environment for approvals, secrets, and branch protection without
+    # creating a second, competing PR timeline entry.
     environment:
       name: Preview
+      deployment: false
       url: ${{ steps.upload.outputs.url }}
     defaults:
       run:
@@ -251,6 +383,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: Production
+      deployment: false
       url: ${{ inputs.production-url }}
     defaults:
       run:

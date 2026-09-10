@@ -37,7 +37,18 @@ jobs:
 ```
 
 `artifact-path` is relative to `working-directory`; `install-working-directory`
-selects the lockfile root. The selected output tree is hashed before and after
+selects the lockfile root. For Turbo monorepos, filtering is automatic when
+`working-directory` points to the application package and the lockfile root
+contains `turbo.json` or `turbo.jsonc`. The workflow resolves the package name,
+then compares pull-request base/head commits or push before/after commits with
+`turbo query affected --packages`; shared-package changes therefore retain
+dependent app deployments. Unaffected app calls skip the build and Cloudflare
+deployment. Set `turbo-filter` only to override the detected package name; set
+it to an empty string to disable filtering. Full history is fetched for the
+comparison. Manual dispatches deploy conservatively because they do not provide
+a reliable comparison range.
+
+The selected output tree is hashed before and after
 upload; changes during upload fail. Include all built code/assets in that tree
 and disable duplicate custom build steps. This digest identifies the declared
 local build tree, not a Cloudflare-signed digest of every uploaded configuration
@@ -71,12 +82,16 @@ not sufficient.
 ## Approvals, ordering, and evidence
 
 Create and protect the fixed `Preview` and `Production` GitHub environments
-before adoption. The workflow references them at the **job** level; naming an
-environment does not itself configure reviewers or branch restrictions. Configure
-required reviewers and branch restrictions on `Production` separately. Production
-execution requires the current default-branch commit and
-rechecks freshness after approval and before final promotion. Fork PRs and
-`pull_request_target` execution are excluded.
+before adoption. The workflow references them at the **job** level and disables
+GitHub's implicit deployment record; the explicit application record is the sole
+entry in deployment history. Required reviewers, wait timers, and branch
+restrictions still apply. GitHub custom deployment protection rules are not
+compatible with `deployment: false`; use the explicit record without that rule or
+keep automatic deployment records enabled. Configure required reviewers and
+branch restrictions on `Production` separately. Production execution requires the
+current default-branch commit and rechecks freshness after approval and before
+final promotion. Fork PRs, release-please PRs, and `pull_request_target` execution
+are excluded from preview delivery.
 
 Per-repository/Worker/mode concurrency never cancels a running promotion. GitHub
 concurrency is not a FIFO queue; stale-source rejection is still necessary.
@@ -88,14 +103,15 @@ and new production workflows active.
 
 Outputs include preview URL, exact version ID, source SHA, declared build-tree
 SHA-256 digest, Cloudflare deployment ID, and GitHub application deployment ID.
-Explicit application deployment records receive in-progress and success/failure
-statuses, in addition to GitHub's environment-job records. For pull requests,
-the deployment record is associated with `github.event.pull_request.head.sha`,
-not GitHub Actions' merge commit, so GitHub can display the preview in the PR's
-Deployments section. Direct pushes use `github.sha`. Sanitized candidate and
-production JSON evidence is uploaded even on failure. Binding values, API bodies,
-and credentials are not copied into those reports. Forced runner termination may
-prevent final status steps; the GitHub job still reflects cancellation/failure.
+The workflows disable GitHub's automatic environment deployment object and use
+one explicit application deployment record, which receives in-progress and
+success/failure statuses. For pull requests, that record is associated with
+`github.event.pull_request.head.sha`, not GitHub Actions' merge commit, so GitHub
+can display the preview in the PR's Deployments section. Direct pushes use
+`github.sha`. Sanitized candidate and production JSON evidence is uploaded even
+on failure. Binding values, API bodies, and credentials are not copied into those
+reports. Forced runner termination may prevent final status steps; the GitHub job
+still reflects cancellation/failure.
 
 ## Stateful resources and isolation
 
@@ -171,18 +187,24 @@ the deployment API intentionally changes version routing only.
 
 ## Legacy workflow hardening
 
-`cloudflare-deploy.yml` uses real job environments, non-cancelling concurrency,
-structured Wrangler output, exact/local Wrangler selection, reusable outputs, and
-in-progress/failure deployment records. Its preview deployment records use the
-pull request head SHA when called from a PR, so completed previews appear in that
-PR's Deployments section; direct pushes use the workflow SHA. Its compatibility
+`cloudflare-deploy.yml` uses real job environments with automatic deployment
+history disabled, non-cancelling concurrency, structured Wrangler output,
+exact/local Wrangler selection, reusable outputs, and one explicit
+in-progress/failure deployment record. Preview records use the pull request head
+SHA when called from a PR, so completed previews appear in that PR's Deployments
+section; direct pushes use `github.sha`. Preview delivery skips release-please PRs,
+which are merged and closed by release automation rather than being application
+previews. Its compatibility
 default remains `latest`; callers should prefer `local` or an exact version for
 reproducibility. A production URL can be supplied with `deployment-url` when API
-output contains only route patterns. It is still a **direct, unverified deployment**;
-adopt `cloudflare-delivery.yml` for candidate verification and
-guarded promotion. Consumers pinned to an older Code Foundry release must update
-their reusable workflow reference; existing deployments are not retroactively
-re-associated with the PR head commit.
+output contains only route patterns. Turbo filtering also applies to production
+pushes, which use the previous and current commit to skip unaffected
+applications. It is still a **direct, unverified
+deployment**; adopt `cloudflare-delivery.yml` for candidate verification and
+guarded promotion.
+Consumers pinned to an older Code Foundry release must update their reusable
+workflow reference; existing deployments are not retroactively re-associated
+with the PR head commit.
 
 ## References and testing
 
