@@ -613,7 +613,10 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       `${remotePrefix}validation-no-codeql.yml`
     )
     rendered = removeWorkflowBlock(rendered, 'default-branch-codeql')
-    rendered = removeWorkflowBlock(rendered, 'push')
+    // Only the validation caller's default-branch trigger is tied to CodeQL.
+    // Draft-PR, release, and other callers still need their own push triggers.
+    if (file === '.github/workflows/validation.yml')
+      rendered = removeWorkflowBlock(rendered, 'push')
   }
   rendered = rendered.replace(
     new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),

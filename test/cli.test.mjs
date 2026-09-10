@@ -964,7 +964,7 @@ describe('code-foundry CLI', () => {
     mkdirSync(join(root, '.github'), { recursive: true })
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
-      `languages: typescript\npackage_manager: bun\nfeatures: validation,release\ncodeql: false\ndependency_review: false\nruntime_ref: ${sourceRuntimeRef}\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n`
+      `languages: typescript\npackage_manager: bun\nfeatures: validation,release,draft-pr\ncodeql: false\ndependency_review: false\nruntime_ref: ${sourceRuntimeRef}\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n`
     )
     syncRepository({ target: root, source: process.cwd() })
 
@@ -981,6 +981,10 @@ describe('code-foundry CLI', () => {
       assert.doesNotMatch(caller, /^  default-branch-codeql:/m)
       assert.doesNotMatch(caller, /^  push:/m)
     }
+
+    const draftPr = readFileSync(join(root, '.github/workflows/draft-pr.yml'), 'utf8')
+    assert.match(draftPr, /^  push:/m)
+    assert.match(draftPr, /^jobs:\n  draft-pr:/m)
 
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
