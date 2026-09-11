@@ -1,6 +1,6 @@
 {
   "name": "code-foundry",
-  "version": "1.28.6",
+  "version": "1.28.7",
   "description": "A fast, language-aware repository factory for agent-ready workflows, testing, security, and release automation.",
   "homepage": "https://github.com/0xPlayerOne/code-foundry#readme",
   "bugs": {
