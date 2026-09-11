@@ -1441,7 +1441,8 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /production_environment: \$production/)
     assert.match(workflow, /MODE: \$\{\{ inputs\.mode \}\}/)
     assert.match(workflow, /\[ "\$MODE" = preview \] && \[ "\$state" = success \]/)
-    assert.match(workflow, /args\+=\(-F auto_inactive=true\)/)
+    assert.match(workflow, /args=\(-f "state=\$state" -F "auto_inactive=\$auto_inactive"\)/)
+    assert.doesNotMatch(workflow, /args\+=\(-F auto_inactive=true\)/)
     assert.match(
       workflow,
       /GITHUB_DEPLOYMENT_REF: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/

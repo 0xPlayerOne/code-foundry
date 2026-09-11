@@ -319,12 +319,13 @@ jobs:
           set -euo pipefail
           state=failure
           if [ "$JOB_STATUS" = success ]; then state=success; fi
-          args=(-f "state=$state" -F auto_inactive=false)
           # Preview environments are persistent per application. Once a new
           # preview succeeds, retire the previous successful preview record;
           # failed previews must not take a working preview offline.
+          auto_inactive=false
           if [ "$MODE" = preview ] && [ "$state" = success ]; then
-            args+=(-F auto_inactive=true)
+            auto_inactive=true
           fi
+          args=(-f "state=$state" -F "auto_inactive=$auto_inactive")
           if [ -n "$DEPLOY_URL" ]; then args+=(-f "environment_url=$DEPLOY_URL"); fi
           gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" "${args[@]}" --silent
