@@ -110,11 +110,16 @@ test('unsafe or incomplete queue configuration fails before generation', () => {
     renderMergeQueueCaller({ ...config, codeql_rust_max_parallel: '9' }, 'v1.0.0')
   )
   assert.throws(() =>
-    renderMergeQueueCaller({ ...config, codeql_rust_shards: '["all", "src"]' }, 'v1.0.0')
-  )
-  assert.throws(() =>
     renderMergeQueueCaller({ ...config, codeql_rust_shards: '["src", "src"]' }, 'v1.0.0')
   )
+})
+
+test('queue rendering accepts mixed broad and scoped Rust shards', () => {
+  const yaml = renderMergeQueueCaller(
+    { ...config, codeql_rust_shards: '["all", "src"]' },
+    'v1.0.0'
+  )
+  assert.match(yaml, /rust-shards: '\["all","src"\]'/)
 })
 
 test('queue rendering accepts the canonical Rust shard path grammar', () => {
