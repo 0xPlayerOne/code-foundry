@@ -1163,6 +1163,43 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /rust-max-parallel: 2/)
   })
 
+  it('renders the configured Rust shards into every CodeQL lane', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-codeql-lanes-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      [
+        'languages: rust',
+        'package_manager: none',
+        'codeql_rust_shards: \'["crates/api","crates/worker"]\'',
+        'codeql_rust_threads: 2',
+        'codeql_rust_max_parallel: 2',
+        '',
+      ].join('\n')
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+
+    // A pull-request lane that renders the configured shards while the
+    // default-branch lane keeps the template literal reports a SARIF category
+    // the default branch never baselines, so the code-scanning gate can never
+    // clear. Both lanes must carry the same shard list.
+    const shards = [...workflow.matchAll(/^\s+rust-shards:\s+(.+)$/gm)].map((match) =>
+      match[1].trim()
+    )
+    assert.equal(shards.length, 2, 'expected one shard value per Rust CodeQL lane')
+    assert.deepEqual(shards, [
+      '\'["crates/api","crates/worker"]\'',
+      '\'["crates/api","crates/worker"]\'',
+    ])
+
+    const defaultBranch = workflow.slice(workflow.indexOf('\n  default-branch-codeql:'))
+    assert.match(defaultBranch, /rust-shards: '\["crates\/api","crates\/worker"\]'/)
+    assert.match(defaultBranch, /rust-threads: '2'/)
+    assert.match(defaultBranch, /rust-max-parallel: 2/)
+  })
+
   it('renders the configured unit runner independently from the test runner', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-unit-runner-'))
     mkdirSync(join(root, '.github'), { recursive: true })

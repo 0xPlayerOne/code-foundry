@@ -733,14 +733,23 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       if (!value) continue
       rendered = rendered.replace(new RegExp(`^(\\s+${input}:)\\s+.*$`, 'm'), `$1 ${value}`)
     }
-    rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/m, `$1 '${rustCodeql.shards}'`)
-    rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/m, `$1 '${rustCodeql.threads}'`)
-    rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/m, `$1 ${rustCodeql.maxParallel}`)
+    // Every Rust CodeQL lane in the caller must carry the configured shard
+    // list. A SARIF category is derived from the shard string, so a caller that
+    // renders the configuration into the pull-request lane while a second lane
+    // keeps the template literal makes the two lanes report disjoint
+    // categories. The default-branch baseline then never matches the pull
+    // request, and the code-scanning gate stalls every merge while every
+    // required check passes. Shards partition one scan, so the same list is
+    // correct in both lanes: `["all"]` stays a single pass, and a real shard
+    // list splits the same work in both places.
+    rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/gm, `$1 '${rustCodeql.shards}'`)
+    rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/gm, `$1 '${rustCodeql.threads}'`)
+    rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/gm, `$1 ${rustCodeql.maxParallel}`)
   }
   if (workflow === 'codeql') {
-    rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/m, `$1 '${rustCodeql.shards}'`)
-    rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/m, `$1 '${rustCodeql.threads}'`)
-    rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/m, `$1 ${rustCodeql.maxParallel}`)
+    rendered = rendered.replace(/^(\s+rust-shards:)\s+.*$/gm, `$1 '${rustCodeql.shards}'`)
+    rendered = rendered.replace(/^(\s+rust-threads:)\s+.*$/gm, `$1 '${rustCodeql.threads}'`)
+    rendered = rendered.replace(/^(\s+rust-max-parallel:)\s+.*$/gm, `$1 ${rustCodeql.maxParallel}`)
   }
   if (workflow === 'opencode-security') {
     const model = configured(config.opencode_security_model, '').trim()
