@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.12](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.11...v1.28.12) (2026-09-11)
+
+
+### Maintenance
+
+* **fleet:** add explicit inventory manifest ([#618](https://github.com/0xPlayerOne/code-foundry/issues/618)) ([0771878](https://github.com/0xPlayerOne/code-foundry/commit/077187817728f3d4eb40333b6e6d07fa533a9780))
+
 ## [1.28.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.10...v1.28.11) (2026-09-11)
 
 
