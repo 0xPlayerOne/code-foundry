@@ -255,7 +255,11 @@ test('merged rollouts without gate evidence verify through base configuration', 
   assert.equal(rolloutEvidence(mergedWithoutEvidence, ['Validation / Gate'], true), 'base-config')
   assert.equal(rolloutEvidence(mergedWithoutEvidence, ['Validation / Gate'], false), null)
   assert.equal(
-    rolloutEvidence({ ...mergedWithoutEvidence, statusCheckRollup: [gate] }, ['Validation / Gate'], false),
+    rolloutEvidence(
+      { ...mergedWithoutEvidence, statusCheckRollup: [gate] },
+      ['Validation / Gate'],
+      false
+    ),
     'gates'
   )
   assert.equal(

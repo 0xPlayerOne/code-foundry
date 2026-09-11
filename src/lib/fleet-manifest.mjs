@@ -367,8 +367,7 @@ function inspectRollout(run, path, entry, version, base) {
     if (response.encoding !== 'base64' || typeof response.content !== 'string')
       throw new Error('Unable to verify merged runtime configuration')
     const config = scalarConfig(Buffer.from(response.content, 'base64').toString('utf8'))
-    const configMatches =
-      config.runtime_ref === version && configDrift(config, entry).length === 0
+    const configMatches = config.runtime_ref === version && configDrift(config, entry).length === 0
     evidence = rolloutEvidence(pr, entry.requiredChecks, configMatches)
     complete = evidence !== null
   }
