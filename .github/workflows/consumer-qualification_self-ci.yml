@@ -17,3 +17,4 @@ jobs:
   consumers:
     if: vars.CI_BILLING_PAUSED != 'true' && github.event.pull_request.draft == false
     uses: ./.github/workflows/consumer-qualification.yml
+    timeout-minutes: 15

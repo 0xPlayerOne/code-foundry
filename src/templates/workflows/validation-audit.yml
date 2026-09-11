@@ -19,6 +19,7 @@ jobs:
   validation:
     name: Validation
     if: vars.CI_BILLING_PAUSED != 'true'
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read

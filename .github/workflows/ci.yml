@@ -53,6 +53,7 @@ jobs:
     name: Format
     if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -112,6 +113,7 @@ jobs:
     name: Lint
     if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -166,6 +168,7 @@ jobs:
     name: Type-Check
     if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -220,6 +223,7 @@ jobs:
     name: Build
     if: vars.CI_BILLING_PAUSED != 'true'
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
     env:
       # Framework builds may validate server-side configuration at build time.
       # Consumers can provide the real value; the fallback is intentionally

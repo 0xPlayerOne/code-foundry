@@ -1,6 +1,14 @@
 // @ts-check
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import {
@@ -318,6 +326,37 @@ function synchronize(options) {
       else rmSync(destination, { force: true })
     } else {
       console.log(`Preserved ${stem}.yml: not recognized as a Code Foundry-generated caller.`)
+    }
+  }
+
+  // Preserved (repository-owned) workflows may reference the runtime directly,
+  // for example a hand-maintained Cloudflare preview caller. Advance their
+  // plain semver pins to the synced runtime ref so a stale hand-added pin
+  // cannot keep an old runtime alive after a fleet upgrade. Intentional refs
+  // (branch names, immutable SHAs) and other repositories' actions are left
+  // untouched, mirroring the config pin policy above.
+  if (!selfRepository && /^v\d+\.\d+\.\d+$/.test(runtimeRef)) {
+    const standard = new Set(standardFiles)
+    const workflowsDir = join(target, '.github/workflows')
+    if (existsSync(workflowsDir)) {
+      const runtimePin = new RegExp(
+        `(uses:\\s*${escapeRegExp(runtimeRepository)}/\\.github/(?:workflows|actions)/[^\\s@]+)@v\\d+\\.\\d+\\.\\d+`,
+        'g'
+      )
+      for (const entry of readdirSync(workflowsDir).toSorted()) {
+        if (!entry.endsWith('.yml') || standard.has(`.github/workflows/${entry}`)) continue
+        const destination = join(workflowsDir, entry)
+        const original = readFileSync(destination, 'utf8')
+        const updated = original.replace(runtimePin, `$1@${runtimeRef}`)
+        if (updated !== original) {
+          changed.push(`.github/workflows/${entry}`)
+          if (dryRun)
+            console.log(
+              `Would refresh the runtime pin in .github/workflows/${entry} to ${runtimeRef}.`
+            )
+          else writeOrReport(destination, updated, dryRun)
+        }
+      }
     }
   }
 

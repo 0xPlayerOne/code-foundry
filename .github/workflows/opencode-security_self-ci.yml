@@ -16,6 +16,7 @@ jobs:
     name: OpenCode Security / Detect
     if: vars.CI_BILLING_PAUSED != 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false))
     runs-on: ubuntu-slim
+    timeout-minutes: 10
     outputs:
       enabled: ${{ steps.detect.outputs.enabled }}
       token: ${{ steps.detect.outputs.token }}
@@ -53,6 +54,7 @@ jobs:
       needs.detect.outputs.enabled == 'true' &&
       needs.detect.outputs.token == 'true'
     uses: 0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@137698ef3545204af8fad00fc8bd64d663c8122e # main
+    timeout-minutes: 30
     with:
       # This is the scanner checkout ref, not the consumer PR ref. The
       # reusable workflow already checks out the consumer repository.

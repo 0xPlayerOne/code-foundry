@@ -12,6 +12,7 @@ permissions:
 jobs:
   release-pr:
     if: vars.CI_BILLING_PAUSED != 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 10
     name: Release PR
     uses: ./.github/workflows/release-pr.yml
     with:

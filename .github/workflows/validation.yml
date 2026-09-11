@@ -95,6 +95,7 @@ jobs:
     name: CI
     if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/ci.yml
+    timeout-minutes: 60
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
@@ -108,6 +109,7 @@ jobs:
     name: Test
     if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/test.yml
+    timeout-minutes: 60
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
@@ -126,6 +128,7 @@ jobs:
     name: Security
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
     uses: ./.github/workflows/security.yml
+    timeout-minutes: 60
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
@@ -137,6 +140,7 @@ jobs:
     # rulesets requiring code scanning results never deadlock the release.
     if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')
     uses: ./.github/workflows/codeql.yml
+    timeout-minutes: 60
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
@@ -152,6 +156,7 @@ jobs:
     # cleanly when the repository has no eval harness.
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
     uses: ./.github/workflows/eval.yml
+    timeout-minutes: 60
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}

@@ -20,6 +20,7 @@ jobs:
     name: Draft PR
     if: vars.CI_BILLING_PAUSED != 'true'
     uses: ./.github/workflows/draft-pr.yml
+    timeout-minutes: 10
     with:
       runner: ubuntu-slim
       base: main
