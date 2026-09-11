@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.7...v1.28.8) (2026-09-11)
+
+
+### Bug Fixes
+
+* **deploy:** send auto_inactive once when completing a deployment status ([#610](https://github.com/0xPlayerOne/code-foundry/issues/610)) ([9951887](https://github.com/0xPlayerOne/code-foundry/commit/99518875f584e08cbd2b52759f13fc6065bcd1c5))
+
 ## [1.28.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.6...v1.28.7) (2026-09-11)
 
 
