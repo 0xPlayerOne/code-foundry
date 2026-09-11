@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.14](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.13...v1.28.14) (2026-09-11)
+
+
+### Bug Fixes
+
+* **sync:** accept mixed broad and scoped CodeQL Rust shards ([#621](https://github.com/0xPlayerOne/code-foundry/issues/621)) ([f13c5a7](https://github.com/0xPlayerOne/code-foundry/commit/f13c5a734a1b24ee75566bab3b778052a28ada99))
+
 ## [1.28.13](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.12...v1.28.13) (2026-09-11)
 
 
