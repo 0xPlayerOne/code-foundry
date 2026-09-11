@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.10...v1.28.11) (2026-09-11)
+
+
+### Bug Fixes
+
+* **fleet:** bound rendered jobs with timeouts and refresh stale runtime pins ([#616](https://github.com/0xPlayerOne/code-foundry/issues/616)) ([f8d20b4](https://github.com/0xPlayerOne/code-foundry/commit/f8d20b4ad48cddd20630ff9b7c1c21d0c5ac9520))
+
 ## [1.28.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.9...v1.28.10) (2026-09-11)
 
 
