@@ -1,4 +1,4 @@
-name: Code Foundry
+name: Code Foundry Security
 
 on:
   pull_request:

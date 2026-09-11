@@ -215,6 +215,24 @@ Each shard must contain tracked Rust source. Absolute paths, parent traversal,
 duplicates, empty scopes, and more than eight shards are rejected. Use
 `["all"]` when complete, non-overlapping source scopes are not available.
 
+Every lane rendered from this configuration (pull-request validation, the
+default-branch scan, the scheduled audit, and merge queues) receives the same
+shard list, and the CodeQL Detect job fails closed when caller workflows drift
+apart. Keep them aligned: each shard uploads a SARIF category keyed by a hash
+of the shard scope, GitHub code scanning baselines every category it has seen
+on the default branch, and the code-scanning merge gate waits for results in
+every tracked category. Two practical consequences:
+
+- Treat `codeql_rust_shards` as add-only while the gate tracks categories.
+  Removing a shard orphans its category on the default branch, and pull
+  requests then stall on "Code scanning is still expecting N results" until
+  the category is covered again.
+- To retire a category for real, delete its code-scanning analyses (Code
+  security → Code scanning → analyses, or the code-scanning analysis
+  deletion API) after removing the shard, then re-run `sync`. Covering retired
+  categories in the shard list keeps the gate green but re-runs their analysis
+  on every pull request and is not a substitute for cleanup.
+
 ## Cloudflare Workers
 
 Repositories that deploy to Cloudflare Workers can use the opt-in verified

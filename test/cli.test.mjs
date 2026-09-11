@@ -959,6 +959,103 @@ describe('code-foundry CLI', () => {
     assert.match(result.stdout, /enabled=false/)
   })
 
+  it('fails CodeQL detection closed when lanes report different Rust shard sets', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-shard-drift-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: rust\n')
+    // The pull-request lane reports scoped shards while the default-branch
+    // lane stays on the unscoped default: exactly the drift that orphaned
+    // code-scanning categories and stalled the merge gate (issue 609).
+    writeFileSync(
+      join(root, '.github/workflows/validation.yml'),
+      [
+        'name: Code Foundry Validation',
+        'on:',
+        '  pull_request:',
+        'jobs:',
+        '  validation:',
+        '    uses: 0xPlayerOne/code-foundry/.github/workflows/validation.yml@v1.0.0',
+        '    with:',
+        '      rust-shards: \'["src"]\'',
+        '  default-branch-codeql:',
+        '    uses: 0xPlayerOne/code-foundry/.github/workflows/codeql.yml@v1.0.0',
+        '    with:',
+        '      rust-shards: \'["all"]\'',
+        '',
+      ].join('\n')
+    )
+
+    const result = spawnSync(process.execPath, [runtime, 'codeql'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...testEnv, REPO_FOUNDRY_VISIBILITY: 'public' },
+    })
+
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /shard sets drift/)
+    assert.match(result.stderr, /validation\.yml \(validation\)/)
+    assert.match(result.stderr, /validation\.yml \(default-branch-codeql\)/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('passes CodeQL detection when every lane shares one shard set', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-shard-aligned-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(join(root, '.github/code-foundry.yml'), 'languages: rust\n')
+    writeFileSync(
+      join(root, '.github/workflows/validation.yml'),
+      [
+        'name: Code Foundry Validation',
+        'on:',
+        '  pull_request:',
+        'jobs:',
+        '  validation:',
+        '    uses: 0xPlayerOne/code-foundry/.github/workflows/validation.yml@v1.0.0',
+        '    with:',
+        '      rust-shards: \'["src"]\'',
+        "      rust-threads: '1'",
+        '      rust-max-parallel: 1',
+        '  default-branch-codeql:',
+        '    uses: 0xPlayerOne/code-foundry/.github/workflows/codeql.yml@v1.0.0',
+        '    with:',
+        '      rust-shards: \'["src"]\'',
+        "      rust-threads: '1'",
+        '      rust-max-parallel: 1',
+        '  audit:',
+        '    uses: 0xPlayerOne/code-foundry/.github/workflows/validation.yml@main',
+        '    with:',
+        '      rust-shards: \'["src"]\'',
+        '',
+      ].join('\n')
+    )
+    // The reusable orchestrator resolves its shards from caller inputs; the
+    // expression cannot be evaluated at detection time and is skipped.
+    writeFileSync(
+      join(root, '.github/workflows/orchestrator.yml'),
+      [
+        'name: Code Foundry Validation (runtime)',
+        'on:',
+        '  workflow_call:',
+        'jobs:',
+        '  codeql:',
+        '    uses: ./.github/workflows/codeql.yml',
+        '    with:',
+        '      rust-shards: ${{ inputs.rust-shards }}',
+        '',
+      ].join('\n')
+    )
+
+    const result = spawnSync(process.execPath, [runtime, 'codeql'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...testEnv, REPO_FOUNDRY_VISIBILITY: 'public' },
+    })
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /enabled=true/)
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('omits unavailable CodeQL checks from generated consumer validation', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-no-codeql-'))
     mkdirSync(join(root, '.github'), { recursive: true })
@@ -1083,6 +1180,39 @@ describe('code-foundry CLI', () => {
     assert.match(validationCaller, /performance-runner: ubuntu-latest/)
     assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
     doctor(root)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('gives every generated caller a unique workflow name', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-caller-names-'))
+    mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+
+    // Shared caller names made validation, security, draft-PR, and release
+    // runs indistinguishable from each other in run lists and check pages
+    // (issue 609). Check names are job-based, so display names stay free to
+    // differ per caller.
+    const names = readdirSync(join(root, '.github/workflows'))
+      .filter((file) => file.endsWith('.yml'))
+      .map(
+        (file) =>
+          readFileSync(join(root, '.github/workflows', file), 'utf8').match(/^name: (.+)$/m)?.[1]
+      )
+    assert.ok(names.length > 1)
+    assert.ok(names.every(Boolean), JSON.stringify(names))
+    assert.deepEqual(
+      names.filter((name, index) => names.indexOf(name) !== index),
+      []
+    )
+    const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(release, /^name: Code Foundry Release$/m)
+    const security = readFileSync(join(root, '.github/workflows/opencode-security.yml'), 'utf8')
+    assert.match(security, /^name: Code Foundry Security$/m)
   })
 
   it('installs the Apache 2.0 license for consumers configured with apache-2.0', () => {
@@ -1161,6 +1291,10 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /rust-shards: '\["crates\/api","crates\/worker"\]'/)
     assert.match(workflow, /rust-threads: '4'/)
     assert.match(workflow, /rust-max-parallel: 2/)
+    // The scheduled audit lane renders the same shard list as the pull-request
+    // and default-branch lanes so all three baseline identical SARIF categories.
+    const audit = readFileSync(join(root, '.github/workflows/validation-audit.yml'), 'utf8')
+    assert.match(audit, /rust-shards: '\["crates\/api","crates\/worker"\]'/)
   })
 
   it('renders the configured Rust shards into every CodeQL lane', () => {
@@ -2140,6 +2274,10 @@ jobs:
       existsSync(join(root, '.github/workflows/release-pr.yml')),
       'staging-release sync must emit release-pr.yml'
     )
+    assert.match(
+      readFileSync(join(root, '.github/workflows/release-pr.yml'), 'utf8'),
+      /^name: Code Foundry Promotion$/m
+    )
     const contributing = readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8')
     assert.match(contributing, /Branch from `staging` and target pull requests at `staging`/)
     rmSync(root, { recursive: true, force: true })
@@ -2396,6 +2534,17 @@ jobs:
     assert.ok(
       !existsSync(join(root, '.github/workflows/release-pr.yml')),
       'direct sync must prune a stale generated promotion caller'
+    )
+    // Callers rendered after issue 609 carry a unique display name; they must
+    // stay recognizable so a topology switch can still prune them.
+    writeFileSync(
+      join(root, '.github/workflows/release-pr.yml'),
+      'name: Code Foundry Promotion\non:\n  push:\n    branches: [staging]\npermissions:\n  contents: write\njobs:\n  release-pr:\n    name: Release PR\n    uses: 0xPlayerOne/code-foundry/.github/workflows/release-pr.yml@v1.2.3\n    with:\n      runtime-repository: 0xPlayerOne/code-foundry\n      runtime-ref: v1.2.3\n    secrets:\n      CODE_FOUNDRY_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}\n'
+    )
+    syncRepository({ target: root, source: process.cwd() })
+    assert.ok(
+      !existsSync(join(root, '.github/workflows/release-pr.yml')),
+      'direct sync must prune a uniquely named generated promotion caller'
     )
     rmSync(root, { recursive: true, force: true })
   })
