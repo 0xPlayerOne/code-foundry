@@ -30,7 +30,6 @@ jobs:
     needs: [release, recovery]
     if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     uses: ./.github/workflows/consumer-qualification.yml
-    timeout-minutes: 15
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
     permissions:
@@ -79,7 +78,6 @@ jobs:
     needs: [preflight]
     if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
     uses: ./.github/workflows/release.yml
-    timeout-minutes: 60
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
       runner: ubuntu-slim
@@ -249,7 +247,6 @@ jobs:
     needs: [qualification, release, recovery, stage]
     if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.stage.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     uses: ./.github/workflows/qualified-foundry-publish.yml
-    timeout-minutes: 15
     permissions:
       actions: read
       attestations: read

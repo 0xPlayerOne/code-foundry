@@ -54,7 +54,6 @@ jobs:
       needs.detect.outputs.enabled == 'true' &&
       needs.detect.outputs.token == 'true'
     uses: 0xPlayerOne/opencode-security/.github/workflows/opencode-security.yml@137698ef3545204af8fad00fc8bd64d663c8122e # main
-    timeout-minutes: 30
     with:
       # This is the scanner checkout ref, not the consumer PR ref. The
       # reusable workflow already checks out the consumer repository.

@@ -26,9 +26,16 @@ function workflowJobs(source) {
   return jobs
 }
 
+/** A job that calls a reusable workflow may not carry timeout-minutes; every
+ * other job must, so a hung runner cannot run to GitHub's 360-minute default. */
+function isReusableCaller(lines) {
+  return lines.some((line) => line.startsWith('    uses:'))
+}
+
 describe('Workflow job timeout invariant', () => {
-  it('bounds every checked-in workflow job with timeout-minutes', () => {
-    const failures = []
+  it('bounds every step job and keeps reusable-workflow callers schema-valid', () => {
+    const unbounded = []
+    const misplaced = []
     for (const directory of workflowDirectories) {
       const workflowFiles = readdirSync(directory)
         .filter((file) => file.endsWith('.yml'))
@@ -38,11 +45,17 @@ describe('Workflow job timeout invariant', () => {
         const source = readFileSync(new URL(file, directory), 'utf8')
         for (const job of workflowJobs(source)) {
           const bounded = job.lines.some((line) => line.startsWith('    timeout-minutes:'))
-          if (!bounded) failures.push(`${file}:${job.name}`)
+          if (isReusableCaller(job.lines) && bounded) misplaced.push(`${file}:${job.name}`)
+          if (!isReusableCaller(job.lines) && !bounded) unbounded.push(`${file}:${job.name}`)
         }
       }
     }
 
-    assert.deepEqual(failures, [], `unbounded workflow jobs: ${failures.join(', ')}`)
+    assert.deepEqual(unbounded, [], `step jobs without timeout-minutes: ${unbounded.join(', ')}`)
+    assert.deepEqual(
+      misplaced,
+      [],
+      `reusable-workflow callers must not set timeout-minutes: ${misplaced.join(', ')}`
+    )
   })
 })
