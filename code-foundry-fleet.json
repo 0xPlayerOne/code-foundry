@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "cohorts": ["canary", "personal", "pinkbinder", "niftyleague", "adea"],
+  "repositories": [
+    {
+      "repository": "0xPlayerOne/pi-autosuggestions",
+      "path": ".fleet/0xPlayerOne/pi-autosuggestions",
+      "cohort": "canary",
+      "profile": "typescript application, npm",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "pinkbinder/blog-pipeline",
+      "path": ".fleet/pinkbinder/blog-pipeline",
+      "cohort": "canary",
+      "profile": "typescript monorepo, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "0xPlayerOne/pi-cloudflare",
+      "path": ".fleet/0xPlayerOne/pi-cloudflare",
+      "cohort": "personal",
+      "profile": "typescript application with performance lane, npm",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "0xPlayerOne/pi-browser-use",
+      "path": ".fleet/0xPlayerOne/pi-browser-use",
+      "cohort": "personal",
+      "profile": "typescript application with eval lane, npm",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "0xPlayerOne/hermes-infra",
+      "path": ".fleet/0xPlayerOne/hermes-infra",
+      "cohort": "personal",
+      "profile": "rust + python application with performance lane",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "0xPlayerOne/model-gateway",
+      "path": ".fleet/0xPlayerOne/model-gateway",
+      "cohort": "personal",
+      "profile": "rust application with performance lane",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "0xPlayerOne/v0-portfolio",
+      "path": ".fleet/0xPlayerOne/v0-portfolio",
+      "cohort": "personal",
+      "profile": "typescript application, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "pinkbinder/pink-binder",
+      "path": ".fleet/pinkbinder/pink-binder",
+      "cohort": "pinkbinder",
+      "profile": "typescript monorepo with cloudflare delivery, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "pinkbinder/medusa",
+      "path": ".fleet/pinkbinder/medusa",
+      "cohort": "pinkbinder",
+      "profile": "typescript monorepo, npm",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "NiftyLeague/nifty-playfab-configs",
+      "path": ".fleet/NiftyLeague/nifty-playfab-configs",
+      "cohort": "niftyleague",
+      "profile": "typescript application, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "NiftyLeague/nifty-subgraph",
+      "path": ".fleet/NiftyLeague/nifty-subgraph",
+      "cohort": "niftyleague",
+      "profile": "typescript application with performance lane, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "NiftyLeague/nifty-world",
+      "path": ".fleet/NiftyLeague/nifty-world",
+      "cohort": "niftyleague",
+      "profile": "typescript + python monorepo, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "NiftyLeague/nifty-fe-monorepo",
+      "path": ".fleet/NiftyLeague/nifty-fe-monorepo",
+      "cohort": "niftyleague",
+      "profile": "typescript + solidity monorepo, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "NiftyLeague/nifty-smart-contracts",
+      "path": ".fleet/NiftyLeague/nifty-smart-contracts",
+      "cohort": "niftyleague",
+      "profile": "typescript + solidity application, bun; legacy v1.9.x runtime",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/plugins",
+      "path": ".fleet/adea-ai/plugins",
+      "cohort": "adea",
+      "profile": "typescript minimal plugin marketplace, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/agent-sim",
+      "path": ".fleet/adea-ai/agent-sim",
+      "cohort": "adea",
+      "profile": "typescript monorepo, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/control-plane",
+      "path": ".fleet/adea-ai/control-plane",
+      "cohort": "adea",
+      "profile": "typescript monorepo, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/cortana",
+      "path": ".fleet/adea-ai/cortana",
+      "cohort": "adea",
+      "profile": "rust + python + typescript application with scoped codeql shards, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/adea",
+      "path": ".fleet/adea-ai/adea",
+      "cohort": "adea",
+      "profile": "typescript + rust monorepo with scoped codeql shards, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/assets",
+      "path": ".fleet/adea-ai/assets",
+      "cohort": "adea",
+      "profile": "minimal asset repository",
+      "validation": [["actionlint"]]
+    }
+  ]
+}
