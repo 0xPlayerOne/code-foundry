@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
@@ -880,6 +887,75 @@ function isPublicRepository() {
   return visibility ? visibility === 'public' : process.env.REPO_FOUNDRY_PRIVATE !== 'true'
 }
 
+/** Split a workflow file's `jobs:` entries into [job id, block text] pairs.
+ * Caller files are re-parsed here instead of trusting the sync renderer so
+ * hand-edited or stale generated callers are still validated at run time.
+ * @param {string} text @returns {Array<[string, string]>}
+ */
+function workflowJobBlocks(text) {
+  const lines = text.split('\n')
+  /** @type {Array<[string, string]>} */
+  const blocks = []
+  let index = 0
+  while (index < lines.length) {
+    const match = lines[index].match(/^  ([A-Za-z0-9_-]+):\s*$/)
+    if (!match) {
+      index += 1
+      continue
+    }
+    const start = index
+    index += 1
+    while (index < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[index])) index += 1
+    blocks.push([match[1], lines.slice(start, index).join('\n')])
+  }
+  return blocks
+}
+
+/**
+ * The Rust SARIF category embeds a hash of each shard scope, and GitHub code
+ * scanning baselines every category it has seen on the default branch: when
+ * two lanes calling the CodeQL workflow report different shard sets, each
+ * lane uploads categories the other never produces and the code-scanning
+ * merge gate waits forever (issue 609). Fail closed before any analysis runs.
+ */
+function assertRustShardsAligned() {
+  const directory = resolve(root, '.github/workflows')
+  if (!existsSync(directory)) return
+  /** @type {Map<string, string>} */
+  const lanes = new Map()
+  for (const file of readdirSync(directory)
+    .filter((name) => name.endsWith('.yml'))
+    .toSorted()) {
+    for (const [job, block] of workflowJobBlocks(readFileSync(resolve(directory, file), 'utf8'))) {
+      // Every lane that ultimately runs CodeQL analysis counts: direct
+      // codeql.yml callers and callers of the validation orchestrators whose
+      // rust-shards input flows through to the analysis matrix.
+      if (!/^\s+uses:\s*\S*\/(codeql|validation|validation-no-codeql)\.yml(@\S+)?\s*$/m.test(block))
+        continue
+      const raw = block.match(/^\s+rust-shards:\s*(.+?)\s*$/m)?.[1] ?? '["all"]'
+      // Unresolved caller expressions cannot be evaluated here; the literal
+      // shard list of the workflow that passes them is what gets compared.
+      if (raw.includes('${{')) continue
+      let shards = raw.replace(/^['"]|['"]$/g, '')
+      try {
+        shards = JSON.stringify(JSON.parse(shards).toSorted())
+      } catch {
+        // Compare unparsable values verbatim; alignment still fails loudly.
+      }
+      lanes.set(`${file} (${job})`, shards)
+    }
+  }
+  const distinct = new Set(lanes.values())
+  if (distinct.size <= 1) return
+  const detail = [...lanes].map(([lane, shards]) => `${lane}: ${shards}`).join(', ')
+  throw new Error(
+    `Rust CodeQL shard sets drift between lanes calling codeql.yml (${detail}). ` +
+      'GitHub code scanning tracks every uploaded category, so every lane must pass the same rust-shards list. ' +
+      'Re-render the callers with `npx code-foundry sync`, keep codeql_rust_shards aligned across callers, and retire ' +
+      'removed categories by deleting their code-scanning analyses (see docs/CONFIGURATION.md).'
+  )
+}
+
 function codeql() {
   const enabled =
     featureEnabled('codeql') &&
@@ -894,6 +970,9 @@ function codeql() {
     }
     return
   }
+  // Detect lane drift before any analysis uploads a category the other lanes
+  // never produce; a stall surfaces only later as a blocked merge gate.
+  assertRustShardsAligned()
   const available = []
   if (existsSync(resolve(root, '.github/workflows'))) available.push('actions')
   if (hasLanguage('typescript') || hasLanguage('javascript'))

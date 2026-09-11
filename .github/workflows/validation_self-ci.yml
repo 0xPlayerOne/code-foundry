@@ -1,4 +1,4 @@
-name: Code Foundry
+name: Code Foundry Validation
 
 on:
   push:

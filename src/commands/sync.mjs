@@ -1003,7 +1003,12 @@ function escapeRegExp(value) {
  */
 export function isGeneratedEventCaller(content, stem, runtimeRepository) {
   const text = Buffer.isBuffer(content) ? content.toString('utf8') : String(content)
-  if (!/^name:\s*Code Foundry\s*$/m.test(text)) return false
+  // Generated callers carried the shared display name "Code Foundry" before
+  // issue 609 gave each caller a unique name; both renders must stay
+  // recognizable so a topology switch can still prune stale promotion callers.
+  const names = ['Code Foundry', ...(stem === 'release-pr' ? ['Code Foundry Promotion'] : [])]
+  if (!names.some((name) => new RegExp(`^name:\\s*${escapeRegExp(name)}\\s*$`, 'm').test(text)))
+    return false
   if (/^\s*(runs-on|steps):/m.test(text)) return false
   // Older generated staging-promotion callers predate the explicit runtime
   // repository input. They are still safe to identify structurally by their
