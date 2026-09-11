@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.9...v1.28.10) (2026-09-11)
+
+
+### Bug Fixes
+
+* **ci:** dedupe caller names and keep CodeQL Rust shards aligned ([#613](https://github.com/0xPlayerOne/code-foundry/issues/613)) ([8000e5e](https://github.com/0xPlayerOne/code-foundry/commit/8000e5e152ccc7e657933b55eb5b82a278762176))
+
 ## [1.28.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.8...v1.28.9) (2026-09-11)
 
 
