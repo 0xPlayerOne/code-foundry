@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.6...v1.28.7) (2026-09-11)
+
+
+### Bug Fixes
+
+* **delivery:** drop impossible NUL guard that always failed the turbo impact check ([#607](https://github.com/0xPlayerOne/code-foundry/issues/607)) ([211db01](https://github.com/0xPlayerOne/code-foundry/commit/211db01cda6fc4f3f6f660b0a807c4cd921cc877))
+
 ## [1.28.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.5...v1.28.6) (2026-09-10)
 
 
