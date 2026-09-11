@@ -115,10 +115,7 @@ test('unsafe or incomplete queue configuration fails before generation', () => {
 })
 
 test('queue rendering accepts mixed broad and scoped Rust shards', () => {
-  const yaml = renderMergeQueueCaller(
-    { ...config, codeql_rust_shards: '["all", "src"]' },
-    'v1.0.0'
-  )
+  const yaml = renderMergeQueueCaller({ ...config, codeql_rust_shards: '["all", "src"]' }, 'v1.0.0')
   assert.match(yaml, /rust-shards: '\["all","src"\]'/)
 })
 
