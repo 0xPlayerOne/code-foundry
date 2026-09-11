@@ -1017,9 +1017,10 @@ function validateRustCodeqlConfig(config) {
       }
     }
   }
-  if (seen.has('all') && shards.length !== 1) {
-    throw new Error('Invalid codeql_rust_shards; "all" cannot be combined with scoped shards.')
-  }
+  // "all" combined with scoped shards is a deliberate consumer strategy: the
+  // broad pass keeps the workspace-level SARIF category reporting while the
+  // scoped shards add per-manifest detail. The renderer forwards the same
+  // list to every lane, so lane parity holds regardless of the combination.
   return { shards: JSON.stringify(shards), threads, maxParallel }
 }
 
