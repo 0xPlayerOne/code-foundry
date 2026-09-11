@@ -286,6 +286,21 @@ export function verifiedPullRequest(pr, required) {
   )
 }
 
+/**
+ * Evidence that a merged rollout actually landed. Gate rollup evidence is the
+ * normal path, but repositories without a required-check policy can merge
+ * through auto-merge before their checks complete, so a merged PR whose base
+ * configuration already matches the declared rollout is accepted with weaker
+ * `base-config` evidence instead of deadlocking the cohort forever.
+ * @param {any} pr @param {string[]} required @param {boolean} baseConfigMatches
+ * @returns {'gates'|'base-config'|null}
+ */
+export function rolloutEvidence(pr, required, baseConfigMatches) {
+  if (!pr || pr.state !== 'MERGED') return null
+  if (verifiedPullRequest(pr, required)) return 'gates'
+  return baseConfigMatches ? 'base-config' : null
+}
+
 /** @param {any} check */
 function checkState(check) {
   return check.status === 'COMPLETED' ? check.conclusion : (check.state ?? check.status)
@@ -339,8 +354,9 @@ function inspectRollout(run, path, entry, version, base) {
     if (!remoteHead || pr.headRefOid !== remoteHead)
       throw new Error('Existing pull request head no longer matches its remote branch')
   }
-  let complete = verifiedPullRequest(pr, entry.requiredChecks)
-  if (complete) {
+  let complete = false
+  let evidence = null
+  if (pr?.state === 'MERGED') {
     const response = JSON.parse(
       checked(run, path, [
         'gh',
@@ -351,9 +367,12 @@ function inspectRollout(run, path, entry, version, base) {
     if (response.encoding !== 'base64' || typeof response.content !== 'string')
       throw new Error('Unable to verify merged runtime configuration')
     const config = scalarConfig(Buffer.from(response.content, 'base64').toString('utf8'))
-    complete = config.runtime_ref === version && configDrift(config, entry).length === 0
+    const configMatches =
+      config.runtime_ref === version && configDrift(config, entry).length === 0
+    evidence = rolloutEvidence(pr, entry.requiredChecks, configMatches)
+    complete = evidence !== null
   }
-  return { ...identity, pr, complete }
+  return { ...identity, pr, complete, evidence }
 }
 
 /** @param {Runner} run @param {string} path @param {string[]} files */
@@ -606,7 +625,12 @@ export function upgradeManifestFleet(root, source, options, sync, run = executeF
         const rollout = inspectRollout(run, item.path, entry, options.version, base)
         if (rollout.complete) {
           completed += 1
-          report.push({ ...record, status: 'verified-merged', pullRequest: rollout.pr.url })
+          report.push({
+            ...record,
+            status: 'verified-merged',
+            evidence: rollout.evidence,
+            pullRequest: rollout.pr.url,
+          })
           continue
         }
         if (rollout.pr) {
