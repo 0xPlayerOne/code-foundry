@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.8...v1.28.9) (2026-09-11)
+
+
+### Bug Fixes
+
+* **sync:** render the configured Rust shards into every CodeQL lane ([#612](https://github.com/0xPlayerOne/code-foundry/issues/612)) ([4e7eb2f](https://github.com/0xPlayerOne/code-foundry/commit/4e7eb2f03ba34b4fe459e8ce302bcbf3303b26cc))
+
 ## [1.28.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.7...v1.28.8) (2026-09-11)
 
 
