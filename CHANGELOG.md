@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.13](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.12...v1.28.13) (2026-09-11)
+
+
+### Bug Fixes
+
+* **fleet:** accept base-config evidence for merged rollouts ([#620](https://github.com/0xPlayerOne/code-foundry/issues/620)) ([394c528](https://github.com/0xPlayerOne/code-foundry/commit/394c528a137617ce2c4464436dbc6068349a0c54))
+
 ## [1.28.12](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.11...v1.28.12) (2026-09-11)
 
 
