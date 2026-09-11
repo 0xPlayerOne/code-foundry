@@ -13,6 +13,7 @@ import {
   fleetPath,
   githubRemote,
   readFleetManifest,
+  rolloutEvidence,
   rolloutIdentity,
   upgradeManifestFleet,
   verifiedPullRequest,
@@ -242,6 +243,30 @@ test('only merged PRs with actual successful required checks unlock rollout', ()
   ]) {
     assert.equal(verifiedPullRequest({ ...good, ...change }, ['Validation / Gate']), false)
   }
+})
+
+test('merged rollouts without gate evidence verify through base configuration', () => {
+  const mergedWithoutEvidence = {
+    state: 'MERGED',
+    isCrossRepository: false,
+    headRefOid: 'a'.repeat(40),
+    statusCheckRollup: [{ ...gate, conclusion: 'SKIPPED' }],
+  }
+  assert.equal(rolloutEvidence(mergedWithoutEvidence, ['Validation / Gate'], true), 'base-config')
+  assert.equal(rolloutEvidence(mergedWithoutEvidence, ['Validation / Gate'], false), null)
+  assert.equal(
+    rolloutEvidence(
+      { ...mergedWithoutEvidence, statusCheckRollup: [gate] },
+      ['Validation / Gate'],
+      false
+    ),
+    'gates'
+  )
+  assert.equal(
+    rolloutEvidence({ ...mergedWithoutEvidence, state: 'OPEN' }, ['Validation / Gate'], true),
+    null
+  )
+  assert.equal(rolloutEvidence(null, ['Validation / Gate'], true), null)
 })
 
 test('policy changes produce different resumable identities', () => {
