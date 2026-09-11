@@ -1,12 +1,6 @@
 {
   "schemaVersion": 1,
-  "cohorts": [
-    "canary",
-    "personal",
-    "pinkbinder",
-    "niftyleague",
-    "adea"
-  ],
+  "cohorts": ["canary", "personal", "pinkbinder", "niftyleague", "adea"],
   "repositories": [
     {
       "repository": "0xPlayerOne/pi-autosuggestions",
