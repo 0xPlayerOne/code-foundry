@@ -195,11 +195,17 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
+      # Analyze the pull request head, not the ephemeral merge ref. The
+      # codeql-action records commit_oid from `git rev-parse HEAD` on the
+      # checkout — the `sha` upload input is only a fallback when git is
+      # unavailable — so checking out the head is what actually keeps the
+      # recorded commit stable across mergeability evaluations.
       - name: Checkout
         if: ${{ matrix.entry.changed == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - name: Runtime
         if: ${{ matrix.entry.changed == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
