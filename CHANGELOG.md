@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.29.1...v1.30.0) (2026-09-17)
+
+
+### Features
+
+* resolve lane diffs only for filtered lanes and accept injected paths ([#631](https://github.com/0xPlayerOne/code-foundry/issues/631)) ([04a0d8a](https://github.com/0xPlayerOne/code-foundry/commit/04a0d8a69b3fd3d3417eef46e22e0eb79860fb04))
+
 ## [1.29.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.29.0...v1.29.1) (2026-09-17)
 
 
