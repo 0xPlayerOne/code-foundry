@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.30.0...v1.30.1) (2026-09-17)
+
+
+### Maintenance
+
+* toolchain-alignment ([#630](https://github.com/0xPlayerOne/code-foundry/issues/630)) ([0d0ddbe](https://github.com/0xPlayerOne/code-foundry/commit/0d0ddbe9f6cbee65094360ff1cd4aadab845b326))
+
 ## [1.30.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.29.1...v1.30.0) (2026-09-17)
 
 
