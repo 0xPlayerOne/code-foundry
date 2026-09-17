@@ -89,6 +89,15 @@ runs:
         if [ -f .github/code-foundry.yml ]; then
           configured_toolchain="$(awk -F': ' '/^toolchain:/ {print $2; exit}' .github/code-foundry.yml)"
           [ -n "$configured_toolchain" ] && toolchain="$configured_toolchain"
+          for flag in rust_sccache rust_nextest; do
+            if grep -Eq "^${flag}:\\s*[\"']?true[\"']?\\s*$" .github/code-foundry.yml; then
+              printf '%s=true\n' "$flag" >> "$GITHUB_OUTPUT"
+            else
+              printf '%s=false\n' "$flag" >> "$GITHUB_OUTPUT"
+            fi
+          done
+        else
+          printf 'rust_sccache=false\nrust_nextest=false\n' >> "$GITHUB_OUTPUT"
         fi
         if [ "$toolchain" = auto ] && [ -f .mise.toml ]; then
           toolchain=mise
@@ -746,6 +755,36 @@ runs:
         # primary saves but reuse a prior workflow's dependency artifacts.
         restore-keys: |
           ${{ runner.os }}-rust-build-v2-
+    # sccache is opt-in (`rust_sccache: true` in code-foundry.yml): it caches
+    # per-compilation objects keyed by content, so dependency artifacts
+    # survive Cargo.toml/Cargo.lock churn that busts the target/ cache above.
+    - name: Cache sccache artifacts
+      if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && steps.profile.outputs.rust_sccache == 'true'
+      uses: ./.github/actions/cache
+      with:
+        save: ${{ inputs.cache-save }}
+        path: ~/.cache/sccache
+        key: ${{ runner.os }}-rust-sccache-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('rust-toolchain.toml', 'rust-toolchain', '.cargo/config*', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-sccache-
+    - name: Install sccache
+      if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && steps.profile.outputs.rust_sccache == 'true'
+      uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
+      with:
+        tool: sccache
+    - name: Wrap rustc with sccache
+      if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && steps.profile.outputs.rust_sccache == 'true'
+      shell: bash
+      run: |
+        echo 'RUSTC_WRAPPER=sccache' >> "$GITHUB_ENV"
+        echo "SCCACHE_DIR=$HOME/.cache/sccache" >> "$GITHUB_ENV"
+    # cargo-nextest is opt-in (`rust_nextest: true`): the runtime uses
+    # `cargo nextest run` when the binary is present.
+    - name: Install cargo-nextest
+      if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && steps.profile.outputs.rust_nextest == 'true'
+      uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
+      with:
+        tool: cargo-nextest
     - name: Setup
       if: ${{ steps.profile.outputs.mise_required == 'true' }}
       uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4

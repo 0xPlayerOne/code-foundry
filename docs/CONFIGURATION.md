@@ -105,6 +105,9 @@ See [Merge queue validation](merge-queues.md) before enabling it.
 | `coverage_minimum`        | `0`–`100`                                      | Minimum percentage; defaults to `80`.                                                                                                           |
 | `coverage_metrics`        | `lines`, `functions`, `branches`, `statements` | Metrics checked by the coverage gate.                                                                                                           |
 | `coverage_report`         | comma-separated repository paths               | Istanbul JSON summary or LCOV evidence files.                                                                                                   |
+| `filter_<task>`           | comma-separated repository path globs          | Skip a lane when no changed path matches; see [Lane path filters](#lane-path-filters).                                                          |
+| `rust_sccache`            | `true`, `false`                                | Install sccache and wrap rustc so compile artifacts survive manifest/lockfile churn.                                                            |
+| `rust_nextest`            | `true`, `false`                                | Install cargo-nextest and prefer `cargo nextest run` over `cargo test` in Rust test lanes.                                                      |
 
 Supported task capabilities are `format`, `lint`, `type_check`, `build`, `unit`,
 `integration`, `e2e`, `smoke`, `eval`, and `performance`. `coverage` is a policy
@@ -199,6 +202,34 @@ behavior:
 
 Use these controls only after measuring a repeatable benefit. See [Caching and
 remote caching](CACHING.md).
+
+## Lane path filters
+
+Validation lanes run their full suite by default. Repositories with clearly
+separated areas — for example a Rust workspace next to a web app — can opt any
+task lane into path filtering so a change that cannot affect the lane skips
+its setup and execution steps:
+
+```yaml
+filter_integration: 'src/**/*.py,tests/**,pyproject.toml,uv.lock'
+filter_eval: 'eval/**,crates/**,src/**'
+filter_e2e: 'apps/**,src/**'
+```
+
+`filter_<task>` accepts the same task names as `required_capabilities`. Globs
+are repo-relative: `**/` matches any directory depth, `*` stays inside one
+path segment, `?` matches one character, and a trailing `/` is shorthand for
+`dir/**`.
+
+The gate is fail-open by design: a task without a configured filter, a diff
+that cannot be resolved (shallow checkout edge, missing base ref), or an empty
+change set all keep the lane running. Paths are evaluated against
+`base...head` for pull requests and `before..after` for pushes; other events
+always run. Because filters only decide whether a lane _executes_, required
+checks stay green and the aggregate gate sees a normal success.
+
+Security lanes and CodeQL are never filterable: their coverage is structural,
+not change-scoped.
 
 ## Rust CodeQL tuning
 

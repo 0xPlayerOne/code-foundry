@@ -75,9 +75,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run eval >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           # Eval harnesses run through the repository's own package scripts and
@@ -87,13 +93,13 @@ jobs:
           task: eval
       - name: Eval
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci eval
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/eval.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

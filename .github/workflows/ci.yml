@@ -78,9 +78,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run format >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           # Repository format scripts normally call a project-local formatter
@@ -93,13 +99,13 @@ jobs:
           task: format
       - name: Format
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci format
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/format.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -138,9 +144,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run lint >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: 'true'
@@ -148,13 +160,13 @@ jobs:
           task: lint
       - name: Lint
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci lint
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/lint.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -193,9 +205,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run type_check >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: 'true'
@@ -203,13 +221,13 @@ jobs:
           task: type_check
       - name: Type-Check
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci type_check
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/type_check.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -253,9 +271,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: 'true'
@@ -263,13 +287,13 @@ jobs:
           task: build
       - name: Build
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/build.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
