@@ -79,14 +79,24 @@ export function globToRegExp(glob) {
 /**
  * Resolve the pull request or push change set. The generated Detect steps
  * pass EVENT_NAME plus BASE_REF/BASE_SHA/HEAD_SHA (pull_request) or
- * BEFORE_SHA/HEAD_SHA (push). Returns null when the change set cannot be
- * resolved; callers treat null as fail-open so a checkout edge never skips a
- * required lane.
+ * BEFORE_SHA/HEAD_SHA (push). An orchestrator that already resolved the
+ * change set once can inject it as a newline-delimited CHANGED_PATHS value;
+ * an empty or missing value falls through to local resolution so a stale
+ * injection can never widen a skip. Returns null when the change set cannot
+ * be resolved; callers treat null as fail-open so a checkout edge never
+ * skips a required lane.
  * @param {string} root
  * @param {Record<string, string | undefined>} env
  * @returns {string[] | null}
  */
 export function resolveChangedPaths(root, env = process.env) {
+  const injected = env.CHANGED_PATHS
+  if (injected && injected.trim().length > 0) {
+    return injected
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+  }
   const event = env.EVENT_NAME
   let range = null
   try {

@@ -691,13 +691,11 @@ function ci(task) {
     writeOutput('applicable', relevant(selected) ? 'true' : 'false')
     // Path-filtered lanes are opt-in via `filter_<task>` config keys. The
     // gate fails open: no filter, an unresolvable diff, or an empty change
-    // set all keep the lane running.
-    writeOutput(
-      'affected',
-      taskAffected(selected ?? '', readTaskFilters(config), resolveChangedPaths(root))
-        ? 'true'
-        : 'false'
-    )
+    // set all keep the lane running. Resolving the diff costs a git fetch,
+    // so only lanes with a configured filter pay it.
+    const filters = readTaskFilters(config)
+    const diff = filters.has(selected ?? '') ? resolveChangedPaths(root) : null
+    writeOutput('affected', taskAffected(selected ?? '', filters, diff) ? 'true' : 'false')
     writeOutput(
       'javascript',
       hasLanguage('typescript') || hasLanguage('javascript') ? 'true' : 'false'
