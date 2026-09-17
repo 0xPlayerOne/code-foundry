@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.15](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.14...v1.28.15) (2026-09-17)
+
+
+### Bug Fixes
+
+* **codeql:** analyze the pull request head commit ([#624](https://github.com/0xPlayerOne/code-foundry/issues/624)) ([ce05d1f](https://github.com/0xPlayerOne/code-foundry/commit/ce05d1f4f6c5df3a2d9134dd4657f478a265cb85))
+
 ## [1.28.14](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.13...v1.28.14) (2026-09-11)
 
 
