@@ -140,6 +140,19 @@ test('a missing optional category does not broaden to cargo test', (t) => {
   assert.equal(result.receipt.status, 'skipped')
 })
 
+test('rust_nextest translates Cargo target selection to nextest run', (t) => {
+  const { run, root, write } = fixture(t, ['src/lib.rs', 'src/main.rs', 'tests/alpha.rs'])
+  write('.github/code-foundry.yml', 'languages: rust\npackage_manager: none\nrust_nextest: true\n')
+  write('bin/cargo-nextest', `#!${process.execPath}\nprocess.exit(0)\n`)
+  chmodSync(join(root, 'bin/cargo-nextest'), 0o755)
+  const unit = run('unit')
+  assert.equal(unit.status, 0, unit.stderr)
+  assert.deepEqual(unit.calls[0].args, ['nextest', 'run', '--lib', '--bin', 'fixture-app'])
+  const integration = run('integration')
+  assert.equal(integration.status, 0, integration.stderr)
+  assert.deepEqual(integration.calls.at(-1).args, ['nextest', 'run', '--test', 'alpha'])
+})
+
 test('unit failure retains a failed public receipt and the Cargo exit status', (t) => {
   const result = fixture(t, ['src/lib.rs', 'src/main.rs']).run('unit', { FAIL_TARGET: '--lib' })
   assert.equal(result.status, 17, result.stderr)

@@ -15,6 +15,7 @@ import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
 import { configured, readConfig } from './lib/config.mjs'
 import { classifyTestFiles } from './lib/test-discovery.mjs'
 import { docsOnlyPullRequest } from './lib/docs-only.mjs'
+import { readTaskFilters, resolveChangedPaths, taskAffected } from './lib/task-filters.mjs'
 import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
 import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
 import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
@@ -688,6 +689,15 @@ function ci(task) {
   if (task === 'should_run' || task === 'task_profile') {
     const selected = process.argv[4]
     writeOutput('applicable', relevant(selected) ? 'true' : 'false')
+    // Path-filtered lanes are opt-in via `filter_<task>` config keys. The
+    // gate fails open: no filter, an unresolvable diff, or an empty change
+    // set all keep the lane running.
+    writeOutput(
+      'affected',
+      taskAffected(selected ?? '', readTaskFilters(config), resolveChangedPaths(root))
+        ? 'true'
+        : 'false'
+    )
     writeOutput(
       'javascript',
       hasLanguage('typescript') || hasLanguage('javascript') ? 'true' : 'false'
@@ -784,9 +794,14 @@ function ci(task) {
   }
 
   if (hasLanguage('rust') && hasRootRustProject()) {
+    // `rust_nextest` opts into process-per-test parallelism. cargo-nextest
+    // accepts the same --lib/--bin/--test target flags as `cargo test`.
+    const nextest =
+      configured(config.rust_nextest, 'false') === 'true' && commandExists('cargo-nextest')
+    const testArgs = nextest ? ['nextest', 'run'] : ['test']
     if (task === 'unit') {
       // Batch exact prior targets through one Cargo graph.
-      const args = ['test']
+      const args = [...testArgs]
       if (existsSync(resolve(root, 'src/lib.rs'))) args.push('--lib')
       if (existsSync(resolve(root, 'src/main.rs'))) args.push('--bin', packageName())
       run('cargo', args)
@@ -796,7 +811,7 @@ function ci(task) {
         const match = file.match(/^tests\/(.+)\.rs$/)
         return match && !match[1].includes('/') ? ['--test', match[1]] : []
       })
-      if (targets.length > 0) run('cargo', ['test', ...targets])
+      if (targets.length > 0) run('cargo', [...testArgs, ...targets])
     }
   }
 }

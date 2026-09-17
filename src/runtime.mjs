@@ -42,6 +42,7 @@ export function taskProfile(root, task, entry = core) {
     throw new Error(`Task discovery returned no applicability: ${task}`)
   return {
     ...describeTask(root, task, profile),
+    affected: profile.affected ?? 'true',
     javascript: profile.javascript ?? 'false',
     python: profile.python ?? 'false',
     rust: profile.rust ?? 'false',
@@ -110,6 +111,24 @@ export function runRuntime(args, root = process.cwd(), entry = core) {
       (name) => name !== 'coverage' && name !== selected
     ))
       taskProfile(root, requiredName, entry)
+    // A path-filtered lane that misses the diff still leaves a receipt so the
+    // run records why its steps skipped.
+    if (profile.applicable && profile.affected === 'false') {
+      const now = new Date().toISOString()
+      saveResult(root, selected, {
+        schemaVersion: 1,
+        kind: 'code-foundry-task-result',
+        task: selected,
+        sourceSha: sourceSha(root),
+        startedAt: now,
+        completedAt: now,
+        status: 'skipped',
+        reason: 'no changed path matched the task filter',
+        required: false,
+        commands: [],
+        artifacts: [],
+      })
+    }
     if (!profile.applicable) {
       const now = new Date().toISOString()
       saveResult(root, selected, {
@@ -128,6 +147,7 @@ export function runRuntime(args, root = process.cwd(), entry = core) {
     }
     for (const [key, value] of Object.entries({
       applicable: String(profile.applicable),
+      affected: profile.affected ?? 'true',
       javascript: profile.javascript ?? 'false',
       python: profile.python ?? 'false',
       rust: profile.rust ?? 'false',

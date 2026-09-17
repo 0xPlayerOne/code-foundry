@@ -92,9 +92,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile unit >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: true
@@ -110,13 +116,13 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Unit
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci unit
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/unit.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -172,9 +178,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile performance >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: true
@@ -191,13 +203,13 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Performance
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci performance
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/performance.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -252,9 +264,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile integration >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: true
@@ -270,13 +288,13 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Integration
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci integration
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/integration.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -316,9 +334,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile e2e >> "$GITHUB_OUTPUT"
       - name: Cache browser binaries
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.browser == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false' && steps.applicability.outputs.browser == 'true'
         uses: ./.github/actions/cache
         with:
           save: ${{ github.event_name == 'push' }}
@@ -330,7 +354,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-e2e-browsers-
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: true
@@ -346,13 +370,13 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: E2E
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci e2e
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/e2e.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -392,9 +416,15 @@ jobs:
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
       - name: Detect
         id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile smoke >> "$GITHUB_OUTPUT"
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
         with:
           install: true
@@ -410,13 +440,13 @@ jobs:
           task-rust: ${{ steps.applicability.outputs.rust }}
       - name: Smoke
         id: execute
-        if: steps.applicability.outputs.applicable == 'true'
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci smoke
       - name: Retain task receipt
         if: >-
           always() &&
           (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false') &&
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
           hashFiles('.code-foundry/results/smoke.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
