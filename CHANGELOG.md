@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.30.1...v1.30.2) (2026-09-17)
+
+
+### Maintenance
+
+* adopt Code Foundry runtime v1.30.0 ([#634](https://github.com/0xPlayerOne/code-foundry/issues/634)) ([2d6d6c9](https://github.com/0xPlayerOne/code-foundry/commit/2d6d6c96a98603dc1394356d01802ca551482ae4))
+
 ## [1.30.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.30.0...v1.30.1) (2026-09-17)
 
 
