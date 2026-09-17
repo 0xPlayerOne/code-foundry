@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
+import { fileURLToPath } from 'node:url'
+
 import {
   resolveChangedPaths,
   globToRegExp,
@@ -129,3 +131,54 @@ test('changedPaths fails open for unresolvable events and diffs', (t) => {
     null
   )
 })
+
+test('resolveChangedPaths prefers a non-empty injected change set without touching git', (t) => {
+  const root = gitFixture(t, { 'src/a.rs': 'x\n' })
+  assert.deepEqual(resolveChangedPaths(root, { CHANGED_PATHS: 'src/a.rs\r\ndocs/b.md\n\n' }), [
+    'src/a.rs',
+    'docs/b.md',
+  ])
+})
+
+test('resolveChangedPaths treats an empty injected change set as not provided', (t) => {
+  const root = gitFixture(t, { 'src/main.rs': 'fn main() {}\n' })
+  assert.deepEqual(
+    resolveChangedPaths(root, {
+      CHANGED_PATHS: '   ',
+      EVENT_NAME: 'pull_request',
+      BASE_REF: 'main',
+      BASE_SHA: 'main',
+      HEAD_SHA: 'HEAD',
+    }),
+    ['src/main.rs']
+  )
+})
+
+test('lanes without a configured filter stay affected without resolving a diff', (t) => {
+  const root = gitFixture(t, { 'docs/guide.md': 'guide\n' })
+  mkdirSync(join(root, '.github'), { recursive: true })
+  writeFileSync(join(root, '.github', 'code-foundry.yml'), 'version: 1\nfilter_unit: "src/**"\n')
+  const run = (/** @type {string} */ task) =>
+    execFileSync(process.execPath, [runtimeCore, 'ci', 'should_run', task], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, CHANGED_PATHS: 'docs/guide.md', GITHUB_OUTPUT: '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  const unit = Object.fromEntries(
+    run('unit')
+      .trim()
+      .split('\n')
+      .map((line) => line.split('=', 2))
+  )
+  assert.equal(unit.affected, 'false')
+  const format = Object.fromEntries(
+    run('format')
+      .trim()
+      .split('\n')
+      .map((line) => line.split('=', 2))
+  )
+  assert.equal(format.affected, 'true')
+})
+
+const runtimeCore = fileURLToPath(new URL('../src/runtime-core.mjs', import.meta.url))

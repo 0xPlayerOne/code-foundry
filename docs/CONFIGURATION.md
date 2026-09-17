@@ -228,6 +228,13 @@ change set all keep the lane running. Paths are evaluated against
 always run. Because filters only decide whether a lane _executes_, required
 checks stay green and the aggregate gate sees a normal success.
 
+Diff resolution only runs for lanes that have a filter configured, so
+repositories using a single filter pay one shallow fetch per change instead
+of one per lane. An orchestrator that has already resolved the change set can
+inject it for a lane through a newline-delimited `CHANGED_PATHS` environment
+variable; an empty or missing value falls back to local resolution, so an
+injection can never widen a skip.
+
 Security lanes and CodeQL are never filterable: their coverage is structural,
 not change-scoped.
 
