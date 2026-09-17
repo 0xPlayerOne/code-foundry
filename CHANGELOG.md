@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.29.0...v1.29.1) (2026-09-17)
+
+
+### Maintenance
+
+* align oxlint and oxfmt pins with fleet standard ([#628](https://github.com/0xPlayerOne/code-foundry/issues/628)) ([32c88f1](https://github.com/0xPlayerOne/code-foundry/commit/32c88f153e06e1f1eda61b16fcb0ba50a847a99a))
+
 ## [1.29.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.15...v1.29.0) (2026-09-17)
 
 
