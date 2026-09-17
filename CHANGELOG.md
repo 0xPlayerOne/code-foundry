@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.15...v1.29.0) (2026-09-17)
+
+
+### Features
+
+* opt-in lane path filters, sccache, and nextest for Rust CI ([#626](https://github.com/0xPlayerOne/code-foundry/issues/626)) ([691ccad](https://github.com/0xPlayerOne/code-foundry/commit/691ccad529d88cde4ddd134b30cfb86988a1cb0a))
+
 ## [1.28.15](https://github.com/0xPlayerOne/code-foundry/compare/v1.28.14...v1.28.15) (2026-09-17)
 
 
