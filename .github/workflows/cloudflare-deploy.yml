@@ -264,6 +264,9 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           BUILD_SCRIPT: ${{ inputs.build-script }}
+          TURBO_API: ${{ vars.TURBO_API }}
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
         run: bun run "$BUILD_SCRIPT"
       - name: Deploy to Cloudflare
         id: deploy
