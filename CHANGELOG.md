@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.31.0...v1.32.0) (2026-09-21)
+
+
+### Features
+
+* forward TURBO_API to validation and cloudflare deploy builds ([#638](https://github.com/0xPlayerOne/code-foundry/issues/638)) ([55347f6](https://github.com/0xPlayerOne/code-foundry/commit/55347f6fd3bea41f11aa936650222cd73cfd8026))
+
 ## [1.31.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.30.2...v1.31.0) (2026-09-21)
 
 
