@@ -152,6 +152,8 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ inputs.bun-version }}
+          cache: true
+          cache-dependency-path: ${{ inputs.install-working-directory }}/bun.lock
       - name: Install dependencies for Turbo
         if: steps.resolve.outputs.turbo_enabled == 'true'
         working-directory: ${{ inputs.install-working-directory }}
@@ -251,6 +253,8 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ inputs.bun-version }}
+          cache: true
+          cache-dependency-path: ${{ inputs.install-working-directory }}/bun.lock
       - name: Install dependencies
         if: inputs.build-script != ''
         working-directory: ${{ inputs.install-working-directory }}
