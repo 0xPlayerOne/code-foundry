@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.30.2...v1.31.0) (2026-09-21)
+
+
+### Features
+
+* **cloudflare-deploy:** cache the Bun package cache across deploy jobs ([#636](https://github.com/0xPlayerOne/code-foundry/issues/636)) ([42048b8](https://github.com/0xPlayerOne/code-foundry/commit/42048b8ec7130c89d35cd93568d720098c37d773))
+
 ## [1.30.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.30.1...v1.30.2) (2026-09-17)
 
 
