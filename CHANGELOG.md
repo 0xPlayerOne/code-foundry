@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.32.0...v1.33.0) (2026-09-22)
+
+
+### Features
+
+* **cloudflare-deploy:** accept optional TURBO_TOKEN secret for remote-cached deploy builds ([#640](https://github.com/0xPlayerOne/code-foundry/issues/640)) ([091bfd1](https://github.com/0xPlayerOne/code-foundry/commit/091bfd12b6bbca0e9289a74827713dc50bcb4193))
+
 ## [1.32.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.31.0...v1.32.0) (2026-09-21)
 
 
