@@ -57,6 +57,9 @@ on:
         required: true
       CLOUDFLARE_ACCOUNT_ID:
         required: true
+      TURBO_TOKEN:
+        description: 'Optional turborepo remote cache token; when set, the Build Worker step authenticates to TURBO_API so deploy builds save to and hit the remote cache.'
+        required: false
     outputs:
       url:
         value: ${{ jobs.deploy.outputs.url }}
