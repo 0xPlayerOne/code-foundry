@@ -282,6 +282,10 @@ The repository's format and lint jobs are ordinary CI checks. Set `codeql:
 false` or `dependency_review: false` when a public repository also needs those
 checks disabled.
 
+The Python audit fails only on a reported advisory: `pip-audit` can report a
+clean result with a non-zero status, so the runtime decides from the report,
+replays it to the job log, and emits a `::warning::` when it downgrades.
+
 ## Branch protection
 
 Use repository rulesets (or legacy branch protection settings) to mirror the
