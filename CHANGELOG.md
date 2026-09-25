@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.33.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.0...v1.33.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **security:** stop a clean pip-audit result from failing the audit gate ([#643](https://github.com/0xPlayerOne/code-foundry/issues/643)) ([7260291](https://github.com/0xPlayerOne/code-foundry/commit/7260291fc24e851678ddbf9cc9dfcf99bea48f59))
+
+
+### Maintenance
+
+* **perf:** recalibrate the packed artifact budget ([#645](https://github.com/0xPlayerOne/code-foundry/issues/645)) ([64b6504](https://github.com/0xPlayerOne/code-foundry/commit/64b65049ba313f01f6989bf52a83efe31d2b91dd))
+
 ## [1.33.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.32.0...v1.33.0) (2026-09-22)
 
 
