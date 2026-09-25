@@ -432,6 +432,25 @@ function run(command, args = [], options = {}) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
+// pip-audit can report its clean result with a non-zero status when the
+// inspected environment hits a resolution problem, so decide from the report.
+const CLEAN_AUDIT = 'No known vulnerabilities found'
+const ADVISORY = /\b(?:PYSEC|GHSA|CVE|OSV)-[A-Za-z0-9._-]+/
+
+/** @param {string} command @param {string[]} [args] */
+function runAudited(command, args = []) {
+  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', env: process.env })
+  if (result.error) throw result.error
+  const stdout = result.stdout ?? ''
+  const stderr = result.stderr ?? ''
+  if (stdout) process.stdout.write(stdout)
+  if (stderr) process.stderr.write(stderr)
+  if (result.status === 0) return
+  const report = `${stdout}\n${stderr}`
+  if (!report.includes(CLEAN_AUDIT) || ADVISORY.test(report)) process.exit(result.status ?? 1)
+  console.warn(`::warning::${command} exited ${result.status} with no known vulnerabilities`)
+}
+
 /** @param {string} command @param {string[]} [args] */
 function capture(command, args = []) {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', env: process.env })
@@ -879,10 +898,10 @@ function security(task, ecosystem) {
     const auditArgs =
       requirement && !['project', 'none'].includes(requirement) ? ['-r', requirement] : []
     if (commandExists('uv'))
-      run('uv', ['tool', 'run', '--from', 'pip-audit==2.10.1', 'pip-audit', ...auditArgs])
+      runAudited('uv', ['tool', 'run', '--from', 'pip-audit==2.10.1', 'pip-audit', ...auditArgs])
     else {
       run('python', ['-m', 'pip', 'install', '--quiet', 'pip-audit==2.10.1'])
-      run('python', ['-m', 'pip_audit', ...auditArgs])
+      runAudited('python', ['-m', 'pip_audit', ...auditArgs])
     }
   }
 }
