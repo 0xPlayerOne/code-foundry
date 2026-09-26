@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.1...v1.33.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **release:** queue version PR merges on branch policy ([#646](https://github.com/0xPlayerOne/code-foundry/issues/646)) ([ca492c8](https://github.com/0xPlayerOne/code-foundry/commit/ca492c8402bfc43ef718c0a6443ee06fcb33e957))
+
 ## [1.33.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.0...v1.33.1) (2026-09-25)
 
 
