@@ -56,7 +56,7 @@ import {
 } from '../src/lib/release-hook.mjs'
 import { doctor, rustManifestPaths } from '../src/commands/doctor.mjs'
 import { doctorGithub } from '../src/lib/github-doctor.mjs'
-import { reconcileRelease } from '../src/commands/release.mjs'
+import { reconcileRelease, validateReleasePullRequestDiffs } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 import {
   buildPausedRuleset,
@@ -1870,7 +1870,12 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /\$\{\{\s*steps\.profile\.outputs\.release_merge_strategy\s*\}\}/)
     assert.match(
       workflow,
-      /release_head=\$\(gh pr view "\$pr"[\s\S]*--json headRefOid[\s\S]*--jq '\.headRefOid'\)/
+      /release_head=\$\(jq -er --arg number "\$pr"[\s\S]*headRefOid[\s\S]*<<< "\$release_validation"\)/
+    )
+    assert.match(workflow, /current_release_head=\$\(gh pr view "\$pr"[\s\S]*--json headRefOid/)
+    assert.match(
+      workflow,
+      /if \[ -z "\$release_head" \] \|\| \[ "\$current_release_head" != "\$release_head" \]/
     )
     assert.match(workflow, /--match-head-commit "\$release_head"/)
     assert.match(workflow, /if \[ -z "\$release_head" \]/)
@@ -1885,63 +1890,75 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /name: Reconcile[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/)
   })
 
-  it('uses GitHub merge state as the guarded release required-check gate', () => {
+  it('delegates pending release checks to GitHub auto-merge with the configured strategy', () => {
     const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+    const validationCaller = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    const validationOrchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
+    const stepSlice = (name) => {
+      const start = workflow.indexOf(`- name: ${name}\n`)
+      assert.ok(start !== -1, `workflow has a ${name} step`)
+      const next = workflow.indexOf('- name: ', start + 1)
+      return next === -1 ? workflow.slice(start) : workflow.slice(start, next)
+    }
+    const mergeStep = stepSlice('Merge generated version pull requests')
 
-    // GitHub's merge state includes branch-policy evaluation. The workflow
-    // must use it directly because gh pr checks --required can return an empty
-    // result for ruleset-backed required contexts in private repositories.
-    assert.match(workflow, /Waiting for release PR #\$pr to become mergeable under branch policy/)
-    assert.match(workflow, /--json mergeStateStatus,mergeable/)
-    assert.match(workflow, /'\[\.mergeStateStatus, \.mergeable\] \| @tsv'/)
-    assert.doesNotMatch(workflow, /gh pr checks "\$pr"[\s\S]*--required/)
-    assert.match(workflow, /authoritative required-check gate/)
-    assert.match(workflow, /case "\$merge_state" in/)
+    // The generated-PR allowlist/path audit runs before any merge request.
     assert.match(
-      workflow,
-      /CLEAN\|UNSTABLE\)\n\s+if \[ "\$mergeable" = MERGEABLE \]; then\n\s+break/
+      mergeStep,
+      /\.headRefName == "release-please--branches--main" or \(\.headRefName \| startswith\("release-please--branches--main--"\)\)/
     )
     assert.match(
-      workflow,
-      /DIRTY\)\n\s+echo "Release PR #\$pr is not mergeable \(mergeStateStatus=\$merge_state\)/
+      mergeStep,
+      /release_validation=\$\(node "\$RUNNER_TEMP\/code-foundry\/src\/cli\.mjs" release validate-prs\)/
     )
-    assert.match(workflow, /\[ "\$mergeable" = CONFLICTING \]/)
-    assert.match(workflow, /resolve conflicts before retrying the release/)
-    assert.match(workflow, /merge_state=UNKNOWN\n\s+mergeable=UNKNOWN/)
-
-    // Non-required checks do not block the merge: UNSTABLE with mergeable
-    // MERGEABLE is accepted immediately, while BLOCKED, BEHIND, and UNKNOWN
-    // keep the guard polling.
     assert.match(
-      workflow,
-      /\{ \[ "\$merge_state" != CLEAN \] && \[ "\$merge_state" != UNSTABLE \]; \} \|\| \[ "\$mergeable" != MERGEABLE \]/
+      mergeStep,
+      /release_head=\$\(jq -er --arg number "\$pr"[\s\S]*headRefOid[\s\S]*<<< "\$release_validation"\)/
+    )
+    assert.match(mergeStep, /current_release_head=\$\(gh pr view "\$pr"[\s\S]*--json headRefOid/)
+    assert.match(
+      mergeStep,
+      /if \[ -z "\$release_head" \] \|\| \[ "\$current_release_head" != "\$release_head" \]/
     )
 
-    // The guard must be bounded: 90 attempts at a 10 second interval, and a
-    // useful fail-closed error when the PR never reaches an accepted state.
-    // Transient gh failures reset the state to UNKNOWN instead of dropping it
-    // to empty.
-    assert.match(workflow, /for attempt in \$\(seq 1 90\)/)
-    assert.match(workflow, /sleep 10/)
+    // GitHub's auto-merge waits on the actual required-check and review policy;
+    // the runner must not reintroduce a shorter local polling deadline.
+    assert.match(mergeStep, /--\$\{\{ steps\.profile\.outputs\.release_merge_strategy \}\}/)
+    assert.match(mergeStep, /--auto/)
+    assert.match(mergeStep, /latest head must still pass the required Validation \/ Gate/)
     assert.match(
-      workflow,
-      /did not become mergeable within the mergeability window \(last mergeStateStatus=\$merge_state, mergeable=\$mergeable\)/
-    )
-    assert.match(workflow, /Required checks may still be pending or branch policy blocks the merge/)
-    assert.match(workflow, /treat the state as unknown and keep polling/)
-
-    // The guard runs before the merge, which still keeps match-head SHA
-    // protection and delete-branch, and never falls back to --admin.
-    const guardIndex = workflow.indexOf('--json mergeStateStatus,mergeable')
-    const timeoutIndex = workflow.indexOf('did not become mergeable within the mergeability window')
-    const mergeIndex = workflow.indexOf('gh pr merge "$pr"')
-    assert.ok(guardIndex !== -1 && timeoutIndex !== -1 && mergeIndex !== -1)
-    assert.ok(guardIndex < timeoutIndex && timeoutIndex < mergeIndex)
-    assert.match(
-      workflow,
+      mergeStep,
       /gh pr merge "\$pr"[\s\S]*--match-head-commit "\$release_head"[\s\S]*--delete-branch/
     )
-    assert.doesNotMatch(workflow, /--admin/)
+    assert.doesNotMatch(mergeStep, /mergeStateStatus|seq 1 90|sleep 10|gh pr checks/)
+    assert.doesNotMatch(mergeStep, /--admin/)
+
+    const validateIndex = mergeStep.indexOf('release validate-prs')
+    const headIndex = mergeStep.indexOf('release_head=$(jq')
+    const currentHeadIndex = mergeStep.indexOf('current_release_head=$(gh pr view')
+    const mergeIndex = mergeStep.indexOf('gh pr merge "$pr"')
+    assert.ok(validateIndex !== -1 && headIndex !== -1 && mergeIndex !== -1)
+    assert.ok(
+      validateIndex < headIndex && headIndex < currentHeadIndex && currentHeadIndex < mergeIndex
+    )
+    assert.match(mergeStep, /if: steps\.credentials\.outputs\.auto_merge == 'true'/)
+
+    // If Release Please advances the head after auto-merge is queued, the
+    // normal required gate runs again for that synchronized head and repeats
+    // the strict release-diff policy before GitHub can merge it.
+    assert.match(
+      validationCaller,
+      /pull_request:[\s\S]*?types:\n\s+- ready_for_review\n\s+- synchronize/
+    )
+    assert.match(
+      validationCaller,
+      /github\.event\.pull_request\.draft == false[\s\S]*?startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)/
+    )
+    assert.match(
+      validationOrchestrator,
+      /name: Validate generated release diff\n\s+if: \$\{\{ inputs\.mode == 'release' \}\}[\s\S]*?validation release_diff/
+    )
+    assert.doesNotMatch(workflow, /startswith\("release-please--branches--main"\)/)
   })
 
   it('doctor and sync enforce topology-specific merge strategies', () => {
@@ -4264,6 +4281,19 @@ jobs:
       allowed
     )
     assert.equal(valid.valid, true)
+    const lookalike = validateReleasePullRequests(
+      [
+        {
+          number: 43,
+          title: 'chore(main): release 1.2.3',
+          headRefName: `${RELEASE_PLEASE_PREFIX}x`,
+        },
+      ],
+      new Map([[43, ['CHANGELOG.md', 'package.json']]]),
+      allowed
+    )
+    assert.equal(lookalike.valid, false)
+    assert.match(lookalike.errors.join(' '), /no generated release PR was found/)
     assert.equal(
       validateReleasePullRequests(generated, new Map([[42, ['src/index.ts']]]), allowed).valid,
       false
@@ -5295,6 +5325,58 @@ jobs:
     })
     assert.equal(extraFile.valid, true)
     assert.deepEqual(extraFile.changedPaths, ['src/version.ts', 'CHANGELOG.md'])
+  })
+
+  it('rejects a release PR head that changes while its path diff is being validated', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-release-head-'))
+    const ghDir = mkdtempSync(join(tmpdir(), 'code-foundry-release-gh-'))
+    const script = join(ghDir, 'gh')
+    const oldPath = process.env.PATH
+    const oldHead = process.env.FAKE_RELEASE_HEAD
+    const oldLog = console.log
+    const auditedHead = 'a'.repeat(40)
+    writeFileSync(
+      script,
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
+  cat <<'JSON'
+[{"number":42,"title":"chore(main): release 1.0.1","headRefName":"release-please--branches--main","headRefOid":"${auditedHead}"}]
+JSON
+elif [ "$1" = "pr" ] && [ "$2" = "diff" ]; then
+  printf 'CHANGELOG.md\\npackage.json\\n'
+elif [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  printf '{"headRefOid":"%s"}\\n' "$FAKE_RELEASE_HEAD"
+else
+  exit 2
+fi
+`
+    )
+    chmodSync(script, 0o755)
+
+    try {
+      process.env.PATH = `${ghDir}:${oldPath}`
+      console.log = () => {}
+      withGitHubEnv({ GITHUB_REPOSITORY: 'owner/repo' }, () => {
+        process.env.FAKE_RELEASE_HEAD = auditedHead
+        const valid = validateReleasePullRequestDiffs(root)
+        assert.equal(valid.valid, true)
+        assert.equal(valid.generated[0].headRefOid, auditedHead)
+
+        process.env.FAKE_RELEASE_HEAD = 'b'.repeat(40)
+        assert.throws(
+          () => validateReleasePullRequestDiffs(root),
+          /changed head while its path diff was being validated/
+        )
+      })
+    } finally {
+      console.log = oldLog
+      process.env.PATH = oldPath
+      if (oldHead == null) delete process.env.FAKE_RELEASE_HEAD
+      else process.env.FAKE_RELEASE_HEAD = oldHead
+      rmSync(ghDir, { recursive: true, force: true })
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('rejects generated release diffs with a stale configured Cargo.lock', () => {

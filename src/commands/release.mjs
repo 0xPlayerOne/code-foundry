@@ -783,7 +783,7 @@ export function validateReleasePullRequestDiffs(root) {
       '--base',
       'main',
       '--json',
-      'number,title,headRefName',
+      'number,title,headRefName,headRefOid',
     ])
     prs = Array.isArray(result) ? result : []
     if (selectGeneratedReleasePrs(prs).length) break
@@ -792,6 +792,8 @@ export function validateReleasePullRequestDiffs(root) {
   const generated = selectGeneratedReleasePrs(Array.isArray(prs) ? prs : [])
   /** @type {Map<number, string[]>} */
   const paths = new Map()
+  /** @type {string[]} */
+  const headErrors = []
   for (const pr of generated) {
     const number = Number(pr.number)
     const result = spawnSync(
@@ -800,12 +802,36 @@ export function validateReleasePullRequestDiffs(root) {
       { cwd: resolve(root), encoding: 'utf8' }
     )
     paths.set(number, result.status === 0 ? result.stdout.split(/\r?\n/).filter(Boolean) : [])
+
+    const auditedHead = typeof pr.headRefOid === 'string' ? pr.headRefOid : ''
+    const currentPr = ghJson(root, [
+      'pr',
+      'view',
+      String(number),
+      '--repo',
+      repository,
+      '--json',
+      'headRefOid',
+    ])
+    const currentHead =
+      currentPr && typeof currentPr === 'object' && !Array.isArray(currentPr)
+        ? /** @type {{ headRefOid?: unknown }} */ (currentPr).headRefOid
+        : undefined
+    if (!auditedHead || currentHead !== auditedHead) {
+      headErrors.push(
+        `Generated release PR #${number} changed head while its path diff was being validated; rerun release validation before merging.`
+      )
+    }
   }
   const validation = validateReleasePullRequests(
     Array.isArray(prs) ? prs : [],
     paths,
     approvedReleaseFiles(readReleaseConfig(root))
   )
+  if (headErrors.length) {
+    validation.valid = false
+    validation.errors.push(...headErrors)
+  }
   console.log(JSON.stringify(validation, null, 2))
   if (!validation.valid) throw new Error(validation.errors.join(' '))
   return validation

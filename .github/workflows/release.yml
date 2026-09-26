@@ -260,7 +260,7 @@ jobs:
               --state open \
               --base main \
               --json number,headRefName \
-              --jq '.[] | select(.headRefName | startswith("release-please--branches--main")) | .number'
+              --jq '.[] | select(.headRefName == "release-please--branches--main" or (.headRefName | startswith("release-please--branches--main--"))) | .number'
           )
 
           if [ ${#release_prs[@]} -eq 0 ]; then
@@ -301,71 +301,40 @@ jobs:
               --state open \
               --base main \
               --json number,title,headRefName \
-              --jq '.[] | select(.title | startswith("chore(main): release ")) | select(.headRefName | startswith("release-please--branches--main")) | .number'
+              --jq '.[] | select(.title | startswith("chore(main): release ")) | select(.headRefName == "release-please--branches--main" or (.headRefName | startswith("release-please--branches--main--"))) | .number'
           )
           if [ "${#release_prs[@]}" -eq 0 ]; then
             echo 'No generated release pull request is open; nothing to merge.'
             exit 0
           fi
-          node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release validate-prs
+          release_validation=$(node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release validate-prs)
+          printf '%s\n' "$release_validation"
           for pr in "${release_prs[@]}"; do
-            # GitHub's merge state is the authoritative required-check gate.
-            # `gh pr checks --required` is not reliable for ruleset-backed
-            # required contexts in private repositories: it can return an
-            # empty result even while the required aggregate check is present
-            # and green. Polling mergeStateStatus avoids that discovery race;
-            # GitHub reports MERGEABLE only after branch policy permits the
-            # requested merge strategy. Non-required checks may leave the PR
-            # UNSTABLE, so accept that state only with mergeable MERGEABLE.
-            echo "Waiting for release PR #$pr to become mergeable under branch policy"
-            merge_state=UNKNOWN
-            mergeable=UNKNOWN
-            for attempt in $(seq 1 90); do
-              : "$attempt"
-              if read -r merge_state mergeable < <(
-                gh pr view "$pr" \
-                  --repo "$GITHUB_REPOSITORY" \
-                  --json mergeStateStatus,mergeable \
-                  --jq '[.mergeStateStatus, .mergeable] | @tsv' 2>/dev/null
-              ); then
-                case "$merge_state" in
-                  CLEAN|UNSTABLE)
-                    if [ "$mergeable" = MERGEABLE ]; then
-                      break
-                    fi
-                    ;;
-                  DIRTY)
-                    echo "Release PR #$pr is not mergeable (mergeStateStatus=$merge_state); resolve conflicts before retrying the release." >&2
-                    exit 1
-                    ;;
-                esac
-                if [ "$mergeable" = CONFLICTING ]; then
-                  echo "Release PR #$pr is not mergeable (mergeable=$mergeable); resolve conflicts before retrying the release." >&2
-                  exit 1
-                fi
-              else
-                # gh API failure: read leaves the variables empty on EOF;
-                # treat the state as unknown and keep polling.
-                merge_state=UNKNOWN
-                mergeable=UNKNOWN
-              fi
-              sleep 10
-            done
-            if { [ "$merge_state" != CLEAN ] && [ "$merge_state" != UNSTABLE ]; } || [ "$mergeable" != MERGEABLE ]; then
-              echo "Release PR #$pr did not become mergeable within the mergeability window (last mergeStateStatus=$merge_state, mergeable=$mergeable). Required checks may still be pending or branch policy blocks the merge; review the pull request before retrying." >&2
-              exit 1
-            fi
-            release_head=$(gh pr view "$pr" \
+            # Keep the generated-PR audit above, then let GitHub wait for the
+            # actual branch policy. A synchronous poll here made a healthy
+            # release fail when required workflows outlasted the runner's
+            # mergeability window. --auto does not bypass checks or reviews;
+            # GitHub merges only after every required condition is satisfied.
+            echo "Requesting branch-policy-gated auto-merge for release PR #$pr"
+            release_head=$(jq -er --arg number "$pr" \
+              '.generated[] | select((.number | tostring) == $number) | .headRefOid | strings | select(length > 0)' \
+              <<< "$release_validation")
+            current_release_head=$(gh pr view "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --json headRefOid \
               --jq '.headRefOid')
-            if [ -z "$release_head" ]; then
-              echo "Could not resolve head commit SHA for release PR #$pr" >&2
+            if [ -z "$release_head" ] || [ "$current_release_head" != "$release_head" ]; then
+              echo "Release PR #$pr changed after its path diff was validated; refusing to enqueue a stale validation result." >&2
               exit 1
             fi
+            # --match-head-commit binds this queue request. GitHub may keep
+            # auto-merge enabled if Release Please later updates the branch;
+            # the latest head must still pass the required Validation / Gate,
+            # including its release-diff policy, before GitHub can merge it.
             gh pr merge "$pr" \
               --repo "$GITHUB_REPOSITORY" \
               --${{ steps.profile.outputs.release_merge_strategy }} \
+              --auto \
               --match-head-commit "$release_head" \
               --delete-branch
           done
