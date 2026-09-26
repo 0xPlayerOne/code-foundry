@@ -173,18 +173,18 @@ export function selectReleaseCredential(input) {
   return { token: '', source: 'missing', autoMerge: false }
 }
 
-/** @param {Array<{number?: number, title?: string, headRefName?: string}>} prs */
+/** @param {Array<{number?: number, title?: string, headRefName?: string, headRefOid?: string}>} prs */
 export function selectGeneratedReleasePrs(prs) {
   return prs.filter(
     (pr) =>
       String(pr.title ?? '').startsWith('chore(main): release ') &&
-      String(pr.headRefName ?? '').startsWith('release-please--branches--main')
+      isReleasePleaseHead(pr.headRefName)
   )
 }
 
 /**
  * Validate all generated release PR diffs before any merge is attempted.
- * @param {Array<{number?: number, title?: string, headRefName?: string}>} prs
+ * @param {Array<{number?: number, title?: string, headRefName?: string, headRefOid?: string}>} prs
  * @param {Map<number, string[]>} changedPathsByPr
  * @param {Set<string>} allowed
  */

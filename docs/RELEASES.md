@@ -128,15 +128,29 @@ repository or organization secret to enable guarded
 automatic merging and downstream workflows triggered by the resulting
 release. The token needs `contents`, `issues`, and `pull-requests` write
 permissions. Code Foundry validates every changed path in the generated
-version pull request before using the token to merge it, waits for the
-required checks to finish, and then polls the pull request's
-`mergeStateStatus` until it is `CLEAN`, or `UNSTABLE` with `mergeable`
-`MERGEABLE`, before merging. Non-required checks that branch policy does not
-require (for example external code review still running after every required
-check passed) do not block the merge; conflicts fail immediately and a bounded
-polling window fails closed if branch or ruleset policy still blocks the merge
-(a ruleset may register additional required checks after earlier ones have
-already passed).
+version pull request before requesting its merge with GitHub's auto-merge
+feature and the configured canonical method (`squash` for `direct`, `rebase`
+for `staging-release`). GitHub performs the merge only after the branch's
+required checks and reviews pass; the release runner exits after submitting
+that request rather than waiting for every workflow to finish. This keeps a
+healthy release from failing just because required checks outlast a bounded
+runner-side wait. No checks, reviews, or branch rules are bypassed. The
+request uses the exact head SHA returned by Code Foundry's path audit and is
+refused if the branch changed during that audit.
+
+Repositories using a valid `CODE_FOUNDRY_TOKEN` must allow auto-merge in their
+GitHub settings when release checks may still be pending. GitHub rejects the
+request if auto-merge is unavailable. If the PR is already eligible, the same
+command merges it immediately under branch policy. A head change detected
+between the path audit and enqueueing fails the release job. Conflicts remain
+subject to GitHub's branch policy and keep the merge from completing until
+resolved. GitHub's
+automatic head-branch deletion setting removes branches after deferred merges;
+the CLI's `--delete-branch` option also removes a branch when the merge completes
+immediately. GitHub can keep auto-merge enabled if a later Release Please run
+updates the branch. With the documented required `Validation / Gate`, each
+synchronized head reruns the release-diff policy, and GitHub waits for that
+head's required checks before merging.
 
 ## Operational checklist
 
