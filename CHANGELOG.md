@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.3...v1.34.0) (2026-09-29)
+
+
+### Features
+
+* billing-paused-dependabot ([#651](https://github.com/0xPlayerOne/code-foundry/issues/651)) ([eda05b5](https://github.com/0xPlayerOne/code-foundry/commit/eda05b5cfa28fc7314ec33a94e539a1660549511))
+
 ## [1.33.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.2...v1.33.3) (2026-09-29)
 
 
