@@ -128,6 +128,14 @@ second toggle: the `OPENCODE_SECURITY` repository or organization variable
 (`true`/`false`) is its only enablement control, so individual repositories can
 opt in or out without a code change.
 
+Dependabot is the one billable runner source the variable cannot gate: its
+update runs execute under the `dynamic` event, outside every job-level guard.
+While paused, set `billing_paused: true` in `.github/code-foundry.yml` and run a
+sync so the rendered `dependabot.yml` disables version updates
+(`open-pull-requests-limit: 0`, monthly cadence). Remove the flag and sync to
+restore updates when billing resumes. `npx code-foundry ci status` reports the
+Dependabot state, and `pause` warns when updates are still active.
+
 ## Standard workflow responsibilities
 
 | Workflow    | Responsibility                                                    |

@@ -1,6 +1,8 @@
 // @ts-check
 
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { readConfig } from '../lib/config.mjs'
 
 export const CI_BILLING_PAUSED_VARIABLE = 'CI_BILLING_PAUSED'
 export const CI_BILLING_BACKUP_VARIABLE = 'CI_BILLING_GATE_BACKUP'
@@ -26,11 +28,13 @@ export function manageCiBilling(root, action) {
   const backup = backupText ? parseBackup(backupText) : null
 
   if (action === 'status') {
+    const dependabot = dependabotPauseState(root)
     const result = {
       repository,
       paused,
       requiredCheck: CI_BILLING_REQUIRED_CHECK,
       backupPresent: Boolean(backup),
+      dependabot,
     }
     console.log(JSON.stringify(result, null, 2))
     return result
@@ -87,12 +91,25 @@ export function manageCiBilling(root, action) {
     setVariable(repository, CI_BILLING_PAUSED_VARIABLE, 'true')
     const cancelledRuns = cancelActiveRuns(repository)
     for (const change of changes) updateRuleset(repository, change.ruleset)
+    const dependabot = dependabotPauseState(root)
     const result = {
       repository,
       paused: true,
       changed: true,
       cancelledRuns,
       rulesets: changes.map((change) => change.ruleset.name),
+      // Dependabot update runs execute under the `dynamic` event, so the
+      // repository variable alone never stops them. Surface the gap every
+      // time so a paused repository cannot keep burning minutes silently.
+      dependabot,
+      ...(dependabot.active
+        ? {
+            dependabotWarning:
+              'Dependabot version updates are still active and are not gated by ' +
+              `${CI_BILLING_PAUSED_VARIABLE}. Set billing_paused: true in .github/code-foundry.yml ` +
+              'and run a sync so dependabot.yml renders open-pull-requests-limit: 0.',
+          }
+        : {}),
     }
     console.log(JSON.stringify(result, null, 2))
     return result
@@ -131,6 +148,31 @@ export function manageCiBilling(root, action) {
   }
   console.log(JSON.stringify(result, null, 2))
   return result
+}
+
+/**
+ * Inspect whether Dependabot version updates are still active in the working
+ * tree. The repository variable gates workflow jobs but not Dependabot's own
+ * `dynamic` update runs, so a paused repository also needs dependabot.yml to
+ * render `open-pull-requests-limit: 0` (the `billing_paused` config does this
+ * during sync). An ecosystem without an explicit limit of 0 counts as active
+ * because Dependabot defaults the limit to 5.
+ *
+ * @param {string} root
+ * @returns {{ configured: boolean, active: boolean, file: string }}
+ */
+export function dependabotPauseState(root) {
+  const file = '.github/dependabot.yml'
+  const path = `${root.replace(/\/$/, '')}/${file}`
+  if (!existsSync(path)) return { configured: false, active: false, file }
+  const source = readFileSync(path, 'utf8')
+  const configured =
+    readConfig(`${root.replace(/\/$/, '')}/.github/code-foundry.yml`).billing_paused === 'true'
+  const blocks = source
+    .split(/(?=^  - package-ecosystem: )/m)
+    .filter((block) => block.startsWith('  - package-ecosystem: '))
+  const active = blocks.some((block) => !/^    open-pull-requests-limit: 0(\s|#|$)/m.test(block))
+  return { configured, active, file }
 }
 
 /** @param {any} ruleset */

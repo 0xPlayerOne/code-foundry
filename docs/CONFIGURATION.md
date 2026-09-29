@@ -45,6 +45,7 @@ to require an existing mise configuration.
 | `runtime_ref`           | tag or commit                                | Runtime version used by generated callers.                           |
 | `features`              | `all` or a list                              | See [Feature selection](#feature-selection).                         |
 | `draft_protection`      | `true`, `false`                              | Skip generated runner-heavy gates for draft PRs when false.          |
+| `billing_paused`        | `true`, `false`                              | Disable Dependabot version updates while CI billing is paused.       |
 | `codeql`                | `auto`, `true`, `false`                      | Enable CodeQL when the repository and GitHub plan support it.        |
 | `dependency_review`     | `auto`, `true`, `false`                      | Enable Dependency Review when supported.                             |
 | `runner` and `*_runner` | GitHub runner labels                         | Override the default runner per workflow.                            |
@@ -61,6 +62,14 @@ configuration key defaults to `true`; set it to `false` only when the repository
 intentionally runs generated gates for draft PRs. Cloudflare reusable-workflow
 callers use their equivalent `draft-protection` input. These opt-outs affect
 CI/deployment gates only and do not disable Draft Guard or draft-PR automation.
+
+The `CI_BILLING_PAUSED` repository variable gates every generated workflow job,
+but Dependabot's update runs execute under the `dynamic` event and never see
+that variable. Set `billing_paused: true` alongside the variable and re-run
+`sync` so the rendered `dependabot.yml` sets `open-pull-requests-limit: 0` and
+drops the update cadence to monthly for every ecosystem. Removing the flag and
+syncing again restores the active template. `npx code-foundry ci status` reports
+when a paused repository still has Dependabot updates active.
 
 ## Feature selection
 
