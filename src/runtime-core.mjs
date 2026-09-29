@@ -1011,8 +1011,13 @@ function codeql() {
     available.push('javascript-typescript')
   if (hasLanguage('python')) available.push('python')
   if (hasLanguage('rust')) available.push('rust')
-  // Upload every configured language on every analysis run so GitHub can
-  // compare pull requests against the base branch's code-scanning config.
+  // On pull requests, analyzers whose language has no changed files skip
+  // their analysis steps, and Rust shards skip individually by scope. Every
+  // other event analyzes the complete set so the default branch keeps one
+  // full, comparable code-scanning baseline; a missing or unreadable
+  // changed-file list also fails open toward analyzing everything.
+  const changedPaths = pullRequestChangedPaths()
+  /** @type {CodeqlLanguageEntry[]} */
   const languagesJson = available.map((language) => ({
     language,
     name:
@@ -1020,8 +1025,17 @@ function codeql() {
         ? 'TypeScript'
         : language[0].toUpperCase() + language.slice(1),
     'build-mode': 'none',
-    changed: true,
+    changed: changedPaths === null || languageChanged(language, changedPaths),
   }))
+  const rustEntry = languagesJson.find((item) => item.language === 'rust')
+  if (rustEntry && changedPaths !== null) {
+    const shards = configuredRustShards().map((shard) => ({
+      shard,
+      changed: shardChanged(shard, changedPaths),
+    }))
+    rustEntry.shards = shards
+    rustEntry.changed = shards.some((entry) => entry.changed)
+  }
   writeOutput('languages', languagesJson)
   for (const language of ['actions', 'javascript-typescript', 'python', 'rust']) {
     const entry = languagesJson.find((item) => item.language === language)
@@ -1030,6 +1044,105 @@ function codeql() {
     writeOutput(`${prefix}_changed`, entry?.changed ? 'true' : 'false')
     writeOutput(`${prefix}_build_mode`, entry?.['build-mode'] ?? 'none')
   }
+}
+
+/**
+ * Changed file paths for the current pull request, read from the list the
+ * caller materializes with the pull request files API. Returns null when
+ * change detection does not apply — any event other than pull_request, a
+ * repository whose rulesets enforce the code-scanning merge gate (that gate
+ * waits for results in every tracked category, so skipped uploads deadlock
+ * merges), or a missing, unreadable, or truncated list — so callers fail
+ * open toward analyzing everything.
+ * @returns {Set<string> | null}
+ */
+function pullRequestChangedPaths() {
+  if ((process.env.FOUNDRY_EVENT_NAME ?? '') !== 'pull_request') return null
+  if (process.env.FOUNDRY_CODEQL_MERGE_GATE === 'true') return null
+  const file = process.env.FOUNDRY_CODEQL_CHANGED_FILES_FILE ?? ''
+  if (!file) return null
+  let contents = ''
+  try {
+    contents = readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+  const paths = contents
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  // The pull request files endpoint stops at 3000 entries; a list that large
+  // cannot prove any language unchanged.
+  if (paths.length >= 3000) return null
+  return new Set(paths)
+}
+
+/**
+ * One detected CodeQL language for the analysis matrix. `shards` carries
+ * per-scope change flags for Rust on pull requests; the matrix builder in
+ * codeql.yml falls back to the language-level flag when it is absent.
+ * @typedef {{
+ *   language: string,
+ *   name: string,
+ *   'build-mode': string,
+ *   changed: boolean,
+ *   shards?: Array<{ shard: string, changed: boolean }>,
+ * }} CodeqlLanguageEntry
+ */
+
+/**
+ * Path predicates per CodeQL language. Manifests and lockfiles count as
+ * language changes: dependency bumps alter what the analyzer sees.
+ * @type {Record<string, RegExp>}
+ */
+const CODEQL_LANGUAGE_PATHS = {
+  actions: /^\.github\/(workflows|actions)\//,
+  'javascript-typescript':
+    /\.(js|jsx|ts|tsx|mjs|cjs|mts|cts)$|(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|bun\.lockb|tsconfig[^/]*\.json|jsconfig[^/]*\.json)$/,
+  python: /\.py$|(^|\/)(pyproject\.toml|poetry\.lock|setup\.py|setup\.cfg|requirements[^/]*\.txt)$/,
+  rust: /\.rs$|(^|\/)(Cargo\.(toml|lock)|rust-toolchain(\.toml)?)$/,
+}
+
+/** @param {string} language @param {Set<string>} changedPaths */
+function languageChanged(language, changedPaths) {
+  const pattern = CODEQL_LANGUAGE_PATHS[language]
+  if (!pattern) return true
+  for (const path of changedPaths) if (pattern.test(path)) return true
+  return false
+}
+
+/** @returns {string[]} */
+function configuredRustShards() {
+  const raw = configured(config.codeql_rust_shards, '["all"]')
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length ? parsed.map(String) : ['all']
+  } catch {
+    return ['all']
+  }
+}
+
+/**
+ * A scoped shard runs when a changed path falls inside one of its scope
+ * prefixes, or when a workspace-wide manifest changed: the analysis config
+ * appends the Cargo manifests and toolchain to every shard, so those files
+ * re-arm all shards at once. The `all` shard never skips.
+ * @param {string} shard @param {Set<string>} changedPaths
+ */
+function shardChanged(shard, changedPaths) {
+  if (shard === 'all') return true
+  const scopes = shard
+    .split(',')
+    .map((scope) => scope.trim())
+    .filter(Boolean)
+  for (const path of changedPaths) {
+    if (/^(Cargo\.toml|Cargo\.lock|rust-toolchain(\.toml)?)$/.test(path)) return true
+    for (const scope of scopes) {
+      const prefix = scope.endsWith('/') ? scope : `${scope}/`
+      if (path === scope || path.startsWith(prefix)) return true
+    }
+  }
+  return false
 }
 
 /** @param {string} command */
