@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.0...v1.36.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **cloudflare:** build a preview Build Output before cf previews deploy ([#660](https://github.com/0xPlayerOne/code-foundry/issues/660)) ([d897380](https://github.com/0xPlayerOne/code-foundry/commit/d897380110a692143b3bcb0915d8ce40cff4663c))
+
 ## [1.36.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.35.0...v1.36.0) (2026-09-29)
 
 
