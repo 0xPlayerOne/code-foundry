@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.2...v1.33.3) (2026-09-29)
+
+
+### Bug Fixes
+
+* **ci:** launch wrangler under Node in the cloudflare deploy step ([#649](https://github.com/0xPlayerOne/code-foundry/issues/649)) ([e797934](https://github.com/0xPlayerOne/code-foundry/commit/e7979343d3ff4d1fe5dc1520568a501cce0c47f3))
+
 ## [1.33.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.1...v1.33.2) (2026-09-26)
 
 
