@@ -823,12 +823,21 @@ function removeWorkflowBlock(content, blockId) {
  * part of the configured language set, respectively; weekly updater runs
  * fail when an ecosystem has no manifests to read, so unconfigured
  * ecosystems are dropped instead of left to error.
+ *
+ * The billing pause must also cover Dependabot: its update runs execute as
+ * Actions workflows under the `dynamic` event, so the `CI_BILLING_PAUSED`
+ * repository variable that gates every workflow job cannot stop them. When
+ * `billing_paused: true` is configured, version updates are disabled by
+ * rendering `open-pull-requests-limit: 0` and dropping the cadence to
+ * monthly; `schedule` is a required key, so the ecosystem blocks stay
+ * structurally valid and a later sync with the flag removed restores the
+ * template verbatim.
  * @param {string} content
  * @param {Record<string,string>} config
  * @param {string} languages
  * @returns {string}
  */
-function renderDependabot(content, config, languages) {
+export function renderDependabot(content, config, languages) {
   let rendered = content
   if (!includesValue(languages, 'rust')) {
     rendered = stripDependabotEcosystem(rendered, 'cargo')
@@ -839,8 +848,31 @@ function renderDependabot(content, config, languages) {
   if (!includesValue(languages, 'python')) {
     rendered = stripDependabotEcosystem(rendered, 'pip')
   }
+  if (configured(config.billing_paused, 'false') === 'true') {
+    rendered = pauseDependabot(rendered)
+  }
   if (isStagingRelease(config.git_workflow)) return rendered
   return rendered.replaceAll('target-branch: staging', 'target-branch: main')
+}
+
+/**
+ * Disable Dependabot version updates for every remaining ecosystem. The
+ * transformations are regex-based so they hold for any ecosystem count and
+ * any future template default; an unchanged file after both replacements
+ * means the template stopped defining schedules or limits, which is a loud
+ * template drift the next sync test will catch.
+ * @param {string} content
+ * @returns {string}
+ */
+function pauseDependabot(content) {
+  const limited = content.replace(
+    /^(\s*)open-pull-requests-limit:\s*\d+\s*$/gm,
+    `$1open-pull-requests-limit: 0 # billing_paused: version updates disabled`
+  )
+  return limited.replace(
+    /^(\s*)interval:\s*weekly\s*$/gm,
+    `$1interval: monthly # billing_paused: reduced cadence`
+  )
 }
 
 /**
