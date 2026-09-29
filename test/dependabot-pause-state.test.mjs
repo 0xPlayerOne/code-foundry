@@ -52,7 +52,11 @@ describe('dependabotPauseState', () => {
   })
 
   it('treats a missing limit as active because Dependabot defaults it to 5', () => {
-    const state = dependabotPauseState(fixture('version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n    schedule:\n      interval: weekly\n'))
+    const state = dependabotPauseState(
+      fixture(
+        'version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n    schedule:\n      interval: weekly\n'
+      )
+    )
     assert.equal(state.active, true)
   })
 
