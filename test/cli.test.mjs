@@ -1792,7 +1792,12 @@ describe('code-foundry CLI', () => {
     assert.match(opencodeCaller, /OPENCODE_SECURITY: \$\{\{ vars\.OPENCODE_SECURITY \}\}/)
     assert.doesNotMatch(opencodeCaller, /OPENCODE_SECURITY_OVERRIDE/)
     assert.doesNotMatch(opencodeCaller, /opencode_security|grep -Eq/)
-    assert.match(opencodeCaller, /if: vars\.CI_BILLING_PAUSED != 'true'/)
+    // The detect job gates on the billing pause and on the security variable
+    // itself, so a disabled repository never allocates a runner for it.
+    assert.match(
+      opencodeCaller,
+      /if: >-\n      vars\.CI_BILLING_PAUSED != 'true' &&\n      vars\.OPENCODE_SECURITY == 'true' &&/
+    )
     assert.doesNotMatch(opencodeCaller, /startsWith\(github\.event\.pull_request\.head\.ref/)
 
     const draftControlCaller = readFileSync('.github/workflows/draft-control_self-ci.yml', 'utf8')

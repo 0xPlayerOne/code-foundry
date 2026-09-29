@@ -126,7 +126,11 @@ Custom workflows are repository-owned and are not rewritten by sync. Add
 honor the shared billing pause. The optional OpenCode Security scan honors a
 second toggle: the `OPENCODE_SECURITY` repository or organization variable
 (`true`/`false`) is its only enablement control, so individual repositories can
-opt in or out without a code change.
+opt in or out without a code change. When the variable is not `true`, no
+Security job runs at all — a disabled repository allocates no runner for it.
+Repository variables override the organization value, so an organization-level
+variable toggles every consumer in one place while a single repository can
+still opt out (or in) independently.
 
 Dependabot is the one billable runner source the variable cannot gate: its
 update runs execute under the `dynamic` event, outside every job-level guard.
