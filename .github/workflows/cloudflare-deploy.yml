@@ -285,12 +285,12 @@ jobs:
           set -euo pipefail
           if [ "$WRANGLER_VERSION" = local ]; then
             if [ -n "$BUILD_SCRIPT" ]; then
-              wrangler=(bunx --bun --no-install wrangler)
+              wrangler=(npx --no-install wrangler)
             else
               wrangler=(npx --no-install wrangler)
             fi
           elif [ -n "$BUILD_SCRIPT" ]; then
-            wrangler=(bunx --bun "wrangler@$WRANGLER_VERSION")
+            wrangler=(npx -y "wrangler@$WRANGLER_VERSION")
           else
             wrangler=(npx -y "wrangler@$WRANGLER_VERSION")
           fi
