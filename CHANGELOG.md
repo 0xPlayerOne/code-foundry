@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.2...v1.36.3) (2026-09-29)
+
+
+### Maintenance
+
+* track the JavaScript Dependabot ecosystem as bun by default ([#648](https://github.com/0xPlayerOne/code-foundry/issues/648)) ([6aa9712](https://github.com/0xPlayerOne/code-foundry/commit/6aa9712904340a7e4783f697a0e02d2be6ab1dce))
+
 ## [1.36.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.1...v1.36.2) (2026-09-29)
 
 
