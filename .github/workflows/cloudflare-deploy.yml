@@ -77,31 +77,63 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  affected:
-    name: Check Turbo deployment impact
+  deploy:
+    name: Cloudflare Deploy / ${{ inputs.mode }}
+    # The Turbo impact check lives here as steps instead of a separate job:
+    # one checkout and one dependency install serve both the query and the
+    # deploy. Every deployment step is skipped when the check reports the
+    # package unaffected, and the check defaults to deploying whenever it
+    # cannot run.
     if: >-
-      inputs['turbo-filter'] != '' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push') &&
       vars.CI_BILLING_PAUSED != 'true' &&
       (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event_name != 'pull_request' || inputs.mode != 'preview' || !startsWith(github.event.pull_request.head.ref, 'release-please--branches--main')) &&
       github.event_name != 'pull_request_target' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 10
-    permissions:
-      contents: read
+    timeout-minutes: 30
+    # The explicit deployment record below is the sole GitHub deployment record.
+    # Keep the environment for approvals, secrets, and branch protection without
+    # creating a second, competing PR timeline entry.
+    environment:
+      name: ${{ inputs.environment || (inputs.mode == 'production' && 'Production' || 'Preview') }}
+      deployment: false
+      url: ${{ steps.deploy.outputs.url }}
     outputs:
-      should_deploy: ${{ steps.check.outputs.should_deploy || steps.resolve.outputs.should_deploy }}
+      url: ${{ steps.deploy.outputs.url }}
+      version-id: ${{ steps.deploy.outputs.version-id }}
+      github-deployment-id: ${{ steps.start.outputs.id }}
     steps:
-      - name: Checkout full history
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
           persist-credentials: false
+          # The Turbo affected query compares the head tree against the base
+          # commit, so the checkout needs history; blob:none keeps it light.
+          fetch-depth: 0
+          filter: blob:none
+      - name: Validate deployment inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+        run: |
+          set -euo pipefail
+          [[ "$MODE" == preview || "$MODE" == production ]]
+          [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" == latest || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
+      - name: Set up Bun
+        if: inputs.build-script != '' || inputs['turbo-filter'] != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+          cache: true
+          cache-dependency-path: ${{ inputs.install-working-directory }}/bun.lock
+      - name: Install dependencies
+        if: inputs.build-script != '' || inputs['turbo-filter'] != ''
+        working-directory: ${{ inputs.install-working-directory }}
+        run: bun install --frozen-lockfile
       - name: Resolve Turbo package
         id: resolve
+        if: inputs['turbo-filter'] != ''
         working-directory: ${{ inputs.install-working-directory }}
         env:
           TURBO_FILTER: ${{ inputs.turbo-filter }}
@@ -150,20 +182,9 @@ jobs:
             }
           }
           NODE
-      - name: Set up Bun
-        if: steps.resolve.outputs.turbo_enabled == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ inputs.bun-version }}
-          cache: true
-          cache-dependency-path: ${{ inputs.install-working-directory }}/bun.lock
-      - name: Install dependencies for Turbo
-        if: steps.resolve.outputs.turbo_enabled == 'true'
-        working-directory: ${{ inputs.install-working-directory }}
-        run: bun install --frozen-lockfile --ignore-scripts
       - name: Check affected build task
-        if: steps.resolve.outputs.turbo_enabled == 'true'
         id: check
+        if: inputs['turbo-filter'] != '' && steps.resolve.outputs.turbo_enabled == 'true'
         working-directory: ${{ inputs.install-working-directory }}
         env:
           TURBO_PACKAGE: ${{ steps.resolve.outputs.turbo_package }}
@@ -193,49 +214,8 @@ jobs:
           console.log(`${packageName}: ${affected ? 'affected' : 'unaffected'}`)
           appendFileSync(process.env.GITHUB_OUTPUT, `should_deploy=${affected}\n`)
           NODE
-
-  deploy:
-    name: Cloudflare Deploy / ${{ inputs.mode }}
-    needs: affected
-    if: >-
-      always() &&
-      vars.CI_BILLING_PAUSED != 'true' &&
-      (inputs['draft-protection'] != true || github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event_name != 'pull_request' || inputs.mode != 'preview' || !startsWith(github.event.pull_request.head.ref, 'release-please--branches--main')) &&
-      github.event_name != 'pull_request_target' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
-      (
-        inputs['turbo-filter'] == '' ||
-        needs.affected.result == 'skipped' ||
-        needs.affected.outputs.should_deploy == 'true'
-      )
-    runs-on: ${{ inputs.runner }}
-    timeout-minutes: 20
-    # The explicit deployment record below is the sole GitHub deployment record.
-    # Keep the environment for approvals, secrets, and branch protection without
-    # creating a second, competing PR timeline entry.
-    environment:
-      name: ${{ inputs.environment || (inputs.mode == 'production' && 'Production' || 'Preview') }}
-      deployment: false
-      url: ${{ steps.deploy.outputs.url }}
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-      version-id: ${{ steps.deploy.outputs.version-id }}
-      github-deployment-id: ${{ steps.start.outputs.id }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Validate deployment inputs
-        env:
-          MODE: ${{ inputs.mode }}
-          WRANGLER_VERSION: ${{ inputs.wrangler-version }}
-        run: |
-          set -euo pipefail
-          [[ "$MODE" == preview || "$MODE" == production ]]
-          [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" == latest || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
       - name: Record pending deployment
+        if: steps.check.outputs.should_deploy != 'false'
         id: start
         env:
           GH_TOKEN: ${{ github.token }}
@@ -263,7 +243,7 @@ jobs:
         working-directory: ${{ inputs.install-working-directory }}
         run: bun install --frozen-lockfile
       - name: Build Worker
-        if: inputs.build-script != ''
+        if: inputs.build-script != '' && steps.check.outputs.should_deploy != 'false'
         working-directory: ${{ inputs.working-directory }}
         env:
           BUILD_SCRIPT: ${{ inputs.build-script }}
@@ -273,6 +253,7 @@ jobs:
         run: bun run "$BUILD_SCRIPT"
       - name: Deploy to Cloudflare
         id: deploy
+        if: steps.check.outputs.should_deploy != 'false'
         working-directory: ${{ inputs.working-directory }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -318,7 +299,7 @@ jobs:
           appendFileSync(process.env.GITHUB_OUTPUT, `url=${url.href}\nversion-id=${record.version_id}\n`)
           NODE
       - name: Complete deployment status
-        if: always() && steps.start.outputs.id != ''
+        if: always() && steps.check.outputs.should_deploy != 'false' && steps.start.outputs.id != ''
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOYMENT_ID: ${{ steps.start.outputs.id }}

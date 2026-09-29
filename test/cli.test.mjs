@@ -1590,15 +1590,17 @@ describe('code-foundry CLI', () => {
     assert.match(workflow, /build-script:/)
     assert.match(workflow, /install-working-directory:/)
     assert.match(workflow, /turbo-filter:[\s\S]*?type: string[\s\S]*?default: auto/)
-    assert.match(workflow, /name: Check Turbo deployment impact/)
     assert.match(workflow, /name: Resolve Turbo package/)
     assert.match(workflow, /TURBO_FILTER: \$\{\{ inputs\.turbo-filter \}\}/)
     assert.match(workflow, /turbo query affected \\\n\s+--packages/)
-    assert.match(workflow, /github\.event_name == 'push'/)
     assert.match(workflow, /github\.event\.before/)
     assert.match(workflow, /fetch-depth: 0/)
-    assert.match(workflow, /needs: affected/)
-    assert.match(workflow, /needs\.affected\.outputs\.should_deploy == 'true'/)
+    // The impact check lives in the deploy job as steps: one checkout and
+    // one install serve both the query and the deploy, and unaffected
+    // packages skip every deployment step.
+    assert.doesNotMatch(workflow, /^  affected:\s*$/m)
+    assert.doesNotMatch(workflow, /needs: affected/)
+    assert.match(workflow, /steps\.check\.outputs\.should_deploy != 'false'/)
     assert.match(workflow, /bun install --frozen-lockfile/)
     assert.match(workflow, /bun run "\$BUILD_SCRIPT"/)
     assert.match(workflow, /deployments: write/)
