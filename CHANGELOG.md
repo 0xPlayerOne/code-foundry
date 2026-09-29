@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.35.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.34.0...v1.35.0) (2026-09-29)
+
+
+### Features
+
+* fold the Turbo impact check into the cloudflare deploy job ([#655](https://github.com/0xPlayerOne/code-foundry/issues/655)) ([b72f5f2](https://github.com/0xPlayerOne/code-foundry/commit/b72f5f26f045103755bb2795f2fc3a84e7625b3c))
+* scope CodeQL analysis to changed languages and Rust shards on pull requests ([#654](https://github.com/0xPlayerOne/code-foundry/issues/654)) ([d5ce743](https://github.com/0xPlayerOne/code-foundry/commit/d5ce74377601c2efb3be4831320cb62cdfbd999b))
+* skip the security detector entirely while OpenCode Security is disabled ([#653](https://github.com/0xPlayerOne/code-foundry/issues/653)) ([9e4271e](https://github.com/0xPlayerOne/code-foundry/commit/9e4271e597d65b4f63c571baab5507eacaab1ce5))
+
+
+### Maintenance
+
+* raise the packed artifact budget to 286 kB ([#657](https://github.com/0xPlayerOne/code-foundry/issues/657)) ([4512af7](https://github.com/0xPlayerOne/code-foundry/commit/4512af75fc18a36292f495c5e7f51791ba38f3d6))
+
 ## [1.34.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.33.3...v1.34.0) (2026-09-29)
 
 
