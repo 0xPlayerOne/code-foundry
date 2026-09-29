@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.35.0...v1.36.0) (2026-09-29)
+
+
+### Features
+
+* **cloudflare:** add a cf deploy mode to cloudflare-deploy.yml ([#658](https://github.com/0xPlayerOne/code-foundry/issues/658)) ([31ef8ca](https://github.com/0xPlayerOne/code-foundry/commit/31ef8ca607c189d7ca0bbe4f42de85ee27edabc9))
+
 ## [1.35.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.34.0...v1.35.0) (2026-09-29)
 
 
