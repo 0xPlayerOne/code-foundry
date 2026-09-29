@@ -301,7 +301,13 @@ repository and configure environment reviewers separately.
 The legacy `cloudflare-deploy.yml` workflow remains available for direct
 (unverified) deployments. It runs `wrangler versions upload` for previews and
 `wrangler deploy` for production, records a GitHub deployment plus status, and
-respects `CI_BILLING_PAUSED`. Preview deployment records use the pull request
+respects `CI_BILLING_PAUSED`. With `deploy-tool: cf` it instead deploys through
+the Cloudflare cf CLI: production runs `cf-wrangler build` plus
+`cf deploy --prebuilt` (consuming the project's cf Build Output), previews run
+`cf previews deploy` named after the pull request or branch, and the cf/wrangler
+CLIs must be devDependencies of the deployed package (the build step installs
+them), so `build-script` is required. Deployment URLs and version IDs are
+extracted from the same job outputs either way. Preview deployment records use the pull request
 head SHA when called from a PR, which lets GitHub show the completed preview in
 the PR's Deployments section; direct pushes use the workflow SHA. Its
 legacy-compatible Wrangler default is `latest`; callers should prefer `local` or
