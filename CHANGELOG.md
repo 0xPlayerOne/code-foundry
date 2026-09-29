@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.1...v1.36.2) (2026-09-29)
+
+
+### Bug Fixes
+
+* **cloudflare:** resolve cf bins by walking up node_modules/.bin ([#662](https://github.com/0xPlayerOne/code-foundry/issues/662)) ([e82bbe0](https://github.com/0xPlayerOne/code-foundry/commit/e82bbe0a1687b5cc8bf939769e15639f25199969))
+
 ## [1.36.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.0...v1.36.1) (2026-09-29)
 
 
