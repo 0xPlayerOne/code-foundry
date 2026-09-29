@@ -280,6 +280,15 @@ every tracked category. Two practical consequences:
   categories in the shard list keeps the gate green but re-runs their analysis
   on every pull request and is not a substitute for cleanup.
 
+On pull requests without a code-scanning merge gate, analyzers run only for
+languages with changed files, and Rust shards run only when their scope (or a
+workspace-wide `Cargo` manifest or toolchain file) changed; unchanged matrix
+entries report `Not applicable` instead of analyzing. Repositories whose
+rulesets enforce a code-scanning requirement are detected automatically and
+analyze everything, because that merge gate waits for results in every tracked
+category. Push, schedule, and merge-queue events always analyze the complete
+set so the default branch keeps one full, comparable baseline.
+
 ## Cloudflare Workers
 
 Repositories that deploy to Cloudflare Workers can use the opt-in verified

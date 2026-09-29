@@ -2389,8 +2389,10 @@ jobs:
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.matrix/)
     assert.doesNotMatch(workflow, /rust_matrix/)
     // Rust shard fan-out lives in the shared matrix; the dedicated throttle
-    // input stays declared for caller compatibility.
-    assert.match(workflow, /for \(const shard of rust \? shards : \[\]\)/)
+    // input stays declared for caller compatibility. The runtime feeds
+    // per-shard change flags so unchanged shards skip their analysis steps.
+    assert.match(workflow, /const rustShards =\s*$/m)
+    assert.match(workflow, /changed: entry\.changed === true,/)
     assert.match(workflow, /sha256.*slice\(0, 12\)/)
     assert.match(
       workflow,

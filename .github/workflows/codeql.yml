@@ -125,10 +125,47 @@ jobs:
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: List pull request files
+        id: changed
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Newline-separated changed paths for the runtime's change
+          # detection. A failed listing leaves the file absent and the
+          # runtime fails open toward analyzing every language and shard.
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST_NUMBER/files?per_page=100" \
+            --paginate --jq '.[].filename' > "$RUNNER_TEMP/changed-files.txt" || true
+          echo "file=$RUNNER_TEMP/changed-files.txt" >> "$GITHUB_OUTPUT"
+      - name: Detect code scanning merge gate
+        id: gate
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The code-scanning merge gate waits for results in every tracked
+          # category, so change detection must never skip an upload while it
+          # is active. Any ruleset API failure also disables change
+          # detection: full analysis is the safe default.
+          gated=false
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/rulesets" --paginate \
+            -q '.[] | select(.enforcement == "active") | .id' 2>/dev/null); do
+            if gh api "repos/$GITHUB_REPOSITORY/rulesets/$id" \
+              -q 'any(.rules[]?; .type == "code_scanning")' 2>/dev/null | grep -q true; then
+              gated=true
+              break
+            fi
+          done
+          echo "gated=$gated" >> "$GITHUB_OUTPUT"
       - id: languages
         name: Detect languages
         env:
           CODEQL_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          FOUNDRY_CODEQL_CHANGED_FILES_FILE: ${{ steps.changed.outputs.file }}
+          FOUNDRY_CODEQL_MERGE_GATE: ${{ steps.gate.outputs.gated }}
           REPO_FOUNDRY_CODE_SECURITY: ${{ steps.security.outputs.status }}
           REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
           REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
@@ -166,14 +203,24 @@ jobs:
                 changed: entry.changed === true,
               }));
             const rust = languages.find((entry) => entry.language === "rust");
-            for (const shard of rust ? shards : []) {
+            // The runtime emits per-shard change flags when the event is a
+            // pull request with a usable changed-file list; fall back to the
+            // shard list of the caller with the language-level flag
+            // otherwise. No single quotes: this script runs through node -e.
+            const rustShards =
+              rust && Array.isArray(rust.shards) && rust.shards.length
+                ? rust.shards
+                : (rust
+                    ? shards.map((shard) => ({ shard: String(shard), changed: rust.changed === true }))
+                    : []);
+            for (const entry of rustShards) {
               matrix.push({
-                display: String(shard) === "all" ? "Rust" : "Rust (" + shard + ")",
+                display: entry.shard === "all" ? "Rust" : "Rust (" + entry.shard + ")",
                 language: "rust",
                 category: "/language:rust",
                 build_mode: "none",
-                changed: rust.changed === true,
-                shard: String(shard),
+                changed: entry.changed === true,
+                shard: String(entry.shard),
               });
             }
             if (!matrix.length) {
