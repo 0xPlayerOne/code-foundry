@@ -69,4 +69,30 @@ describe('renderDependabot billing pause', () => {
       }
     }
   })
+
+  it('keeps the bun ecosystem for the bun default', () => {
+    const rendered = renderDependabot(template, { ...directConfig }, 'typescript')
+    assert.match(rendered, /- package-ecosystem: bun$/m)
+    assert.match(rendered, /bun-dependencies:/)
+    assert.doesNotMatch(rendered, /package-ecosystem: npm/)
+  })
+
+  it('retargets the JavaScript ecosystem to npm for npm-locked consumers', () => {
+    const rendered = renderDependabot(
+      template,
+      { ...directConfig, package_manager: 'npm' },
+      'typescript'
+    )
+    assert.match(rendered, /- package-ecosystem: npm$/m)
+    assert.match(rendered, /npm-dependencies:/)
+    assert.doesNotMatch(rendered, /package-ecosystem: bun/)
+  })
+
+  it('drops the JavaScript ecosystem for non-TypeScript consumers in either flavor', () => {
+    for (const package_manager of ['bun', 'npm']) {
+      const rendered = renderDependabot(template, { ...directConfig, package_manager }, 'python')
+      assert.doesNotMatch(rendered, /package-ecosystem: (bun|npm)/)
+      assert.match(rendered, /package-ecosystem: pip/)
+    }
+  })
 })

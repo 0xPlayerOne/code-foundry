@@ -818,11 +818,13 @@ function removeWorkflowBlock(content, blockId) {
 
 /**
  * Dependabot updates land on the repository's integration branch. Direct
- * repositories have no staging branch, so every update targets main. Cargo,
- * npm, and pip updates are emitted only when Rust, TypeScript, or Python is
- * part of the configured language set, respectively; weekly updater runs
- * fail when an ecosystem has no manifests to read, so unconfigured
- * ecosystems are dropped instead of left to error.
+ * repositories have no staging branch, so every update targets main. The
+ * JavaScript ecosystem block ships as `bun` (the fleet default) and is
+ * retargeted to `npm` for consumers whose `package_manager` is npm; Cargo,
+ * the JavaScript block, and pip updates are emitted only when Rust,
+ * TypeScript, or Python is part of the configured language set,
+ * respectively; weekly updater runs fail when an ecosystem has no manifests
+ * to read, so unconfigured ecosystems are dropped instead of left to error.
  *
  * The billing pause must also cover Dependabot: its update runs execute as
  * Actions workflows under the `dynamic` event, so the `CI_BILLING_PAUSED`
@@ -843,16 +845,38 @@ export function renderDependabot(content, config, languages) {
     rendered = stripDependabotEcosystem(rendered, 'cargo')
   }
   if (!includesValue(languages, 'typescript')) {
-    rendered = stripDependabotEcosystem(rendered, 'npm')
+    rendered = stripDependabotEcosystem(rendered, 'bun')
   }
   if (!includesValue(languages, 'python')) {
     rendered = stripDependabotEcosystem(rendered, 'pip')
+  }
+  if (
+    includesValue(languages, 'typescript') &&
+    configured(config.package_manager, 'bun') === 'npm'
+  ) {
+    // The template tracks the fleet's bun majority; an npm-locked consumer
+    // needs the npm ecosystem or Dependabot fails with misconfigured_tooling
+    // (it cannot read bun.lock).
+    rendered = swapBunEcosystemForNpm(rendered)
   }
   if (configured(config.billing_paused, 'false') === 'true') {
     rendered = pauseDependabot(rendered)
   }
   if (isStagingRelease(config.git_workflow)) return rendered
   return rendered.replaceAll('target-branch: staging', 'target-branch: main')
+}
+
+/**
+ * Retarget the JavaScript ecosystem block to npm for npm-locked consumers.
+ * Exact-string based so template drift fails loudly at Dependabot time
+ * instead of silently scanning the wrong lockfile.
+ * @param {string} content
+ * @returns {string}
+ */
+function swapBunEcosystemForNpm(content) {
+  return content
+    .replace('  - package-ecosystem: bun\n', '  - package-ecosystem: npm\n')
+    .replace('      bun-dependencies:\n', '      npm-dependencies:\n')
 }
 
 /**

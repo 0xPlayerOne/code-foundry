@@ -2117,9 +2117,11 @@ jobs:
     const dependabot = readFileSync(join(root, '.github/dependabot.yml'), 'utf8')
     assert.match(dependabot, /target-branch: main/)
     assert.doesNotMatch(dependabot, /target-branch: staging/)
+    // The init default detects no languages, so only github-actions remains.
     assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
     assert.doesNotMatch(dependabot, /package-ecosystem: pip/)
     assert.doesNotMatch(dependabot, /package-ecosystem: npm/)
+    assert.doesNotMatch(dependabot, /package-ecosystem: bun/)
     assert.match(dependabot, /package-ecosystem: github-actions/)
 
     // No promotion caller and no promotion prose in the direct topology.
@@ -2289,7 +2291,7 @@ jobs:
     assert.match(dependabot, /target-branch: staging/)
     assert.doesNotMatch(dependabot, /package-ecosystem: cargo/)
     assert.doesNotMatch(dependabot, /package-ecosystem: pip/)
-    assert.match(dependabot, /package-ecosystem: npm/)
+    assert.match(dependabot, /package-ecosystem: bun/)
     assert.match(dependabot, /dependency-name: 'typescript'\n\s+versions: \['>=7\.0\.0'\]/)
     assert.match(dependabot, /dependency-name: '@types\/node'\n\s+versions: \['>=23'\]/)
 
