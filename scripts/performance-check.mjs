@@ -11,8 +11,9 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // The packed budget is a guard against publishing a runaway artifact, not a
 // size target. CHANGELOG.md ships inside the package, so every release adds
 // bytes on its own; 280_000 left under 400 bytes of headroom over v1.33.0 and
-// failed the release pull request itself. Recalibrate with real headroom and
-// raise it deliberately as the artifact grows.
+// failed the release pull request itself, and 286_000 failed the same way two
+// releases later. Keep real headroom (several releases of CHANGELOG growth)
+// and raise it deliberately as the artifact grows.
 const budgets = {
   cliP95Ms: 250,
   runtimeP95Ms: 750,
@@ -20,7 +21,7 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 286_000,
+  packedBytes: 292_000,
   unpackedBytes: 1_100_000,
   packedFiles: 120,
 }

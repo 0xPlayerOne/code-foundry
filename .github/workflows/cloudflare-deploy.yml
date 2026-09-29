@@ -292,6 +292,9 @@ jobs:
               version_id="$(printf '%s\n' "$out" | sed -n 's/.*Current Version ID: *//p' | head -1 | tr -d '[:space:]')"
               value="${DEPLOYMENT_URL:-$(printf '%s\n' "$out" | grep -o 'https://[^[:space:]]*' | head -1)}"
             else
+              # Previews refuse a production Build Output; rebuild flagged as
+              # a preview build first.
+              CLOUDFLARE_PREVIEW_BUILD=true "${cfbin[@]}" cf-wrangler build --mode preview
               "${cfbin[@]}" cf previews deploy "$PREVIEW_NAME" > "$RUNNER_TEMP/cf-preview.json"
               value="$(jq -r '.preview_urls[0] // empty' "$RUNNER_TEMP/cf-preview.json")"
               version_id="$(jq -r '.deployment_id // empty' "$RUNNER_TEMP/cf-preview.json")"
