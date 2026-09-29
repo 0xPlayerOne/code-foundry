@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: preview
+      deploy-tool:
+        description: 'Deployment CLI: wrangler (default, reads a wrangler config) or cf (Cloudflare cf CLI; deploys the cf Build Output produced by cf-wrangler build).'
+        required: false
+        type: string
+        default: wrangler
       draft-protection:
         description: 'Skip draft pull requests by default; set false to run deployments for drafts.'
         required: false
@@ -116,9 +121,17 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+          DEPLOY_TOOL: ${{ inputs.deploy-tool }}
+          BUILD_SCRIPT: ${{ inputs.build-script }}
         run: |
           set -euo pipefail
           [[ "$MODE" == preview || "$MODE" == production ]]
+          [[ "$DEPLOY_TOOL" == wrangler || "$DEPLOY_TOOL" == cf ]]
+          [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" == latest || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
+          # The cf path runs the project's cf-wrangler delegate to refresh the
+          # Build Output; that delegate comes from the app's own dependencies,
+          # which only the build step installs.
+          [[ "$DEPLOY_TOOL" != cf || -n "$BUILD_SCRIPT" ]]
           [[ "$WRANGLER_VERSION" == local || "$WRANGLER_VERSION" == latest || "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]
       - name: Set up Bun
         if: inputs.build-script != '' || inputs['turbo-filter'] != ''
@@ -262,8 +275,41 @@ jobs:
           WRANGLER_VERSION: ${{ inputs.wrangler-version }}
           MODE: ${{ inputs.mode }}
           DEPLOYMENT_URL: ${{ inputs.deployment-url }}
+          DEPLOY_TOOL: ${{ inputs.deploy-tool }}
+          PREVIEW_NAME: ${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
         run: |
           set -euo pipefail
+          if [ "$DEPLOY_TOOL" = cf ]; then
+            # cf path: refresh the Build Output with the project's own
+            # cf-wrangler delegate, then deploy/preview it with the cf CLI.
+            # Both CLIs come from the app's devDependencies installed by the
+            # build step; the Node launcher avoids the Bun-runtime trap.
+            cfbin=(npx --no-install)
+            "${cfbin[@]}" cf-wrangler build
+            if [ "$MODE" = production ]; then
+              out="$("${cfbin[@]}" cf deploy --prebuilt)"
+              printf '%s\n' "$out"
+              version_id="$(printf '%s\n' "$out" | sed -n 's/.*Current Version ID: *//p' | head -1 | tr -d '[:space:]')"
+              value="${DEPLOYMENT_URL:-$(printf '%s\n' "$out" | grep -o 'https://[^[:space:]]*' | head -1)}"
+            else
+              "${cfbin[@]}" cf previews deploy "$PREVIEW_NAME" > "$RUNNER_TEMP/cf-preview.json"
+              value="$(jq -r '.preview_urls[0] // empty' "$RUNNER_TEMP/cf-preview.json")"
+              version_id="$(jq -r '.deployment_id // empty' "$RUNNER_TEMP/cf-preview.json")"
+            fi
+            if [[ ! "$version_id" =~ ^[0-9a-f-]{36}$ ]]; then
+              echo 'cf deploy did not report a Worker version ID' >&2
+              exit 1
+            fi
+            if [[ -z "$value" || "$value" != https://* || "$value" == *'@'* || "$value" == *'#'* || "$value" == *' '* ]]; then
+              echo 'cf deploy did not report a valid deployment URL' >&2
+              exit 1
+            fi
+            {
+              echo "url=$value"
+              echo "version-id=$version_id"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "$WRANGLER_VERSION" = local ]; then
             if [ -n "$BUILD_SCRIPT" ]; then
               wrangler=(npx --no-install wrangler)
