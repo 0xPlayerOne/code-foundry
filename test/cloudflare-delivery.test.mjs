@@ -364,15 +364,17 @@ test('workflow keeps approvals, identities, and secrets separated', () => {
   assert.match(yaml, /name: Production/)
   assert.match(yaml, /name: Preview/)
   assert.match(yaml, /turbo-filter:[\s\S]*?type: string[\s\S]*?default: auto/)
-  assert.match(yaml, /name: Check Turbo delivery impact/)
   assert.match(yaml, /name: Resolve Turbo package/)
   assert.match(yaml, /TURBO_FILTER: \$\{\{ inputs\.turbo-filter \}\}/)
   assert.match(yaml, /turbo query affected \\\n\s+--packages/)
-  assert.match(yaml, /github\.event_name == 'push'/)
   assert.match(yaml, /github\.event\.before/)
   assert.match(yaml, /fetch-depth: 0/)
-  assert.match(yaml, /needs: affected/)
-  assert.match(yaml, /needs\.affected\.outputs\.should_deploy == 'true'/)
+  // The impact check lives in the candidate job as steps (mirrors the
+  // cloudflare-deploy.yml fold); unaffected packages skip every delivery
+  // step while the check keeps its conservative deploy-by-default.
+  assert.doesNotMatch(yaml, /^  affected:/m)
+  assert.doesNotMatch(yaml, /needs: affected/)
+  assert.match(yaml, /steps\.check\.outputs\.should_deploy != 'false'/)
   assert.equal((yaml.match(/deployment: false/g) ?? []).length, 2)
   assert.match(
     yaml,
