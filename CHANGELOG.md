@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.38.0...v1.38.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* normalize blank runs when stripping legacy managed markers ([#678](https://github.com/0xPlayerOne/code-foundry/issues/678)) ([acd5afc](https://github.com/0xPlayerOne/code-foundry/commit/acd5afce12b3de3b3574259639e89067e1ab3cb0))
+
 ## [1.38.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.3...v1.38.0) (2026-09-30)
 
 
