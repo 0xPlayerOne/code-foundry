@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.2...v1.37.3) (2026-09-30)
+
+
+### Bug Fixes
+
+* perf-budget-best-of-n ([#674](https://github.com/0xPlayerOne/code-foundry/issues/674)) ([c377ede](https://github.com/0xPlayerOne/code-foundry/commit/c377ede617d89fb0606413ab7b5d478330c49e93))
+
 ## [1.37.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.1...v1.37.2) (2026-09-30)
 
 
