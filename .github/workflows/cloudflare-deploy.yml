@@ -298,6 +298,12 @@ jobs:
               exit 1
             }
             if [ "$MODE" = production ]; then
+              # --prebuilt uploads the Build Output Specification and builds
+              # nothing, so package it from the dist/ the build step produced
+              # first. Production is the delegate's default mode; only previews
+              # need the explicit preview flags below. Skipping this fails the
+              # deploy with "no root config found" for every cf consumer.
+              cf-wrangler build
               out="$(cf deploy --prebuilt)"
               printf '%s\n' "$out"
               version_id="$(printf '%s\n' "$out" | sed -n 's/.*Current Version ID: *//p' | head -1 | tr -d '[:space:]')"
