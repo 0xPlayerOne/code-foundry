@@ -1452,6 +1452,10 @@ function refreshManagedPolicyDocument(existing, baseline) {
   }
 
   merged = stripUnpairedManagedMarkers(merged)
+  // Stripping residue and block wrapping can leave the blank runs the old
+  // template carried; oxfmt collapses three or more newlines to one blank
+  // line, so normalize to the same shape the format gate expects.
+  merged = merged.replace(/\n{3,}/g, '\n\n')
 
   for (const match of blocks) {
     if (present.has(match[1])) continue
