@@ -299,14 +299,20 @@ function synchronize(options) {
     }
     if (!force && protectedFiles.has(file) && existsSync(destination)) {
       const existing = readFileSync(destination, 'utf8')
-      if (!isLegacyManagedDoc(file, existing) && !isManagedConfigPolicy(file, existing)) {
-        if (configAwarePolicyFiles.has(file)) {
-          const merged = mergeManagedPolicyBlocks(existing, content.toString('utf8'))
-          if (merged !== existing) {
-            changed.push(file)
-            writeOrReport(destination, merged, dryRun)
-          }
+      if (isLegacyManagedDoc(file, existing)) {
+        // Ancient scaffolds predate managed blocks entirely; fall through to
+        // the full overwrite so they migrate to the marked layout.
+      } else if (configAwarePolicyFiles.has(file)) {
+        // Refresh managed blocks in place and keep every unmarked line. A
+        // whole-file overwrite here would silently delete repository-owned
+        // sections of the policy documents (issue #667).
+        const merged = refreshManagedPolicyDocument(existing, content.toString('utf8'))
+        if (merged !== existing) {
+          changed.push(file)
+          writeOrReport(destination, merged, dryRun)
         }
+        continue
+      } else {
         continue
       }
     }
@@ -1375,89 +1381,101 @@ function isLegacyManagedDoc(file, content) {
   return false
 }
 
+const MANAGED_BLOCK_PATTERN =
+  /<!-- code-foundry-managed: ([A-Za-z0-9_-]+) -->[\s\S]*?<!-- \/code-foundry-managed: \1 -->/g
+const MANAGED_MARKER_LINE = /^[ \t]*<!-- \/?code-foundry-managed: [A-Za-z0-9_-]+ -->[ \t]*\r?\n/gm
+
+/** @param {string} id */
+function managedBlockPattern(id) {
+  const start = `<!-- code-foundry-managed: ${id} -->`
+  const end = `<!-- /code-foundry-managed: ${id} -->`
+  return new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}`, 'g')
+}
+
 /**
- * Config-aware policy documents are generated contracts: a normal sync must
- * refresh generated copies after branch-topology or validation-policy edits.
- * Unmarked consumer-owned documents receive only the explicitly marked policy
- * blocks, so another agent's initializer cannot be overwritten. The top-level
- * marker owns generated copies. Exact scaffold signatures migrate older
- * generated copies without treating arbitrary repository documentation as
- * managed.
- * @param {string} file
+ * Remove managed marker lines that do not belong to a complete block. The
+ * pre-block templates carried a single unclosed `config-aware-policy` marker
+ * as an ownership flag; that residue (and any hand-mangled leftover marker)
+ * is migration noise, not content, and would otherwise break block matching.
+ * Markers inside complete blocks are kept.
  * @param {string} content
+ * @returns {string}
  */
-function isManagedConfigPolicy(file, content) {
-  if (!configAwarePolicyFiles.has(file)) return false
-  if (content.includes('<!-- code-foundry-managed: config-aware-policy -->')) return true
-  if (file === 'AGENTS.md') {
-    return (
-      content.startsWith('# Agent Instructions\n') &&
-      content.includes(
-        'These instructions are the repository-level operating contract for coding agents'
-      ) &&
-      content.includes('They complement `CONTRIBUTING.md`.')
-    )
+function stripUnpairedManagedMarkers(content) {
+  const spans = [...content.matchAll(MANAGED_BLOCK_PATTERN)].map((match) => [
+    match.index,
+    match.index + match[0].length,
+  ])
+  if (!spans.length) return content.replace(MANAGED_MARKER_LINE, '')
+  let out = ''
+  let cursor = 0
+  for (const match of content.matchAll(MANAGED_MARKER_LINE)) {
+    const index = match.index
+    if (spans.some(([from, to]) => index >= from && index < to)) continue
+    out += content.slice(cursor, index)
+    cursor = index + match[0].length
   }
-  if (file === '.github/CONTRIBUTING.md') {
-    return (
-      content.startsWith('# Contributing\n') &&
-      content.includes(
-        'This guide is the operating contract for humans and automation contributing to this repository.'
-      ) &&
-      content.includes('[Agent contract](#agent-operating-contract)')
-    )
+  return out + content.slice(cursor)
+}
+
+/**
+ * Refresh the managed policy blocks in a policy document against a rendered
+ * baseline while preserving every unmarked line (issue #667). Blocks the
+ * document already carries are replaced with the baseline content in place,
+ * so config-driven prose (branch topology, validation tiers) always follows
+ * the repository configuration. Missing blocks migrate in place when their
+ * baseline content is present verbatim — documents rendered by the pre-block
+ * templates carried the same prose unmarked — and are appended at the end
+ * otherwise, so hand-edited generated regions and consumer-owned sections
+ * are never silently deleted.
+ * @param {string} existing
+ * @param {string} baseline
+ * @returns {string}
+ */
+function refreshManagedPolicyDocument(existing, baseline) {
+  const blocks = [...baseline.matchAll(MANAGED_BLOCK_PATTERN)]
+  if (!blocks.length) return existing
+
+  let merged = existing
+  /** @type {Set<string>} */
+  const present = new Set()
+  for (const match of blocks) {
+    const id = match[1]
+    const occurrences = [...merged.matchAll(managedBlockPattern(id))]
+    if (occurrences.length > 1) {
+      throw new Error(`Managed policy block appears more than once in consumer document: ${id}`)
+    }
+    if (occurrences.length === 1) {
+      merged = merged.replace(managedBlockPattern(id), () => match[0])
+      present.add(id)
+    }
   }
-  return (
-    content.startsWith('# Security Policy\n') &&
-    content.includes('## Reporting a Vulnerability') &&
-    content.includes(
-      'This policy covers the code, configuration, dependencies, workflows, and generated artifacts maintained in this repository.'
-    )
-  )
+
+  merged = stripUnpairedManagedMarkers(merged)
+
+  for (const match of blocks) {
+    if (present.has(match[1])) continue
+    const start = `<!-- code-foundry-managed: ${match[1]} -->`
+    const end = `<!-- /code-foundry-managed: ${match[1]} -->`
+    const inner = match[0]
+      .slice(start.length, match[0].length - end.length)
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '')
+    if (inner && merged.includes(inner)) {
+      // Wrap the legacy unmarked region in place; the replacer function keeps
+      // `$` sequences in the prose from being treated as substitution patterns.
+      merged = merged.replace(inner, () => match[0])
+      continue
+    }
+    const separator = merged.endsWith('\n\n') ? '' : merged.endsWith('\n') ? '\n' : '\n\n'
+    merged = `${merged}${separator}${match[0]}\n`
+  }
+  return merged
 }
 
 /** @param {string} target @param {string[]} args */
 function git(target, args) {
   spawnSync('git', args, { cwd: target, stdio: 'ignore' })
-}
-
-/**
- * Merge the marked policy blocks from a rendered baseline into a consumer-owned
- * policy document. Unmarked AGENTS.md/CONTRIBUTING.md files are commonly
- * generated by another agent initializer, so sync must add and refresh the
- * Code Foundry contract without replacing the user's surrounding instructions.
- * @param {string} existing
- * @param {string} baseline
- * @returns {string}
- */
-function mergeManagedPolicyBlocks(existing, baseline) {
-  const blockPattern =
-    /<!-- code-foundry-managed: ([A-Za-z0-9_-]+) -->[\s\S]*?<!-- \/code-foundry-managed: \1 -->/g
-  const blocks = [...baseline.matchAll(blockPattern)]
-  if (!blocks.length) return existing
-
-  let merged = existing
-  for (const match of blocks) {
-    const id = match[1]
-    const block = match[0]
-    const start = `<!-- code-foundry-managed: ${id} -->`
-    const end = `<!-- /code-foundry-managed: ${id} -->`
-    const pattern = new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}`, 'g')
-    const occurrences = merged.match(pattern) ?? []
-    if (occurrences.length > 1) {
-      throw new Error(`Managed policy block appears more than once in consumer document: ${id}`)
-    }
-    if (occurrences.length === 1) {
-      merged = merged.replace(pattern, block)
-      continue
-    }
-    if (merged.includes(start) || merged.includes(end)) {
-      throw new Error(`Managed policy block is incomplete in consumer document: ${id}`)
-    }
-    const separator = merged.endsWith('\n\n') ? '' : merged.endsWith('\n') ? '\n' : '\n\n'
-    merged = `${merged}${separator}${block}\n`
-  }
-  return merged
 }
 
 /** @param {string} file @param {Buffer|string} content @param {boolean} dryRun */
