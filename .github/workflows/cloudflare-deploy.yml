@@ -304,8 +304,18 @@ jobs:
               # need the explicit preview flags below. Skipping this fails the
               # deploy with "no root config found" for every cf consumer.
               cf-wrangler build
-              out="$(cf deploy --prebuilt)"
-              printf '%s\n' "$out"
+              # cf reports failures on stdout, so a bare `out="$(cf deploy)"`
+              # under `set -e` throws away the only diagnostic the CLI emitted
+              # and the job dies with a bare "exit code 1" and no cause. Keep
+              # the capture for parsing, but re-emit it and preserve the status
+              # when the deploy fails.
+              if out="$(cf deploy --prebuilt)"; then
+                printf '%s\n' "$out"
+              else
+                status=$?
+                printf '%s\n' "$out" >&2
+                exit "$status"
+              fi
               version_id="$(printf '%s\n' "$out" | sed -n 's/.*Current Version ID: *//p' | head -1 | tr -d '[:space:]')"
               value="${DEPLOYMENT_URL:-$(printf '%s\n' "$out" | grep -o 'https://[^[:space:]]*' | head -1)}"
             else
@@ -316,7 +326,13 @@ jobs:
               # and previews deploy otherwise re-runs the framework's own
               # build, which not every project tolerates (e.g. Vite plugin
               # configPath vs newConfig).
-              cf previews deploy --prebuilt "$PREVIEW_NAME" > "$RUNNER_TEMP/cf-preview.json"
+              # Same stdout-swallowing hazard as the production branch: a failed
+              # preview deploy writes its reason into the JSON file, which is
+              # discarded unread. Surface it before exiting.
+              if ! cf previews deploy --prebuilt "$PREVIEW_NAME" > "$RUNNER_TEMP/cf-preview.json"; then
+                cat "$RUNNER_TEMP/cf-preview.json" >&2 || true
+                exit 1
+              fi
               value="$(jq -r '.preview_urls[0] // empty' "$RUNNER_TEMP/cf-preview.json")"
               version_id="$(jq -r '.deployment_id // empty' "$RUNNER_TEMP/cf-preview.json")"
             fi
