@@ -929,6 +929,9 @@ describe('code-foundry CLI', () => {
       1
     )
     assert.equal(migrated.split('## Completion report').length - 1, 1)
+    // Stripping the legacy flag must not leave double blank lines behind:
+    // oxfmt collapses them and would fail the consumer's format gate.
+    assert.doesNotMatch(migrated, /\n\n\n/)
     rmSync(root, { recursive: true, force: true })
   })
 
