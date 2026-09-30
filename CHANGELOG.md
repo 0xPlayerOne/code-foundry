@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.0...v1.37.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **cloudflare:** build the production Build Output before the prebuilt deploy ([5f2f83c](https://github.com/0xPlayerOne/code-foundry/commit/5f2f83c6d6135c403b520f83469c0c5ca350cdba))
+
 ## [1.37.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.4...v1.37.0) (2026-09-30)
 
 
