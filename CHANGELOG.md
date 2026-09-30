@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.3...v1.38.0) (2026-09-30)
+
+
+### Features
+
+* fold the Turbo impact check into the delivery candidate job ([#676](https://github.com/0xPlayerOne/code-foundry/issues/676)) ([fd99d29](https://github.com/0xPlayerOne/code-foundry/commit/fd99d29ae7e10ef9346b8059dcad0ed4df6df109))
+
 ## [1.37.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.2...v1.37.3) (2026-09-30)
 
 
