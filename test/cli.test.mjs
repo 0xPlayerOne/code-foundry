@@ -827,6 +827,111 @@ describe('code-foundry CLI', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
+  it('keeps repository-owned sections of marked policy documents across resyncs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-marked-policy-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\n'
+    )
+    // The first sync renders the policy documents in the blocked layout.
+    syncRepository({ target: root, source: process.cwd() })
+    const marked = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    assert.match(marked, /code-foundry-managed: config-aware-policy/)
+    assert.match(marked, /code-foundry-managed: pull-request-policy/)
+
+    // The repository adds its own sections between managed blocks — a docs
+    // router table that a repository test enforces, for example — and drifts
+    // inside one generated block.
+    const routerTable =
+      '## Module specs\n\n| If you touch | Read spec first |\n| --- | --- |\n' +
+      '| `src/core/**` | [docs/specs/core.md](docs/specs/core.md) |\n'
+    const withSections = marked.replace(
+      '\n\n<!-- code-foundry-managed: priorities -->',
+      `\n\n${routerTable}\n<!-- code-foundry-managed: priorities -->`
+    )
+    assert.notEqual(withSections, marked)
+    const drifted = withSections.replace(
+      '- Keep formatting, linting, type checking, builds, tests, and coverage reproducible locally and in CI.',
+      '- (drifted away)'
+    )
+    assert.notEqual(drifted, withSections)
+    writeFileSync(join(root, 'AGENTS.md'), drifted)
+
+    syncRepository({ target: root, source: process.cwd() })
+    const resynced = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    // The repository-owned section between the blocks survived.
+    assert.match(resynced, /## Module specs/)
+    assert.match(resynced, /docs\/specs\/core\.md/)
+    // The drifted managed block was restored from the baseline.
+    assert.match(
+      resynced,
+      /- Keep formatting, linting, type checking, builds, tests, and coverage reproducible locally and in CI\./
+    )
+    assert.doesNotMatch(resynced, /drifted away/)
+    // Sync is idempotent once the document is current.
+    syncRepository({ target: root, source: process.cwd() })
+    assert.equal(readFileSync(join(root, 'AGENTS.md'), 'utf8'), resynced)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('migrates pre-block managed documents without losing content', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-policy-migration-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\n'
+    )
+    // Rebuild the pre-block layout from the current template: the
+    // config-aware marker as an unclosed ownership flag, the pull-request
+    // policy block, and every other generated region unmarked.
+    const template = readFileSync(join(process.cwd(), 'AGENTS.md'), 'utf8')
+    const legacyKeepers = [
+      '<!-- code-foundry-managed: config-aware-policy -->',
+      '<!-- code-foundry-managed: pull-request-policy -->',
+      '<!-- /code-foundry-managed: pull-request-policy -->',
+    ]
+    const legacy = template
+      .split('\n')
+      .filter(
+        (line) =>
+          !/^[ \t]*<!-- \/code-foundry-managed: /.test(line) || legacyKeepers.includes(line.trim())
+      )
+      .filter(
+        (line) =>
+          !/^<!-- code-foundry-managed: (?!config-aware-policy -->|pull-request-policy -->)/.test(
+            line
+          )
+      )
+      .join('\n')
+    assert.match(legacy, /<!-- code-foundry-managed: config-aware-policy -->/)
+    assert.doesNotMatch(legacy, /<!-- \/code-foundry-managed: config-aware-policy -->/)
+    assert.match(legacy, /<!-- \/code-foundry-managed: pull-request-policy -->/)
+    writeFileSync(
+      join(root, 'AGENTS.md'),
+      `${legacy}\n## Repository notes\n\nCustom section that must survive.\n`
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const migrated = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    // Every generated region is wrapped again, including the formerly
+    // unclosed config-aware block.
+    assert.equal(migrated.match(/<!-- code-foundry-managed: config-aware-policy -->/g)?.length, 1)
+    assert.match(migrated, /<!-- \/code-foundry-managed: config-aware-policy -->/)
+    assert.match(migrated, /<!-- code-foundry-managed: completion-report -->/)
+    // The repository-owned section survived verbatim.
+    assert.match(migrated, /## Repository notes\n\nCustom section that must survive\./)
+    // No generated prose was duplicated by the migration.
+    assert.equal(
+      migrated.split('These instructions are the repository-level operating contract').length - 1,
+      1
+    )
+    assert.equal(migrated.split('## Completion report').length - 1, 1)
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('pins rendered callers and the config to an explicit runtime ref', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-runtime-ref-'))
     mkdirSync(join(root, '.github'), { recursive: true })
