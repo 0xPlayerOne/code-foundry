@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.37.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.1...v1.37.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* **cloudflare:** surface the cf deploy error instead of discarding it ([66de0d1](https://github.com/0xPlayerOne/code-foundry/commit/66de0d1e8238315dbd910abbd907e921cbc6764f))
+
+## [1.37.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.37.0...v1.37.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **cloudflare:** build the production Build Output before the prebuilt deploy ([5f2f83c](https://github.com/0xPlayerOne/code-foundry/commit/5f2f83c6d6135c403b520f83469c0c5ca350cdba))
+
+## [1.37.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.4...v1.37.0) (2026-09-30)
+
+
+### Features
+
+* preserve repository-owned sections of managed policy documents ([#668](https://github.com/0xPlayerOne/code-foundry/issues/668)) ([26e9f4b](https://github.com/0xPlayerOne/code-foundry/commit/26e9f4bfeaca8b01087626bafbfc5090d891530f)), closes [#667](https://github.com/0xPlayerOne/code-foundry/issues/667)
+
 ## [1.36.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.36.3...v1.36.4) (2026-09-29)
 
 
