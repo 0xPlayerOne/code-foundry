@@ -23,7 +23,10 @@ describe('Generated pre-commit hook', () => {
       syncRepository({ target: root, source: process.cwd() })
       const hook = readFileSync(join(root, '.githooks/pre-commit'), 'utf8')
       const version = readPackageVersion(process.cwd())
-      assert.match(hook, new RegExp(`code-foundry@${version.replace(/\./g, '\\.')} pre-commit`))
+      assert.ok(
+        hook.includes(`code-foundry@${version} pre-commit`),
+        `expected the gate pinned to ${version}, got: ${hook.split('\n').find((l) => l.includes('npx')) ?? ''}`
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
