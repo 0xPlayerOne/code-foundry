@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.0...v1.39.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* report inactive main rulesets in github doctor ([#682](https://github.com/0xPlayerOne/code-foundry/issues/682)) ([695a0b4](https://github.com/0xPlayerOne/code-foundry/commit/695a0b437910aa8e664a481c1648dbadcc1a2de8))
+
 ## [1.39.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.38.1...v1.39.0) (2026-10-01)
 
 
