@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.39.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.38.1...v1.39.0) (2026-10-01)
+
+
+### Features
+
+* **ci:** surface ungated scheduled workflows in the billing pause controls ([#681](https://github.com/0xPlayerOne/code-foundry/issues/681)) ([ef48f9a](https://github.com/0xPlayerOne/code-foundry/commit/ef48f9a25aa0b22f82b0ed8a512bc1a65d08d8e9))
+
+
+### Maintenance
+
+* register the adea-ai ui and themes consumers in the fleet manifest ([#680](https://github.com/0xPlayerOne/code-foundry/issues/680)) ([f50e6c6](https://github.com/0xPlayerOne/code-foundry/commit/f50e6c6a4ef4b7f0396cdce21f53070fec818c50))
+
 ## [1.38.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.38.0...v1.38.1) (2026-09-30)
 
 
