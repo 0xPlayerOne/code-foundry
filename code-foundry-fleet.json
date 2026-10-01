@@ -141,6 +141,20 @@
       "cohort": "adea",
       "profile": "minimal asset repository",
       "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/ui",
+      "path": ".fleet/adea-ai/ui",
+      "cohort": "adea",
+      "profile": "typescript minimal design-system registry, bun",
+      "validation": [["actionlint"]]
+    },
+    {
+      "repository": "adea-ai/themes",
+      "path": ".fleet/adea-ai/themes",
+      "cohort": "adea",
+      "profile": "typescript minimal theme repository, bun",
+      "validation": [["actionlint"]]
     }
   ]
 }
