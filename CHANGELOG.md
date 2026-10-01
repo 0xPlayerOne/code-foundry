@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.2...v1.39.3) (2026-10-01)
+
+
+### Bug Fixes
+
+* **hooks:** run the gate from a local dependency, not npx ([#688](https://github.com/0xPlayerOne/code-foundry/issues/688)) ([d256b69](https://github.com/0xPlayerOne/code-foundry/commit/d256b69b8f89f0041a01c53cc51af32fe582b5dc))
+
 ## [1.39.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.1...v1.39.2) (2026-10-01)
 
 
