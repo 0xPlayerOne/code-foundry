@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.1...v1.39.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* **hooks:** delegate the generated pre-commit hook to the runtime ([#684](https://github.com/0xPlayerOne/code-foundry/issues/684)) ([5d9a571](https://github.com/0xPlayerOne/code-foundry/commit/5d9a5714aeff0d48397e3be51b22e08395bfb5ce))
+
 ## [1.39.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.0...v1.39.1) (2026-10-01)
 
 
