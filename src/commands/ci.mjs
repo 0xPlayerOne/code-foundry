@@ -1,7 +1,7 @@
 // @ts-check
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { readConfig } from '../lib/config.mjs'
 
 export const CI_BILLING_PAUSED_VARIABLE = 'CI_BILLING_PAUSED'
@@ -29,12 +29,14 @@ export function manageCiBilling(root, action) {
 
   if (action === 'status') {
     const dependabot = dependabotPauseState(root)
+    const ungatedSchedules = ungatedScheduledWorkflows(root)
     const result = {
       repository,
       paused,
       requiredCheck: CI_BILLING_REQUIRED_CHECK,
       backupPresent: Boolean(backup),
       dependabot,
+      ungatedSchedules,
     }
     console.log(JSON.stringify(result, null, 2))
     return result
@@ -92,6 +94,7 @@ export function manageCiBilling(root, action) {
     const cancelledRuns = cancelActiveRuns(repository)
     for (const change of changes) updateRuleset(repository, change.ruleset)
     const dependabot = dependabotPauseState(root)
+    const ungatedSchedules = ungatedScheduledWorkflows(root)
     const result = {
       repository,
       paused: true,
@@ -108,6 +111,19 @@ export function manageCiBilling(root, action) {
               'Dependabot version updates are still active and are not gated by ' +
               `${CI_BILLING_PAUSED_VARIABLE}. Set billing_paused: true in .github/code-foundry.yml ` +
               'and run a sync so dependabot.yml renders open-pull-requests-limit: 0.',
+          }
+        : {}),
+      // Cron workflows are repository-owned, so sync cannot add the guard.
+      // List any that would keep firing on schedule while paused.
+      ungatedSchedules,
+      ...(ungatedSchedules.length
+        ? {
+            scheduleWarning:
+              `Scheduled workflows without a ${CI_BILLING_PAUSED_VARIABLE} job guard keep ` +
+              `running while paused: ${ungatedSchedules
+                .map((/** @type {{ file: string }} */ entry) => entry.file)
+                .join(', ')}. Add ` +
+              "`if: vars.CI_BILLING_PAUSED != 'true'` to each of their jobs.",
           }
         : {}),
     }
@@ -173,6 +189,52 @@ export function dependabotPauseState(root) {
     .filter((block) => block.startsWith('  - package-ecosystem: '))
   const active = blocks.some((block) => !/^    open-pull-requests-limit: 0(\s|#|$)/m.test(block))
   return { configured, active, file }
+}
+
+/**
+ * List custom cron workflows that the `CI_BILLING_PAUSED` variable does not
+ * gate. Sync keeps every managed workflow referencing the variable, so a
+ * scheduled workflow without that token is repository-owned, and its cron
+ * jobs keep allocating runners while CI is paused — the same gap Dependabot
+ * has, but one a one-line job guard can close.
+ *
+ * @param {string} root
+ * @returns {{ file: string, crons: string[] }[]}
+ */
+export function ungatedScheduledWorkflows(root) {
+  const dir = `${root.replace(/\/$/, '')}/.github/workflows`
+  if (!existsSync(dir)) return []
+  const gated = []
+  for (const entry of readdirSync(dir)) {
+    if (!/\.ya?ml$/.test(entry)) continue
+    const source = readFileSync(`${dir}/${entry}`, 'utf8')
+    if (source.includes(CI_BILLING_PAUSED_VARIABLE)) continue
+    const triggers = workflowTriggerBlock(source)
+    if (!triggers || !/^  schedule:/m.test(triggers)) continue
+    const crons = [...triggers.matchAll(/^\s*-\s*cron:\s*(.+?)\s*$/gm)].flatMap(
+      (/** @type {RegExpMatchArray} */ match) => [
+        match[1].replace(/^['"]|['"]$/g, '').replace(/\s+#.*$/, ''),
+      ]
+    )
+    gated.push({ file: `.github/workflows/${entry}`, crons })
+  }
+  return gated
+}
+
+/**
+ * Return the block-form `on:` section of a workflow, or null when the file
+ * has none. Dependency-free on purpose: the runtime avoids a YAML parser,
+ * and the block ends at the next top-level key.
+ *
+ * @param {string} source
+ * @returns {string | null}
+ */
+function workflowTriggerBlock(source) {
+  const start = source.search(/^on:\s*$/m)
+  if (start < 0) return null
+  const rest = source.slice(start + 3)
+  const end = rest.search(/^[A-Za-z_-]+:/m)
+  return end >= 0 ? rest.slice(0, end) : rest
 }
 
 /** @param {any} ruleset */
