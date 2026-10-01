@@ -271,6 +271,16 @@ async function main() {
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
     }
+  } else if (command === 'pre-commit') {
+    // The generated `.githooks/pre-commit` calls this. Without a CLI entry
+    // point the language-aware gate in runtime-core is unreachable from a hook.
+    try {
+      process.chdir(target)
+      const { preCommit } = await import('./runtime-core.mjs')
+      preCommit()
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
   } else fail(`unknown command: ${command}`)
 }
 

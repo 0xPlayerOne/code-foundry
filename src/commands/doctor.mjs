@@ -40,6 +40,20 @@ export function doctor(root, options = {}) {
   }
   const hooks = git(target, ['config', '--get', 'core.hooksPath'])
   if (hooks !== '.githooks') warn('Git hooks are not enabled; run `npx code-foundry init`')
+  // A correctly enabled hook that enforces nothing is the failure this check
+  // could not see: the generated template used to be the whitespace guard
+  // alone while the real gate sat unused in the runtime. Reading only the
+  // hooksPath reports success for a hook that does nothing.
+  if (hooks === '.githooks') {
+    const hookFile = join(target, '.githooks/pre-commit')
+    if (!existsSync(hookFile)) warn('No .githooks/pre-commit found; run `npx code-foundry sync`')
+    else if (
+      !/code-foundry[@\w./-]*\s+(?:--yes\s+)?pre-commit/.test(readFileSync(hookFile, 'utf8'))
+    )
+      warn(
+        '.githooks/pre-commit does not delegate to the Code Foundry gate; run `npx code-foundry sync`'
+      )
+  }
   if (
     ['rust', 'python', 'solidity'].some((language) =>
       profile.languages.split(',').includes(language)

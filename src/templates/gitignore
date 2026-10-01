@@ -72,6 +72,9 @@ pnpm-debug.log*
 .fleet/
 .opencode/
 .kluster/
+.zcode/
+.kiro/
+.goose/
 .direnv/
 .envrc
 .vercel/
