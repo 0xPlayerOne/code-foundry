@@ -18,6 +18,24 @@ export function doctorGithub(root) {
   const details = { repository }
   const rulesets = hydrateRulesets(repository, ghJson(['api', `repos/${repository}/rulesets`]))
   const mainRulesets = rulesetsForBranch(rulesets, 'main')
+  details.mainRulesets = mainRulesets.map((ruleset) => ({
+    id: ruleset.id ?? null,
+    name: ruleset.name ?? String(ruleset.id ?? 'unnamed'),
+    enforcement: ruleset.enforcement ?? null,
+  }))
+  for (const ruleset of mainRulesets) {
+    const name = ruleset.name ?? ruleset.id ?? 'unnamed'
+    if (ruleset.enforcement === 'disabled') {
+      errors.push(`main ruleset ${name} is disabled; its branch rules are not enforced.`)
+    } else if (ruleset.enforcement === 'evaluate') {
+      errors.push(`main ruleset ${name} is evaluate-only; its branch rules are not enforced.`)
+    } else if (ruleset.enforcement !== 'active') {
+      const state = ruleset.enforcement ?? 'missing'
+      warnings.push(
+        `main ruleset ${name} enforcement state '${state}' could not be confirmed; expected active.`
+      )
+    }
+  }
   const protection = ghJson(['api', `repos/${repository}/branches/main/protection`])
   const required = mainRulesets.length
     ? requiredContextsFromRulesets(mainRulesets)
