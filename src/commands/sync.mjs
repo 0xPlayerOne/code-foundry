@@ -260,6 +260,9 @@ function synchronize(options) {
     if (file === 'LICENSE' && license !== 'preserve' && license !== 'none') continue
     if (file === '.github/CODEOWNERS' && existsSync(destination)) continue
     let content = readFileSync(sourceFile)
+    if (file === '.githooks/pre-commit') {
+      content = Buffer.from(renderHook(sourceFile, source))
+    }
     if (file === 'release-please-config.json') {
       content = Buffer.from(renderReleaseConfig(target, sourceFile))
     }
@@ -584,6 +587,20 @@ function mergeReleaseConfig(target, sourceFile) {
 /** @param {string} target @param {string} sourceFile @returns {string} */
 function renderReleaseConfig(target, sourceFile) {
   return `${JSON.stringify(mergeReleaseConfig(target, sourceFile), null, 2)}\n`
+}
+
+/**
+ * The hook runs `npx code-foundry@<version>` on every commit, so the version
+ * is substituted at generation time rather than resolved at run time. A
+ * mutable dist-tag there would let any publish under that tag run code on
+ * every developer's machine at commit time; pinning means the gate a
+ * repository received is the gate that generated it.
+ *
+ * @param {string} sourceFile the template path
+ * @param {string} sourceRoot the package root that carries package.json
+ */
+function renderHook(sourceFile, sourceRoot) {
+  return readFileSync(sourceFile, 'utf8').replaceAll('__VERSION__', readPackageVersion(sourceRoot))
 }
 
 /** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */

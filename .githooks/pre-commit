@@ -6,7 +6,7 @@ if [ -z "$(git diff --cached --name-only)" ]; then
   exit 0
 fi
 
-if command -v npx >/dev/null 2>&1 && npx --yes code-foundry@latest pre-commit; then
+if command -v npx >/dev/null 2>&1 && npx --yes code-foundry@__VERSION__ pre-commit; then
   exit 0
 fi
 
