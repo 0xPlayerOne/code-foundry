@@ -7,9 +7,11 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   writeFileSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { detectPackageManager, resolveProfile } from './lib/profile.mjs'
 import { configured, readConfig } from './lib/config.mjs'
@@ -1165,7 +1167,15 @@ function printProfile(command) {
   writeOutput('npm_publish', config.npm_publish ?? 'false')
 }
 
-function preCommit() {
+/**
+ * The local commit gate.
+ *
+ * Exported so the generated `.githooks/pre-commit` can reach it: the hook is
+ * what turns this into an actual gate, and it used to run the whitespace
+ * check alone. The generated hook is the consumer-visible contract, so keep
+ * the two in step.
+ */
+export function preCommit() {
   const changed = capture('git', ['diff', '--cached', '--name-only'])
   if (!changed) return
   const check = spawnSync('git', ['diff', '--cached', '--check'], { cwd: root, stdio: 'inherit' })
@@ -1173,6 +1183,10 @@ function preCommit() {
   if (/\.(js|jsx|ts|tsx|json|md|mdx|yml|yaml)$/.test(changed)) {
     ci('format')
     ci('lint')
+    // Type errors are the fastest check that still needs a full toolchain, and
+    // the most common reason a green-looking commit fails CI later. Run it
+    // here while the dependency graph is warm.
+    ci('type_check')
   }
   if (/\.rs$|(^|\/)Cargo\.toml$/.test(changed)) {
     run('cargo', ['fmt', '--check'])
@@ -1184,16 +1198,34 @@ function preCommit() {
   }
 }
 
-const [area, task, ecosystem] = process.argv.slice(2)
-try {
-  if (area === 'ci') ci(task)
-  else if (area === 'security') security(task, ecosystem)
-  else if (area === 'codeql') codeql()
-  else if (area === 'profile') printProfile(task)
-  else if (area === 'validation') validation(task)
-  else if (area === 'pre-commit') preCommit()
-  else throw new Error(`Unknown runtime command: ${area || '(missing)'}`)
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
+// Only dispatch when this module is the process entry point. The CLI imports
+// `preCommit` from here, and an unguarded dispatch would read argv and run the
+// gate a second time on import.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  realpathSafe(process.argv[1]) === realpathSafe(fileURLToPath(import.meta.url))
+
+/** @param {string} p @returns {string} */
+function realpathSafe(p) {
+  try {
+    return realpathSync(p)
+  } catch {
+    return p
+  }
+}
+
+if (invokedDirectly) {
+  const [area, task, ecosystem] = process.argv.slice(2)
+  try {
+    if (area === 'ci') ci(task)
+    else if (area === 'security') security(task, ecosystem)
+    else if (area === 'codeql') codeql()
+    else if (area === 'profile') printProfile(task)
+    else if (area === 'validation') validation(task)
+    else if (area === 'pre-commit') preCommit()
+    else throw new Error(`Unknown runtime command: ${area || '(missing)'}`)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  }
 }
