@@ -123,7 +123,10 @@ throughout the bounded release flow.
 
 Custom workflows are repository-owned and are not rewritten by sync. Add
 `if: vars.CI_BILLING_PAUSED != 'true'` to each custom root job that should
-honor the shared billing pause. The optional OpenCode Security scan honors a
+honor the shared billing pause. `npx code-foundry ci status` lists custom
+scheduled workflows that lack the guard, and `pause` warns about them: a cron
+workflow without the guard keeps allocating runners while CI is paused. The
+optional OpenCode Security scan honors a
 second toggle: the `OPENCODE_SECURITY` repository or organization variable
 (`true`/`false`) is its only enablement control, so individual repositories can
 opt in or out without a code change. When the variable is not `true`, no
