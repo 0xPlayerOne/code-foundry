@@ -311,6 +311,12 @@ features and enforce only checks that actually run:
 Apply only checks for enabled workflows.
 ```
 
+`code-foundry doctor --github` treats a matching `main` ruleset in `disabled`
+or `evaluate` mode as an error because neither mode blocks merges. If GitHub
+does not expose branch protection or rulesets for the repository, the doctor
+warns that enforcement could not be confirmed instead of inferring an active
+policy from unavailable data.
+
 Keep strict status checks, linear history, and conversation resolution enabled
 where required. For a repository with optional features disabled, do not require
 checks that will never run.
