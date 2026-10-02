@@ -141,7 +141,9 @@ While paused, set `billing_paused: true` in `.github/code-foundry.yml` and run a
 sync so the rendered `dependabot.yml` disables version updates
 (`open-pull-requests-limit: 0`, monthly cadence). Remove the flag and sync to
 restore updates when billing resumes. `npx code-foundry ci status` reports the
-Dependabot state, and `pause` warns when updates are still active.
+Dependabot state, and `pause` warns when updates are still active. A repository
+whose `dependency_updater` is `renovate` or `none` has no Dependabot
+configuration to pause.
 
 ## Standard workflow responsibilities
 
