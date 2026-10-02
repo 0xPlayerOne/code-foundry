@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.41.0...v1.42.0) (2026-10-02)
+
+
+### Features
+
+* **validation:** shard the managed E2E lane via e2e_shards ([#697](https://github.com/0xPlayerOne/code-foundry/issues/697)) ([edb20b4](https://github.com/0xPlayerOne/code-foundry/commit/edb20b4e32e2055bf22e6f6f94b51f234a24687d))
+
 ## [1.41.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.40.0...v1.41.0) (2026-10-02)
 
 
