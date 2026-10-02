@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.3...v1.40.0) (2026-10-02)
+
+
+### Features
+
+* **sync:** add dependency_updater setting to gate Dependabot and scaffold Renovate ([#692](https://github.com/0xPlayerOne/code-foundry/issues/692)) ([15805de](https://github.com/0xPlayerOne/code-foundry/commit/15805dee09a93ca168bbc00dbc3c3af36a40e7bf))
+
 ## [1.39.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.2...v1.39.3) (2026-10-01)
 
 
