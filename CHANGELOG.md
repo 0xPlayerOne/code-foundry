@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.41.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.40.0...v1.41.0) (2026-10-02)
+
+
+### Features
+
+* **validation:** skip default-branch CodeQL on release-please merges ([#694](https://github.com/0xPlayerOne/code-foundry/issues/694)) ([25fc22e](https://github.com/0xPlayerOne/code-foundry/commit/25fc22e6d4b76f0b7e06601f6dc420085949f127))
+
+
+### Bug Fixes
+
+* give the release artifact budgets several releases of headroom ([#696](https://github.com/0xPlayerOne/code-foundry/issues/696)) ([a504607](https://github.com/0xPlayerOne/code-foundry/commit/a504607e16f097a5075191fd24cb26953b06a340))
+
 ## [1.40.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.39.3...v1.40.0) (2026-10-02)
 
 
