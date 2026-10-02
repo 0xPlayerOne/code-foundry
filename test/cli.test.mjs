@@ -1885,7 +1885,7 @@ describe('code-foundry CLI', () => {
     assert.match(validationCaller, /on:\n  push:\n    branches: \[main\]\n  pull_request:/)
     assert.match(
       validationCaller,
-      /default-branch-codeql:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push'/
+      /default-branch-codeql:[\s\S]*?if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push' &&\n\s+!startsWith\(github\.event\.head_commit\.message, 'chore\(main\): release '\)/
     )
     assert.match(
       validationCaller,
@@ -4836,6 +4836,10 @@ jobs:
     assert.match(caller, /^  push:\n\s+branches: \[main\]/m)
     assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
     assert.match(caller, /default-branch-codeql:[\s\S]*?github\.event_name == 'push'/)
+    assert.match(
+      caller,
+      /!startsWith\(github\.event\.head_commit\.message, 'chore\(main\): release '\)/
+    )
     assert.doesNotMatch(caller, /schedule:/)
     assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
