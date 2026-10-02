@@ -738,6 +738,21 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
   if (configured(config.draft_protection, 'true') === 'false') {
     rendered = rendered.replaceAll(' && github.event.pull_request.draft == false', '')
   }
+  // E2E sharding fans the managed E2E job into one runner per shard; shards
+  // stay isolated because each job owns a runner-local test database. Fail
+  // closed on a malformed count rather than silently rendering a single shard.
+  const e2eShards =
+    config.e2e_shards === undefined || config.e2e_shards === '' ? 1 : Number(config.e2e_shards)
+  if (!Number.isInteger(e2eShards) || e2eShards < 1 || e2eShards > 8) {
+    throw new Error(`Unsupported e2e_shards: ${config.e2e_shards}; use an integer between 1 and 8.`)
+  }
+  if (e2eShards > 1 && file === '.github/workflows/validation.yml') {
+    rendered = rendered.replace(
+      /^(\s+e2e-shard-list:)\s+.*$/gm,
+      `$1 ${Array.from({ length: e2eShards }, (_, index) => index + 1).join(',')}`
+    )
+    rendered = rendered.replace(/^(\s+e2e-total-shards:)\s+.*$/gm, `$1 ${e2eShards}`)
+  }
   // Consumer release callers are generic package release workflows. The
   // installed-consumer qualification harness is specific to Code Foundry's
   // own package and must remain in the self workflow rather than being
