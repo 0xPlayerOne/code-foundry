@@ -31,9 +31,17 @@ for (const [file, tasks] of Object.entries(workflows)) {
       assert.ok(retention.includes(`path: .code-foundry/results/${task}.json\n`))
       assert.ok(
         retention.includes(
-          `name: \${{ inputs.artifact-prefix }}-\${{ github.run_id }}-\${{ github.run_attempt }}-${task}\n`
+          `name: \${{ inputs.artifact-prefix }}-\${{ github.run_id }}-\${{ github.run_attempt }}-${task}`
         )
       )
+      if (task === 'e2e') {
+        // Sharded E2E legs must not collide on one artifact name, and the
+        // unsharded default keeps the historical suffix-free name.
+        assert.match(
+          retention,
+          /-e2e\$\{\{ inputs\.e2e-total-shards != '1' && format\('-s\{0\}', matrix\.shard\) \|\| '' \}\}\n/
+        )
+      }
       assert.match(retention, /include-hidden-files: true\n/)
       assert.match(retention, /if-no-files-found: error\n/)
       assert.match(retention, /retention-days: 14\n/)

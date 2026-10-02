@@ -38,6 +38,16 @@ on:
         required: false
         type: string
         default: task-result
+      e2e-shard-list:
+        description: Comma-separated E2E shard indices, for example "1,2". A single index runs one unsharded job.
+        required: false
+        type: string
+        default: '1'
+      e2e-total-shards:
+        description: Total E2E shard count handed to the repository script as E2E_TOTAL_SHARDS.
+        required: false
+        type: string
+        default: '1'
     secrets:
       TURBO_TOKEN:
         required: false
@@ -309,6 +319,14 @@ jobs:
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 45
+    # Shards duplicate the whole job, but each shard owns a runner-local test
+    # database (repositories without DATABASE_URL fall back to their own local
+    # compose services), so shards stay isolated. A single-entry matrix keeps
+    # the unsharded default byte-compatible with the pre-matrix job.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(format('[{0}]', inputs.e2e-shard-list)) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -371,6 +389,9 @@ jobs:
       - name: E2E
         id: execute
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        env:
+          E2E_SHARD_INDEX: ${{ matrix.shard }}
+          E2E_TOTAL_SHARDS: ${{ inputs.e2e-total-shards }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci e2e
       - name: Retain task receipt
         if: >-
@@ -380,7 +401,7 @@ jobs:
           hashFiles('.code-foundry/results/e2e.json') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-e2e
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-e2e${{ inputs.e2e-total-shards != '1' && format('-s{0}', matrix.shard) || '' }}
           path: .code-foundry/results/e2e.json
           include-hidden-files: true
           if-no-files-found: error
