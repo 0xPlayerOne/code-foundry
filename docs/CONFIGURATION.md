@@ -34,21 +34,22 @@ to require an existing mise configuration.
 
 ## Repository and runtime
 
-| Key                     | Values                                       | Notes                                                                |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| `version`               | `1`                                          | Configuration schema version.                                        |
-| `profile`               | `auto`, `application`, `monorepo`, `minimal` | Repository shape; `auto` detects it.                                 |
-| `languages`             | comma-separated language names               | Supported values are `typescript`, `rust`, `python`, and `solidity`. |
-| `package_manager`       | `bun`, `pnpm`, `yarn`, `npm`, `none`         | JavaScript package-manager policy.                                   |
-| `toolchain`             | `auto`, `native`, `mise`                     | Environment setup policy.                                            |
-| `runtime_repository`    | `OWNER/REPO`                                 | Source of reusable workflows and runtime code.                       |
-| `runtime_ref`           | tag or commit                                | Runtime version used by generated callers.                           |
-| `features`              | `all` or a list                              | See [Feature selection](#feature-selection).                         |
-| `draft_protection`      | `true`, `false`                              | Skip generated runner-heavy gates for draft PRs when false.          |
-| `billing_paused`        | `true`, `false`                              | Disable Dependabot version updates while CI billing is paused.       |
-| `codeql`                | `auto`, `true`, `false`                      | Enable CodeQL when the repository and GitHub plan support it.        |
-| `dependency_review`     | `auto`, `true`, `false`                      | Enable Dependency Review when supported.                             |
-| `runner` and `*_runner` | GitHub runner labels                         | Override the default runner per workflow.                            |
+| Key                     | Values                                       | Notes                                                                                  |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `version`               | `1`                                          | Configuration schema version.                                                          |
+| `profile`               | `auto`, `application`, `monorepo`, `minimal` | Repository shape; `auto` detects it.                                                   |
+| `languages`             | comma-separated language names               | Supported values are `typescript`, `rust`, `python`, and `solidity`.                   |
+| `package_manager`       | `bun`, `pnpm`, `yarn`, `npm`, `none`         | JavaScript package-manager policy.                                                     |
+| `toolchain`             | `auto`, `native`, `mise`                     | Environment setup policy.                                                              |
+| `runtime_repository`    | `OWNER/REPO`                                 | Source of reusable workflows and runtime code.                                         |
+| `runtime_ref`           | tag or commit                                | Runtime version used by generated callers.                                             |
+| `features`              | `all` or a list                              | See [Feature selection](#feature-selection).                                           |
+| `draft_protection`      | `true`, `false`                              | Skip generated runner-heavy gates for draft PRs when false.                            |
+| `billing_paused`        | `true`, `false`                              | Disable Dependabot version updates while CI billing is paused.                         |
+| `dependency_updater`    | `dependabot`, `renovate`, `none`             | Which dependency-update bot sync manages; see [Feature selection](#feature-selection). |
+| `codeql`                | `auto`, `true`, `false`                      | Enable CodeQL when the repository and GitHub plan support it.                          |
+| `dependency_review`     | `auto`, `true`, `false`                      | Enable Dependency Review when supported.                                               |
+| `runner` and `*_runner` | GitHub runner labels                         | Override the default runner per workflow.                                              |
 
 For `codeql: auto` and `dependency_review: auto`, public repositories use the
 available GitHub security checks and private repositories require the relevant
@@ -81,6 +82,22 @@ remain aliases for compatibility. Other selectable features are:
 - `release-pr` — promote `staging` into `main` in the `staging-release` topology.
 - `release` — run Release Please and optional package publication.
 - `dependabot` — install the language-aware Dependabot configuration.
+
+The `dependency_updater` key selects which dependency-update bot `sync`
+manages, and an explicit value wins over the `dependabot` feature (including
+`features: all`):
+
+- `dependabot` (default) — render `.github/dependabot.yml` whenever the
+  `dependabot` feature is selected; existing repositories are unaffected.
+- `renovate` — never render `.github/dependabot.yml` and remove an existing
+  one; install `renovate.json` from the runtime template only when the
+  repository has none. A repository-owned `renovate.json` is never modified.
+- `none` — never render `.github/dependabot.yml`, remove an existing one, and
+  install nothing.
+
+Installing `renovate.json` does not schedule update runs: a repository still
+needs the Renovate GitHub App or a self-hosted runner. The `billing_paused`
+Dependabot pause applies only while `dependency_updater` is `dependabot`.
 
 The release-integrity and OpenCode Security callers are installed independently
 of feature selection. OpenCode Security is disabled unless the repository or

@@ -145,6 +145,14 @@ function synchronize(options) {
   if (!['true', 'false'].includes(draftProtection)) {
     throw new Error(`Unsupported draft_protection: ${draftProtection}; use true or false.`)
   }
+  // Validate the dependency-update bot policy before any sync writes so a
+  // typo fails fast instead of leaving a half-switched updater behind.
+  const dependencyUpdater = configured(config.dependency_updater, 'dependabot')
+  if (!['renovate', 'dependabot', 'none'].includes(dependencyUpdater)) {
+    throw new Error(
+      `Unsupported dependency_updater: ${dependencyUpdater}; use renovate, dependabot, or none.`
+    )
+  }
   const obsoleteConfigKeys = [
     'opencode_security',
     ...(workflow === 'direct' ? ['staging_validation_mode'] : []),
@@ -332,6 +340,33 @@ function synchronize(options) {
       else rmSync(destination, { force: true })
     } else {
       console.log(`Preserved ${stem}.yml: not recognized as a Code Foundry-generated caller.`)
+    }
+  }
+
+  // `dependency_updater` owns the dependency-update bot contract, and an
+  // explicit value wins over the features gate above: a repository that
+  // leaves Dependabot must not keep a previously rendered dependabot.yml,
+  // and a Renovate repository gets a config only when it does not already
+  // own one (repository-owned renovate.json is never modified).
+  if (dependencyUpdater !== 'dependabot') {
+    const destination = join(target, '.github/dependabot.yml')
+    if (existsSync(destination)) {
+      changed.push('.github/dependabot.yml')
+      if (dryRun)
+        console.log(
+          `Would remove .github/dependabot.yml; dependency_updater selects ${dependencyUpdater}.`
+        )
+      else rmSync(destination, { force: true })
+    }
+  }
+  if (dependencyUpdater === 'renovate') {
+    const destination = join(target, 'renovate.json')
+    if (!existsSync(destination)) {
+      const template = join(source, 'src/templates/renovate.json')
+      if (!existsSync(template))
+        throw new Error('Template file missing: src/templates/renovate.json')
+      changed.push('renovate.json')
+      writeOrReport(destination, readFileSync(template), dryRun)
     }
   }
 
@@ -591,7 +626,11 @@ function shouldInclude(file, languages, features, config) {
   if (file === 'ruff.toml') return includesValue(languages, 'python')
   if (file === '.oxfmtrc.json' || file === '.oxlintrc.json')
     return includesValue(languages, 'typescript')
-  if (file === '.github/dependabot.yml') return includesValue(features, 'dependabot')
+  if (file === '.github/dependabot.yml')
+    return (
+      configured(config.dependency_updater, 'dependabot') === 'dependabot' &&
+      includesValue(features, 'dependabot')
+    )
   // The OpenCode Security caller is installed in every repository so the
   // OPENCODE_SECURITY repository variable can opt a repository in (or out)
   // without a configuration change. The detect job keeps the scan off unless
