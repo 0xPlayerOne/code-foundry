@@ -13,7 +13,10 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // bytes on its own; 280_000 left under 400 bytes of headroom over v1.33.0 and
 // failed the release pull request itself, and 286_000 failed the same way two
 // releases later. Keep real headroom (several releases of CHANGELOG growth)
-// and raise it deliberately as the artifact grows.
+// and raise it deliberately as the artifact grows. The 292_000/1_120_000 pair
+// repeated that mistake — v1.41.0's version pull request measured 152 bytes
+// over the unpacked budget — so the 2026-10-02 bump leaves ~15 releases of
+// CHANGELOG growth instead of one.
 const budgets = {
   cliP95Ms: 250,
   runtimeP95Ms: 750,
@@ -21,8 +24,8 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 292_000,
-  unpackedBytes: 1_120_000,
+  packedBytes: 296_000,
+  unpackedBytes: 1_136_000,
   packedFiles: 120,
 }
 
