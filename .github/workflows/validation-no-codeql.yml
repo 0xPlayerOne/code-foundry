@@ -75,6 +75,16 @@ on:
         required: false
         type: string
         default: task-result
+      e2e-shard-list:
+        description: Comma-separated E2E shard indices passed to the test lane's matrix, e.g. "1,2".
+        required: false
+        type: string
+        default: '1'
+      e2e-total-shards:
+        description: Total E2E shard count passed to the repository script as E2E_TOTAL_SHARDS.
+        required: false
+        type: string
+        default: '1'
     secrets:
       TURBO_TOKEN:
         required: false
@@ -119,6 +129,8 @@ jobs:
       # smoke, and performance lanes stay in the audit and scheduled lanes.
       unit-only: ${{ inputs.mode == 'fast' || inputs.mode == 'release' }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
+      e2e-shard-list: ${{ inputs.e2e-shard-list }}
+      e2e-total-shards: ${{ inputs.e2e-total-shards }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
