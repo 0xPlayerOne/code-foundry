@@ -147,3 +147,18 @@ test('actual optional discovery writes an explicit skip receipt at the exact upl
   assert.equal(report.task, 'e2e')
   assert.deepEqual(report.commands, [])
 })
+
+test('validation orchestrators declare and forward the e2e shard inputs', () => {
+  for (const file of ['validation.yml', 'validation-no-codeql.yml']) {
+    const source = readFileSync(join(root, '.github/workflows', file), 'utf8')
+    for (const name of ['e2e-shard-list', 'e2e-total-shards']) {
+      assert.match(
+        source,
+        new RegExp(`^      ${name}:\\n(?:[^\\n]*\\n){3}        default: '1'`, 'm'),
+        `${file} must declare ${name}: rendered callers always pass it, and an undeclared reusable input fails the call at startup`
+      )
+      const testBlock = source.split('\n  test:\n')[1].split(/\n  [a-z0-9-]+:\n/)[0]
+      assert.match(testBlock, new RegExp(`${name}: \\$\\{\\{ inputs\\.${name} \\}\\}`))
+    }
+  }
+})
