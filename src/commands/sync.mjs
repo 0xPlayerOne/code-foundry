@@ -684,15 +684,6 @@ function sourcePath(source, file) {
 }
 
 /**
- * @param {string} content
- * @param {Record<string,string>} config
- * @param {string} repository
- * @param {string} ref
- * @param {{ shards: string, threads: string, maxParallel: string }} rustCodeql
- * @param {string} file
- * @param {boolean} selfRepository
- */
-/**
  * The batch-soak promoter for repositories with `release_batching_soak_hours`.
  * Repo-agnostic by construction: every call goes through `$GITHUB_REPOSITORY`.
  * The newest pre-release published after the last stable flips to stable once
@@ -820,13 +811,26 @@ jobs:
 `
 
 /** Render the batch-soak promoter for a repository, or null when the
- * repository has not configured a soak. */
+ * repository has not configured a soak.
+ *
+ * @param {Record<string, string>} config
+ * @returns {string | null}
+ */
 export function renderPromoteStable(config) {
   const soakHours = Number(config.release_batching_soak_hours ?? '')
   if (!Number.isInteger(soakHours) || soakHours < 1 || soakHours > 336) return null
   return PROMOTE_STABLE_TEMPLATE.replaceAll('__SOAK_HOURS__', String(soakHours))
 }
 
+/**
+ * @param {string} content
+ * @param {Record<string,string>} config
+ * @param {string} repository
+ * @param {string} ref
+ * @param {{ shards: string, threads: string, maxParallel: string }} rustCodeql
+ * @param {string} file
+ * @param {boolean} selfRepository
+ */
 function renderWorkflow(content, config, repository, ref, rustCodeql, file, selfRepository) {
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
