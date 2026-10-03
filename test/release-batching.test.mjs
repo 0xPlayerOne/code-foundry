@@ -137,10 +137,21 @@ test('batching stages releases as drafts and delegates atomic visibility to the 
 
 // Execute the generated shell with only its external API and clock replaced.
 // jq, bash, filtering and note stitching are the real workflow implementation.
-function runPromotion({ releases, held = false, force = false, version = '' }) {
+function runPromotion({
+  releases,
+  held = false,
+  force = false,
+  version = '',
+  qualification = '',
+  conclusion = 'missing',
+  apiFailure = false,
+}) {
   const root = mkdtempSync(join(tmpdir(), 'code-foundry-promotion-'))
   try {
-    const workflow = renderPromoteStable({ release_batching_soak_hours: '96' })
+    const workflow = renderPromoteStable({
+      release_batching_soak_hours: '96',
+      release_batching_qualification_workflow: qualification,
+    })
     const script = workflow
       .split('        run: |\n')[1]
       .split('\n')
@@ -150,7 +161,11 @@ function runPromotion({ releases, held = false, force = false, version = '' }) {
     writeFileSync(
       join(root, 'gh'),
       `#!/bin/sh
-if [ "$1" = api ]; then case "$*" in *--slurp*) cat "$FIXTURE/releases.json";; *) jq 'add' "$FIXTURE/releases.json";; esac; else printf '%s\\n' "$*" >> "$FIXTURE/edits"; fi
+if [ "$1" = api ]; then
+  [ "$API_FAILURE" = true ] && exit 1
+  case "$*" in *commits*) printf '%s\\n' 'qualified-source-sha';; *--slurp*) cat "$FIXTURE/releases.json";; *) jq 'add' "$FIXTURE/releases.json";; esac
+elif [ "$1" = run ]; then printf '%s\\n' "$CONCLUSION"; printf '%s\\n' "$*" >> "$FIXTURE/qualification-calls"
+else printf '%s\\n' "$*" >> "$FIXTURE/edits"; fi
 `,
       { mode: 0o755 }
     )
@@ -171,6 +186,9 @@ console.log(process.argv[2] === '-d' ? Date.parse(process.argv[3]) / 1000 : Date
         GITHUB_REPOSITORY: 'example/app',
         GITHUB_STEP_SUMMARY: join(root, 'summary'),
         SOAK_HOURS: '96',
+        QUALIFICATION_WORKFLOW: qualification,
+        CONCLUSION: conclusion,
+        API_FAILURE: String(apiFailure),
         STABLE_PROMOTION_HELD: String(held),
         FORCE: String(force),
         VERSION: version,
@@ -179,6 +197,9 @@ console.log(process.argv[2] === '-d' ? Date.parse(process.argv[3]) / 1000 : Date
     })
     return {
       ...result,
+      qualificationCalls: existsSync(join(root, 'qualification-calls'))
+        ? readFileSync(join(root, 'qualification-calls'), 'utf8')
+        : '',
       edits: existsSync(join(root, 'edits')) ? readFileSync(join(root, 'edits'), 'utf8') : '',
       notes: existsSync(join(root, 'batch-notes.md'))
         ? readFileSync(join(root, 'batch-notes.md'), 'utf8')
@@ -350,6 +371,56 @@ test('the producer publishes a draft and its final visibility in one API update'
         new RegExp('--latest=' + (prerelease === 'true' ? 'false' : 'true'))
       )
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('asset qualification holds soaked and forced batches until the exact candidate succeeds', () => {
+  const releases = [release('v1.4.0', '2026-09-26T09:00:00Z')]
+  for (const conclusion of ['failure', 'missing', 'cancelled', '']) {
+    for (const version of ['', '1.4.0']) {
+      const result = runPromotion({
+        releases,
+        qualification: 'release-assets.yml',
+        conclusion,
+        force: true,
+        version,
+      })
+      assert.equal(result.status, 0, result.stderr)
+      assert.equal(result.edits, '')
+    }
+  }
+  const unavailable = runPromotion({
+    releases,
+    qualification: 'release-assets.yml',
+    apiFailure: true,
+    version: '1.4.0',
+  })
+  assert.equal(unavailable.edits, '')
+  const passed = runPromotion({
+    releases,
+    qualification: 'release-assets.yml',
+    conclusion: 'success',
+  })
+  assert.equal(passed.status, 0, passed.stderr)
+  assert.match(passed.edits, /release edit v1.4.0/)
+  assert.match(passed.qualificationCalls, /--commit qualified-source-sha/)
+  assert.match(passed.qualificationCalls, /--event release/)
+})
+
+test('asset workflow identity rejects path and shell injection before synchronization', () => {
+  const root = consumerFixture({
+    release_batching_schedule: '23 12 * * *',
+    release_batching_soak_hours: '96',
+    release_batching_qualification_workflow: '../release-assets.yml',
+  })
+  try {
+    assert.throws(
+      () => syncRepository({ target: root, source }),
+      /Unsupported release_batching_qualification_workflow/
+    )
+    assert.ok(!existsSync(join(root, 'release-please-config.json')))
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

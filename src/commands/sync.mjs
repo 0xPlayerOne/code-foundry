@@ -754,6 +754,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: promote-stable
@@ -769,6 +770,7 @@ jobs:
         env:
           GH_TOKEN: \${{ github.token }}
           SOAK_HOURS: '__SOAK_HOURS__'
+          QUALIFICATION_WORKFLOW: '__QUALIFICATION_WORKFLOW__'
           VERSION: \${{ inputs.version }}
           FORCE: \${{ inputs.force }}
           STABLE_PROMOTION_HELD: \${{ vars.STABLE_PROMOTION_HELD }}
@@ -776,6 +778,19 @@ jobs:
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
           summary="$GITHUB_STEP_SUMMARY"
+
+          # Force bypasses hold and soak, but never asset qualification.
+          require_qualification() {
+            [ -z "$QUALIFICATION_WORKFLOW" ] && return 0
+            local candidate_sha conclusion
+            candidate_sha="$(gh api "repos/$repo/commits/$1" --jq '.sha')" || return 1
+            [ -n "$candidate_sha" ] && [ "$candidate_sha" != "null" ] || return 1
+            conclusion="$(gh run list --repo "$repo" --workflow "$QUALIFICATION_WORKFLOW" --event release --commit "$candidate_sha" --limit 1 --json conclusion --jq '.[0].conclusion // "missing"')" || return 1
+            if [ "$conclusion" != "success" ]; then
+              echo "Asset qualification for $1 is $conclusion; holding stable promotion." | tee -a "$summary"
+              return 1
+            fi
+          }
 
           # The repository variable applies equally to scheduled and manual runs.
           if [ "$STABLE_PROMOTION_HELD" = "true" ] && [ "$FORCE" != "true" ]; then
@@ -787,6 +802,10 @@ jobs:
             if ! [[ "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
               echo "::error::version must be a plain semantic version" >&2
               exit 1
+            fi
+            if ! require_qualification "v$VERSION"; then
+              echo "Qualification unavailable or unsuccessful; holding v$VERSION." | tee -a "$summary"
+              exit 0
             fi
             gh release edit "v$VERSION" --repo "$repo" --prerelease=false --latest
             echo "Promoted v$VERSION to stable by name." | tee -a "$summary"
@@ -830,6 +849,11 @@ jobs:
 
           if [ "$age_hours" -lt "$SOAK_HOURS" ] && [ "$FORCE" != "true" ]; then
             echo "The batch has soaked \${age_hours}h of \${SOAK_HOURS}h; holding. Tip: $tip" | tee -a "$summary"
+            exit 0
+          fi
+
+          if ! require_qualification "$tip"; then
+            echo "Qualification unavailable or unsuccessful; holding $tip." | tee -a "$summary"
             exit 0
           fi
 
@@ -878,6 +902,16 @@ function validateReleaseBatchingConfig(config) {
       `Unsupported release_batching_prerelease: ${config.release_batching_prerelease}; use true or false.`
     )
   }
+  if (config.release_batching_qualification_workflow) {
+    if (
+      !/^[A-Za-z0-9_.-]+\.ya?ml$/.test(config.release_batching_qualification_workflow) ||
+      !config.release_batching_soak_hours
+    ) {
+      throw new Error(
+        'Unsupported release_batching_qualification_workflow: use a workflow filename with a batching soak.'
+      )
+    }
+  }
   if (config.release_batching_soak_hours) {
     const hours = Number(config.release_batching_soak_hours)
     if (!Number.isInteger(hours) || hours < 1 || hours > 336) {
@@ -902,7 +936,10 @@ function validateReleaseBatchingConfig(config) {
 export function renderPromoteStable(config) {
   const soakHours = Number(config.release_batching_soak_hours ?? '')
   if (!Number.isInteger(soakHours) || soakHours < 1 || soakHours > 336) return null
-  return PROMOTE_STABLE_TEMPLATE.replaceAll('__SOAK_HOURS__', String(soakHours))
+  return PROMOTE_STABLE_TEMPLATE.replaceAll('__SOAK_HOURS__', String(soakHours)).replaceAll(
+    '__QUALIFICATION_WORKFLOW__',
+    config.release_batching_qualification_workflow ?? ''
+  )
 }
 
 /**
