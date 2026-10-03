@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.0...v1.44.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **release:** budget the package without the changelog and ship recent history only ([#708](https://github.com/0xPlayerOne/code-foundry/issues/708)) ([ab365e0](https://github.com/0xPlayerOne/code-foundry/commit/ab365e0910472c3596429adc86a1c8f3e19730f9))
+
 ## [1.44.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.43.2...v1.44.0) (2026-10-03)
 
 
