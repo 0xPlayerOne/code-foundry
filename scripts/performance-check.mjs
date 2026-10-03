@@ -16,7 +16,9 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // and raise it deliberately as the artifact grows. The 292_000/1_120_000 pair
 // repeated that mistake — v1.41.0's version pull request measured 152 bytes
 // over the unpacked budget — so the 2026-10-02 bump leaves ~15 releases of
-// CHANGELOG growth instead of one.
+// CHANGELOG growth instead of one. The 2026-10-03 bump carries the release
+// batching feature (#699): the promoter template ships inside sync.mjs and
+// added ~1.3 KB packed on top of that headroom.
 const budgets = {
   cliP95Ms: 250,
   runtimeP95Ms: 750,
@@ -24,8 +26,8 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 296_000,
-  unpackedBytes: 1_136_000,
+  packedBytes: 304_000,
+  unpackedBytes: 1_152_000,
   packedFiles: 120,
 }
 
