@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.2...v1.44.3) (2026-10-03)
+
+
+### Tests
+
+* **cli:** assert expected doctor warnings ([#712](https://github.com/0xPlayerOne/code-foundry/issues/712)) ([d036bee](https://github.com/0xPlayerOne/code-foundry/commit/d036beee79a9b200315cdbee5509fc3c2a6c4a04))
+
 ## [1.44.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.1...v1.44.2) (2026-10-03)
 
 
