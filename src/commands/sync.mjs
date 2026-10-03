@@ -135,6 +135,21 @@ function synchronize(options) {
   const changed = []
   if (!Object.keys(existingConfig).length && !options.init)
     throw new Error('Missing .github/code-foundry.yml; run init first.')
+  validateReleaseBatchingConfig(existingConfig)
+  if (
+    existingConfig.release_batching_schedule &&
+    existingConfig.release_batching_prerelease !== 'false'
+  ) {
+    const releasePath = join(target, 'release-please-config.json')
+    if (existsSync(releasePath)) {
+      const packages = JSON.parse(readFileSync(releasePath, 'utf8')).packages
+      if (packages && (Object.keys(packages).length !== 1 || !packages['.'])) {
+        throw new Error(
+          'Unsupported release_batching_schedule: batched publication requires a single root Release Please package.'
+        )
+      }
+    }
+  }
   const defaults = createDefaultConfig(target, source, existingConfig.git_workflow)
   let config = { ...defaults, ...existingConfig }
   const workflow = gitWorkflow(config.git_workflow)
@@ -269,7 +284,7 @@ function synchronize(options) {
     if (file === '.github/CODEOWNERS' && existsSync(destination)) continue
     let content = readFileSync(sourceFile)
     if (file === 'release-please-config.json') {
-      content = Buffer.from(renderReleaseConfig(target, sourceFile))
+      content = Buffer.from(renderReleaseConfig(target, sourceFile, config))
     }
     if (file.endsWith('.yml') && file.startsWith('.github/workflows/')) {
       content = Buffer.from(
@@ -625,9 +640,34 @@ function mergeReleaseConfig(target, sourceFile) {
   return buildReleaseConfig(target, merged)
 }
 
-/** @param {string} target @param {string} sourceFile @returns {string} */
-function renderReleaseConfig(target, sourceFile) {
-  return `${JSON.stringify(mergeReleaseConfig(target, sourceFile), null, 2)}\n`
+/** @param {string} target @param {string} sourceFile @param {Record<string, string>} config @returns {string} */
+function renderReleaseConfig(target, sourceFile, config) {
+  const merged = mergeReleaseConfig(target, sourceFile)
+  if (
+    config.release_batching_schedule &&
+    configured(config.release_batching_prerelease, 'true') === 'true'
+  ) {
+    // Stage privately so publication can set visibility atomically. A polling
+    // flagger cannot prevent clients seeing an initially stable release.
+    merged.draft = true
+    merged['force-tag-creation'] = true
+    for (const value of Object.values(merged.packages ?? {})) {
+      value.draft = true
+      value['force-tag-creation'] = true
+    }
+  } else {
+    const caller = join(target, '.github/workflows/release.yml')
+    const previouslyBatched =
+      existsSync(caller) &&
+      readFileSync(caller, 'utf8').includes(
+        "prerelease: ${{ github.event_name != 'workflow_dispatch' }}"
+      )
+    if (previouslyBatched) {
+      merged.draft = false
+      for (const value of Object.values(merged.packages ?? {})) value.draft = false
+    }
+  }
+  return `${JSON.stringify(merged, null, 2)}\n`
 }
 
 /** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */
@@ -711,14 +751,9 @@ on:
         required: false
         type: boolean
         default: false
-      hold:
-        description: Set (true) or clear (false) the promotion hold; nothing promotes on schedule while held.
-        required: false
-        type: boolean
 
 permissions:
   contents: write
-  actions: write
 
 concurrency:
   group: promote-stable
@@ -736,29 +771,22 @@ jobs:
           SOAK_HOURS: '__SOAK_HOURS__'
           VERSION: \${{ inputs.version }}
           FORCE: \${{ inputs.force }}
-          HOLD: \${{ inputs.hold }}
+          STABLE_PROMOTION_HELD: \${{ vars.STABLE_PROMOTION_HELD }}
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
           summary="$GITHUB_STEP_SUMMARY"
 
-          # The hold switch is a repository variable so a bad batch can be
-          # halted without a code change; a dispatch sets or clears it.
-          if [ "$HOLD" = "true" ] || [ "$HOLD" = "false" ]; then
-            wanted="false"; [ "$HOLD" = "true" ] && wanted="true"
-            if gh api "repos/$repo/actions/variables/STABLE_PROMOTION_HELD" >/dev/null 2>&1; then
-              gh api -X PATCH "repos/$repo/actions/variables/STABLE_PROMOTION_HELD" -f value="$wanted" >/dev/null
-            else
-              gh api -X POST "repos/$repo/actions/variables" -f name=STABLE_PROMOTION_HELD -f value="$wanted" >/dev/null
-            fi
-            echo "Promotion hold set to $wanted." | tee -a "$summary"
+          # The repository variable applies equally to scheduled and manual runs.
+          if [ "$STABLE_PROMOTION_HELD" = "true" ] && [ "$FORCE" != "true" ]; then
+            echo "Stable promotion is held." | tee -a "$summary"
+            exit 0
           fi
 
-          # A manually named version wins over everything but the hold.
           if [ -n "$VERSION" ]; then
-            if [ "$(gh api "repos/$repo/actions/variables/STABLE_PROMOTION_HELD" --jq '.value' 2>/dev/null || echo false)" = "true" ] && [ "$FORCE" != "true" ]; then
-              echo "Promotion is held; pass force=true to promote $VERSION anyway." | tee -a "$summary"
-              exit 0
+            if ! [[ "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+              echo "::error::version must be a plain semantic version" >&2
+              exit 1
             fi
             gh release edit "v$VERSION" --repo "$repo" --prerelease=false --latest
             echo "Promoted v$VERSION to stable by name." | tee -a "$summary"
@@ -766,22 +794,25 @@ jobs:
           fi
 
           releases="$(mktemp)"
-          gh api "repos/$repo/releases?per_page=100" > "$releases"
+          trap 'rm -f "$releases"' EXIT
+          gh api --paginate --slurp "repos/$repo/releases?per_page=100" | jq 'add' > "$releases"
 
           # The last promoted stable anchors the candidate batch.
           last_stable_published="$(jq -r '
-            [ .[] | select(.draft == false and .prerelease == false) ][0].published_at // "null"
+            [ .[] | select(.draft == false and .prerelease == false)
+              | select(.tag_name | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) ]
+            | sort_by(.published_at) | .[-1].published_at // "null"
           ' "$releases")"
           echo "Last stable published: $last_stable_published"
 
           # The batch: every non-draft pre-release published since then, with
           # the plain release tag shape (dev builds carry a -dev suffix and
           # live on their own channel forever; they are never promoted).
-          batch="$(jq -r '
+          batch="$(jq -r --arg last_stable_published "$last_stable_published" '
             [ .[]
               | select(.draft == false and .prerelease == true)
-              | select(.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
-              | select("$last_stable_published" == "null" or .published_at > "$last_stable_published")
+              | select(.tag_name | test("^v[0-9]+[.][0-9]+[.][0-9]+$"))
+              | select($last_stable_published == "null" or .published_at > $last_stable_published)
               | { tag: .tag_name, published_at: .published_at, body: .body } ]
             | sort_by(.published_at)
           ' "$releases")"
@@ -809,6 +840,58 @@ jobs:
           count="$(jq 'length' <<<"$batch")"
           echo "Promoted $tip to stable: the batch of $count had soaked \${age_hours}h." | tee -a "$summary"
 `
+
+/** @param {Record<string, string>} config */
+function validateReleaseBatchingConfig(config) {
+  const schedule = String(config.release_batching_schedule ?? '').trim()
+  if (schedule) {
+    const limits = [
+      [0, 59],
+      [0, 23],
+      [1, 31],
+      [1, 12],
+      [0, 6],
+    ]
+    const fields = schedule.split(/\s+/)
+    const valid =
+      fields.length === 5 &&
+      fields.every((field, index) => {
+        const [min, max] = limits[index]
+        return field.split(',').every((part) => {
+          const match = part.match(/^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/)
+          if (!match || (match[2] && (Number(match[2]) < 1 || Number(match[2]) > max))) return false
+          if (match[1] === '*') return true
+          const [start, end = start] = match[1].split('-').map(Number)
+          return start >= min && end <= max && start <= end
+        })
+      })
+    if (!valid)
+      throw new Error(
+        `Unsupported release_batching_schedule: ${schedule}; use a five-field numeric cron expression.`
+      )
+  }
+  if (
+    config.release_batching_prerelease &&
+    !['true', 'false'].includes(config.release_batching_prerelease)
+  ) {
+    throw new Error(
+      `Unsupported release_batching_prerelease: ${config.release_batching_prerelease}; use true or false.`
+    )
+  }
+  if (config.release_batching_soak_hours) {
+    const hours = Number(config.release_batching_soak_hours)
+    if (!Number.isInteger(hours) || hours < 1 || hours > 336) {
+      throw new Error(
+        `Unsupported release_batching_soak_hours: ${config.release_batching_soak_hours}; use an integer between 1 and 336.`
+      )
+    }
+    if (!schedule || config.release_batching_prerelease === 'false') {
+      throw new Error(
+        'Unsupported release_batching_soak_hours: configure a batching schedule with prerelease publication.'
+      )
+    }
+  }
+}
 
 /** Render the batch-soak promoter for a repository, or null when the
  * repository has not configured a soak.
@@ -923,43 +1006,23 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\)\n/m,
       "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n"
     )
-    // Release batching (issue #699): `release_batching_schedule` gates the
-    // pipeline to the `chore(main): release …` squash so ordinary merges
-    // accumulate into the configured window, and the mark-prerelease job
-    // flags each window release for the pre-release channel. Without the
-    // config the caller renders the classic per-merge form and the batching
-    // blocks are stripped. `release_batching_prerelease: false` opts out of
-    // the flagging job while keeping the window.
+    // Gate ordinary pushes while allowing the release squash and manual hotfixes.
     const batchingSchedule = String(config.release_batching_schedule ?? '').trim()
     if (batchingSchedule) {
-      // The minute field must be numeric or a wildcard: that single rule
-      // rejects prose ('every morning') while accepting every real cron form
-      // the field needs, including lists, steps, and ranges.
-      if (
-        !/^[\d*]+([/,][\d*]+)*( \S+){0,4}$/.test(batchingSchedule) ||
-        batchingSchedule.length > 64
-      ) {
-        throw new Error(
-          `Unsupported release_batching_schedule: ${config.release_batching_schedule}; use a cron expression.`
-        )
-      }
       rendered = rendered.replace(
-        /^    - cron: '53 12 \* \* \*'\n/m,
-        `    - cron: '${batchingSchedule}'\n`
+        '  workflow_dispatch:',
+        `  schedule:\n    - cron: '${batchingSchedule}'\n  workflow_dispatch:`
       )
       rendered = rendered.replace(
         "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n",
-        "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true) && (github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore(main): release '))\n"
+        "    if: >-\n      (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && (github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore(main): release '))\n"
       )
-    } else {
-      rendered = rendered.replace(
-        /^  # Release batching \(release_batching_schedule[^\n]*\n(  #[^\n]*\n)*  schedule:\n    - cron: '53 12 \* \* \*'\n/m,
-        ''
-      )
-      rendered = removeWorkflowBlock(rendered, 'mark-prerelease')
-    }
-    if (configured(config.release_batching_prerelease, 'true') === 'false') {
-      rendered = removeWorkflowBlock(rendered, 'mark-prerelease')
+      if (configured(config.release_batching_prerelease, 'true') === 'true') {
+        rendered = rendered.replace(
+          '      git-workflow:',
+          "      prerelease: ${{ github.event_name != 'workflow_dispatch' }}\n      git-workflow:"
+        )
+      }
     }
     rendered = rendered.replace(
       /(\n    secrets:\n      CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}\n)/,
