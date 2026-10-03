@@ -5024,6 +5024,7 @@ jobs:
       assert.match(audit, new RegExp(`${budget}:`))
     }
     assert.match(audit, /npm.*pack.*--dry-run.*--json/)
+    assert.match(audit, /measurePackWithoutChangelog/)
     assert.match(audit, /cacheIsolated/)
     assert.match(ignore, /^performance-results\.json$/m)
     assert.match(templateIgnore, /^performance-results\.json$/m)

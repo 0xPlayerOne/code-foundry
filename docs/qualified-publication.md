@@ -51,7 +51,9 @@ identity checks.
 
 The producer must:
 
-- pack the candidate with lifecycle scripts disabled;
+- pack the candidate with lifecycle scripts disabled, after trimming the
+  checkout's `CHANGELOG.md` to recent releases with
+  `scripts/package-changelog.mjs`;
 - create or reuse a draft release for the exact package version;
 - attach the package archive before the release is published;
 - keep the tag at the qualified source commit;

@@ -1,28 +1,25 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
 import { spawnSync } from 'node:child_process'
-import { resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { trimChangelog } from './package-changelog.mjs'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // The packed budget is a guard against publishing a runaway artifact, not a
-// size target. CHANGELOG.md ships inside the package, so every release adds
-// bytes on its own; 280_000 left under 400 bytes of headroom over v1.33.0 and
-// failed the release pull request itself, and 286_000 failed the same way two
-// releases later. Keep real headroom (several releases of CHANGELOG growth)
-// and raise it deliberately as the artifact grows. The 292_000/1_120_000 pair
-// repeated that mistake — v1.41.0's version pull request measured 152 bytes
-// over the unpacked budget — so the 2026-10-02 bump leaves ~15 releases of
-// CHANGELOG growth instead of one. The 2026-10-03 bump carries the release
-// batching feature (#699): the promoter template ships inside sync.mjs and
-// added ~1.3 KB packed on top of that headroom. The change-aware pre-commit
-// gate (#702) adds src/lib/pre-commit.mjs after v1.43.0–v1.43.2 had already
-// spent most of that headroom (1,155,679 unpacked against 1,152,000), so the
-// 316_000/1_200_000 pair restores room for the gate plus many releases of
-// CHANGELOG growth.
+// size target. It measures the package WITHOUT CHANGELOG.md: the changelog
+// grows with every release on its own, and budgets that included it tripped
+// release pull requests repeatedly (280_000, 286_000, then 292_000/1_120_000
+// each failed within a release or two of being raised). The published package
+// ships a changelog trimmed to recent releases (scripts/package-changelog.mjs,
+// applied in the qualification pack job), and its full and packaged sizes are
+// reported below for visibility only. With the changelog excluded, the
+// remaining headroom (~5% packed, ~6% unpacked over v1.44.0) is for source
+// growth alone; raise it deliberately when the source artifact grows.
 const budgets = {
   cliP95Ms: 250,
   runtimeP95Ms: 750,
@@ -75,6 +72,45 @@ function benchmarkNode(label, args, env = process.env) {
   }
 }
 
+/**
+ * Packs a staging copy of the release artifact without CHANGELOG.md so the
+ * budget measures the source artifact, not accumulated release notes.
+ */
+function measurePackWithoutChangelog() {
+  const listed = JSON.parse(
+    run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts']).stdout
+  )[0]
+  const stage = mkdtempSync(join(tmpdir(), 'code-foundry-pack-'))
+  try {
+    for (const { path } of listed.files) {
+      if (path === 'CHANGELOG.md' || path === 'package.json') continue
+      const target = join(stage, path)
+      mkdirSync(dirname(target), { recursive: true })
+      copyFileSync(resolve(root, path), target)
+    }
+    const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+    manifest.files = manifest.files.filter(
+      (/** @type {string} */ entry) => entry !== 'CHANGELOG.md'
+    )
+    writeFileSync(join(stage, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+    const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+      cwd: stage,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    })
+    if (result.status !== 0) throw new Error(`staged npm pack failed: ${result.stderr}`)
+    const staged = JSON.parse(result.stdout)[0]
+    const expected = listed.files.filter(
+      (/** @type {{ path: string }} */ file) => file.path !== 'CHANGELOG.md'
+    ).length
+    if (staged.files.length !== expected)
+      throw new Error(`staged pack has ${staged.files.length} files; expected ${expected}`)
+    return staged
+  } finally {
+    rmSync(stage, { recursive: true, force: true })
+  }
+}
+
 const cli = benchmarkNode('CLI help startup', ['src/cli.mjs', '--help'])
 const runtime = benchmarkNode('runtime mode startup', ['src/runtime.mjs', 'validation', 'mode'], {
   ...process.env,
@@ -93,7 +129,12 @@ const ciChecks = performance.now() - ciStarted
 const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 const runtimeDependencies = Object.keys(packageJson.dependencies ?? {}).length
 const developmentDependencies = Object.keys(packageJson.devDependencies ?? {}).length
-const pack = JSON.parse(run('npm', ['pack', '--dry-run', '--json']).stdout)[0]
+const pack = measurePackWithoutChangelog()
+const changelogText = readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8')
+const changelog = {
+  repositoryBytes: Buffer.byteLength(changelogText),
+  packagedBytes: Buffer.byteLength(trimChangelog(changelogText).text),
+}
 const workflow = readFileSync(resolve(root, '.github/workflows/test.yml'), 'utf8')
 const performanceJob = workflow.slice(
   workflow.indexOf('\n  performance:'),
@@ -113,10 +154,13 @@ const metrics = {
   runtimeDependencies,
   developmentDependencies,
   releaseArtifact: {
+    excludes: ['CHANGELOG.md'],
     packedBytes: pack.size,
     unpackedBytes: pack.unpackedSize,
     files: pack.files.length,
   },
+  // Informational only; never budgeted (see the budget comment above).
+  changelog,
   budgets,
 }
 

@@ -73,3 +73,10 @@ test('qualification runs only when a release or a stuck draft needs it', () => {
   const stage = caller.slice(caller.indexOf('\n  stage:'), caller.indexOf('\n  publish:'))
   assert.match(stage, /needs\.qualification\.result == 'success'/)
 })
+
+test('the pack job trims the packaged changelog before the single lifecycle-free pack', () => {
+  const pack = workflow.slice(workflow.indexOf('\n  pack:'), workflow.indexOf('\n  qualify:'))
+  const trim = pack.indexOf('node scripts/package-changelog.mjs CHANGELOG.md')
+  assert.ok(trim > 0, 'pack job must trim CHANGELOG.md')
+  assert.ok(trim < pack.indexOf('npm pack --ignore-scripts'), 'trim must precede npm pack')
+})
