@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.1...v1.44.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ci:** cancel only superseded pull-request runs in managed workflows ([#710](https://github.com/0xPlayerOne/code-foundry/issues/710)) ([f5fead6](https://github.com/0xPlayerOne/code-foundry/commit/f5fead677c032d253f2e1a2a256da4f207ddfa2a))
+
 ## [1.44.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.0...v1.44.1) (2026-10-03)
 
 
