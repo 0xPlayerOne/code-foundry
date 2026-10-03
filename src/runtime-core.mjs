@@ -20,6 +20,12 @@ import { docsOnlyPullRequest } from './lib/docs-only.mjs'
 import { readTaskFilters, resolveChangedPaths, taskAffected } from './lib/task-filters.mjs'
 import { classifyValidationMode, evaluateValidationGate } from './lib/validation-policy.mjs'
 import { readReleaseConfig, validateGeneratedReleaseDiff } from './lib/release-policy.mjs'
+import {
+  chunkFiles,
+  parseStagedFiles,
+  planPreCommit,
+  preCommitBuildEnabled,
+} from './lib/pre-commit.mjs'
 import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
 import {
   EVAL_BUDGET_FILE_DEFAULT,
@@ -1167,35 +1173,89 @@ function printProfile(command) {
   writeOutput('npm_publish', config.npm_publish ?? 'false')
 }
 
+/** Whether JavaScript sources are type-checked (a root jsconfig or `checkJs`). */
+function checksJavascript() {
+  if (existsSync(resolve(root, 'jsconfig.json'))) return true
+  return /"checkJs"\s*:\s*true/.test(readFileSafe(resolve(root, 'tsconfig.json')) ?? '')
+}
+
+/** @param {string} tool @param {string[]} args @param {string[]} files */
+function runToolOnFiles(tool, args, files) {
+  for (const chunk of chunkFiles(files)) runTool(tool, [...args, ...chunk])
+}
+
 /**
  * The local commit gate.
  *
  * Exported so the generated `.githooks/pre-commit` can reach it: the hook is
- * what turns this into an actual gate, and it used to run the whitespace
- * check alone. The generated hook is the consumer-visible contract, so keep
- * the two in step.
+ * what turns this into an actual gate. The generated hook is the
+ * consumer-visible contract, so keep the two in step.
+ *
+ * The gate is change-aware: it formats and lints only staged files, runs the
+ * project's type-check command only when typed sources or compiler config are
+ * staged, and never builds unless `pre_commit_build: true` opts back in. The
+ * full suite still runs in CI. Tools see working-tree contents, so a partially
+ * staged file is checked as it exists on disk.
  */
 export function preCommit() {
-  const changed = capture('git', ['diff', '--cached', '--name-only'])
-  if (!changed) return
+  const staged = parseStagedFiles(
+    capture('git', ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR'])
+  )
+  // Deletions still go through the whitespace guard; they need no tool run.
+  if (!staged.length && !capture('git', ['diff', '--cached', '--name-only'])) return
   const check = spawnSync('git', ['diff', '--cached', '--check'], { cwd: root, stdio: 'inherit' })
   if (check.status !== 0) process.exit(check.status ?? 1)
-  if (/\.(js|jsx|ts|tsx|json|md|mdx|yml|yaml)$/.test(changed)) {
-    ci('format')
-    ci('lint')
-    // Type errors are the fastest check that still needs a full toolchain, and
-    // the most common reason a green-looking commit fails CI later. Run it
-    // here while the dependency graph is warm.
-    ci('type_check')
+  if (!staged.length) return
+
+  const plan = planPreCommit(staged, {
+    checkJs: checksJavascript(),
+    build: preCommitBuildEnabled(config.pre_commit_build),
+  })
+  const js = (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject()
+
+  if (js && (plan.formatAll || plan.formatFiles.length)) {
+    if (plan.formatAll) {
+      if (!runScript(['format:check', 'format', 'fmt']) && hasOxfmtSetup())
+        runTool('oxfmt', ['--check', '.'])
+    } else if (hasOxfmtSetup()) {
+      runToolOnFiles('oxfmt', ['--check', '--no-error-on-unmatched-pattern'], plan.formatFiles)
+    } else if (plan.formatFiles.some((file) => /\.(?:[cm]?[jt]sx?|json|mdx?|ya?ml)$/.test(file))) {
+      // A repository-owned formatter cannot be scoped generically; its script
+      // still runs, but only when a file it plausibly owns is staged.
+      runScript(['format:check', 'format', 'fmt'])
+    }
   }
-  if (/\.rs$|(^|\/)Cargo\.toml$/.test(changed)) {
+  if (js && (plan.lintAll || plan.lintFiles.length)) {
+    if (plan.lintAll) {
+      if (!runScript(['lint']) && hasOxlintSetup()) runTool('oxlint', ['--deny-warnings'])
+    } else if (hasOxlintSetup()) {
+      runToolOnFiles(
+        'oxlint',
+        ['--deny-warnings', '--no-error-on-unmatched-pattern'],
+        plan.lintFiles
+      )
+    } else {
+      runScript(['lint'])
+    }
+  }
+  if (js && plan.typeCheck) {
+    // Use the project's own command so project references, workspaces, and
+    // path aliases resolve exactly as they do in CI.
+    const scripted = runScript(['type-check', 'typecheck', 'type:check'])
+    if (!scripted && existsSync(resolve(root, 'tsconfig.json'))) runTool('tsc', ['--noEmit'])
+  }
+  if (plan.rust) {
     run('cargo', ['fmt', '--check'])
     run('cargo', ['clippy', '--all-targets', '--', '-D', 'warnings'])
   }
-  if (/\.py$|(^|\/)(pyproject\.toml|requirements[^/]*\.txt)$/.test(changed)) {
+  if (plan.pythonAll) {
     runTool('ruff', ['format', '--check', '.'])
     runTool('ruff', ['check', '.'])
+  } else if (plan.pythonFiles.length) {
+    runToolOnFiles('ruff', ['format', '--check', '--force-exclude'], plan.pythonFiles)
+    runToolOnFiles('ruff', ['check', '--force-exclude'], plan.pythonFiles)
   }
+  if (plan.build) ci('build')
 }
 
 // Only dispatch when this module is the process entry point. The CLI imports

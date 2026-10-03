@@ -44,8 +44,9 @@ contract. For normal updates, edit that file and run `npx code-foundry sync`.
   outcomes comparable across revisions and executors.
 - An opt-in product-quality runner for static sites, web apps, Workers, and
   published packages.
-- A small `.githooks/pre-commit` launcher with language-aware formatting and
-  linting.
+- A small `.githooks/pre-commit` launcher with a change-aware gate: it formats
+  and lints only staged files, type-checks only when typed sources are staged,
+  and leaves the build to CI.
 - An optional `.mise.toml`/`mise.lock`, repository profile configuration, and
   standard GitHub forms and policy files.
 - AGENTS instructions, CODEOWNERS, license/notice files, and reusable release

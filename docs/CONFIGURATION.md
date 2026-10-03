@@ -131,6 +131,7 @@ See [Merge queue validation](merge-queues.md) before enabling it.
 | `coverage_minimum`                        | `0`–`100`                                            | Minimum percentage; defaults to `80`.                                                                                                                                                                                                                                                                                                                                                                                  |
 | `coverage_metrics`                        | `lines`, `functions`, `branches`, `statements`       | Metrics checked by the coverage gate.                                                                                                                                                                                                                                                                                                                                                                                  |
 | `coverage_report`                         | comma-separated repository paths                     | Istanbul JSON summary or LCOV evidence files.                                                                                                                                                                                                                                                                                                                                                                          |
+| `pre_commit_build`                        | `true`, `false`                                      | Run the project's build in the local pre-commit gate. Defaults to `false`; see [Pre-commit gate](#pre-commit-gate).                                                                                                                                                                                                                                                                                                    |
 | `filter_<task>`                           | comma-separated repository path globs                | Skip a lane when no changed path matches; see [Lane path filters](#lane-path-filters).                                                                                                                                                                                                                                                                                                                                 |
 | `rust_sccache`                            | `true`, `false`                                      | Install sccache and wrap rustc so compile artifacts survive manifest/lockfile churn.                                                                                                                                                                                                                                                                                                                                   |
 | `rust_nextest`                            | `true`, `false`                                      | Install cargo-nextest and prefer `cargo nextest run` over `cargo test` in Rust test lanes.                                                                                                                                                                                                                                                                                                                             |
@@ -168,6 +169,36 @@ and production-dependency budgets. Supported budget names are
 to keep discovery optional. Product-quality profiles are repository-owned
 manifests invoked by existing build or E2E commands; they are not activated by a
 configuration key. See [Product quality profiles](product-quality.md).
+
+### Pre-commit gate
+
+`code-foundry sync` installs `.githooks/pre-commit`, which runs
+`code-foundry pre-commit` when the repository depends on `code-foundry`. The
+gate is change-aware and never runs work for code the commit cannot affect:
+
+- With nothing staged it exits immediately. `git diff --cached --check` still
+  blocks whitespace errors in every staged change.
+- Oxfmt and Oxlint check only the staged files they support, honoring their
+  own ignore patterns. Staging `.oxfmtrc.json`, `.oxlintrc.json`, or their
+  `*.config.*` equivalents widens that tool to the whole repository through the
+  repository's `format:check`/`lint` script. A repository without Oxfmt or
+  Oxlint keeps its own script, which runs only when a matching file is staged.
+- The project's `type-check`/`typecheck`/`type:check` script (or `tsc --noEmit`)
+  runs only when `.ts`, `.tsx`, `.mts`, `.cts`, or `tsconfig*.json` files are
+  staged, and for JavaScript sources when the repository type-checks them with
+  a root `jsconfig.json` or `checkJs`.
+- Ruff checks only staged Python files (`--force-exclude`), or the whole
+  repository when `pyproject.toml`, `ruff.toml`, or a requirements file is
+  staged. Staged Rust sources or `Cargo.toml` run `cargo fmt --check` and
+  Clippy.
+- The build does not run at commit time; CI and explicit commands own it. Set
+  `pre_commit_build: true` to run the `build` script (or `cargo build`) when
+  code is staged.
+
+Tools read working-tree contents, so a partially staged file is checked as it
+exists on disk. Task scripts that declare dependencies of their own, such as a
+Turborepo `typecheck` task with `dependsOn: ["^build"]`, still run them; drop
+that dependency to keep type checks build-free.
 
 ## Release and branch policy
 
