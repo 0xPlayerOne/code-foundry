@@ -240,7 +240,8 @@ readying a pull request.
 - Keep workflows concise, independently runnable, and safe to re-run.
 - Use `push` for `main` and `pull_request` for `main` unless a workflow has a documented event-specific reason.
 - Give workflows clear names and jobs concise names; avoid repeating the workflow name in the job name.
-- Use per-workflow concurrency groups that cancel superseded runs while allowing independent workflows to run in parallel.
+- Use per-workflow concurrency groups keyed by pull request or ref that cancel superseded pull-request runs while allowing independent workflows to run in parallel. Do not cancel in progress for pushes to `main`, release, publication, or deployment runs; let them queue.
+- Do not put `always()` on heavy jobs: it keeps a cancelled run alive and holding its concurrency group. Use `!cancelled()` for jobs that must run after upstream failures, and keep `always()` for lightweight aggregate gates only.
 - Keep setup language-aware and cache dependency downloads by lockfile; do not cache secrets, `node_modules`, virtual environments, or broad build output without a measured reason.
 - Use least-privilege permissions and pin action versions consistently with the template.
 - Keep CI, Test, Security, CodeQL, Draft Guard, Draft PR, Release PR, and Release concerns separated.
