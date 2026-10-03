@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.43.0...v1.43.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **release:** make batched publication and stable promotion reliable ([#703](https://github.com/0xPlayerOne/code-foundry/issues/703)) ([271731d](https://github.com/0xPlayerOne/code-foundry/commit/271731d8fac3bff42a99b3d5f4a774eccc0a7788))
+
 ## [1.43.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.42.0...v1.43.0) (2026-10-03)
 
 
