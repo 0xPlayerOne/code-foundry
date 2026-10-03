@@ -190,7 +190,7 @@ for (const [key, value] of [
 test('Release Please outputs preserve the exact SHA for both credential routes', () => {
   const normalize = release.slice(
     release.indexOf('      - name: Normalize Release Please outputs'),
-    release.indexOf('      - name: Normalize generated release PR draft state')
+    release.indexOf('      - name: Publish batched draft with atomic visibility')
   )
   const shell = normalize
     .split('        run: |\n')[1]

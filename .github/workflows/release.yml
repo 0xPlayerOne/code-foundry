@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: release-please-config.json
+      prerelease:
+        description: Publish a batched draft release as a prerelease; manual hotfixes use false.
+        required: false
+        type: boolean
+        default: false
       defer-publication:
         description: Create a root draft release for an external qualified publisher; skip legacy publication and post-release jobs.
         required: false
@@ -139,6 +144,7 @@ jobs:
           }
           if (releaseType === 'none' || !fs.existsSync('package.json')) npmPublish = 'false'
           let legacyReleaseType = ''
+          const batchedPublication = Boolean(config.release_batching_schedule) && config.release_batching_prerelease !== 'false' && process.env.DEFER_PUBLICATION !== 'true'
           if (releaseType !== 'none') {
             const sourcePath = process.env.RELEASE_CONFIG_FILE || 'release-please-config.json'
             if (!/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\.json$/.test(sourcePath) || sourcePath.split('/').includes('..')) {
@@ -151,12 +157,12 @@ jobs:
               throw new Error('config-file must be a file inside the repository')
             }
             const releaseConfig = JSON.parse(fs.readFileSync(sourcePath, 'utf8'))
-            if (process.env.DEFER_PUBLICATION === 'true') {
+            if (process.env.DEFER_PUBLICATION === 'true' || batchedPublication) {
               const rootPackage = releaseConfig.packages?.['.']
               if (!rootPackage || Object.keys(releaseConfig.packages).length !== 1 ||
                   (rootPackage.draft ?? releaseConfig.draft) !== true ||
                   (rootPackage['force-tag-creation'] ?? releaseConfig['force-tag-creation']) !== true) {
-                throw new Error('defer-publication requires one root package with draft and force-tag-creation enabled')
+                throw new Error('Deferred or batched publication requires one root package with draft and force-tag-creation enabled')
               }
             }
             if (!releaseConfig.packages && !releaseConfig['release-type']) {
@@ -167,7 +173,7 @@ jobs:
           }
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `release_type=${releaseType}\nlegacy_release_type=${legacyReleaseType}\nnpm_publish=${npmPublish}\nrelease_merge_strategy=${releaseMergeStrategy}\n`,
+            `batched_publication=${batchedPublication}\nrelease_type=${releaseType}\nlegacy_release_type=${legacyReleaseType}\nnpm_publish=${npmPublish}\nrelease_merge_strategy=${releaseMergeStrategy}\n`,
           )
           NODE
       - name: Detect release credentials
@@ -243,6 +249,17 @@ jobs:
               echo "prs_created=$WORKFLOW_PRS_CREATED"
             } >> "$GITHUB_OUTPUT"
           fi
+      - name: Publish batched draft with atomic visibility
+        if: steps.profile.outputs.batched_publication == 'true' && steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && secrets.CODE_FOUNDRY_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          latest=false
+          if [ "$PRERELEASE" != true ]; then latest=true; fi
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease="$PRERELEASE" --latest="$latest"
       - name: Normalize generated release PR draft state
         if: steps.release.outcome == 'success'
         env:

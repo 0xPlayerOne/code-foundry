@@ -3,12 +3,6 @@ name: Code Foundry Release
 on:
   push:
     branches: [main]
-  # Release batching (release_batching_schedule in code-foundry.yml). The
-  # window gates the pipeline to the version-PR squash so ordinary merges
-  # accumulate; sync strips this block and the mark-prerelease job below for
-  # repositories without the config, and rewrites the cron when configured.
-  schedule:
-    - cron: '53 12 * * *'
   workflow_dispatch:
     inputs:
       release-while-paused:
@@ -264,44 +258,3 @@ jobs:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  mark-prerelease:
-    name: Mark the release a pre-release
-    # Release batching (release_batching_schedule): the window's release
-    # publishes as a GitHub pre-release so the stable feed (releases/latest)
-    # never sees it until a promotion workflow flips the flag. Runs in
-    # parallel with the pipeline, not after it: a failed (unqualified) build
-    # is exactly when a release must not be stable-visible. A dispatched run
-    # has no head commit to parse, so a hand-dispatched release — the hotfix
-    # path — stays stable immediately. Sync strips this job for repositories
-    # without the batching config.
-    if: >-
-      (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) &&
-      github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(main): release ')
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: write
-    steps:
-      - name: Flag the freshly published release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^chore(main): release \([0-9][0-9.]*\).*$/\1/p' <<<"$COMMIT_SUBJECT")"
-          if [[ -z "$version" ]]; then
-            echo "No release version in the head commit subject; nothing to mark." >&2
-            exit 0
-          fi
-          tag="v${version}"
-          for _ in $(seq 1 50); do
-            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease
-              echo "Marked $tag as a pre-release."
-              exit 0
-            fi
-            sleep 30
-          done
-          echo "::error::release $tag did not appear within 25 minutes; it is stable-visible — flip it manually or investigate the release job" >&2
-          exit 1
