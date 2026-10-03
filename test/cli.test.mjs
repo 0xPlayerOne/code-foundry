@@ -4843,7 +4843,7 @@ jobs:
     assert.doesNotMatch(caller, /schedule:/)
     assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
-    assert.match(caller, /cancel-in-progress: true/)
+    assert.match(caller, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/)
     assert.match(caller, /runtime-ref: \$\{\{ github\.sha \}\}/)
 
     assert.doesNotMatch(audit, /pull_request:/)

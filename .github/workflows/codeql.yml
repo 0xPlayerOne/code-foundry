@@ -52,7 +52,10 @@ env:
 
 concurrency:
   group: code-foundry-codeql-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  # Superseded pull-request runs are cancelled so the newest head owns the
+  # group; push and scheduled runs queue instead, because cancelling a main
+  # push can drop default-branch analysis or release-adjacent work.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   detect:
