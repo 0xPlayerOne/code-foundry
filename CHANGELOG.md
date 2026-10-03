@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.3...v1.44.4) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ci:** declare the e2e shard inputs on the no-codeql orchestrator ([#714](https://github.com/0xPlayerOne/code-foundry/issues/714)) ([7500208](https://github.com/0xPlayerOne/code-foundry/commit/7500208f3b25dfe55c41ea45b382e021cf804012))
+
 ## [1.44.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.2...v1.44.3) (2026-10-03)
 
 
