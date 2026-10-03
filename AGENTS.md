@@ -211,6 +211,14 @@ At minimum:
 
 If a check cannot run, state the exact reason. A skipped check is not a passing check.
 
+The generated `.githooks/pre-commit` gate is change-aware so parallel work on a
+shared checkout is not serialized behind repository-wide checks. It blocks
+whitespace errors, formats and lints only staged files, runs the project's
+type-check command only when typed sources or compiler configuration are
+staged, and does not build unless `pre_commit_build: true` is set. Passing the
+hook is not full validation: run the broader checks above before opening or
+readying a pull request.
+
 <!-- /code-foundry-managed: validation -->
 
 <!-- code-foundry-managed: tests-and-coverage -->
