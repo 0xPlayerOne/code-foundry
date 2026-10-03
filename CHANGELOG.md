@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.42.0...v1.43.0) (2026-10-03)
+
+
+### Features
+
+* release-batching ([#700](https://github.com/0xPlayerOne/code-foundry/issues/700)) ([3dd5c5f](https://github.com/0xPlayerOne/code-foundry/commit/3dd5c5fd50883608baa3e2f9daef6b8aa83f269f))
+
 ## [1.42.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.41.0...v1.42.0) (2026-10-02)
 
 
