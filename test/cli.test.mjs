@@ -67,6 +67,11 @@ import {
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url))
 const runtime = fileURLToPath(new URL('../src/runtime.mjs', import.meta.url))
 const sourceRuntimeRef = `v${JSON.parse(readFileSync('package.json', 'utf8')).version}`
+const expectedHooksWarning = 'WARN: Git hooks are not enabled; run `npx code-foundry init`'
+const expectedStaleCallerWarning =
+  'WARN: stale generated legacy caller ci.yml still triggers canonical suites; run code-foundry sync to migrate to validation.yml.'
+const expectedUnreleasedRuntimeWarning =
+  'WARN: validation caller runtime ref main is not a released tag; pin a vX.Y.Z tag.'
 const testEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => key !== 'GITHUB_OUTPUT')
 )
@@ -482,15 +487,17 @@ function run(...args) {
  * Run fn while capturing one console stream, restoring it afterwards.
  * @param {'warn'|'error'} method
  * @param {() => void} fn
+ * @param {{ propagateError?: boolean }} [options]
  */
-function captureConsole(method, fn) {
+function captureConsole(method, fn, { propagateError = false } = {}) {
   /** @type {string[]} */
   const messages = []
   const original = console[method]
   console[method] = (message) => messages.push(String(message))
   try {
     fn()
-  } catch {
+  } catch (error) {
+    if (propagateError) throw error
     /* doctor throws only a summary; details are captured */
   } finally {
     console[method] = original
@@ -1194,7 +1201,10 @@ describe('code-foundry CLI', () => {
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
     assert.match(orchestrator, /needs: \[ci, test, security, eval\]/)
-    assert.doesNotThrow(() => doctor(root))
+    const warnings = captureConsole('warn', () => assert.doesNotThrow(() => doctor(root)), {
+      propagateError: true,
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -1287,7 +1297,8 @@ describe('code-foundry CLI', () => {
     assert.match(validationCaller, /rust-max-parallel: 1/)
     assert.match(validationCaller, /performance-runner: ubuntu-latest/)
     assert.equal(exists(join(root, 'docs/EXTENSIONS.md')), true)
-    doctor(root)
+    const warnings = captureConsole('warn', () => doctor(root), { propagateError: true })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -1757,7 +1768,10 @@ describe('code-foundry CLI', () => {
     )
     rmSync(join(root, '.github/workflows/draft-control.yml'))
     rmSync(join(root, '.github/workflows/validation.yml'))
-    assert.doesNotThrow(() => doctor(root))
+    const warnings = captureConsole('warn', () => assert.doesNotThrow(() => doctor(root)), {
+      propagateError: true,
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -1794,6 +1808,7 @@ describe('code-foundry CLI', () => {
     const captureErrors = (fn) => captureConsole('error', fn)
     writeFileSync(join(root, '.github/workflows/ci.yml'), legacyCaller('ci'))
     const stale = captureWarnings(() => doctor(root))
+    assert.deepEqual(stale, [expectedHooksWarning, expectedStaleCallerWarning])
     assert.ok(
       stale.some((message) => /stale generated legacy caller ci\.yml/.test(message)),
       stale.join('\n')
@@ -1804,7 +1819,11 @@ describe('code-foundry CLI', () => {
       '$1ref: v0.31.0'
     )
     writeFileSync(callerPath, mismatched)
-    const mismatchErrors = captureErrors(() => doctor(root))
+    let mismatchErrors
+    const mismatchWarnings = captureWarnings(() => {
+      mismatchErrors = captureErrors(() => doctor(root))
+    })
+    assert.deepEqual(mismatchWarnings, [expectedHooksWarning, expectedStaleCallerWarning])
     assert.ok(
       mismatchErrors.some((message) => /mismatched runtime refs/.test(message)),
       mismatchErrors.join('\n')
@@ -1815,6 +1834,11 @@ describe('code-foundry CLI', () => {
       .replace(/^(\s+)ref: v\d+\.\d+\.\d+$/m, '$1ref: main')
     writeFileSync(callerPath, unpinned)
     const warning = captureWarnings(() => doctor(root))
+    assert.deepEqual(warning, [
+      expectedHooksWarning,
+      expectedUnreleasedRuntimeWarning,
+      expectedStaleCallerWarning,
+    ])
     assert.ok(
       warning.some((message) => /not a released tag/.test(message)),
       warning.join('\n')
@@ -2079,6 +2103,7 @@ describe('code-foundry CLI', () => {
   it('doctor and sync enforce topology-specific merge strategies', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-merge-policy-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
+    const captureWarnings = (fn) => captureConsole('warn', fn)
     const captureErrors = (fn) => captureConsole('error', fn)
 
     writeFileSync(
@@ -2086,13 +2111,20 @@ describe('code-foundry CLI', () => {
       'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: rebase\n'
     )
     syncRepository({ target: root, source: process.cwd() })
-    assert.doesNotThrow(() => doctor(root))
+    let warnings = captureConsole('warn', () => assert.doesNotThrow(() => doctor(root)), {
+      propagateError: true,
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
 
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
       'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: merge\nrelease_merge_strategy: merge\n'
     )
-    const promotion = captureErrors(() => doctor(root))
+    let promotion
+    warnings = captureWarnings(() => {
+      promotion = captureErrors(() => doctor(root))
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     assert.ok(
       promotion.some((message) => /merge_strategy must be "rebase"/.test(message)),
       promotion.join('\n')
@@ -2110,7 +2142,11 @@ describe('code-foundry CLI', () => {
       join(root, '.github/code-foundry.yml'),
       'languages: typescript\npackage_manager: bun\ngit_workflow: staging-release\nmerge_strategy: rebase\nrelease_merge_strategy: squash\n'
     )
-    const release = captureErrors(() => doctor(root))
+    let release
+    warnings = captureWarnings(() => {
+      release = captureErrors(() => doctor(root))
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     assert.ok(
       release.some((message) => /release_merge_strategy must be "rebase"/.test(message)),
       release.join('\n')
@@ -2125,13 +2161,20 @@ describe('code-foundry CLI', () => {
       'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: squash\n'
     )
     syncRepository({ target: root, source: process.cwd() })
-    assert.doesNotThrow(() => doctor(root))
+    warnings = captureConsole('warn', () => assert.doesNotThrow(() => doctor(root)), {
+      propagateError: true,
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
 
     writeFileSync(
       join(root, '.github/code-foundry.yml'),
       'languages: typescript\npackage_manager: bun\ngit_workflow: direct\nmerge_strategy: squash\nrelease_merge_strategy: merge\n'
     )
-    const directRelease = captureErrors(() => doctor(root))
+    let directRelease
+    warnings = captureWarnings(() => {
+      directRelease = captureErrors(() => doctor(root))
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     assert.ok(
       directRelease.some((message) => /release_merge_strategy must be "squash"/.test(message)),
       directRelease.join('\n')
@@ -2158,7 +2201,11 @@ describe('code-foundry CLI', () => {
       () => syncRepository({ target: root, source: process.cwd() }),
       /Unsupported merge_strategy: merge/
     )
-    const directFeature = captureErrors(() => doctor(root))
+    let directFeature
+    warnings = captureWarnings(() => {
+      directFeature = captureErrors(() => doctor(root))
+    })
+    assert.deepEqual(warnings, [expectedHooksWarning])
     assert.ok(
       directFeature.some((message) => /merge_strategy must be "squash"/.test(message)),
       directFeature.join('\n')
