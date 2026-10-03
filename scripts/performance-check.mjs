@@ -18,7 +18,11 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // over the unpacked budget — so the 2026-10-02 bump leaves ~15 releases of
 // CHANGELOG growth instead of one. The 2026-10-03 bump carries the release
 // batching feature (#699): the promoter template ships inside sync.mjs and
-// added ~1.3 KB packed on top of that headroom.
+// added ~1.3 KB packed on top of that headroom. The change-aware pre-commit
+// gate (#702) adds src/lib/pre-commit.mjs after v1.43.0–v1.43.2 had already
+// spent most of that headroom (1,155,679 unpacked against 1,152,000), so the
+// 316_000/1_200_000 pair restores room for the gate plus many releases of
+// CHANGELOG growth.
 const budgets = {
   cliP95Ms: 250,
   runtimeP95Ms: 750,
@@ -26,8 +30,8 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 304_000,
-  unpackedBytes: 1_152_000,
+  packedBytes: 316_000,
+  unpackedBytes: 1_200_000,
   packedFiles: 120,
 }
 
