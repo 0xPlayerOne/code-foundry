@@ -46,6 +46,10 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24'
+      - name: Trim the packaged changelog to recent releases
+        # Rewrites only this job's ephemeral checkout; the repository keeps the
+        # full CHANGELOG.md that Release Please maintains.
+        run: node scripts/package-changelog.mjs CHANGELOG.md
       - name: Pack the distributable once
         id: pack
         run: |
