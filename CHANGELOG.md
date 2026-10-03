@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.43.1...v1.43.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* require candidate asset qualification before stable promotion ([#705](https://github.com/0xPlayerOne/code-foundry/issues/705)) ([f42e4f5](https://github.com/0xPlayerOne/code-foundry/commit/f42e4f5fb063ea22fa25791a13c75c90d41bf17a))
+
 ## [1.43.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.43.0...v1.43.1) (2026-10-03)
 
 
