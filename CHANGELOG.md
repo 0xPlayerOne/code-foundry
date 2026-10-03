@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.43.2...v1.44.0) (2026-10-03)
+
+
+### Features
+
+* **pre-commit:** make the commit gate change-aware ([#702](https://github.com/0xPlayerOne/code-foundry/issues/702)) ([f5bca91](https://github.com/0xPlayerOne/code-foundry/commit/f5bca91c177b30b99f5d62287255d191617b4788))
+
 ## [1.43.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.43.1...v1.43.2) (2026-10-03)
 
 
