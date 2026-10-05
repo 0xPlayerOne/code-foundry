@@ -220,6 +220,10 @@ jobs:
           fi
       - name: Release Please (automation token)
         id: release_automation
+        # The REST fallback below completes the run when the action's own
+        # release-creation call is rejected, so this step must not fail the
+        # job before the fallback gets its turn.
+        continue-on-error: true
         if: steps.profile.outputs.release_type != 'none' && steps.credentials.outputs.token_source == 'configured'
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
@@ -234,6 +238,99 @@ jobs:
           token: ${{ github.token }}
           config-file: ${{ inputs.config-file }}
           release-type: ${{ steps.profile.outputs.legacy_release_type }}
+      - name: Create missing release objects over REST
+        id: release_rest_fallback
+        # release-please's own release-creation call is occasionally rejected
+        # with 403 even though the same credential creates release objects and
+        # refs through the plain REST API from the same runner (observed with
+        # fine-grained automation tokens; the identical curl call succeeds
+        # seconds earlier). When the action failed but merged version pull
+        # requests are waiting for their release objects, create them here
+        # through the REST API with the validated credential.
+        if: >-
+          always() &&
+          steps.profile.outputs.release_type != 'none' &&
+          steps.credentials.outputs.token_source == 'configured' &&
+          steps.release_automation.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.CODE_FOUNDRY_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          CONFIG_FILE: ${{ inputs.config-file }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const fs = require('node:fs');
+
+          const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' });
+
+          const repo = process.env.REPOSITORY;
+          const config = JSON.parse(fs.readFileSync(process.env.CONFIG_FILE, 'utf8'));
+          const manifest = JSON.parse(fs.readFileSync('.release-please-manifest.json', 'utf8'));
+
+          // Newest merged release-please version pull requests first.
+          const pulls = JSON.parse(gh([
+            'api', `repos/${repo}/pulls`,
+            '-X', 'GET',
+            '-f', 'state=closed',
+            '-f', 'sort=updated',
+            '-f', 'direction=desc',
+            '-f', 'per_page=30',
+          ])).filter((pull) => pull.merged_at !== null).filter((pull) =>
+            pull.head.ref.startsWith('release-please--branches--')
+          );
+
+          // The newest existing tag supplies the tag prefix; the manifest
+          // supplies the version each merged pull request published.
+          const tags = JSON.parse(gh([
+            'api', `repos/${repo}/tags`, '-X', 'GET', '-f', 'per_page=100',
+          ]));
+          const latestTag = tags[0]?.name ?? '';
+          const prefix = latestTag.replace(/v?\d+\.\d+\.\d+.*$/, '') || 'v';
+
+          let created = 0;
+          let lastTag = '';
+          let lastSha = '';
+          for (const pull of pulls) {
+            const version = /^chore\(main\): release ([^)]+)\)/.exec(pull.title)?.[1];
+            if (!version) continue;
+            const tag = `${prefix}v${version}`;
+            try {
+              gh(['api', `repos/${repo}/releases/tags/${tag}`, '--silent']);
+              console.log(`${tag}: release object already exists`);
+              continue;
+            } catch {
+              // No release object for this tag: create it below.
+            }
+            if (!tags.some((t) => t.name === tag)) {
+              gh(['api', `repos/${repo}/git/refs`, '-X', 'POST',
+                '-f', `ref=refs/tags/${tag}`, '-f', `sha=${pull.merge_commit_sha}`]);
+              console.log(`${tag}: tag created at ${pull.merge_commit_sha.slice(0, 10)}`);
+            }
+            const body = JSON.stringify({
+              tag_name: tag,
+              name: tag,
+              body: pull.body ?? '',
+              draft: config.packages?.['.']?.draft ?? config.draft ?? false,
+              prerelease: version.includes('-'),
+            });
+            gh(['api', `repos/${repo}/releases`, '-X', 'POST', '--input', '-'], { input: body });
+            console.log(`${tag}: release object created`);
+            created += 1;
+            lastTag = tag;
+            lastSha = pull.merge_commit_sha;
+          }
+          if (created === 0) {
+            throw new Error(
+              'release-please failed and no merged version pull request was waiting for a release object; ' +
+              'the failure needs human eyes'
+            );
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `fallback_created=true\ntag_name=${lastTag}\nsha=${lastSha}\n`,
+          );
+          NODE
       - name: Normalize Release Please outputs
         id: release
         if: steps.profile.outputs.release_type != 'none'
@@ -246,11 +343,17 @@ jobs:
           WORKFLOW_TAG_NAME: ${{ steps.release_workflow.outputs.tag_name }}
           WORKFLOW_SHA: ${{ steps.release_workflow.outputs.sha }}
           WORKFLOW_PRS_CREATED: ${{ steps.release_workflow.outputs.prs_created }}
+          FALLBACK_RELEASE_CREATED: ${{ steps.release_rest_fallback.outputs.fallback_created }}
+          FALLBACK_TAG_NAME: ${{ steps.release_rest_fallback.outputs.tag_name }}
+          FALLBACK_SHA: ${{ steps.release_rest_fallback.outputs.sha }}
+          FALLBACK_PRS_CREATED: '0'
         run: |
           set -euo pipefail
-          # Exactly one of the two Release Please steps runs, so selecting the
-          # source by a non-empty release_created is deterministic. The stable
-          # release step id keeps the job outputs and downstream jobs reading
+          # Exactly one of the three Release Please sources runs: the
+          # automation-token action, the workflow-token action, or the REST
+          # fallback that completes a rejected automation run. Selection by a
+          # non-empty release_created is deterministic. The stable release
+          # step id keeps the job outputs and downstream jobs reading
           # steps.release.outputs.* unchanged.
           if [ -n "$AUTOMATION_RELEASE_CREATED" ]; then
             {
@@ -258,6 +361,13 @@ jobs:
               echo "tag_name=$AUTOMATION_TAG_NAME"
               echo "sha=$AUTOMATION_SHA"
               echo "prs_created=$AUTOMATION_PRS_CREATED"
+            } >> "$GITHUB_OUTPUT"
+          elif [ -n "$FALLBACK_RELEASE_CREATED" ]; then
+            {
+              echo "release_created=$FALLBACK_RELEASE_CREATED"
+              echo "tag_name=$FALLBACK_TAG_NAME"
+              echo "sha=$FALLBACK_SHA"
+              echo "prs_created=$FALLBACK_PRS_CREATED"
             } >> "$GITHUB_OUTPUT"
           else
             {

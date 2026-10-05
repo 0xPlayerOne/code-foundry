@@ -2793,6 +2793,15 @@ jobs:
     // while git/refs rejects the write); the step must probe the write itself.
     assert.match(credentialsStep, /probe_ref="refs\/tags\/token-write-probe-/)
     assert.match(credentialsStep, /-X POST "repos\/\$\{GITHUB_REPOSITORY\}\/git\/refs"/)
+    // When the action's own release-creation call is rejected (observed with
+    // fine-grained tokens: identical REST calls succeed seconds earlier), the
+    // REST fallback completes the run instead of failing it.
+    assert.match(workflow, /name: Create missing release objects over REST/)
+    assert.match(workflow, /steps\.release_automation\.outcome == 'failure'/)
+    assert.match(
+      workflow,
+      /FALLBACK_RELEASE_CREATED: \$\{\{ steps\.release_rest_fallback\.outputs\.fallback_created \}\}/
+    )
 
     // auto_merge stays true only in the branch where the configured token was
     // validated; any absence or rejection selects the short-lived workflow
