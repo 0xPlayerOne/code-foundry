@@ -362,12 +362,12 @@ jobs:
               echo "sha=$AUTOMATION_SHA"
               echo "prs_created=$AUTOMATION_PRS_CREATED"
             } >> "$GITHUB_OUTPUT"
-          elif [ -n "$FALLBACK_RELEASE_CREATED" ]; then
+          elif [ -n "${FALLBACK_RELEASE_CREATED:-}" ]; then
             {
-              echo "release_created=$FALLBACK_RELEASE_CREATED"
-              echo "tag_name=$FALLBACK_TAG_NAME"
-              echo "sha=$FALLBACK_SHA"
-              echo "prs_created=$FALLBACK_PRS_CREATED"
+              echo "release_created=${FALLBACK_RELEASE_CREATED:-}"
+              echo "tag_name=${FALLBACK_TAG_NAME:-}"
+              echo "sha=${FALLBACK_SHA:-}"
+              echo "prs_created=${FALLBACK_PRS_CREATED:-}"
             } >> "$GITHUB_OUTPUT"
           else
             {
