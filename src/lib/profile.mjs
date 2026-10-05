@@ -126,7 +126,10 @@ export function recommendRunners(root) {
     hasBrowserProject(root)
   return {
     runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
-    ci_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
+    // The CI lane carries the lint step: oxlint's allocator pool reserves
+    // 4 GiB of virtual address space per worker and aborts on ubuntu-slim,
+    // so the lint-bearing lane always pins a standard runner.
+    ci_runner: 'ubuntu-latest',
     test_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
     unit_runner: heavy ? 'ubuntu-latest' : 'ubuntu-slim',
     performance_runner: 'ubuntu-latest',

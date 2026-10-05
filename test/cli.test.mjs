@@ -4481,6 +4481,13 @@ jobs:
     )
   })
 
+  it('pins the lint-bearing CI lane to a standard runner for light repositories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-runner-light-'))
+    writeFileSync(join(root, 'package.json'), '{"name":"light-runner-fixture","version":"1.0.0"}\n')
+    assert.equal(recommendRunners(root).runner, 'ubuntu-slim')
+    assert.equal(recommendRunners(root).ci_runner, 'ubuntu-latest')
+  })
+
   it('recommends full runners for native-toolchain repositories', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-runner-'))
     writeFileSync(join(root, 'Cargo.toml'), '[package]\nname = "runner-fixture"\n')
