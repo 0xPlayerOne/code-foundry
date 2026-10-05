@@ -2788,6 +2788,11 @@ jobs:
     assert.match(credentialsStep, /token_source=configured/)
     assert.match(credentialsStep, /token_source=fallback/)
     assert.match(credentialsStep, /::warning title=Release token fallback::/)
+    // A passing read probe does not imply the tag-creation write release-please
+    // needs (fine-grained tokens can read, and even create draft releases,
+    // while git/refs rejects the write); the step must probe the write itself.
+    assert.match(credentialsStep, /probe_ref="refs\/tags\/token-write-probe-/)
+    assert.match(credentialsStep, /-X POST "repos\/\$\{GITHUB_REPOSITORY\}\/git\/refs"/)
 
     // auto_merge stays true only in the branch where the configured token was
     // validated; any absence or rejection selects the short-lived workflow
