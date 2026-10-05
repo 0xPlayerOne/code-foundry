@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.6...v1.44.7) (2026-10-05)
+
+
+### Bug Fixes
+
+* **release:** complete rejected release-please runs over REST ([#720](https://github.com/0xPlayerOne/code-foundry/issues/720)) ([14e88b5](https://github.com/0xPlayerOne/code-foundry/commit/14e88b5561803fc8d5d3a77b67b99e1be90bc4af))
+
 ## [1.44.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.5...v1.44.6) (2026-10-05)
 
 
