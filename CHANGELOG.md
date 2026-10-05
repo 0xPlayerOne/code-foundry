@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.4...v1.44.5) (2026-10-05)
+
+
+### Bug Fixes
+
+* **release:** probe the tag-creation write before trusting the automation token ([#716](https://github.com/0xPlayerOne/code-foundry/issues/716)) ([fabaddc](https://github.com/0xPlayerOne/code-foundry/commit/fabaddcb05d5dc701248b693f91be6ee433f8d39))
+
 ## [1.44.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.3...v1.44.4) (2026-10-03)
 
 
