@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.5...v1.44.6) (2026-10-05)
+
+
+### Bug Fixes
+
+* **config:** pin the lint-bearing CI lane to a standard runner by default ([#718](https://github.com/0xPlayerOne/code-foundry/issues/718)) ([fc0ed14](https://github.com/0xPlayerOne/code-foundry/commit/fc0ed14434151fb11eef7c0d4c324c7a370d5058))
+
 ## [1.44.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.4...v1.44.5) (2026-10-05)
 
 
