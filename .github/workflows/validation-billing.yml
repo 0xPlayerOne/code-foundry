@@ -55,11 +55,21 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+      performance-runner:
+        description: Accepted for caller parity; the merged fast-lanes job runs performance on ci-runner.
+        required: false
+        type: string
+        default: ubuntu-latest
       security-runner:
         description: Runner used by the merged audit job.
         required: false
         type: string
         default: ubuntu-slim
+      eval-runner:
+        description: Accepted for caller parity; the merged fast-lanes job runs eval on ci-runner.
+        required: false
+        type: string
+        default: ubuntu-latest
       codeql-runner:
         description: Runner used by CodeQL jobs.
         required: false
