@@ -269,16 +269,17 @@ jobs:
           const manifest = JSON.parse(fs.readFileSync('.release-please-manifest.json', 'utf8'));
 
           // Newest merged release-please version pull requests first.
+          // The head filter keeps the query on the version-PR branch
+          // regardless of how many unrelated pull requests merged since.
           const pulls = JSON.parse(gh([
             'api', `repos/${repo}/pulls`,
             '-X', 'GET',
             '-f', 'state=closed',
+            '-f', `head=${repo.split('/')[0]}:release-please--branches--main`,
             '-f', 'sort=updated',
             '-f', 'direction=desc',
-            '-f', 'per_page=30',
-          ])).filter((pull) => pull.merged_at !== null).filter((pull) =>
-            pull.head.ref.startsWith('release-please--branches--')
-          );
+            '-f', 'per_page=100',
+          ])).filter((pull) => pull.merged_at !== null);
 
           // The newest existing tag supplies the tag prefix; the manifest
           // supplies the version each merged pull request published.
