@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.10...v1.44.11) (2026-10-06)
+
+
+### Bug Fixes
+
+* **release:** retry the token probe and REST fallback writes with backoff ([#729](https://github.com/0xPlayerOne/code-foundry/issues/729)) ([ad28e18](https://github.com/0xPlayerOne/code-foundry/commit/ad28e18326f0ee8c25950fb649eb81cdb3dc0a1a))
+
 ## [1.44.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.9...v1.44.10) (2026-10-06)
 
 
