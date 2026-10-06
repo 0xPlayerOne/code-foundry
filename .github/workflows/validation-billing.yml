@@ -1,0 +1,1159 @@
+name: Code Foundry Validation (Billing)
+
+# Billing-lane orchestrator for repositories whose Actions minutes are billed:
+# identical coverage to the split orchestrators, but lanes that measure under a
+# minute in practice share one runner so GitHub's whole-minute rounding stops
+# dominating the invoice. Wall-clock neutrality rule enforced by review: a lane
+# may only join the merged job when its work plus the shared checkout/setup
+# overhead stays under the longest separate lane (type-check, unit, or build),
+# so the merged job never becomes the critical path. Repositories that adopt
+# this orchestrator must keep every runner input on standard hosted runners.
+#
+# Differences from the split orchestrators, by design:
+# - Format, build, performance, smoke, and eval run as sequential steps of one
+#   job ("Fast lanes"). Each lane keeps its own detect, setup, execution, and
+#   task-receipt steps, so receipts and skip semantics are unchanged.
+# - Profile and dependency audit run in one job; the audit matrix is replaced
+#   by language blocks driven directly by the profile step's outputs.
+# - One file serves both CodeQL-enabled and CodeQL-unavailable consumers via
+#   the `codeql` input, instead of two orchestrator variants.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: Validation tier (fast, audit, or release).
+        required: true
+        type: string
+      codeql:
+        description: Run the CodeQL lane (the consumer's canonical codeql config).
+        required: false
+        type: boolean
+        default: false
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: false
+        type: string
+        default: 0xPlayerOne/code-foundry
+      runtime-ref:
+        description: Code Foundry runtime tag or ref.
+        required: false
+        type: string
+        default: v1.0.5
+      ci-runner:
+        description: Runner used by CI jobs and the merged fast-lanes job.
+        required: false
+        type: string
+        default: ubuntu-latest
+      test-runner:
+        description: Runner used by non-unit test jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      unit-runner:
+        description: Runner used by unit tests.
+        required: false
+        type: string
+        default: ubuntu-slim
+      security-runner:
+        description: Runner used by the merged audit job.
+        required: false
+        type: string
+        default: ubuntu-slim
+      codeql-runner:
+        description: Runner used by CodeQL jobs.
+        required: false
+        type: string
+        default: ubuntu-latest
+      rust-shards:
+        description: JSON array of Rust scope sharding values. Use ["all"] for single-pass behavior.
+        required: false
+        type: string
+        default: '["all"]'
+      rust-threads:
+        description: Threads used for Rust extraction and analysis. Values above 1 opt into local parallelism.
+        required: false
+        type: string
+        default: '1'
+      rust-max-parallel:
+        description: Maximum Rust shard jobs allowed to run concurrently.
+        required: false
+        type: number
+        default: 1
+      artifact-prefix:
+        description: Prefix for task receipts; use a unique value when calling this workflow more than once.
+        required: false
+        type: string
+        default: task-result
+      e2e-shard-list:
+        description: Comma-separated E2E shard indices passed to the test lane's matrix, e.g. "1,2".
+        required: false
+        type: string
+        default: '1'
+      e2e-total-shards:
+        description: Total E2E shard count passed to the repository script as E2E_TOTAL_SHARDS.
+        required: false
+        type: string
+        default: '1'
+    secrets:
+      TURBO_TOKEN:
+        required: false
+      NEXTAUTH_SECRET:
+        required: false
+
+# The orchestrator keeps the union of permissions needed by the chain it calls
+# (CodeQL uploads require security-events: write). Nested reusable workflows
+# can only maintain or reduce permissions, never elevate them.
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+env:
+  TURBO_API: ${{ vars.TURBO_API }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  REPO_FOUNDRY_PROFILE: ${{ vars.REPO_FOUNDRY_PROFILE }}
+  REPO_FOUNDRY_LANGUAGES: ${{ vars.REPO_FOUNDRY_LANGUAGES }}
+  REPO_FOUNDRY_FEATURES: ${{ vars.REPO_FOUNDRY_FEATURES }}
+  REPO_FOUNDRY_PACKAGE_MANAGER: ${{ vars.REPO_FOUNDRY_PACKAGE_MANAGER }}
+  REPO_FOUNDRY_RUNNER: ${{ vars.REPO_FOUNDRY_RUNNER }}
+  REPO_FOUNDRY_CACHE_PACKAGES: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+  REPO_FOUNDRY_CACHE_BUILD: ${{ vars.REPO_FOUNDRY_CACHE_BUILD || 'auto' }}
+  REPO_FOUNDRY_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before || '' }}
+
+concurrency:
+  group: code-foundry-validation-billing-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  # Superseded pull-request runs are cancelled so the newest head owns the
+  # group; push and scheduled runs queue instead, because cancelling a main
+  # push can drop default-branch analysis or release-adjacent work.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Merged low-cost lanes. Each block below is a step-for-step mirror of the
+  # corresponding lane job in ci.yml, test.yml, or eval.yml; only the step ids
+  # are prefixed and subsequent lanes add !cancelled() so one lane's failure
+  # never hides another lane's result.
+  fast-lanes:
+    name: Fast lanes
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.ci-runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      # --- Format lane (mirror of ci.yml format) ---
+      - name: Detect format
+        id: format_applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run format >> "$GITHUB_OUTPUT"
+      - name: Setup format
+        if: steps.format_applicability.outputs.applicable == 'true' && steps.format_applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          # Repository format scripts normally call a project-local formatter
+          # (for example, Oxfmt). Install dependencies before running them;
+          # otherwise a clean runner cannot resolve the declared tool.
+          install: 'true'
+          cache-format: 'true'
+          cache-lint: 'false'
+          cache-build: 'false'
+          task: format
+      - name: Format
+        id: format_execute
+        if: steps.format_applicability.outputs.applicable == 'true' && steps.format_applicability.outputs.affected != 'false'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci format
+      - name: Retain format task receipt
+        if: >-
+          always() &&
+          (steps.format_execute.outcome == 'success' || steps.format_execute.outcome == 'failure' ||
+          steps.format_applicability.outputs.applicable == 'false' || steps.format_applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/format.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-format
+          path: .code-foundry/results/format.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      # --- Build lane (mirror of ci.yml build) ---
+      - name: Detect build
+        id: build_applicability
+        if: ${{ !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
+      - name: Setup build
+        if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-build: 'true'
+          task: build
+        env:
+          # Framework builds may validate server-side configuration at build
+          # time. Consumers can provide the real value; the fallback is
+          # intentionally CI-only and must never be used at runtime.
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
+      - name: Build
+        id: build_execute
+        if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
+        env:
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
+      - name: Retain build task receipt
+        if: >-
+          always() &&
+          (steps.build_execute.outcome == 'success' || steps.build_execute.outcome == 'failure' ||
+          steps.build_applicability.outputs.applicable == 'false' || steps.build_applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/build.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-build
+          path: .code-foundry/results/build.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      # --- Performance lane (mirror of test.yml performance; audit tier only) ---
+      - name: Detect performance
+        id: performance_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile performance >> "$GITHUB_OUTPUT"
+      - name: Setup performance
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.performance_applicability.outputs.applicable == 'true' && steps.performance_applicability.outputs.affected != 'false' }}
+        uses: ./.github/actions/setup
+        with:
+          install: true
+          install-javascript: ${{ steps.performance_applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.performance_applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.performance_applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-save: false
+          cache-packages: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+          task: performance
+          task-javascript: ${{ steps.performance_applicability.outputs.javascript }}
+          task-python: ${{ steps.performance_applicability.outputs.python }}
+          task-rust: ${{ steps.performance_applicability.outputs.rust }}
+      - name: Performance
+        id: performance_execute
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.performance_applicability.outputs.applicable == 'true' && steps.performance_applicability.outputs.affected != 'false' }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci performance
+      - name: Retain performance task receipt
+        if: >-
+          always() &&
+          inputs.mode == 'audit' &&
+          (steps.performance_execute.outcome == 'success' || steps.performance_execute.outcome == 'failure' ||
+          steps.performance_applicability.outputs.applicable == 'false' || steps.performance_applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/performance.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-performance
+          path: .code-foundry/results/performance.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload performance results
+        if: >-
+          always() &&
+          inputs.mode == 'audit' &&
+          steps.performance_applicability.outputs.applicable == 'true' &&
+          hashFiles('artifacts/performance/**', 'performance-results.json', 'performance-results/**') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: performance-${{ github.run_id }}
+          path: |
+            artifacts/performance/**
+            performance-results.json
+            performance-results/**
+          compression-level: 1
+          if-no-files-found: ignore
+          retention-days: 14
+      # --- Smoke lane (mirror of test.yml smoke; audit tier only) ---
+      - name: Detect smoke
+        id: smoke_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile smoke >> "$GITHUB_OUTPUT"
+      - name: Setup smoke
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.smoke_applicability.outputs.applicable == 'true' && steps.smoke_applicability.outputs.affected != 'false' }}
+        uses: ./.github/actions/setup
+        with:
+          install: true
+          install-javascript: ${{ steps.smoke_applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.smoke_applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.smoke_applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          cache-packages: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+          task: smoke
+          task-javascript: ${{ steps.smoke_applicability.outputs.javascript }}
+          task-python: ${{ steps.smoke_applicability.outputs.python }}
+          task-rust: ${{ steps.smoke_applicability.outputs.rust }}
+      - name: Smoke
+        id: smoke_execute
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.smoke_applicability.outputs.applicable == 'true' && steps.smoke_applicability.outputs.affected != 'false' }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci smoke
+      - name: Retain smoke task receipt
+        if: >-
+          always() &&
+          inputs.mode == 'audit' &&
+          (steps.smoke_execute.outcome == 'success' || steps.smoke_execute.outcome == 'failure' ||
+          steps.smoke_applicability.outputs.applicable == 'false' || steps.smoke_applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/smoke.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-smoke
+          path: .code-foundry/results/smoke.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      # --- Eval lane (mirror of eval.yml; audit tier only) ---
+      - name: Detect eval
+        id: eval_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run eval >> "$GITHUB_OUTPUT"
+      - name: Setup eval
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.eval_applicability.outputs.applicable == 'true' && steps.eval_applicability.outputs.affected != 'false' }}
+        uses: ./.github/actions/setup
+        with:
+          # Eval harnesses run through the repository's own package scripts and
+          # need their dependencies installed before the task executes.
+          install: 'true'
+          cache-build: 'true'
+          task: eval
+      - name: Eval
+        id: eval_execute
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.eval_applicability.outputs.applicable == 'true' && steps.eval_applicability.outputs.affected != 'false' }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci eval
+      - name: Retain eval task receipt
+        if: >-
+          always() &&
+          inputs.mode == 'audit' &&
+          (steps.eval_execute.outcome == 'success' || steps.eval_execute.outcome == 'failure' ||
+          steps.eval_applicability.outputs.applicable == 'false' || steps.eval_applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/eval.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval
+          path: .code-foundry/results/eval.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain eval report
+        if: >-
+          always() &&
+          inputs.mode == 'audit' &&
+          steps.eval_execute.outcome == 'failure' &&
+          hashFiles('eval-results/result.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval-report
+          path: |
+            eval-results/result.json
+            eval-results/summary.json
+          if-no-files-found: error
+          retention-days: 14
+
+  lint:
+    name: Lint
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.ci-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run lint >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-lint: 'true'
+          task: lint
+      - name: Lint
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci lint
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/lint.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-lint
+          path: .code-foundry/results/lint.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  type-check:
+    name: Type-Check
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.ci-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run type_check >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-build: 'true'
+          task: type_check
+      - name: Type-Check
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci type_check
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/type_check.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-type_check
+          path: .code-foundry/results/type_check.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  unit:
+    name: Unit
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.unit-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile unit >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-packages: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+          task: unit
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
+      - name: Unit
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci unit
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/unit.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-unit
+          path: .code-foundry/results/unit.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload coverage
+        if: >-
+          always() &&
+          steps.applicability.outputs.applicable == 'true' &&
+          hashFiles('coverage/**', 'htmlcov/**', '.coverage*', 'target/llvm-cov/**') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-unit-${{ github.run_id }}
+          path: |
+            coverage/**
+            htmlcov/**
+            .coverage*
+            target/llvm-cov/**
+          compression-level: 1
+          if-no-files-found: ignore
+          retention-days: 14
+
+  integration:
+    name: Integration
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    runs-on: ${{ inputs.test-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile integration >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          task: integration
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
+      - name: Integration
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci integration
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/integration.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-integration
+          path: .code-foundry/results/integration.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  e2e:
+    name: E2E
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    runs-on: ${{ inputs.test-runner }}
+    timeout-minutes: 45
+    # Shards duplicate the whole job, but each shard owns a runner-local test
+    # database (repositories without DATABASE_URL fall back to their own local
+    # compose services), so shards stay isolated. A single-entry matrix keeps
+    # the unsharded default byte-compatible with the pre-matrix job.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(format('[{0}]', inputs.e2e-shard-list)) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile e2e >> "$GITHUB_OUTPUT"
+      - name: Cache browser binaries
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false' && steps.applicability.outputs.browser == 'true'
+        uses: ./.github/actions/cache
+        with:
+          save: ${{ github.event_name == 'push' }}
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/Cypress
+            ~/.cache/puppeteer
+          key: ${{ runner.os }}-e2e-browsers-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/playwright.config.*', '**/cypress.config.*') }}
+          restore-keys: |
+            ${{ runner.os }}-e2e-browsers-
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          install: true
+          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
+          cache-build: false
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          task: e2e
+          task-javascript: ${{ steps.applicability.outputs.javascript }}
+          task-python: ${{ steps.applicability.outputs.python }}
+          task-rust: ${{ steps.applicability.outputs.rust }}
+      - name: E2E
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        env:
+          E2E_SHARD_INDEX: ${{ matrix.shard }}
+          E2E_TOTAL_SHARDS: ${{ inputs.e2e-total-shards }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci e2e
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/e2e.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-e2e${{ inputs.e2e-total-shards != '1' && format('-s{0}', matrix.shard) || '' }}
+          path: .code-foundry/results/e2e.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  # Profile and dependency audit merged into one job. The split orchestrators
+  # run a profile job that feeds an audit matrix; here the language blocks run
+  # sequentially, driven directly by the profile step's outputs, so the second
+  # runner spin-up disappears. Python requirements run in one loop inside the
+  # audit step because a matrix cannot follow preceding steps in the same job.
+  audit:
+    name: Audit
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    runs-on: ${{ inputs.security-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          filter: blob:none
+          sparse-checkout: |
+            .github
+            .mise.toml
+            mise.lock
+            .npmrc
+            .pnpmfile.cjs
+            .yarnrc*
+            **/package.json
+            **/bun.lock
+            **/bun.lockb
+            **/pnpm-lock.yaml
+            **/yarn.lock
+            **/package-lock.json
+            **/Cargo.toml
+            **/Cargo.lock
+            **/.cargo/**
+            **/pyproject.toml
+            **/requirements*.txt
+            **/setup.py
+            **/setup.cfg
+            **/Pipfile
+            **/Pipfile.lock
+            **/poetry.lock
+            **/uv.lock
+          sparse-checkout-cone-mode: false
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: profile
+        env:
+          REPO_FOUNDRY_PRIVATE: ${{ github.event.repository.private }}
+          REPO_FOUNDRY_VISIBILITY: ${{ github.event.repository.visibility }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security profile >> "$GITHUB_OUTPUT"
+      - name: Dependency Review
+        if: ${{ github.event_name == 'pull_request' && steps.profile.outputs.dependency_review == 'true' }}
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
+          license-check: true
+      - name: Detect audit toolchain
+        id: audit-toolchain
+        if: steps.profile.outputs.javascript == 'true' || steps.profile.outputs.rust == 'true' || steps.profile.outputs.python == 'true'
+        shell: bash
+        env:
+          REPO_FOUNDRY_LANGUAGE: ${{ steps.profile.outputs.javascript == 'true' && 'javascript' || (steps.profile.outputs.rust == 'true' && 'rust' || 'python') }}
+        run: |
+          toolchain=auto
+          configured_toolchain=''
+          configured_package_manager=''
+          if [ -f .github/code-foundry.yml ]; then
+            configured_toolchain="$(awk -F': ' '/^toolchain:/ {print $2; exit}' .github/code-foundry.yml)"
+            configured_package_manager="$(awk -F': ' '/^package_manager:/ {print $2; exit}' .github/code-foundry.yml)"
+          fi
+          [ -n "$configured_toolchain" ] && toolchain="$configured_toolchain"
+          if [ "$toolchain" = auto ] && [ -f .mise.toml ]; then toolchain=mise; fi
+
+          package_manager=none
+          case "$configured_package_manager" in
+            bun|pnpm|yarn|npm|none) package_manager="$configured_package_manager" ;;
+            *)
+              if [ -f bun.lock ] || [ -f bun.lockb ]; then package_manager=bun
+              elif [ -f pnpm-lock.yaml ]; then package_manager=pnpm
+              elif [ -f yarn.lock ]; then package_manager=yarn
+              elif [ -f package-lock.json ]; then package_manager=npm
+              elif [ -f package.json ]; then package_manager=bun
+              fi
+              ;;
+          esac
+
+          mise_tools=''
+          configured_tool() {
+            [ -f .mise.toml ] && grep -Eq "^$1[[:space:]]*=" .mise.toml
+          }
+          add_mise_tool() {
+            configured_tool "$1" || return 0
+            if [ -n "$mise_tools" ]; then mise_tools="$mise_tools $1"; else mise_tools="$1"; fi
+          }
+          if [ "$toolchain" = mise ] && [ -f .mise.toml ]; then
+            case "$REPO_FOUNDRY_LANGUAGE" in
+              javascript)
+                add_mise_tool node
+                [ "$package_manager" = bun ] && add_mise_tool bun
+                ;;
+              python)
+                add_mise_tool python
+                add_mise_tool uv
+                add_mise_tool ruff
+                ;;
+              rust) add_mise_tool rust ;;
+            esac
+          fi
+
+          {
+            printf 'toolchain_mode=%s\n' "$toolchain"
+            printf 'package_manager=%s\n' "$package_manager"
+            printf 'mise_tools=%s\n' "$mise_tools"
+          } >> "$GITHUB_OUTPUT"
+      - name: Setup mise toolchain
+        if: steps.audit-toolchain.outputs.mise_tools != ''
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          version: 2026.9.2
+          cache: false
+          install_args: ${{ steps.audit-toolchain.outputs.mise_tools }}
+      # --- JavaScript audit block ---
+      - name: Detect JavaScript
+        id: applicability-javascript
+        if: steps.profile.outputs.javascript == 'true'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security should_run javascript >> "$GITHUB_OUTPUT"
+      - name: Setup Node
+        if: >-
+          steps.profile.outputs.javascript == 'true' &&
+          steps.applicability-javascript.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise' &&
+          steps.audit-toolchain.outputs.package_manager != 'bun' &&
+          steps.audit-toolchain.outputs.package_manager != 'none'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Setup Bun
+        if: >-
+          steps.profile.outputs.javascript == 'true' &&
+          steps.applicability-javascript.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise' &&
+          steps.audit-toolchain.outputs.package_manager == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Enable Corepack
+        if: >-
+          steps.profile.outputs.javascript == 'true' &&
+          steps.applicability-javascript.outputs.applicable == 'true' &&
+          (steps.audit-toolchain.outputs.package_manager == 'pnpm' ||
+          steps.audit-toolchain.outputs.package_manager == 'yarn')
+        shell: bash
+        run: corepack enable
+      - name: Audit JavaScript dependencies
+        if: >-
+          steps.profile.outputs.javascript == 'true' &&
+          steps.applicability-javascript.outputs.applicable == 'true'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit javascript
+      # --- Rust audit block ---
+      - name: Checkout Rust
+        if: steps.profile.outputs.rust == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          filter: blob:none
+          path: .audit-worktree
+          sparse-checkout: |
+            .github
+            .mise.toml
+            mise.lock
+            **/Cargo.toml
+            **/Cargo.lock
+            **/.cargo/**
+          sparse-checkout-cone-mode: false
+      - name: Detect Rust
+        id: applicability-rust
+        if: steps.profile.outputs.rust == 'true'
+        working-directory: .audit-worktree
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security should_run rust >> "$GITHUB_OUTPUT"
+      - name: Check Rust
+        id: system-rust
+        if: >-
+          steps.profile.outputs.rust == 'true' &&
+          steps.applicability-rust.outputs.applicable == 'true'
+        shell: bash
+        run: |
+          if command -v cargo >/dev/null 2>&1 && command -v rustc >/dev/null 2>&1; then
+            cargo --version
+            rustc --version
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup Rust
+        if: >-
+          steps.profile.outputs.rust == 'true' &&
+          steps.applicability-rust.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise' &&
+          steps.system-rust.outputs.available != 'true'
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - name: Install cargo-audit
+        if: >-
+          steps.profile.outputs.rust == 'true' &&
+          steps.applicability-rust.outputs.applicable == 'true'
+        uses: taiki-e/install-action@cb33e69fad06166ca28a42b2575e4dadabf62ee8 # v2
+        with:
+          tool: cargo-audit
+      - name: Audit Rust dependencies
+        if: >-
+          steps.profile.outputs.rust == 'true' &&
+          steps.applicability-rust.outputs.applicable == 'true'
+        working-directory: .audit-worktree
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit rust
+      # --- Python audit block ---
+      - name: Checkout Python
+        if: steps.profile.outputs.python == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          filter: blob:none
+          path: .audit-worktree
+          sparse-checkout: |
+            .github
+            .mise.toml
+            mise.lock
+            **/pyproject.toml
+            **/requirements*.txt
+            **/setup.py
+            **/setup.cfg
+            **/Pipfile
+            **/Pipfile.lock
+            **/poetry.lock
+            **/uv.lock
+          sparse-checkout-cone-mode: false
+      - name: Detect Python
+        id: applicability-python
+        if: steps.profile.outputs.python == 'true'
+        working-directory: .audit-worktree
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security should_run python >> "$GITHUB_OUTPUT"
+      - name: Setup Python
+        if: >-
+          steps.profile.outputs.python == 'true' &&
+          steps.applicability-python.outputs.applicable == 'true' &&
+          steps.audit-toolchain.outputs.toolchain_mode != 'mise'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Check uv
+        id: uv
+        if: steps.profile.outputs.python == 'true' && steps.applicability-python.outputs.applicable == 'true'
+        shell: bash
+        run: |
+          if command -v uv >/dev/null 2>&1; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup uv
+        if: >-
+          steps.profile.outputs.python == 'true' &&
+          steps.applicability-python.outputs.applicable == 'true' &&
+          steps.uv.outputs.available != 'true'
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.11.32
+          enable-cache: false
+      - name: Audit Python dependencies
+        if: steps.profile.outputs.python == 'true' && steps.applicability-python.outputs.applicable == 'true'
+        working-directory: .audit-worktree
+        shell: bash
+        env:
+          REQUIREMENTS_JSON: ${{ steps.profile.outputs.python_requirements }}
+        run: |
+          # The split orchestrator fans one matrix job out per Python
+          # requirement; a single merged job loops over them instead.
+          requirements=''
+          if [ -n "$REQUIREMENTS_JSON" ] && [ "$REQUIREMENTS_JSON" != '[]' ]; then
+            requirements="$(node -e '
+              const parsed = JSON.parse(process.argv[1] || "[]");
+              console.log(parsed.filter((item) => item && item !== "none").join("\n"));
+            ' "$REQUIREMENTS_JSON")"
+          fi
+          if [ -z "$requirements" ]; then
+            node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit python
+          else
+            while IFS= read -r requirement; do
+              [ -n "$requirement" ] || continue
+              echo "Auditing Python requirements set: $requirement"
+              REPO_FOUNDRY_PYTHON_REQUIREMENT="$requirement" \
+                node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit python
+            done <<< "$requirements"
+          fi
+
+  codeql:
+    name: CodeQL
+    # Release-please pull requests also analyze with CodeQL so repository
+    # rulesets requiring code scanning results never deadlock the release.
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.codeql == true && (inputs.mode == 'audit' || inputs.mode == 'release')
+    uses: ./.github/workflows/codeql.yml
+    with:
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      runner: ${{ inputs.codeql-runner }}
+      rust-shards: ${{ inputs.rust-shards }}
+      rust-threads: ${{ inputs.rust-threads }}
+      rust-max-parallel: ${{ inputs.rust-max-parallel }}
+
+  # Aggregate check: "Validation / Gate" (caller job name + this job name).
+  # Always evaluates; only jobs required for the mode must have succeeded.
+  # Category results fold the merged job's lanes back into the same FOUNDRY_*
+  # vocabulary the split orchestrators feed the runtime gate, so
+  # evaluateValidationGate's mode truth table is reused unchanged.
+  gate:
+    name: Gate
+    needs: [fast-lanes, lint, type-check, unit, integration, e2e, audit, codeql]
+    if: vars.CI_BILLING_PAUSED != 'true' && always()
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    env:
+      FOUNDRY_MODE: ${{ inputs.mode }}
+      # CI category: lint and type-check always run; the merged fast-lanes job
+      # carries the format and build lanes.
+      FOUNDRY_CI: ${{ (needs.lint.result != 'success' && needs.lint.result) || (needs.type-check.result != 'success' && needs.type-check.result) || (needs.fast-lanes.result != 'success' && needs.fast-lanes.result) || 'success' }}
+      # Test category: unit always runs and must succeed; integration and e2e
+      # are audit-tier jobs whose expected skip on fast/release is not a
+      # failure; the merged fast-lanes job carries performance, smoke, and
+      # eval-mode lanes, so its result joins the category too.
+      FOUNDRY_TEST: ${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && (needs.integration.result == 'success' || needs.integration.result == 'skipped') && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && 'success' || ((needs.integration.result != 'success' && needs.integration.result != 'skipped' && needs.integration.result) || (needs.e2e.result != 'success' && needs.e2e.result != 'skipped' && needs.e2e.result) || (needs.unit.result != 'success' && needs.unit.result) || (needs.fast-lanes.result != 'success' && needs.fast-lanes.result) || 'failure') }}
+      FOUNDRY_SECURITY: ${{ needs.audit.result }}
+      # This orchestrator runs CodeQL only when the consumer's canonical
+      # configuration enables it; otherwise the unavailability decision is
+      # treated as satisfied without registering a skipped PR check.
+      FOUNDRY_CODEQL: ${{ inputs.codeql == true && needs.codeql.result || 'success' }}
+      # Eval runs inside the merged fast-lanes job on the audit tier; a
+      # fast-lanes failure on that tier marks the eval category failed even if
+      # another merged lane caused it, which fails closed.
+      FOUNDRY_EVAL: ${{ needs.fast-lanes.result }}
+    steps:
+      - name: Checkout runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Checkout consumer repository
+        if: ${{ inputs.mode == 'release' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+      - name: Validate generated release diff
+        if: ${{ inputs.mode == 'release' }}
+        env:
+          FOUNDRY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FOUNDRY_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          FOUNDRY_REPOSITORY: ${{ github.repository }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
+      - name: Evaluate aggregate gate
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation gate
