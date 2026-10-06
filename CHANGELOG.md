@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.1...v1.45.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **billing:** emit the codeql input as a YAML boolean ([#735](https://github.com/0xPlayerOne/code-foundry/issues/735)) ([e0b348c](https://github.com/0xPlayerOne/code-foundry/commit/e0b348c9a3c730e46210fe0b9dc46af49c9db605))
+
 ## [1.45.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.0...v1.45.1) (2026-10-06)
 
 
