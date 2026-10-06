@@ -73,6 +73,28 @@ test('the billing orchestrator declares the full input contract', () => {
   }
 })
 
+test('the billing orchestrator accepts every input the rendered caller sends', () => {
+  // Regression pin for the #714 class of bug: the renderer forwards a fixed
+  // input set regardless of the orchestrator in use, and an undeclared input
+  // is a GitHub startup_failure that never reaches a check run.
+  const caller = syncConsumer({ codeql: 'false', billing_lanes: 'true' })
+  const withBlock = caller.slice(caller.indexOf('validation-billing.yml@'))
+  const inputs = new Set(
+    [...withBlock.slice(withBlock.indexOf('with:')).matchAll(/^      ([a-z-]+):/gm)].map(
+      (match) => match[1]
+    )
+  )
+  assert.ok(inputs.size >= 10, `unexpectedly few caller inputs: ${[...inputs].join(', ')}`)
+  const template = billingTemplate()
+  for (const input of inputs) {
+    assert.match(
+      template,
+      new RegExp(`^      ${input}:\\n`, 'm'),
+      `caller sends input "${input}" that validation-billing.yml does not declare`
+    )
+  }
+})
+
 test('sub-minute lanes share the merged fast-lanes job with their own receipts', () => {
   const template = billingTemplate()
   const fastLanes = template.slice(template.indexOf('  fast-lanes:'), template.indexOf('\n  lint:'))
