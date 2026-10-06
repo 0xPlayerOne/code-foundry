@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.7...v1.44.8) (2026-10-06)
+
+
+### Bug Fixes
+
+* **release:** query the version-PR branch directly in the REST fallback ([#722](https://github.com/0xPlayerOne/code-foundry/issues/722)) ([b38f394](https://github.com/0xPlayerOne/code-foundry/commit/b38f394c0ca6438117fdd2f45bd106b0b145a0f9))
+
 ## [1.44.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.6...v1.44.7) (2026-10-05)
 
 
