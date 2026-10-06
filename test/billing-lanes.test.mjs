@@ -43,11 +43,11 @@ test('the default render keeps the split orchestrators', () => {
 test('billing_lanes routes both CodeQL flavors through the billing orchestrator', () => {
   const withoutCodeql = syncConsumer({ codeql: 'false', billing_lanes: 'true' })
   assert.match(withoutCodeql, /uses: .*\/\.github\/workflows\/validation-billing\.yml@/)
-  assert.match(withoutCodeql, /^\s+codeql: 'false'$/m)
+  assert.match(withoutCodeql, /^      codeql: false$/m)
 
   const withCodeql = syncConsumer({ billing_lanes: 'true' })
   assert.match(withCodeql, /uses: .*\/\.github\/workflows\/validation-billing\.yml@/)
-  assert.match(withCodeql, /^\s+codeql: 'true'$/m)
+  assert.match(withCodeql, /^      codeql: true$/m)
 })
 
 test('the billing orchestrator declares the full input contract', () => {

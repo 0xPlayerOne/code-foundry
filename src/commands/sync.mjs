@@ -987,7 +987,9 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     )
     rendered = rendered.replace(
       new RegExp(`(${escapeRegExp(remotePrefix)}validation-billing\\.yml\\n    with:\\n)`),
-      `$1      codeql: ${configured(config.codeql, 'auto') === 'false' ? "'false'" : "'true'"}\n`
+      // The `codeql` input is boolean-typed: GitHub rejects a quoted string
+      // at workflow load with a startup_failure, so emit YAML booleans.
+      `$1      codeql: ${configured(config.codeql, 'auto') === 'false' ? 'false' : 'true'}\n`
     )
   }
   rendered = rendered.replace(
