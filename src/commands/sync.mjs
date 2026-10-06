@@ -970,6 +970,26 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     if (file === '.github/workflows/validation.yml')
       rendered = removeWorkflowBlock(rendered, 'push')
   }
+  // Billing-lane orchestrator: repositories whose Actions minutes are billed
+  // can opt into the merged-lane variant, which keeps the same coverage and
+  // gate vocabulary but shares one runner across the sub-minute lanes so
+  // whole-minute rounding stops dominating the invoice. The `codeql` input
+  // replaces the two-orchestrator split, so this mapping runs after the
+  // CodeQL selection above and preserves its push-trigger pruning.
+  if (configured(config.billing_lanes, 'false') === 'true') {
+    rendered = rendered.replaceAll(
+      `${remotePrefix}validation-no-codeql.yml`,
+      `${remotePrefix}validation-billing.yml`
+    )
+    rendered = rendered.replaceAll(
+      `${remotePrefix}validation.yml`,
+      `${remotePrefix}validation-billing.yml`
+    )
+    rendered = rendered.replace(
+      new RegExp(`(${escapeRegExp(remotePrefix)}validation-billing\\.yml\\n    with:\\n)`),
+      `$1      codeql: ${configured(config.codeql, 'auto') === 'false' ? "'false'" : "'true'"}\n`
+    )
+  }
   rendered = rendered.replace(
     new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
     `$&@${ref}`
