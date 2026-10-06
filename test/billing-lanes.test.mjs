@@ -43,11 +43,11 @@ test('the default render keeps the split orchestrators', () => {
 test('billing_lanes routes both CodeQL flavors through the billing orchestrator', () => {
   const withoutCodeql = syncConsumer({ codeql: 'false', billing_lanes: 'true' })
   assert.match(withoutCodeql, /uses: .*\/\.github\/workflows\/validation-billing\.yml@/)
-  assert.match(withoutCodeql, /^\s+codeql: 'false'$/m)
+  assert.match(withoutCodeql, /^      codeql: false$/m)
 
   const withCodeql = syncConsumer({ billing_lanes: 'true' })
   assert.match(withCodeql, /uses: .*\/\.github\/workflows\/validation-billing\.yml@/)
-  assert.match(withCodeql, /^\s+codeql: 'true'$/m)
+  assert.match(withCodeql, /^      codeql: true$/m)
 })
 
 test('the billing orchestrator declares the full input contract', () => {
@@ -97,8 +97,11 @@ test('the billing orchestrator accepts every input the rendered caller sends', (
 
 test('sub-minute lanes share the merged fast-lanes job with their own receipts', () => {
   const template = billingTemplate()
-  const fastLanes = template.slice(template.indexOf('  fast-lanes:'), template.indexOf('\n  lint:'))
-  for (const lane of ['format', 'build', 'performance', 'smoke', 'eval']) {
+  const fastLanes = template.slice(
+    template.indexOf('  fast-lanes:'),
+    template.indexOf('\n  type-check:')
+  )
+  for (const lane of ['format', 'build', 'performance', 'smoke', 'eval', 'lint', 'integration']) {
     assert.match(fastLanes, new RegExp(`id: ${lane}_applicability`), `missing detect for ${lane}`)
     assert.match(fastLanes, new RegExp(`id: ${lane}_execute`), `missing execute for ${lane}`)
     assert.match(
@@ -125,16 +128,13 @@ test('sub-minute lanes share the merged fast-lanes job with their own receipts',
   )
 })
 
-test('long lanes stay on separate runners so the merged job is never the critical path', () => {
+test('CPU-bound lanes stay on separate runners so the merged job is never the critical path', () => {
   const template = billingTemplate()
-  for (const job of [
-    '\n  lint:\n    name: Lint',
-    '\n  type-check:\n    name: Type-Check',
-    '\n  unit:\n    name: Unit',
-  ]) {
+  for (const job of ['\n  type-check:\n    name: Type-Check', '\n  unit:\n    name: Unit']) {
     assert.ok(template.includes(job), `expected separate job ${job}`)
   }
-  assert.match(template, /  integration:\n    name: Integration/)
+  assert.doesNotMatch(template, /^  lint:$/m)
+  assert.doesNotMatch(template, /^  integration:$/m)
   assert.match(template, /  e2e:\n    name: E2E/)
   assert.match(template, /runs-on: \$\{\{ inputs\.unit-runner \}\}/)
 })
@@ -157,16 +157,14 @@ test('the gate folds merged lanes back into the shared category vocabulary', () 
   const template = billingTemplate()
   const gate = template.slice(template.indexOf('\n  gate:'))
   assert.match(gate, /name: Gate/)
-  assert.match(
-    gate,
-    /needs: \[fast-lanes, lint, type-check, unit, integration, e2e, audit, codeql\]/
-  )
+  assert.match(gate, /needs: \[fast-lanes, type-check, unit, e2e, audit, codeql\]/)
   assert.match(gate, /FOUNDRY_MODE: \$\{\{ inputs\.mode \}\}/)
+  assert.match(gate, /FOUNDRY_CI: \$\{\{.*needs\.type-check\.result.*needs\.fast-lanes\.result/)
   assert.match(
     gate,
-    /FOUNDRY_CI: \$\{\{.*needs\.lint\.result.*needs\.type-check\.result.*needs\.fast-lanes\.result/
+    /FOUNDRY_TEST: \$\{\{.*needs\.unit\.result.*needs\.fast-lanes\.result.*needs\.e2e\.result/
   )
-  assert.match(gate, /FOUNDRY_TEST: \$\{\{.*needs\.unit\.result.*needs\.fast-lanes\.result/)
+  assert.doesNotMatch(gate, /needs\.lint\.result|needs\.integration\.result/)
   assert.match(gate, /FOUNDRY_SECURITY: \$\{\{ needs\.audit\.result \}\}/)
   // The CodeQL decision collapses into the input so one file serves both
   // flavors; expected skips of audit-tier jobs never fail the gate.
