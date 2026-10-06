@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.9...v1.44.10) (2026-10-06)
+
+
+### Bug Fixes
+
+* **release:** treat ref-creation errors in the REST fallback as non-fatal ([#727](https://github.com/0xPlayerOne/code-foundry/issues/727)) ([75ea614](https://github.com/0xPlayerOne/code-foundry/commit/75ea61465e7c4cacd39e3aa8c52df93c2ea9bf03))
+
 ## [1.44.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.8...v1.44.9) (2026-10-06)
 
 
