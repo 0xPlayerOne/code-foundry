@@ -262,7 +262,8 @@ jobs:
           const { execFileSync } = require('node:child_process');
           const fs = require('node:fs');
 
-          const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' });
+          const gh = (args) =>
+            execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 
           const repo = process.env.REPOSITORY;
           const config = JSON.parse(fs.readFileSync(process.env.CONFIG_FILE, 'utf8'));
@@ -275,53 +276,71 @@ jobs:
             'api', `repos/${repo}/pulls`,
             '-X', 'GET',
             '-f', 'state=closed',
-            '-f', `head=${repo.split('/')[0]}:release-please--branches--main`,
             '-f', 'sort=updated',
             '-f', 'direction=desc',
             '-f', 'per_page=100',
-          ])).filter((pull) => pull.merged_at !== null);
+          ])).filter((pull) => pull.merged_at !== null && pull.head.ref === 'release-please--branches--main');
 
           // The newest existing tag supplies the tag prefix; the manifest
           // supplies the version each merged pull request published.
           const tags = JSON.parse(gh([
             'api', `repos/${repo}/tags`, '-X', 'GET', '-f', 'per_page=100',
-          ]));
-          const latestTag = tags[0]?.name ?? '';
+          ])).map((tag) => tag.name);
+          // Only version-shaped tags inform the prefix; stray tags must
+          // not corrupt it.
+          const versionedTags = tags.filter((name) => /v?\d+\.\d+\.\d+$/.test(name));
+          const latestTag = versionedTags[0] ?? '';
           const prefix = latestTag.replace(/v?\d+\.\d+\.\d+.*$/, '') || 'v';
 
-          let created = 0;
+          let ensured = 0;
+          let failures = 0;
           let lastTag = '';
           let lastSha = '';
           for (const pull of pulls) {
-            const version = /^chore\(main\): release ([^)]+)\)/.exec(pull.title)?.[1];
+            const version = /^chore\(main\): release (\S+)/.exec(pull.title)?.[1];
             if (!version) continue;
             const tag = `${prefix}v${version}`;
-            try {
-              gh(['api', `repos/${repo}/releases/tags/${tag}`, '--silent']);
+            // Draft releases are invisible to get-release-by-tag, so scan
+            // the list endpoint (which returns drafts) for the tag.
+            const releasesForCheck = JSON.parse(gh([
+              'api', `repos/${repo}/releases`, '-X', 'GET', '-f', 'per_page=100',
+            ]));
+            if (releasesForCheck.some((release) => release.tag_name === tag)) {
               console.log(`${tag}: release object already exists`);
-              continue;
-            } catch {
-              // No release object for this tag: create it below.
+            } else {
+              // No release object for this tag: create it.
+              try {
+                if (!tags.includes(tag)) {
+                  gh(['api', `repos/${repo}/git/refs`, '-X', 'POST',
+                    '-f', `ref=refs/tags/${tag}`, '-f', `sha=${pull.merge_commit_sha}`]);
+                  console.log(`${tag}: tag created at ${pull.merge_commit_sha.slice(0, 10)}`);
+                }
+                const body = JSON.stringify({
+                  tag_name: tag,
+                  name: tag,
+                  body: pull.body ?? '',
+                  draft: config.packages?.['.']?.draft ?? config.draft ?? false,
+                  prerelease: version.includes('-'),
+                });
+                gh(['api', `repos/${repo}/releases`, '-X', 'POST', '--input', '-'], { input: body });
+                console.log(`${tag}: release object created`);
+              } catch (error) {
+                failures += 1;
+                console.log(`${tag}: creation failed: ${error.message}`);
+                continue;
+              }
             }
-            if (!tags.some((t) => t.name === tag)) {
-              gh(['api', `repos/${repo}/git/refs`, '-X', 'POST',
-                '-f', `ref=refs/tags/${tag}`, '-f', `sha=${pull.merge_commit_sha}`]);
-              console.log(`${tag}: tag created at ${pull.merge_commit_sha.slice(0, 10)}`);
+            // The newest ensured release drives the batched promotion step.
+            if (!lastTag) {
+              lastTag = tag;
+              lastSha = pull.merge_commit_sha;
             }
-            const body = JSON.stringify({
-              tag_name: tag,
-              name: tag,
-              body: pull.body ?? '',
-              draft: config.packages?.['.']?.draft ?? config.draft ?? false,
-              prerelease: version.includes('-'),
-            });
-            gh(['api', `repos/${repo}/releases`, '-X', 'POST', '--input', '-'], { input: body });
-            console.log(`${tag}: release object created`);
-            created += 1;
-            lastTag = tag;
-            lastSha = pull.merge_commit_sha;
+            ensured += 1;
           }
-          if (created === 0) {
+          if (failures > 0) {
+            throw new Error(`${failures} release object(s) could not be ensured; see the log above`);
+          }
+          if (ensured === 0) {
             throw new Error(
               'release-please failed and no merged version pull request was waiting for a release object; ' +
               'the failure needs human eyes'
