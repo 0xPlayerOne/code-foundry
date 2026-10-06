@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.8...v1.44.9) (2026-10-06)
+
+
+### Bug Fixes
+
+* **release:** make the REST fallback draft-aware and idempotent ([#725](https://github.com/0xPlayerOne/code-foundry/issues/725)) ([c29da6e](https://github.com/0xPlayerOne/code-foundry/commit/c29da6efb919d68a568c2328eea2c2f7654334fe))
+
 ## [1.44.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.7...v1.44.8) (2026-10-06)
 
 
