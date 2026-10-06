@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.0...v1.45.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **billing:** declare the runner inputs the callers always forward ([#733](https://github.com/0xPlayerOne/code-foundry/issues/733)) ([f7a29cb](https://github.com/0xPlayerOne/code-foundry/commit/f7a29cb6dbc9a8695a9bef9e85ccce82aa9c84db))
+
 ## [1.45.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.11...v1.45.0) (2026-10-06)
 
 
