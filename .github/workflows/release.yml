@@ -308,13 +308,20 @@ jobs:
             if (releasesForCheck.some((release) => release.tag_name === tag)) {
               console.log(`${tag}: release object already exists`);
             } else {
-              // No release object for this tag: create it.
-              try {
-                if (!tags.includes(tag)) {
+              // No release object for this tag: create it. The tag may also
+              // already exist from a partial earlier attempt; the release
+              // creation adopts an existing tag, so ref-creation errors are
+              // not fatal.
+              if (!tags.includes(tag)) {
+                try {
                   gh(['api', `repos/${repo}/git/refs`, '-X', 'POST',
                     '-f', `ref=refs/tags/${tag}`, '-f', `sha=${pull.merge_commit_sha}`]);
                   console.log(`${tag}: tag created at ${pull.merge_commit_sha.slice(0, 10)}`);
+                } catch (error) {
+                  console.log(`${tag}: tag ref creation skipped: ${String(error.message).slice(0, 120)}`);
                 }
+              }
+              try {
                 const body = JSON.stringify({
                   tag_name: tag,
                   name: tag,
@@ -326,7 +333,7 @@ jobs:
                 console.log(`${tag}: release object created`);
               } catch (error) {
                 failures += 1;
-                console.log(`${tag}: creation failed: ${error.message}`);
+                console.log(`${tag}: release creation failed: ${String(error.message).slice(0, 160)}`);
                 continue;
               }
             }
