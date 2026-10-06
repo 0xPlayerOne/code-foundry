@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.11...v1.45.0) (2026-10-06)
+
+
+### Features
+
+* add a merged-lane billing orchestrator for minute-billed consumers ([#731](https://github.com/0xPlayerOne/code-foundry/issues/731)) ([a91402e](https://github.com/0xPlayerOne/code-foundry/commit/a91402e701f458ece0d2ea4715f9586a06b15108))
+
 ## [1.44.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.44.10...v1.44.11) (2026-10-06)
 
 
