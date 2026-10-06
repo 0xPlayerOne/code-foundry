@@ -202,11 +202,15 @@ jobs:
           write_ok=false
           if [ "$HAS_AUTOMATION_TOKEN" = true ] && gh api "repos/${GITHUB_REPOSITORY}" --jq '.full_name' >/dev/null 2>&1; then
             probe_ref="refs/tags/token-write-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-            if gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-                -f "ref=$probe_ref" -f "sha=${GITHUB_SHA}" >/dev/null 2>&1; then
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/token-write-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >/dev/null 2>&1 || true
-              write_ok=true
-            fi
+            for wait in 0 10 30; do
+              sleep "$wait"
+              if gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+                  -f "ref=$probe_ref" -f "sha=${GITHUB_SHA}" >/dev/null 2>&1; then
+                gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/token-write-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >/dev/null 2>&1 || true
+                write_ok=true
+                break
+              fi
+            done
           fi
           if [ "$write_ok" = true ]; then
             echo "auto_merge=true" >> "$GITHUB_OUTPUT"
@@ -262,8 +266,28 @@ jobs:
           const { execFileSync } = require('node:child_process');
           const fs = require('node:fs');
 
-          const gh = (args) =>
-            execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+          const sleep = (seconds) =>
+            execFileSync('sleep', [String(seconds)]);
+          // Writes intermittently hit GitHub's secondary rate limiting from
+          // busy automation accounts (403 with the generic not-accessible
+          // message); back off and retry before giving up.
+          const gh = (args) => {
+            for (const wait of [0, 10, 30]) {
+              try {
+                if (wait) sleep(wait);
+                return execFileSync('gh', args, {
+                  encoding: 'utf8',
+                  maxBuffer: 32 * 1024 * 1024,
+                });
+              } catch (error) {
+                const status = error.status;
+                const retriable = status === null || status === 403 || status === 429 || status >= 500;
+                if (!retriable || wait === 30) throw error;
+                console.log(`gh call failed (status ${status ?? 'unknown'}); retrying in ${wait === 0 ? 10 : 30}s`);
+              }
+            }
+            throw new Error('unreachable');
+          };
 
           const repo = process.env.REPOSITORY;
           const config = JSON.parse(fs.readFileSync(process.env.CONFIG_FILE, 'utf8'));
