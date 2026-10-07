@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.2...v1.46.0) (2026-10-07)
+
+
+### Features
+
+* **billing:** run fast-lane executes concurrently ([#738](https://github.com/0xPlayerOne/code-foundry/issues/738)) ([b40e82a](https://github.com/0xPlayerOne/code-foundry/commit/b40e82a0709b288a8be46998cfdc8b909f92c23c))
+
 ## [1.45.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.1...v1.45.2) (2026-10-06)
 
 
