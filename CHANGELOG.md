@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.1...v1.46.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **billing:** join fast-lane receipts in a second parallel group ([#742](https://github.com/0xPlayerOne/code-foundry/issues/742)) ([c63a39c](https://github.com/0xPlayerOne/code-foundry/commit/c63a39cf5e236d6747bd85cf10b04bd10f690b11))
+
 ## [1.46.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.0...v1.46.1) (2026-10-07)
 
 
