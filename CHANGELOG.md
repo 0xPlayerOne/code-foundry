@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.0...v1.46.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **qualification:** skip parallel-syntax files until actionlint supports them ([#740](https://github.com/0xPlayerOne/code-foundry/issues/740)) ([db98c7f](https://github.com/0xPlayerOne/code-foundry/commit/db98c7f40cae080cdc9dcab7baac4976e5e0656e))
+
 ## [1.46.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.2...v1.46.0) (2026-10-07)
 
 
