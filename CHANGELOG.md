@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.2...v1.46.3) (2026-10-07)
+
+
+### Bug Fixes
+
+* **billing:** keep lint standalone; join fast-lane receipts in parallel ([#744](https://github.com/0xPlayerOne/code-foundry/issues/744)) ([574690b](https://github.com/0xPlayerOne/code-foundry/commit/574690b707abffe9350ccc67589540afb82323ee))
+
 ## [1.46.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.1...v1.46.2) (2026-10-07)
 
 
