@@ -227,17 +227,6 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run eval >> "$GITHUB_OUTPUT"
-      # --- Lint lane (mirror of ci.yml lint) ---
-      - name: Detect lint
-        id: lint_applicability
-        if: ${{ !cancelled() }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run lint >> "$GITHUB_OUTPUT"
       # --- Integration lane (mirror of test.yml integration; audit tier only) ---
       - name: Detect integration
         id: integration_applicability
@@ -314,13 +303,6 @@ jobs:
           install: 'true'
           cache-build: 'true'
           task: eval
-      - name: Setup lint
-        if: ${{ !cancelled() && steps.lint_applicability.outputs.applicable == 'true' && steps.lint_applicability.outputs.affected != 'false' }}
-        uses: ./.github/actions/setup
-        with:
-          install: 'true'
-          cache-lint: 'true'
-          task: lint
       - name: Setup integration
         if: ${{ !cancelled() && inputs.mode == 'audit' && steps.integration_applicability.outputs.applicable == 'true' && steps.integration_applicability.outputs.affected != 'false' }}
         uses: ./.github/actions/setup
@@ -365,11 +347,6 @@ jobs:
             id: eval_execute
             if: ${{ !cancelled() && inputs.mode == 'audit' && steps.eval_applicability.outputs.applicable == 'true' && steps.eval_applicability.outputs.affected != 'false' }}
             run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci eval
-          # --- Lint execute ---
-          - name: Lint
-            id: lint_execute
-            if: ${{ !cancelled() && steps.lint_applicability.outputs.applicable == 'true' && steps.lint_applicability.outputs.affected != 'false' }}
-            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci lint
           # --- Integration execute ---
           - name: Integration
             id: integration_execute
@@ -477,19 +454,6 @@ jobs:
                 eval-results/summary.json
               if-no-files-found: error
               retention-days: 14
-          - name: Retain lint task receipt
-            if: >-
-              always() &&
-              (steps.lint_execute.outcome == 'success' || steps.lint_execute.outcome == 'failure' ||
-              steps.lint_applicability.outputs.applicable == 'false' || steps.lint_applicability.outputs.affected == 'false') &&
-              hashFiles('.code-foundry/results/lint.json') != ''
-            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-            with:
-              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-lint
-              path: .code-foundry/results/lint.json
-              include-hidden-files: true
-              if-no-files-found: error
-              retention-days: 14
           - name: Retain integration task receipt
             if: >-
               always() &&
@@ -504,6 +468,67 @@ jobs:
               include-hidden-files: true
               if-no-files-found: error
               retention-days: 14
+
+  lint:
+    name: Lint
+    if: vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ${{ inputs.ci-runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            .github/actions
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        run: |
+          mkdir -p .github/actions
+          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Detect
+        id: applicability
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run lint >> "$GITHUB_OUTPUT"
+      - name: Setup
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        uses: ./.github/actions/setup
+        with:
+          install: 'true'
+          cache-lint: 'true'
+          task: lint
+      - name: Lint
+        id: execute
+        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci lint
+      - name: Retain task receipt
+        if: >-
+          always() &&
+          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
+          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
+          hashFiles('.code-foundry/results/lint.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-lint
+          path: .code-foundry/results/lint.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   type-check:
     name: Type-Check
@@ -1074,7 +1099,7 @@ jobs:
   # evaluateValidationGate's mode truth table is reused unchanged.
   gate:
     name: Gate
-    needs: [fast-lanes, type-check, unit, e2e, audit, codeql]
+    needs: [fast-lanes, lint, type-check, unit, e2e, audit, codeql]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
     runs-on: ubuntu-slim
     timeout-minutes: 10
@@ -1082,7 +1107,7 @@ jobs:
       FOUNDRY_MODE: ${{ inputs.mode }}
       # CI category: lint and type-check always run; the merged fast-lanes job
       # carries the format and build lanes.
-      FOUNDRY_CI: ${{ (needs.type-check.result != 'success' && needs.type-check.result) || (needs.fast-lanes.result != 'success' && needs.fast-lanes.result) || 'success' }}
+      FOUNDRY_CI: ${{ (needs.lint.result != 'success' && needs.lint.result) || (needs.type-check.result != 'success' && needs.type-check.result) || (needs.fast-lanes.result != 'success' && needs.fast-lanes.result) || 'success' }}
       # Test category: unit always runs and must succeed; integration and e2e
       # are audit-tier jobs whose expected skip on fast/release is not a
       # failure; the merged fast-lanes job carries performance, smoke, and
