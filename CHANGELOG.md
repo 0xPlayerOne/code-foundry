@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.4...v1.46.5) (2026-10-08)
+
+
+### Bug Fixes
+
+* **sync:** chain machine-level hooks instead of silencing them ([#747](https://github.com/0xPlayerOne/code-foundry/issues/747)) ([7fcad52](https://github.com/0xPlayerOne/code-foundry/commit/7fcad52d400dbb2aaa9ba46c0c76f14e8d63f660)), closes [#690](https://github.com/0xPlayerOne/code-foundry/issues/690)
+
 ## [1.46.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.3...v1.46.4) (2026-10-08)
 
 
