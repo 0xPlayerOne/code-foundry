@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.1...v1.47.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **qualification:** exclude pending parallel syntax by content, not filename ([#755](https://github.com/0xPlayerOne/code-foundry/issues/755)) ([1f7cae8](https://github.com/0xPlayerOne/code-foundry/commit/1f7cae8167002061850e56e3dc0fa800a69d7be9))
+
 ## [1.47.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.0...v1.47.1) (2026-10-08)
 
 
