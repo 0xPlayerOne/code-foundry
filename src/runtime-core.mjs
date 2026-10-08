@@ -25,6 +25,7 @@ import {
   parseStagedFiles,
   planPreCommit,
   preCommitBuildEnabled,
+  freshCloneBuildHint,
 } from './lib/pre-commit.mjs'
 import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
 import {
@@ -428,16 +429,20 @@ function commandExists(command) {
   return spawnSync(command, ['--version'], { stdio: 'ignore' }).status === 0
 }
 
-/** @param {string} command @param {string[]} [args] @param {Record<string, unknown>} [options] */
+/** @param {string} command @param {string[]} [args] @param {{ onFailure?: string }} [options] */
 function run(command, args = [], options = {}) {
+  const { onFailure, ...spawnOptions } = options
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     env: process.env,
-    ...options,
+    ...spawnOptions,
   })
   if (result.error) throw result.error
-  if (result.status !== 0) process.exit(result.status ?? 1)
+  if (result.status !== 0) {
+    if (onFailure) console.error(onFailure)
+    process.exit(result.status ?? 1)
+  }
 }
 
 // pip-audit can report its clean result with a non-zero status when the
@@ -494,28 +499,28 @@ function packageCommand(args) {
   }
 }
 
-/** @param {string[]} names */
-function runScript(names) {
+/** @param {string[]} names @param {{ onFailure?: string }} [options] */
+function runScript(names, options = {}) {
   const name = names.find((candidate) => hasScript(candidate))
   if (!name) return false
   const [manager, args] = packageCommand(['run', name])
   if (!manager) return false
-  run(manager, args)
+  run(manager, args, options)
   return true
 }
 
-/** @param {string} tool @param {string[]} [args] */
-function runTool(tool, args = []) {
+/** @param {string} tool @param {string[]} [args] @param {{ onFailure?: string }} [options] */
+function runTool(tool, args = [], options = {}) {
   if (['ruff', 'pytest', 'pylint'].includes(tool)) {
     const venvTool = resolve(root, `.venv/bin/${tool}`)
-    if (existsSync(venvTool)) return run(venvTool, args)
+    if (existsSync(venvTool)) return run(venvTool, args, options)
   }
   const [manager] = packageCommand([])
-  if (manager === 'bun') return run('bunx', ['--no-install', tool, ...args])
-  if (manager === 'pnpm') return run('pnpm', ['exec', tool, ...args])
-  if (manager === 'yarn') return run('yarn', ['exec', tool, ...args])
-  if (manager === 'npm') return run('npx', ['--no-install', tool, ...args])
-  return run(tool, args)
+  if (manager === 'bun') return run('bunx', ['--no-install', tool, ...args], options)
+  if (manager === 'pnpm') return run('pnpm', ['exec', tool, ...args], options)
+  if (manager === 'yarn') return run('yarn', ['exec', tool, ...args], options)
+  if (manager === 'npm') return run('npx', ['--no-install', tool, ...args], options)
+  return run(tool, args, options)
 }
 
 function install() {
@@ -1193,9 +1198,11 @@ function runToolOnFiles(tool, args, files) {
  *
  * The gate is change-aware: it formats and lints only staged files, runs the
  * project's type-check command only when typed sources or compiler config are
- * staged, and never builds unless `pre_commit_build: true` opts back in. The
- * full suite still runs in CI. Tools see working-tree contents, so a partially
- * staged file is checked as it exists on disk.
+ * staged, and never builds unless `pre_commit_build: true` opts back in — in
+ * which case the build runs before lint and type-check, mirroring CI's
+ * ordering, because those tasks read built package output. The full suite
+ * still runs in CI. Tools see working-tree contents, so a partially staged
+ * file is checked as it exists on disk.
  */
 export function preCommit() {
   const staged = parseStagedFiles(
@@ -1225,9 +1232,22 @@ export function preCommit() {
       runScript(['format:check', 'format', 'fmt'])
     }
   }
+  // Mirror CI's prerequisite ordering: lint, boundary, and type-check tasks
+  // read built package output, so the opt-in build runs before them. Format
+  // stays first for the fastest feedback on the most common failure. Without
+  // the opt-in, a failure that CI (which builds first) cannot reproduce gets
+  // the one-line explanation instead of training `--no-verify`.
+  if (plan.build) ci('build')
+  const buildHint = freshCloneBuildHint({
+    build: plan.build,
+    buildScript: hasScript('build'),
+    packageManager: packageCommand([])[0],
+  })
+
   if (js && (plan.lintAll || plan.lintFiles.length)) {
     if (plan.lintAll) {
-      if (!runScript(['lint']) && hasOxlintSetup()) runTool('oxlint', ['--deny-warnings'])
+      if (!runScript(['lint'], { onFailure: buildHint }) && hasOxlintSetup())
+        runTool('oxlint', ['--deny-warnings'])
     } else if (hasOxlintSetup()) {
       runToolOnFiles(
         'oxlint',
@@ -1241,8 +1261,11 @@ export function preCommit() {
   if (js && plan.typeCheck) {
     // Use the project's own command so project references, workspaces, and
     // path aliases resolve exactly as they do in CI.
-    const scripted = runScript(['type-check', 'typecheck', 'type:check'])
-    if (!scripted && existsSync(resolve(root, 'tsconfig.json'))) runTool('tsc', ['--noEmit'])
+    const scripted = runScript(['type-check', 'typecheck', 'type:check'], {
+      onFailure: buildHint,
+    })
+    if (!scripted && existsSync(resolve(root, 'tsconfig.json')))
+      runTool('tsc', ['--noEmit'], { onFailure: buildHint })
   }
   if (plan.rust) {
     run('cargo', ['fmt', '--check'])
@@ -1255,7 +1278,6 @@ export function preCommit() {
     runToolOnFiles('ruff', ['format', '--check', '--force-exclude'], plan.pythonFiles)
     runToolOnFiles('ruff', ['check', '--force-exclude'], plan.pythonFiles)
   }
-  if (plan.build) ci('build')
 }
 
 // Only dispatch when this module is the process entry point. The CLI imports

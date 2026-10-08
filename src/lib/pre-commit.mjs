@@ -99,6 +99,25 @@ export function preCommitBuildEnabled(value) {
 }
 
 /**
+ * The one-line explanation printed when lint or type-check fails while the
+ * commit-time build is disabled. CI builds before those tasks, so a fresh
+ * clone can fail the gate against an unmodified tree — a bare ENOENT trains
+ * `--no-verify` unless the gate names the actual problem.
+ *
+ * @param {{ build: boolean, buildScript: boolean, packageManager: string | null }} options
+ * @returns {string | undefined} The hint, or undefined when it cannot apply.
+ */
+export function freshCloneBuildHint({ build, buildScript, packageManager }) {
+  if (build || !buildScript) return undefined
+  const runner = packageManager ?? 'npm'
+  return (
+    `note: these checks may be reading missing build output on a fresh clone; ` +
+    `run "${runner} run build" once, or set pre_commit_build: true in ` +
+    `.github/code-foundry.yml to build before lint and type-check`
+  )
+}
+
+/**
  * Split a file list so one tool invocation never exceeds the platform's
  * argument-length limit on very large commits.
  * @param {string[]} files
