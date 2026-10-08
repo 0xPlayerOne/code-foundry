@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.0...v1.47.1) (2026-10-08)
+
+
+### Tests
+
+* **doctor:** pin the machine-hook shadow warning ([#753](https://github.com/0xPlayerOne/code-foundry/issues/753)) ([f634269](https://github.com/0xPlayerOne/code-foundry/commit/f634269424580d8d34323319288747587b6d6ae3))
+
 ## [1.47.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.6...v1.47.0) (2026-10-08)
 
 
