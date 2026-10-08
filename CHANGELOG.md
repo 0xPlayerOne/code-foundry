@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.46.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.2...v1.46.3) (2026-10-07)
+
+
+### Bug Fixes
+
+* **billing:** keep lint standalone; join fast-lane receipts in parallel ([#744](https://github.com/0xPlayerOne/code-foundry/issues/744)) ([574690b](https://github.com/0xPlayerOne/code-foundry/commit/574690b707abffe9350ccc67589540afb82323ee))
+
+## [1.46.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.1...v1.46.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **billing:** join fast-lane receipts in a second parallel group ([#742](https://github.com/0xPlayerOne/code-foundry/issues/742)) ([c63a39c](https://github.com/0xPlayerOne/code-foundry/commit/c63a39cf5e236d6747bd85cf10b04bd10f690b11))
+
+## [1.46.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.0...v1.46.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **qualification:** skip parallel-syntax files until actionlint supports them ([#740](https://github.com/0xPlayerOne/code-foundry/issues/740)) ([db98c7f](https://github.com/0xPlayerOne/code-foundry/commit/db98c7f40cae080cdc9dcab7baac4976e5e0656e))
+
+## [1.46.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.2...v1.46.0) (2026-10-07)
+
+
+### Features
+
+* **billing:** run fast-lane executes concurrently ([#738](https://github.com/0xPlayerOne/code-foundry/issues/738)) ([b40e82a](https://github.com/0xPlayerOne/code-foundry/commit/b40e82a0709b288a8be46998cfdc8b909f92c23c))
+
 ## [1.45.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.45.1...v1.45.2) (2026-10-06)
 
 

@@ -183,6 +183,61 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run format >> "$GITHUB_OUTPUT"
+      # --- Build lane (mirror of ci.yml build) ---
+      - name: Detect build
+        id: build_applicability
+        if: ${{ !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
+      # --- Performance lane (mirror of test.yml performance; audit tier only) ---
+      - name: Detect performance
+        id: performance_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile performance >> "$GITHUB_OUTPUT"
+      # --- Smoke lane (mirror of test.yml smoke; audit tier only) ---
+      - name: Detect smoke
+        id: smoke_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile smoke >> "$GITHUB_OUTPUT"
+      # --- Eval lane (mirror of eval.yml; audit tier only) ---
+      - name: Detect eval
+        id: eval_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run eval >> "$GITHUB_OUTPUT"
+      # --- Integration lane (mirror of test.yml integration; audit tier only) ---
+      - name: Detect integration
+        id: integration_applicability
+        if: ${{ !cancelled() && inputs.mode == 'audit' }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile integration >> "$GITHUB_OUTPUT"
       - name: Setup format
         if: steps.format_applicability.outputs.applicable == 'true' && steps.format_applicability.outputs.affected != 'false'
         uses: ./.github/actions/setup
@@ -195,34 +250,6 @@ jobs:
           cache-lint: 'false'
           cache-build: 'false'
           task: format
-      - name: Format
-        id: format_execute
-        if: steps.format_applicability.outputs.applicable == 'true' && steps.format_applicability.outputs.affected != 'false'
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci format
-      - name: Retain format task receipt
-        if: >-
-          always() &&
-          (steps.format_execute.outcome == 'success' || steps.format_execute.outcome == 'failure' ||
-          steps.format_applicability.outputs.applicable == 'false' || steps.format_applicability.outputs.affected == 'false') &&
-          hashFiles('.code-foundry/results/format.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-format
-          path: .code-foundry/results/format.json
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      # --- Build lane (mirror of ci.yml build) ---
-      - name: Detect build
-        id: build_applicability
-        if: ${{ !cancelled() }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
       - name: Setup build
         if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
         uses: ./.github/actions/setup
@@ -235,36 +262,6 @@ jobs:
           # time. Consumers can provide the real value; the fallback is
           # intentionally CI-only and must never be used at runtime.
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
-      - name: Build
-        id: build_execute
-        if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
-        env:
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
-      - name: Retain build task receipt
-        if: >-
-          always() &&
-          (steps.build_execute.outcome == 'success' || steps.build_execute.outcome == 'failure' ||
-          steps.build_applicability.outputs.applicable == 'false' || steps.build_applicability.outputs.affected == 'false') &&
-          hashFiles('.code-foundry/results/build.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-build
-          path: .code-foundry/results/build.json
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      # --- Performance lane (mirror of test.yml performance; audit tier only) ---
-      - name: Detect performance
-        id: performance_applicability
-        if: ${{ !cancelled() && inputs.mode == 'audit' }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile performance >> "$GITHUB_OUTPUT"
       - name: Setup performance
         if: ${{ !cancelled() && inputs.mode == 'audit' && steps.performance_applicability.outputs.applicable == 'true' && steps.performance_applicability.outputs.affected != 'false' }}
         uses: ./.github/actions/setup
@@ -281,51 +278,6 @@ jobs:
           task-javascript: ${{ steps.performance_applicability.outputs.javascript }}
           task-python: ${{ steps.performance_applicability.outputs.python }}
           task-rust: ${{ steps.performance_applicability.outputs.rust }}
-      - name: Performance
-        id: performance_execute
-        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.performance_applicability.outputs.applicable == 'true' && steps.performance_applicability.outputs.affected != 'false' }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci performance
-      - name: Retain performance task receipt
-        if: >-
-          always() &&
-          inputs.mode == 'audit' &&
-          (steps.performance_execute.outcome == 'success' || steps.performance_execute.outcome == 'failure' ||
-          steps.performance_applicability.outputs.applicable == 'false' || steps.performance_applicability.outputs.affected == 'false') &&
-          hashFiles('.code-foundry/results/performance.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-performance
-          path: .code-foundry/results/performance.json
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload performance results
-        if: >-
-          always() &&
-          inputs.mode == 'audit' &&
-          steps.performance_applicability.outputs.applicable == 'true' &&
-          hashFiles('artifacts/performance/**', 'performance-results.json', 'performance-results/**') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: performance-${{ github.run_id }}
-          path: |
-            artifacts/performance/**
-            performance-results.json
-            performance-results/**
-          compression-level: 1
-          if-no-files-found: ignore
-          retention-days: 14
-      # --- Smoke lane (mirror of test.yml smoke; audit tier only) ---
-      - name: Detect smoke
-        id: smoke_applicability
-        if: ${{ !cancelled() && inputs.mode == 'audit' }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile smoke >> "$GITHUB_OUTPUT"
       - name: Setup smoke
         if: ${{ !cancelled() && inputs.mode == 'audit' && steps.smoke_applicability.outputs.applicable == 'true' && steps.smoke_applicability.outputs.affected != 'false' }}
         uses: ./.github/actions/setup
@@ -342,35 +294,6 @@ jobs:
           task-javascript: ${{ steps.smoke_applicability.outputs.javascript }}
           task-python: ${{ steps.smoke_applicability.outputs.python }}
           task-rust: ${{ steps.smoke_applicability.outputs.rust }}
-      - name: Smoke
-        id: smoke_execute
-        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.smoke_applicability.outputs.applicable == 'true' && steps.smoke_applicability.outputs.affected != 'false' }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci smoke
-      - name: Retain smoke task receipt
-        if: >-
-          always() &&
-          inputs.mode == 'audit' &&
-          (steps.smoke_execute.outcome == 'success' || steps.smoke_execute.outcome == 'failure' ||
-          steps.smoke_applicability.outputs.applicable == 'false' || steps.smoke_applicability.outputs.affected == 'false') &&
-          hashFiles('.code-foundry/results/smoke.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-smoke
-          path: .code-foundry/results/smoke.json
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      # --- Eval lane (mirror of eval.yml; audit tier only) ---
-      - name: Detect eval
-        id: eval_applicability
-        if: ${{ !cancelled() && inputs.mode == 'audit' }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run eval >> "$GITHUB_OUTPUT"
       - name: Setup eval
         if: ${{ !cancelled() && inputs.mode == 'audit' && steps.eval_applicability.outputs.applicable == 'true' && steps.eval_applicability.outputs.affected != 'false' }}
         uses: ./.github/actions/setup
@@ -380,38 +303,171 @@ jobs:
           install: 'true'
           cache-build: 'true'
           task: eval
-      - name: Eval
-        id: eval_execute
-        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.eval_applicability.outputs.applicable == 'true' && steps.eval_applicability.outputs.affected != 'false' }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci eval
-      - name: Retain eval task receipt
-        if: >-
-          always() &&
-          inputs.mode == 'audit' &&
-          (steps.eval_execute.outcome == 'success' || steps.eval_execute.outcome == 'failure' ||
-          steps.eval_applicability.outputs.applicable == 'false' || steps.eval_applicability.outputs.affected == 'false') &&
-          hashFiles('.code-foundry/results/eval.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - name: Setup integration
+        if: ${{ !cancelled() && inputs.mode == 'audit' && steps.integration_applicability.outputs.applicable == 'true' && steps.integration_applicability.outputs.affected != 'false' }}
+        uses: ./.github/actions/setup
         with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval
-          path: .code-foundry/results/eval.json
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
-      - name: Retain eval report
-        if: >-
-          always() &&
-          inputs.mode == 'audit' &&
-          steps.eval_execute.outcome == 'failure' &&
-          hashFiles('eval-results/result.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval-report
-          path: |
-            eval-results/result.json
-            eval-results/summary.json
-          if-no-files-found: error
-          retention-days: 14
+          install: true
+          install-javascript: ${{ steps.integration_applicability.outputs.javascript == 'true' }}
+          install-python: ${{ steps.integration_applicability.outputs.python == 'true' }}
+          install-rust: ${{ steps.integration_applicability.outputs.rust == 'true' }}
+          cache-build: ${{ steps.integration_applicability.outputs.rust == 'true' }}
+          cache-environment: false
+          cache-save: ${{ github.event_name == 'push' }}
+          cache-packages: ${{ vars.REPO_FOUNDRY_CACHE_PACKAGES || 'auto' }}
+          task: integration
+          task-javascript: ${{ steps.integration_applicability.outputs.javascript }}
+          task-python: ${{ steps.integration_applicability.outputs.python }}
+          task-rust: ${{ steps.integration_applicability.outputs.rust }}
+      - parallel:
+          # --- Format execute ---
+          - name: Format
+            id: format_execute
+            if: steps.format_applicability.outputs.applicable == 'true' && steps.format_applicability.outputs.affected != 'false'
+            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci format
+          # --- Build execute ---
+          - name: Build
+            id: build_execute
+            if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
+            env:
+              NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
+            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
+          # --- Performance execute ---
+          - name: Performance
+            id: performance_execute
+            if: ${{ !cancelled() && inputs.mode == 'audit' && steps.performance_applicability.outputs.applicable == 'true' && steps.performance_applicability.outputs.affected != 'false' }}
+            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci performance
+          # --- Smoke execute ---
+          - name: Smoke
+            id: smoke_execute
+            if: ${{ !cancelled() && inputs.mode == 'audit' && steps.smoke_applicability.outputs.applicable == 'true' && steps.smoke_applicability.outputs.affected != 'false' }}
+            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci smoke
+          # --- Eval execute ---
+          - name: Eval
+            id: eval_execute
+            if: ${{ !cancelled() && inputs.mode == 'audit' && steps.eval_applicability.outputs.applicable == 'true' && steps.eval_applicability.outputs.affected != 'false' }}
+            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci eval
+          # --- Integration execute ---
+          - name: Integration
+            id: integration_execute
+            if: ${{ !cancelled() && inputs.mode == 'audit' && steps.integration_applicability.outputs.applicable == 'true' && steps.integration_applicability.outputs.affected != 'false' }}
+            run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci integration
+      # Receipts are independent artifact uploads; a second parallel
+      # group joins them instead of serializing 8+ uploads after the
+      # executes.
+      - parallel:
+          - name: Retain format task receipt
+            if: >-
+              always() &&
+              (steps.format_execute.outcome == 'success' || steps.format_execute.outcome == 'failure' ||
+              steps.format_applicability.outputs.applicable == 'false' || steps.format_applicability.outputs.affected == 'false') &&
+              hashFiles('.code-foundry/results/format.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-format
+              path: .code-foundry/results/format.json
+              include-hidden-files: true
+              if-no-files-found: error
+              retention-days: 14
+          - name: Retain build task receipt
+            if: >-
+              always() &&
+              (steps.build_execute.outcome == 'success' || steps.build_execute.outcome == 'failure' ||
+              steps.build_applicability.outputs.applicable == 'false' || steps.build_applicability.outputs.affected == 'false') &&
+              hashFiles('.code-foundry/results/build.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-build
+              path: .code-foundry/results/build.json
+              include-hidden-files: true
+              if-no-files-found: error
+              retention-days: 14
+          - name: Retain performance task receipt
+            if: >-
+              always() &&
+              inputs.mode == 'audit' &&
+              (steps.performance_execute.outcome == 'success' || steps.performance_execute.outcome == 'failure' ||
+              steps.performance_applicability.outputs.applicable == 'false' || steps.performance_applicability.outputs.affected == 'false') &&
+              hashFiles('.code-foundry/results/performance.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-performance
+              path: .code-foundry/results/performance.json
+              include-hidden-files: true
+              if-no-files-found: error
+              retention-days: 14
+          - name: Upload performance results
+            if: >-
+              always() &&
+              inputs.mode == 'audit' &&
+              steps.performance_applicability.outputs.applicable == 'true' &&
+              hashFiles('artifacts/performance/**', 'performance-results.json', 'performance-results/**') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: performance-${{ github.run_id }}
+              path: |
+                artifacts/performance/**
+                performance-results.json
+                performance-results/**
+              compression-level: 1
+              if-no-files-found: ignore
+              retention-days: 14
+          - name: Retain smoke task receipt
+            if: >-
+              always() &&
+              inputs.mode == 'audit' &&
+              (steps.smoke_execute.outcome == 'success' || steps.smoke_execute.outcome == 'failure' ||
+              steps.smoke_applicability.outputs.applicable == 'false' || steps.smoke_applicability.outputs.affected == 'false') &&
+              hashFiles('.code-foundry/results/smoke.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-smoke
+              path: .code-foundry/results/smoke.json
+              include-hidden-files: true
+              if-no-files-found: error
+              retention-days: 14
+          - name: Retain eval task receipt
+            if: >-
+              always() &&
+              inputs.mode == 'audit' &&
+              (steps.eval_execute.outcome == 'success' || steps.eval_execute.outcome == 'failure' ||
+              steps.eval_applicability.outputs.applicable == 'false' || steps.eval_applicability.outputs.affected == 'false') &&
+              hashFiles('.code-foundry/results/eval.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval
+              path: .code-foundry/results/eval.json
+              include-hidden-files: true
+              if-no-files-found: error
+              retention-days: 14
+          - name: Retain eval report
+            if: >-
+              always() &&
+              inputs.mode == 'audit' &&
+              steps.eval_execute.outcome == 'failure' &&
+              hashFiles('eval-results/result.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval-report
+              path: |
+                eval-results/result.json
+                eval-results/summary.json
+              if-no-files-found: error
+              retention-days: 14
+          - name: Retain integration task receipt
+            if: >-
+              always() &&
+              inputs.mode == 'audit' &&
+              (steps.integration_execute.outcome == 'success' || steps.integration_execute.outcome == 'failure' ||
+              steps.integration_applicability.outputs.applicable == 'false' || steps.integration_applicability.outputs.affected == 'false') &&
+              hashFiles('.code-foundry/results/integration.json') != ''
+            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            with:
+              name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-integration
+              path: .code-foundry/results/integration.json
+              include-hidden-files: true
+              if-no-files-found: error
+              retention-days: 14
 
   lint:
     name: Lint
@@ -619,76 +675,6 @@ jobs:
             target/llvm-cov/**
           compression-level: 1
           if-no-files-found: ignore
-          retention-days: 14
-
-  integration:
-    name: Integration
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
-    runs-on: ${{ inputs.test-runner }}
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          fetch-depth: 2
-      - name: Runtime
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          repository: ${{ inputs.runtime-repository }}
-          ref: ${{ inputs.runtime-ref }}
-          path: .github/.code-foundry
-          sparse-checkout: |
-            .github/actions
-            src/lib
-            src/runtime-core.mjs
-            src/runtime.mjs
-      - name: Install runtime
-        run: |
-          mkdir -p .github/actions
-          mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
-          cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
-      - name: Detect
-        id: applicability
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci task_profile integration >> "$GITHUB_OUTPUT"
-      - name: Setup
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
-        uses: ./.github/actions/setup
-        with:
-          install: true
-          install-javascript: ${{ steps.applicability.outputs.javascript == 'true' }}
-          install-python: ${{ steps.applicability.outputs.python == 'true' }}
-          install-rust: ${{ steps.applicability.outputs.rust == 'true' }}
-          cache-build: ${{ steps.applicability.outputs.rust == 'true' }}
-          cache-environment: false
-          cache-save: ${{ github.event_name == 'push' }}
-          task: integration
-          task-javascript: ${{ steps.applicability.outputs.javascript }}
-          task-python: ${{ steps.applicability.outputs.python }}
-          task-rust: ${{ steps.applicability.outputs.rust }}
-      - name: Integration
-        id: execute
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
-        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci integration
-      - name: Retain task receipt
-        if: >-
-          always() &&
-          (steps.execute.outcome == 'success' || steps.execute.outcome == 'failure' ||
-          steps.applicability.outputs.applicable == 'false' || steps.applicability.outputs.affected == 'false') &&
-          hashFiles('.code-foundry/results/integration.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-integration
-          path: .code-foundry/results/integration.json
-          include-hidden-files: true
-          if-no-files-found: error
           retention-days: 14
 
   e2e:
@@ -1113,7 +1099,7 @@ jobs:
   # evaluateValidationGate's mode truth table is reused unchanged.
   gate:
     name: Gate
-    needs: [fast-lanes, lint, type-check, unit, integration, e2e, audit, codeql]
+    needs: [fast-lanes, lint, type-check, unit, e2e, audit, codeql]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
     runs-on: ubuntu-slim
     timeout-minutes: 10
@@ -1126,7 +1112,7 @@ jobs:
       # are audit-tier jobs whose expected skip on fast/release is not a
       # failure; the merged fast-lanes job carries performance, smoke, and
       # eval-mode lanes, so its result joins the category too.
-      FOUNDRY_TEST: ${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && (needs.integration.result == 'success' || needs.integration.result == 'skipped') && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && 'success' || ((needs.integration.result != 'success' && needs.integration.result != 'skipped' && needs.integration.result) || (needs.e2e.result != 'success' && needs.e2e.result != 'skipped' && needs.e2e.result) || (needs.unit.result != 'success' && needs.unit.result) || (needs.fast-lanes.result != 'success' && needs.fast-lanes.result) || 'failure') }}
+      FOUNDRY_TEST: ${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && 'success' || ((needs.e2e.result != 'success' && needs.e2e.result != 'skipped' && needs.e2e.result) || (needs.unit.result != 'success' && needs.unit.result) || (needs.fast-lanes.result != 'success' && needs.fast-lanes.result) || 'failure') }}
       FOUNDRY_SECURITY: ${{ needs.audit.result }}
       # This orchestrator runs CodeQL only when the consumer's canonical
       # configuration enables it; otherwise the unavailability decision is
