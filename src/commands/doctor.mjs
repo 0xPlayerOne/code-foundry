@@ -1,7 +1,7 @@
 // @ts-check
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, resolve, isAbsolute } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
@@ -52,6 +52,29 @@ export function doctor(root, options = {}) {
     )
       warn(
         '.githooks/pre-commit does not delegate to the Code Foundry gate; run `npx code-foundry sync`'
+      )
+    // core.hooksPath shadows every machine-level hook behind it (secret
+    // guards, git-lfs). The generated hook chains to the machine's pre-commit
+    // when sync recorded one, so a machine hook without the chain marker in
+    // the installed hook is exactly the silent-disable bug chaining exists to
+    // prevent.
+    const hookText = existsSync(hookFile) ? readFileSync(hookFile, 'utf8') : ''
+    const machineDirs = [
+      git(target, ['config', '--get', 'code-foundry.previousHooksPath']),
+      git(target, ['config', '--global', '--get', 'core.hooksPath']),
+      `${git(target, ['rev-parse', '--git-common-dir']) || '.git'}/hooks`,
+    ].filter((dir) => dir && dir !== '.githooks' && dir !== './.githooks')
+    const machinePreCommit = machineDirs.some((dir) => {
+      const candidate = isAbsolute(dir) ? join(dir, 'pre-commit') : join(target, dir, 'pre-commit')
+      try {
+        return statSync(candidate).isFile()
+      } catch {
+        return false
+      }
+    })
+    if (machinePreCommit && !hookText.includes('machine_hook'))
+      warn(
+        'A machine-level pre-commit exists but the installed hook does not chain to it; run `npx code-foundry sync`'
       )
   }
   if (
