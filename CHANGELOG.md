@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.5...v1.46.6) (2026-10-08)
+
+
+### Bug Fixes
+
+* **pre-commit:** build before lint and type-check when the gate opts in ([#748](https://github.com/0xPlayerOne/code-foundry/issues/748)) ([f56454f](https://github.com/0xPlayerOne/code-foundry/commit/f56454f313a1a5b802b8a17b09d850902de1ba55)), closes [#691](https://github.com/0xPlayerOne/code-foundry/issues/691)
+
 ## [1.46.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.4...v1.46.5) (2026-10-08)
 
 
