@@ -157,17 +157,21 @@ function lintContracts(consumer, candidate, destination, actionlint, version) {
     paths.push(target)
   }
   // Check all candidate callees as well as rendered callers, without executing them.
-  // actionlint v1.7.12 (still the latest release as of 2026-10-07) predates
+  // actionlint v1.7.12 (still the latest release as of 2026-10-08) predates
   // the June 2026 step parallelism keywords (background/wait/wait-all/
   // cancel/parallel), so files using them are excluded from this pass until
   // actionlint ships support — GitHub's own loader accepts the syntax, which
   // is verified by live runs and pinned in test/billing-lanes.test.mjs.
-  // Restore the removal of this exclusion when rhysd/actionlint releases
-  // post-parallel support.
-  const actionlintPendingParallelSyntax = new Set(['validation-billing.yml'])
-  const workflows = readdirSync(join(destination, '.github/workflows')).filter(
-    (name) => /\.ya?ml$/.test(name) && !actionlintPendingParallelSyntax.has(name)
-  )
+  // The exclusion is content-based so repository-owned workflows adopting the
+  // keywords (adea's desktop-shell, for one) stay covered without list
+  // maintenance. Restore the removal of this exclusion when
+  // rhysd/actionlint releases post-parallel support.
+  const pendingParallelSyntax = /(?:^|\n)\s*(?:background|wait|wait-all|cancel|parallel):/m
+  const workflows = readdirSync(join(destination, '.github/workflows')).filter((name) => {
+    if (!/\.ya?ml$/.test(name)) return false
+    const text = readFileSync(join(destination, '.github/workflows', name), 'utf8')
+    return !pendingParallelSyntax.test(text)
+  })
   run(
     actionlint,
     [
