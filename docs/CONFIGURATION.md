@@ -203,6 +203,27 @@ exists on disk. Task scripts that declare dependencies of their own, such as a
 Turborepo `typecheck` task with `dependsOn: ["^build"]`, still run them; drop
 that dependency to keep type checks build-free.
 
+### Machine-level hook chaining
+
+`core.hooksPath` names a single directory, so enabling `.githooks` would
+silence every hook in the machine's own hooks directory: secret guards,
+git-lfs, signing. Sync chains instead of replacing. The generated
+`.githooks/pre-commit` discovers a machine-level `pre-commit` at run time —
+from the hooks directory sync replaced (recorded as the
+`code-foundry.previousHooksPath` repository config), then the global
+`core.hooksPath`, then the checkout's default hooks directory — and runs it
+before the gate, so a cheap secret guard rejects before the heavier project
+checks. The committed hook stays machine-independent; the target is resolved
+on the machine that runs it.
+
+Hook names this repository does not own (`post-checkout`, `pre-push`,
+`commit-msg`, and the other client-side hooks) get delegating stubs in
+`.githooks` when a machine-level counterpart exists, which is what keeps
+git-lfs working after sync. Stubs are machine-local, gitignored, rewritten on
+every sync, and removed once the machine hook they mirrored disappears.
+`code-foundry doctor` warns when a machine-level pre-commit exists but the
+installed hook predates chaining.
+
 ## Release and branch policy
 
 | Key                       | Values                                                                           | Purpose                                                                 |

@@ -447,6 +447,9 @@ jobs:
           # when it validated, github.token after fallback. The token value
           # lives only in this masked env expression, never in step outputs.
           AUTO_MERGE: ${{ steps.credentials.outputs.auto_merge }}
+          # Read Actions ownership with the workflow credential, not an
+          # automation token that may only have release/PR write permissions.
+          VALIDATION_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && (secrets.CODE_FOUNDRY_TOKEN) || github.token }}
         run: |
           set -euo pipefail
@@ -464,12 +467,87 @@ jobs:
           fi
 
           for pr in "${release_prs[@]}"; do
-            PR_DRAFT=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            pr_state=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,headRefOid,headRefName \
+              --jq '[.isDraft, .headRefOid, .headRefName] | @tsv')
+            read -r PR_DRAFT PR_HEAD PR_BRANCH <<< "$pr_state"
+            if [[ ! "$PR_DRAFT" =~ ^(true|false)$ || ! "$PR_HEAD" =~ ^[a-f0-9]{40}$ ]]; then
+              echo 'Unable to verify generated release PR state.' >&2
+              exit 1
+            fi
+            case "$PR_BRANCH" in
+              release-please--branches--main|release-please--branches--main--*) ;;
+              *) echo 'Release PR head left the generated namespace; refusing readiness mutation.' >&2; exit 1 ;;
+            esac
             if [ "$AUTO_MERGE" = true ]; then
               if [ "$PR_DRAFT" = false ]; then
-                # A Release Please PR can be updated while already ready. Reset
-                # it so ready_for_review always starts validation for the exact
-                # current release head.
+                # A ready head already receives synchronize validation. Preserve
+                # its live/completed owner instead of cancelling and reallocating
+                # CI every time another queued main release run prepares it.
+                runs=$(GH_TOKEN="$VALIDATION_TOKEN" gh api \
+                  "repos/$GITHUB_REPOSITORY/actions/runs" --method GET \
+                  -f event=pull_request -f head_sha="$PR_HEAD" -f per_page=100)
+                validation=$(jq -er --arg head "$PR_HEAD" --arg branch "$PR_BRANCH" \
+                  --arg repo "$GITHUB_REPOSITORY" '
+                  def active: .status == "queued" or .status == "in_progress" or
+                    .status == "waiting" or .status == "pending" or .status == "requested";
+                  def valid_run:
+                    type == "object" and
+                    (.id | type == "number" and . > 0 and floor == .) and
+                    (.run_attempt | type == "number" and . >= 1 and floor == .) and
+                    (.head_sha | type == "string" and test("^[a-f0-9]{40}$")) and
+                    (.head_branch | type == "string" and length > 0) and
+                    (.event | type == "string" and length > 0) and
+                    (.repository | type == "object") and
+                    (.repository.full_name | type == "string" and length > 0) and
+                    (.path | type == "string" and length > 0) and
+                    ((active and has("conclusion") and .conclusion == null) or
+                     (.status == "completed" and
+                      (.conclusion == "success" or .conclusion == "failure" or
+                       .conclusion == "timed_out" or .conclusion == "action_required" or
+                       .conclusion == "cancelled" or .conclusion == "skipped" or
+                       .conclusion == "neutral")));
+                  if (.workflow_runs | type) != "array" or
+                     (.total_count | type) != "number" then
+                    error("Invalid validation owner response")
+                  elif .total_count != (.workflow_runs | length) then
+                    error("Incomplete validation owner response")
+                  elif any(.workflow_runs[]; valid_run | not) then
+                    error("Invalid validation run identity or state")
+                  else
+                    [.workflow_runs[] | (.path | split("@")[0]) as $workflow | select(
+                      .head_sha == $head and .head_branch == $branch and
+                      .event == "pull_request" and .repository.full_name == $repo and
+                      ($workflow == ".github/workflows/validation.yml" or
+                       $workflow == ".github/workflows/validation_self-ci.yml")
+                    )] | sort_by(.id) | last |
+                    if . == null then "missing"
+                    elif active or (.status == "completed" and .conclusion == "success") then "owned"
+                    elif .status == "completed" and
+                         (.conclusion == "failure" or .conclusion == "timed_out" or
+                          .conclusion == "action_required") then "failed"
+                    elif .status == "completed" and
+                         (.conclusion == "cancelled" or .conclusion == "skipped" or
+                          .conclusion == "neutral") then "missing"
+                    else error("Unconfirmed validation owner state") end
+                  end' <<< "$runs")
+                fresh_state=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
+                  --json isDraft,headRefOid,headRefName \
+                  --jq '[.isDraft, .headRefOid, .headRefName] | @tsv')
+                if [ "$fresh_state" != "$pr_state" ]; then
+                  echo 'Release PR state changed during validation lookup; refusing a stale readiness mutation.' >&2
+                  exit 1
+                fi
+                if [ "$validation" = owned ]; then
+                  echo "Release PR #$pr already has current-head validation; preserving readiness."
+                  continue
+                fi
+                if [ "$validation" = failed ]; then
+                  echo "Current-head validation failed for release PR #$pr; resolve or explicitly retry it before release." >&2
+                  exit 1
+                fi
+                # A missing, cancelled or skipped owner still needs the existing
+                # explicit ready_for_review transition with the validated token.
                 gh pr ready --undo "$pr" --repo "$GITHUB_REPOSITORY"
               fi
               gh pr ready "$pr" --repo "$GITHUB_REPOSITORY"
