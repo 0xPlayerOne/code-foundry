@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { describe, it } from 'node:test'
 import {
   chunkFiles,
+  freshCloneBuildHint,
   parseStagedFiles,
   planPreCommit,
   preCommitBuildEnabled,
@@ -151,6 +152,22 @@ function gate(root) {
   return { status: result.status, calls, stderr: result.stderr }
 }
 
+describe('freshCloneBuildHint', () => {
+  it('explains the fresh-clone failure mode only when the build is disabled but exists', () => {
+    const hint = freshCloneBuildHint({ build: false, buildScript: true, packageManager: 'bun' })
+    assert.match(hint, /"bun run build"/)
+    assert.match(hint, /pre_commit_build: true/)
+    assert.equal(
+      freshCloneBuildHint({ build: true, buildScript: true, packageManager: 'bun' }),
+      undefined
+    )
+    assert.equal(
+      freshCloneBuildHint({ build: false, buildScript: false, packageManager: 'bun' }),
+      undefined
+    )
+  })
+})
+
 describe('change-aware pre-commit gate', () => {
   it('does nothing when nothing is staged', () => {
     const root = fixture()
@@ -212,7 +229,11 @@ describe('change-aware pre-commit gate', () => {
       stage(root, { 'src/a.ts': 'export const a = 1\n' })
       const { status, calls } = gate(root)
       assert.equal(status, 0)
-      assert.equal(calls.at(-1), 'bun run build')
+      assert.equal(calls.filter((call) => call === 'bun run build').length, 1)
+      assert.ok(
+        calls.indexOf('bun run build') < calls.indexOf('bun run typecheck'),
+        'the build must precede type-check, mirroring CI'
+      )
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -245,6 +266,23 @@ describe('change-aware pre-commit gate', () => {
       const { status, calls } = gate(root)
       assert.equal(status, 0)
       assert.deepEqual(calls, [])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('builds before lint and type-check when pre_commit_build opts in', () => {
+    const root = fixture('pre_commit_build: true\n')
+    try {
+      stage(root, { 'src/a.ts': 'export const a = 1\n' })
+      const { status, calls } = gate(root)
+      assert.equal(status, 0)
+      assert.deepEqual(calls, [
+        'bunx --no-install oxfmt --check --no-error-on-unmatched-pattern src/a.ts',
+        'bun run build',
+        'bunx --no-install oxlint --deny-warnings --no-error-on-unmatched-pattern src/a.ts',
+        'bun run typecheck',
+      ])
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
