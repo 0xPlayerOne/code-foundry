@@ -5,6 +5,21 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import test from 'node:test'
 import { discoverRepositories } from '../src/commands/fleet-core.mjs'
+
+// The upgrade flow commits through the generated hook, which now chains to the
+// machine's own hooks (secret guards, git-lfs). Point the global git config at
+// an empty sandbox so these tests never invoke the developer's real machine
+// hooks; each test sandbox also disables the chain with a scoped config.
+const fleetMachineIsolation = mkdtempSync(join(tmpdir(), 'foundry-fleet-machine-'))
+const fleetRealGlobalConfig = process.env.GIT_CONFIG_GLOBAL
+process.env.GIT_CONFIG_GLOBAL = join(fleetMachineIsolation, 'gitconfig')
+writeFileSync(process.env.GIT_CONFIG_GLOBAL, '')
+test.after(() => {
+  if (fleetRealGlobalConfig === undefined) delete process.env.GIT_CONFIG_GLOBAL
+  else process.env.GIT_CONFIG_GLOBAL = fleetRealGlobalConfig
+  rmSync(fleetMachineIsolation, { recursive: true, force: true })
+})
+
 import { syncRepository } from '../src/commands/sync.mjs'
 import {
   configDrift,
