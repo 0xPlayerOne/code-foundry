@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -65,4 +65,21 @@ test('candidate source identity is mandatory before any install', () => {
     () => qualifyCandidate({ packageFile: '/missing', sourceSha: 'main', reportPath: '/missing' }),
     /exact.*SHA/
   )
+})
+
+test('the actionlint pass excludes pending parallel syntax by content, not by filename', () => {
+  // actionlint v1.7.12 predates the step-parallelism keywords; the
+  // qualification skips any workflow whose text uses them so
+  // repository-owned adopters (adea's desktop-shell) stay covered without
+  // list maintenance.
+  const source = readFileSync(join(process.cwd(), 'src/lib/consumer-qualification.mjs'), 'utf8')
+  const line = source
+    .split('\n')
+    .find((candidate) => candidate.includes('const pendingParallelSyntax ='))
+  assert.ok(line, 'the qualification declares the pending-syntax pattern')
+  for (const keyword of ['background', 'wait', 'wait-all', 'cancel', 'parallel']) {
+    assert.ok(line.includes(keyword), `the pattern covers ${keyword}`)
+  }
+  assert.ok(!source.includes("new Set(['validation-billing.yml'])"), 'the filename list is gone')
+  assert.match(source, /pendingParallelSyntax\.test\(text\)/, 'files are filtered by content')
 })
