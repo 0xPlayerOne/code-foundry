@@ -82,6 +82,23 @@ to run generated gates for drafts. Cloudflare callers use their equivalent
 `draft-protection: false` input. These opt-outs do not remove Draft Guard or
 draft-PR automation; they only allow the protected gates to run for drafts.
 
+Generated release PR preparation preserves a ready head when the canonical
+generated `.github/workflows/validation.yml` (or Code Foundry
+`validation_self-ci.yml`) pull-request run for that exact head, branch, and
+repository is the newest matching run and is active or successful. API workflow
+paths may include a Git ref suffix; ownership compares the canonical filename.
+The workflow credential reads Actions ownership; the validated automation credential still performs readiness writes.
+A newer failed qualification blocks release preparation until it is resolved or
+explicitly retried. Missing, cancelled, or skipped validation still receives the
+explicit draft/ready transition; a new draft receives its first readiness event.
+An unavailable or malformed ownership response, an incomplete Actions page, or a
+PR state change during the lookup fails before mutation. An older live run cannot
+mask a newer failed qualification. Invalid automation credentials retain the
+manual draft fallback. This changes readiness only: release creation, qualification,
+tag publication, and branch-policy-gated exact-head merging still run through
+the existing release pipeline. Consumers must adopt the fixed reusable workflow
+pin before they receive this behavior; older pins still reset ready heads.
+
 ## Billing pause
 
 Code Foundry consumers can stop all generated jobs from allocating GitHub-hosted
