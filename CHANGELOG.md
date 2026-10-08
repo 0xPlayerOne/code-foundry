@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.6...v1.47.0) (2026-10-08)
+
+
+### Features
+
+* **release:** configurable dev channel on top of batched releases ([#749](https://github.com/0xPlayerOne/code-foundry/issues/749)) ([8fd8556](https://github.com/0xPlayerOne/code-foundry/commit/8fd85567a1a89735ab0db589649741253fbbeb21)), closes [#699](https://github.com/0xPlayerOne/code-foundry/issues/699)
+
 ## [1.46.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.5...v1.46.6) (2026-10-08)
 
 
