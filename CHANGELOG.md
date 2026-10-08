@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.3...v1.46.4) (2026-10-08)
+
+
+### Bug Fixes
+
+* **release:** preserve current-head validation ownership ([#737](https://github.com/0xPlayerOne/code-foundry/issues/737)) ([aa8bfcf](https://github.com/0xPlayerOne/code-foundry/commit/aa8bfcfbfcd3c213d15ba9e1fbfb5c65ab8ddb6b))
+
 ## [1.46.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.46.2...v1.46.3) (2026-10-07)
 
 
