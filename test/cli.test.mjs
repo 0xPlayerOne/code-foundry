@@ -838,7 +838,8 @@ describe('code-foundry CLI', () => {
       for (const [, shell] of validation.matchAll(/```sh\n([\s\S]*?)```/g)) {
         assert.doesNotMatch(shell, /Security and dependency audits/)
       }
-      assert.match(validation, /```\n\nSecurity and dependency audits/)
+      const prose = validation.replace(/```[\s\S]*?```/g, '')
+      assert.match(prose, /^Security and dependency audits/m)
       assert.match(validation, /npx code-foundry doctor/)
     }
   })
