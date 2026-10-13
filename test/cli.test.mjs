@@ -822,6 +822,25 @@ describe('code-foundry CLI', () => {
       assert.match(validation, /```\n\nSecurity and dependency audits/)
       assert.match(validation, /node src\/runtime\.mjs ci performance/)
     }
+    for (const guide of [
+      readFileSync(join(process.cwd(), '.github/CONTRIBUTING.md'), 'utf8'),
+      readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8'),
+    ]) {
+      const validation = guide.match(
+        /<!-- code-foundry-managed: local-validation -->([\s\S]*?)<!-- \/code-foundry-managed: local-validation -->/
+      )?.[1]
+      assert.ok(validation)
+      assert.doesNotMatch(validation, /^npm (?:run|test)/m)
+      const commands = [...validation.matchAll(/^npx code-foundry ((?:plan|check) .+)$/gm)]
+      assert.equal(commands.length, 3)
+      for (const [, command] of commands)
+        assert.doesNotThrow(() => parseAgentArgs(command.split(' ')))
+      for (const [, shell] of validation.matchAll(/```sh\n([\s\S]*?)```/g)) {
+        assert.doesNotMatch(shell, /Security and dependency audits/)
+      }
+      assert.match(validation, /```\n\nSecurity and dependency audits/)
+      assert.match(validation, /npx code-foundry doctor/)
+    }
   })
 
   it('merges managed pull-request policy into agent-owned documents on resync', () => {
