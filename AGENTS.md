@@ -194,7 +194,7 @@ npx code-foundry check --tier audit
 
 `plan` discovers tasks without running them. `check` invokes the shared runtime;
 `fast` includes CI tasks, unit tests and performance, while `audit` adds
-integration, E2E and smoke. See [agent validation](docs/agent-validation.md).
+integration, E2E and smoke.
 
 From a Code Foundry source checkout only, the shared runtime is also available.
 The paths below are relative to that checkout, not a consumer repository. The

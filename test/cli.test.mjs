@@ -799,8 +799,14 @@ describe('code-foundry CLI', () => {
     assert.equal(existsSync(join(root, 'src/runtime.mjs')), false)
     assert.equal(existsSync(join(root, '.github/CONTRIBUTING.md')), true)
     assert.equal(existsSync(join(process.cwd(), 'src/runtime.mjs')), true)
-    for (const guide of [source, generated]) {
+    for (const [guide, guideRoot] of [
+      [source, process.cwd()],
+      [generated, root],
+    ]) {
       assert.match(guide, /They complement `\.github\/CONTRIBUTING\.md`/)
+      for (const [, target] of guide.matchAll(/\]\(([^)]+)\)/g)) {
+        if (!target.startsWith('https://')) assert.ok(existsSync(join(guideRoot, target)))
+      }
       assert.match(guide, /From a Code Foundry source checkout only/)
       const validation = guide.match(
         /<!-- code-foundry-managed: validation -->([\s\S]*?)<!-- \/code-foundry-managed: validation -->/
