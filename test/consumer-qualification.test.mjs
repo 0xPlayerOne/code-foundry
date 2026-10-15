@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  actionlintEligibleWorkflows,
   digest,
   FIXTURES,
   localizeCalls,
@@ -65,4 +66,34 @@ test('candidate source identity is mandatory before any install', () => {
     () => qualifyCandidate({ packageFile: '/missing', sourceSha: 'main', reportPath: '/missing' }),
     /exact.*SHA/
   )
+})
+
+test('the actionlint pass filters pending parallel syntax by content, not filename', (t) => {
+  const workflows = join(temporary(t), '.github', 'workflows')
+  mkdirSync(workflows, { recursive: true })
+  const keywords = ['background', 'wait', 'wait-all', 'cancel', 'parallel']
+  for (const keyword of keywords) {
+    writeFileSync(
+      join(workflows, `pending-sequence-${keyword}.yml`),
+      `jobs:\n  check:\n    steps:\n      - ${keyword}:\n          run: echo pending\n`
+    )
+    writeFileSync(
+      join(workflows, `pending-mapping-${keyword}.yaml`),
+      `workflow:\n  ${keyword}:\n    enabled: true\n`
+    )
+  }
+  writeFileSync(
+    join(workflows, 'validation-billing.yml'),
+    'jobs:\n  check:\n    steps:\n      - run: echo parallel\n'
+  )
+  writeFileSync(
+    join(workflows, 'validation.yml'),
+    'jobs:\n  check:\n    steps:\n      - run: echo ok\n'
+  )
+  writeFileSync(join(workflows, 'README.md'), 'parallel:\n')
+
+  assert.deepEqual(actionlintEligibleWorkflows(workflows).toSorted(), [
+    'validation-billing.yml',
+    'validation.yml',
+  ])
 })

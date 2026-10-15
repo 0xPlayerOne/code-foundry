@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.47.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.3...v1.47.4) (2026-10-15)
+
+
+### Documentation
+
+* fix generated agent contribution and validation references ([#760](https://github.com/0xPlayerOne/code-foundry/issues/760)) ([c3564c9](https://github.com/0xPlayerOne/code-foundry/commit/c3564c92cb168449317afe2e40359144bf7a0c71))
+
+## [1.47.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.2...v1.47.3) (2026-10-09)
+
+
+### Maintenance
+
+* **fleet:** point the manifest at the rollout worktrees and filter adea's actionlint ([#757](https://github.com/0xPlayerOne/code-foundry/issues/757)) ([55bae8b](https://github.com/0xPlayerOne/code-foundry/commit/55bae8bf99a022bfa03294972d89a3cca20a6203))
+
+## [1.47.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.1...v1.47.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **qualification:** exclude pending parallel syntax by content, not filename ([#755](https://github.com/0xPlayerOne/code-foundry/issues/755)) ([1f7cae8](https://github.com/0xPlayerOne/code-foundry/commit/1f7cae8167002061850e56e3dc0fa800a69d7be9))
+
 ## [1.47.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.0...v1.47.1) (2026-10-08)
 
 

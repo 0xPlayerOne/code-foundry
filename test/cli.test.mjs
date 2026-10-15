@@ -58,6 +58,7 @@ import { doctor, rustManifestPaths } from '../src/commands/doctor.mjs'
 import { doctorGithub } from '../src/lib/github-doctor.mjs'
 import { reconcileRelease, validateReleasePullRequestDiffs } from '../src/commands/release.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
+import { parseAgentArgs } from '../src/commands/agent-check.mjs'
 import {
   buildPausedRuleset,
   buildResumedRuleset,
@@ -780,6 +781,67 @@ describe('code-foundry CLI', () => {
       /Unsupported draft_protection: maybe/
     )
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it('renders agent guidance with consumer commands and checkout-only runtime examples', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-agent-references-'))
+    t.after(() => rmSync(root, { recursive: true, force: true }))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: validation\n'
+    )
+    syncRepository({ target: root, source: process.cwd(), configureHooks: false })
+    const generated = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+    const source = readFileSync(join(process.cwd(), 'AGENTS.md'), 'utf8')
+    assert.equal(existsSync(join(root, 'CONTRIBUTING.md')), false)
+    assert.equal(existsSync(join(root, 'src/runtime.mjs')), false)
+    assert.equal(existsSync(join(root, '.github/CONTRIBUTING.md')), true)
+    assert.equal(existsSync(join(process.cwd(), 'src/runtime.mjs')), true)
+    for (const [guide, guideRoot] of [
+      [source, process.cwd()],
+      [generated, root],
+    ]) {
+      assert.match(guide, /They complement `\.github\/CONTRIBUTING\.md`/)
+      for (const [, target] of guide.matchAll(/\]\(([^)]+)\)/g)) {
+        if (!target.startsWith('https://')) assert.ok(existsSync(join(guideRoot, target)))
+      }
+      assert.match(guide, /From a Code Foundry source checkout only/)
+      const validation = guide.match(
+        /<!-- code-foundry-managed: validation -->([\s\S]*?)<!-- \/code-foundry-managed: validation -->/
+      )?.[1]
+      assert.ok(validation)
+      const commands = [...validation.matchAll(/^npx code-foundry (.+)$/gm)]
+      assert.equal(commands.length, 3)
+      for (const [, command] of commands)
+        assert.doesNotThrow(() => parseAgentArgs(command.split(' ')))
+      for (const [, shell] of validation.matchAll(/```sh\n([\s\S]*?)```/g)) {
+        assert.doesNotMatch(shell, /Security and dependency audits/)
+      }
+      assert.match(validation, /```\n\nSecurity and dependency audits/)
+      assert.match(validation, /node src\/runtime\.mjs ci performance/)
+    }
+    for (const guide of [
+      readFileSync(join(process.cwd(), '.github/CONTRIBUTING.md'), 'utf8'),
+      readFileSync(join(root, '.github/CONTRIBUTING.md'), 'utf8'),
+    ]) {
+      const validation = guide.match(
+        /<!-- code-foundry-managed: local-validation -->([\s\S]*?)<!-- \/code-foundry-managed: local-validation -->/
+      )?.[1]
+      assert.ok(validation)
+      assert.doesNotMatch(validation, /^npm (?:run|test)/m)
+      const commands = [...validation.matchAll(/^npx code-foundry ((?:plan|check) .+)$/gm)]
+      assert.equal(commands.length, 3)
+      for (const [, command] of commands)
+        assert.doesNotThrow(() => parseAgentArgs(command.split(' ')))
+      for (const [, shell] of validation.matchAll(/```sh\n([\s\S]*?)```/g)) {
+        assert.doesNotMatch(shell, /Security and dependency audits/)
+      }
+      const prose = validation.replace(/```[\s\S]*?```/g, '')
+      assert.match(prose, /^Security and dependency audits/m)
+      assert.match(validation, /npx code-foundry doctor/)
+    }
   })
 
   it('merges managed pull-request policy into agent-owned documents on resync', () => {
