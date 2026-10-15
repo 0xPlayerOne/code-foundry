@@ -533,6 +533,9 @@ jobs:
   type-check:
     name: Type-Check
     if: vars.CI_BILLING_PAUSED != 'true'
+    permissions:
+      contents: read
+      issues: read
     runs-on: ${{ inputs.ci-runner }}
     timeout-minutes: 30
     steps:
@@ -576,6 +579,8 @@ jobs:
       - name: Type-Check
         id: execute
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci type_check
       - name: Retain task receipt
         if: >-

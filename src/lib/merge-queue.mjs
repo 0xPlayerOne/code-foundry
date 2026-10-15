@@ -110,6 +110,7 @@ on:
 permissions:
   actions: read
   contents: read
+  issues: read
   packages: read
   security-events: write
 

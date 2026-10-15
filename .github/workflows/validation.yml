@@ -104,6 +104,12 @@ jobs:
   ci:
     name: CI
     if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    # Type-Check reads the issue-backed requirements ledger with github.token.
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      packages: read
     uses: ./.github/workflows/ci.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}

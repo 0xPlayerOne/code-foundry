@@ -166,12 +166,7 @@ function lintContracts(consumer, candidate, destination, actionlint, version) {
   // keywords (adea's desktop-shell, for one) stay covered without list
   // maintenance. Restore the removal of this exclusion when
   // rhysd/actionlint releases post-parallel support.
-  const pendingParallelSyntax = /(?:^|\n)\s*(?:background|wait|wait-all|cancel|parallel):/m
-  const workflows = readdirSync(join(destination, '.github/workflows')).filter((name) => {
-    if (!/\.ya?ml$/.test(name)) return false
-    const text = readFileSync(join(destination, '.github/workflows', name), 'utf8')
-    return !pendingParallelSyntax.test(text)
-  })
+  const workflows = actionlintEligibleWorkflows(join(destination, '.github/workflows'))
   run(
     actionlint,
     [
@@ -182,6 +177,15 @@ function lintContracts(consumer, candidate, destination, actionlint, version) {
     destination
   )
   return paths.length
+}
+
+/** @param {string} workflowsDirectory */
+export function actionlintEligibleWorkflows(workflowsDirectory) {
+  const pendingParallelSyntax = /^[ \t]*(?:-[ \t]+)?(?:background|wait|wait-all|cancel|parallel):/m
+  return readdirSync(workflowsDirectory).filter((name) => {
+    if (!/\.ya?ml$/.test(name)) return false
+    return !pendingParallelSyntax.test(readFileSync(join(workflowsDirectory, name), 'utf8'))
+  })
 }
 
 /** @param {{ packageFile: string, sourceSha: string, reportPath: string, actionlint?: string }} options */
