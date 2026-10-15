@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.4...v1.47.5) (2026-10-15)
+
+
+### Bug Fixes
+
+* validation-issue-read-v1471 ([#759](https://github.com/0xPlayerOne/code-foundry/issues/759)) ([7119b3e](https://github.com/0xPlayerOne/code-foundry/commit/7119b3e2baebfbfdd47d32428cbf5df2f2079afa))
+
 ## [1.47.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.3...v1.47.4) (2026-10-15)
 
 
