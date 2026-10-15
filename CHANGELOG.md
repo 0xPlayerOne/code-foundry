@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.3...v1.47.4) (2026-10-15)
+
+
+### Documentation
+
+* fix generated agent contribution and validation references ([#760](https://github.com/0xPlayerOne/code-foundry/issues/760)) ([c3564c9](https://github.com/0xPlayerOne/code-foundry/commit/c3564c92cb168449317afe2e40359144bf7a0c71))
+
 ## [1.47.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.2...v1.47.3) (2026-10-09)
 
 
