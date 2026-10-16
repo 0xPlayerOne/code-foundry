@@ -962,15 +962,12 @@ runs:
           `bun${tryVersion('bun')}`,
           `vp${vitePlus}`,
         ].map(clean).join('-')
-        // VITE_CACHE_PATH relocates the cache; it must be absolute.
+        // Inherited runner env counts too; the post-job save re-reads the cache `path`.
         const custom = process.env.VITE_CACHE_PATH
-        const paths = custom
-          ? [resolve(custom)]
-          : ['node_modules/.vite/task-cache', '**/node_modules/.vite/task-cache']
+        appendFileSync(process.env.GITHUB_ENV, `CODE_FOUNDRY_VITE_CACHE_PATH=${custom ? resolve(custom) : ''}\n`)
         // Without a resolvable version the namespace cannot isolate releases.
         appendFileSync(process.env.GITHUB_OUTPUT, `cacheable=${vitePlus !== 'unknown'}\n`)
         appendFileSync(process.env.GITHUB_OUTPUT, `namespace=${namespace}\n`)
-        appendFileSync(process.env.GITHUB_OUTPUT, `cache_paths<<CACHE_PATHS_EOF\n${paths.join('\n')}\nCACHE_PATHS_EOF\n`)
         console.log(`Vite+ cache namespace: ${namespace}`)
         NODE
     - name: Cache Vite+ tasks
@@ -978,7 +975,11 @@ runs:
       uses: ./.github/actions/cache
       with:
         save: ${{ inputs.cache-save }}
-        path: ${{ steps.vite-plus-toolchain.outputs.cache_paths }}
+        # Static: the post-job save re-reads this, and step outputs are empty then.
+        path: |
+          node_modules/.vite/task-cache
+          **/node_modules/.vite/task-cache
+          ${{ env.CODE_FOUNDRY_VITE_CACHE_PATH }}
         # The run/attempt suffix saves a refreshed entry on every push; restore
         # keys never leave the compatibility namespace.
         key: ${{ steps.vite-plus-toolchain.outputs.namespace }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '.mise.toml', 'mise.lock') }}-${{ hashFiles('**/vite.config.*') }}-${{ github.run_id }}-${{ github.run_attempt }}

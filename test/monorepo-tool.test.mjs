@@ -7,12 +7,13 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
@@ -833,7 +834,9 @@ function parseOutputs(text) {
 function toolchainOutputs(root, env = {}) {
   writeFileSync(join(root, '.toolchain.mjs.sh'), stepScript('Detect Vite+ toolchain'))
   const output = join(root, '.github-output')
+  const envFile = join(root, '.github-env')
   writeFileSync(output, '')
+  writeFileSync(envFile, '')
   const result = spawnSync('bash', [join(root, '.toolchain.mjs.sh')], {
     cwd: root,
     encoding: 'utf8',
@@ -841,13 +844,17 @@ function toolchainOutputs(root, env = {}) {
       PATH: process.env.PATH,
       HOME: process.env.HOME,
       GITHUB_OUTPUT: output,
+      GITHUB_ENV: envFile,
       REPO_FOUNDRY_RUNNER_OS: 'Linux',
       REPO_FOUNDRY_RUNNER_ARCH: 'X64',
       ...env,
     },
   })
   assert.equal(result.status, 0, result.stderr)
-  return parseOutputs(readFileSync(output, 'utf8'))
+  return {
+    ...parseOutputs(readFileSync(output, 'utf8')),
+    exported: parseOutputs(readFileSync(envFile, 'utf8')),
+  }
 }
 
 test('the Vite+ cache namespace isolates OS, architecture, runtime, and Vite+ version', (t) => {
@@ -859,7 +866,6 @@ test('the Vite+ cache namespace isolates OS, architecture, runtime, and Vite+ ve
   assert.match(linux.namespace, /^vite-plus-v1-Linux-X64-node/)
   assert.ok(linux.namespace.includes(`node${process.version}`), linux.namespace)
   assert.match(linux.namespace, /-bun[^-]*-vp9\.9\.9$/)
-  assert.equal(linux.cache_paths, 'node_modules/.vite/task-cache\n**/node_modules/.vite/task-cache')
 
   const arm = toolchainOutputs(root, { REPO_FOUNDRY_RUNNER_ARCH: 'ARM64' })
   assert.notEqual(arm.namespace, linux.namespace)
@@ -881,11 +887,39 @@ test('the Vite+ cache namespace isolates OS, architecture, runtime, and Vite+ ve
   assert.match(linux.namespace, /^[A-Za-z0-9._-]+$/)
 })
 
-test('VITE_CACHE_PATH relocates the cached directory', (t) => {
-  const root = fixture(t, { 'package.json': { name: 'a' } })
+test('the Vite+ cache path survives the post-job save', () => {
+  const step = setupAction.slice(setupAction.indexOf('- name: Cache Vite+ tasks'))
+  const path = step.match(/^ {8}path: \|\n((?: {10}.+\n)+)/m)?.[1]
+  assert.ok(path, 'path is a block scalar')
+  // The post-job save re-evaluates this input, where step outputs are empty
+  // (the first Actions run logged "Input required and not supplied: path").
+  assert.doesNotMatch(path, /steps\./)
+  assert.match(path, /node_modules\/\.vite\/task-cache/)
+  assert.match(path, /\$\{\{ env\.CODE_FOUNDRY_VITE_CACHE_PATH \}\}/)
+  assert.doesNotMatch(setupAction, /cache_paths/)
+})
+
+test('VITE_CACHE_PATH from any environment source relocates the cached directory', (t) => {
+  const root = fixture(t, {
+    'package.json': { name: 'a' },
+    'node_modules/vite-plus/package.json': { name: 'vite-plus', version: '9.9.9' },
+  })
+  // The step process sees the inherited runner environment, not just
+  // workflow/job/step `env:`, so the value is read from process.env and
+  // published under the fixed name the cache `path` references.
   const custom = join(tmpdir(), 'foundry-custom-vite-cache')
-  const outputs = toolchainOutputs(root, { VITE_CACHE_PATH: custom })
-  assert.equal(outputs.cache_paths, custom)
+  assert.equal(
+    toolchainOutputs(root, { VITE_CACHE_PATH: custom }).exported.CODE_FOUNDRY_VITE_CACHE_PATH,
+    custom
+  )
+  // The documented override is absolute; a relative value is resolved, never dropped.
+  assert.equal(
+    toolchainOutputs(root, { VITE_CACHE_PATH: 'relative/cache' }).exported
+      .CODE_FOUNDRY_VITE_CACHE_PATH,
+    resolve(realpathSync(root), 'relative/cache')
+  )
+  // Unset leaves the default directories only (an empty line in `path`).
+  assert.equal(toolchainOutputs(root).exported.CODE_FOUNDRY_VITE_CACHE_PATH, '')
 })
 
 test('the Vite+ cache is restored after Install and every node_modules archive', () => {
@@ -912,7 +946,6 @@ test('the Vite+ cache key rolls per run and never crosses a compatibility namesp
   assert.match(detect, /steps\.profile\.outputs\.vite_plus_task == 'true'/)
   assert.match(step, /if: steps\.vite-plus-toolchain\.outputs\.cacheable == 'true'/)
   assert.match(step, /save: \$\{\{ inputs\.cache-save \}\}/)
-  assert.match(step, /path: \$\{\{ steps\.vite-plus-toolchain\.outputs\.cache_paths \}\}/)
   assert.doesNotMatch(step, /turbo/i)
 
   const key = step.match(/^ {8}key: (.+)$/m)?.[1] ?? ''

@@ -45,8 +45,8 @@ keys fall back by lockfiles, job, then any job, but never leave the namespace
 Task does not fingerprint the Node or Bun binary. If the `vite-plus` version
 cannot be resolved, nothing is restored or saved.
 
-If `VITE_CACHE_PATH` (absolute) is set, Vite+ writes its cache there and the
-setup action caches that directory instead.
+If `VITE_CACHE_PATH` (absolute, from any environment source) is set, Vite+
+writes its cache there and the setup action caches that directory too.
 
 Vite+ has no remote cache and this repository does not configure one.
 
