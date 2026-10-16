@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.5...v1.48.0) (2026-10-16)
+
+
+### Features
+
+* add opt-in Vite+ task runner support ([#763](https://github.com/0xPlayerOne/code-foundry/issues/763)) ([f7970cd](https://github.com/0xPlayerOne/code-foundry/commit/f7970cdf1c1880aaee159d2de79ba043f93711a7))
+
 ## [1.47.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.4...v1.47.5) (2026-10-15)
 
 
