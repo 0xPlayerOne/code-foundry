@@ -1,6 +1,20 @@
 name: Repository Setup
 description: Select mise or native language tooling and optionally install project dependencies.
 
+outputs:
+  vite-plus-cacheable:
+    description: Whether the Vite+ task cache is enabled for this setup.
+    value: ${{ steps.vite-plus-cache-contract.outputs.cacheable }}
+  vite-plus-cache-path:
+    description: Paths to pass to the Vite+ task cache save action.
+    value: ${{ steps.vite-plus-cache-contract.outputs.path }}
+  vite-plus-cache-key:
+    description: Primary key to pass to the Vite+ task cache save action.
+    value: ${{ steps.vite-plus-cache-contract.outputs.key }}
+  vite-plus-cache-save:
+    description: Aggregated save intent to pass to the Vite+ task cache save action.
+    value: ${{ steps.vite-plus-cache-contract.outputs.save }}
+
 inputs:
   install:
     description: Install dependencies for the detected project ecosystems.
@@ -35,7 +49,7 @@ inputs:
     required: false
     default: auto
   cache-save:
-    description: Save restored caches after the job completes; disable to avoid post-job archive work in parallel jobs.
+    description: Save restored caches after tasks; the explicit Vite+ save action also uses this intent. Disable to avoid archive work in parallel jobs.
     required: false
     default: 'true'
   cache-packages:
@@ -962,27 +976,66 @@ runs:
           `bun${tryVersion('bun')}`,
           `vp${vitePlus}`,
         ].map(clean).join('-')
-        // VITE_CACHE_PATH relocates the cache; it must be absolute.
+        // Inherited runner env counts too; publish the resolved path for the
+        // explicit save action that runs after the task.
         const custom = process.env.VITE_CACHE_PATH
-        const paths = custom
-          ? [resolve(custom)]
-          : ['node_modules/.vite/task-cache', '**/node_modules/.vite/task-cache']
+        const customPath = custom ? resolve(custom) : ''
         // Without a resolvable version the namespace cannot isolate releases.
         appendFileSync(process.env.GITHUB_OUTPUT, `cacheable=${vitePlus !== 'unknown'}\n`)
         appendFileSync(process.env.GITHUB_OUTPUT, `namespace=${namespace}\n`)
-        appendFileSync(process.env.GITHUB_OUTPUT, `cache_paths<<CACHE_PATHS_EOF\n${paths.join('\n')}\nCACHE_PATHS_EOF\n`)
+        appendFileSync(process.env.GITHUB_OUTPUT, `custom_path_b64=${Buffer.from(customPath).toString('base64')}\n`)
         console.log(`Vite+ cache namespace: ${namespace}`)
         NODE
-    - name: Cache Vite+ tasks
+    - name: Publish Vite+ cache contract
+      id: vite-plus-cache-contract
       if: steps.vite-plus-toolchain.outputs.cacheable == 'true'
-      uses: ./.github/actions/cache
-      with:
-        save: ${{ inputs.cache-save }}
-        path: ${{ steps.vite-plus-toolchain.outputs.cache_paths }}
-        # The run/attempt suffix saves a refreshed entry on every push; restore
-        # keys never leave the compatibility namespace.
-        key: ${{ steps.vite-plus-toolchain.outputs.namespace }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '.mise.toml', 'mise.lock') }}-${{ hashFiles('**/vite.config.*') }}-${{ github.run_id }}-${{ github.run_attempt }}
-        restore-keys: |
+      shell: bash
+      env:
+        VITE_PLUS_CUSTOM_CACHE_PATH_B64: ${{ steps.vite-plus-toolchain.outputs.custom_path_b64 }}
+        VITE_PLUS_CACHE_KEY: ${{ steps.vite-plus-toolchain.outputs.namespace }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '.mise.toml', 'mise.lock') }}-${{ hashFiles('**/vite.config.*') }}-${{ github.run_id }}-${{ github.run_attempt }}
+        VITE_PLUS_CACHE_RESTORE_KEYS: |
           ${{ steps.vite-plus-toolchain.outputs.namespace }}-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '.mise.toml', 'mise.lock') }}-
           ${{ steps.vite-plus-toolchain.outputs.namespace }}-${{ github.workflow }}-${{ github.job }}-
           ${{ steps.vite-plus-toolchain.outputs.namespace }}-
+        VITE_PLUS_CACHE_SAVE: ${{ inputs.cache-save }}
+      run: |
+        node --input-type=module <<'NODE'
+        import { appendFileSync } from 'node:fs'
+        import { randomBytes } from 'node:crypto'
+
+        const paths = [
+          'node_modules/.vite/task-cache',
+          '**/node_modules/.vite/task-cache',
+          Buffer.from(process.env.VITE_PLUS_CUSTOM_CACHE_PATH_B64, 'base64').toString(),
+        ].filter(Boolean).join('\n')
+        const key = process.env.VITE_PLUS_CACHE_KEY
+        const restoreKeys = process.env.VITE_PLUS_CACHE_RESTORE_KEYS.trimEnd()
+        const save = process.env.CODE_FOUNDRY_VITE_CACHE_SAVE === 'true' ||
+          process.env.VITE_PLUS_CACHE_SAVE === 'true'
+        const output = process.env.GITHUB_OUTPUT
+        const environment = process.env.GITHUB_ENV
+
+        function writeMultiline(file, name, value) {
+          let delimiter
+          do {
+            delimiter = `CODE_FOUNDRY_${randomBytes(16).toString('hex')}`
+          } while (value.split('\n').includes(delimiter))
+          appendFileSync(file, `${name}<<${delimiter}\n${value}\n${delimiter}\n`)
+        }
+
+        for (const [name, value] of Object.entries({ cacheable: 'true', key, save: String(save) })) {
+          appendFileSync(output, `${name}=${value}\n`)
+        }
+        writeMultiline(output, 'path', paths)
+        writeMultiline(output, 'restore-keys', restoreKeys)
+        writeMultiline(environment, 'CODE_FOUNDRY_VITE_CACHE_PATHS', paths)
+        appendFileSync(environment, `CODE_FOUNDRY_VITE_CACHE_KEY=${key}\n`)
+        appendFileSync(environment, `CODE_FOUNDRY_VITE_CACHE_SAVE=${save}\n`)
+        NODE
+    - name: Cache Vite+ tasks
+      if: steps.vite-plus-cache-contract.outputs.cacheable == 'true'
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.vite-plus-cache-contract.outputs.path }}
+        key: ${{ steps.vite-plus-cache-contract.outputs.key }}
+        restore-keys: ${{ steps.vite-plus-cache-contract.outputs.restore-keys }}

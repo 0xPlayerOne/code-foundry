@@ -18,6 +18,7 @@
     "src",
     "docs",
     ".github",
+    "!.github/actions/**",
     ".githooks",
     ".editorconfig",
     ".gitattributes",
