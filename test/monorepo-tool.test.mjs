@@ -704,6 +704,10 @@ test('doctor reports unsatisfied monorepo_tool settings', (t) => {
 // --- setup action: profile detection, cache steps -------------------------
 
 const setupAction = readFileSync(join(packageRoot, '.github/actions/setup/action.yml'), 'utf8')
+const vitePlusCacheSaveAction = readFileSync(
+  join(packageRoot, '.github/actions/vite-plus-cache-save/action.yml'),
+  'utf8'
+)
 
 /** Extract and run the "Detect project profile" shell exactly as the action does. */
 function profileOutputs(root, { task = '' } = {}) {
@@ -799,8 +803,8 @@ test('setup profile opts into Vite+ and turns the Turbo cache off', (t) => {
 })
 
 /** The shell of a named action step, dedented as the runner would see it. */
-function stepScript(name) {
-  const lines = setupAction.split('\n')
+function actionStepScript(action, name) {
+  const lines = action.split('\n')
   const start = lines.findIndex((line) => line.trim() === `- name: ${name}`)
   assert.notEqual(start, -1, `step ${name} exists`)
   const run = lines.findIndex((line, index) => index > start && line.startsWith('      run: |'))
@@ -810,6 +814,10 @@ function stepScript(name) {
     script.push(line.startsWith('        ') ? line.slice(8) : line.trimStart())
   }
   return script.join('\n')
+}
+
+function stepScript(name) {
+  return actionStepScript(setupAction, name)
 }
 
 /** Parse a GITHUB_OUTPUT file, including `name<<DELIMITER` multi-line values. */
@@ -887,57 +895,142 @@ test('the Vite+ cache namespace isolates OS, architecture, runtime, and Vite+ ve
   assert.match(linux.namespace, /^[A-Za-z0-9._-]+$/)
 })
 
-test('the Vite+ cache path survives the post-job save', () => {
-  const step = setupAction.slice(setupAction.indexOf('- name: Cache Vite+ tasks'))
-  const path = step.match(/^ {8}path: \|\n((?: {10}.+\n)+)/m)?.[1]
-  assert.ok(path, 'path is a block scalar')
-  // The post-job save re-evaluates this input, where step outputs are empty
-  // (the first Actions run logged "Input required and not supplied: path").
-  assert.doesNotMatch(path, /steps\./)
-  assert.match(path, /node_modules\/\.vite\/task-cache/)
-  assert.match(path, /\$\{\{ env\.CODE_FOUNDRY_VITE_CACHE_PATH \}\}/)
-  assert.doesNotMatch(setupAction, /cache_paths/)
-})
+function viteCacheContract(root, { customPath = '', save = 'true', previousSave = 'false' } = {}) {
+  const output = join(root, '.vite-cache-contract-output')
+  const envFile = join(root, '.vite-cache-contract-env')
+  const script = join(root, '.vite-cache-contract.sh')
+  writeFileSync(script, actionStepScript(setupAction, 'Publish Vite+ cache contract'))
+  writeFileSync(output, '')
+  writeFileSync(envFile, '')
+  const result = spawnSync('bash', [script], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      GITHUB_OUTPUT: output,
+      GITHUB_ENV: envFile,
+      VITE_PLUS_CUSTOM_CACHE_PATH_B64: Buffer.from(customPath).toString('base64'),
+      VITE_PLUS_CACHE_KEY: 'vite-plus-v1-Linux-X64-node24-bun1-vp9.9.9-ci-unit-lock-vite-42-1',
+      VITE_PLUS_CACHE_RESTORE_KEYS: [
+        'vite-plus-v1-Linux-X64-node24-bun1-vp9.9.9-ci-unit-lock-',
+        'vite-plus-v1-Linux-X64-node24-bun1-vp9.9.9-ci-unit-',
+        'vite-plus-v1-Linux-X64-node24-bun1-vp9.9.9-',
+      ].join('\n'),
+      VITE_PLUS_CACHE_SAVE: save,
+      CODE_FOUNDRY_VITE_CACHE_SAVE: previousSave,
+    },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  return {
+    outputs: parseOutputs(readFileSync(output, 'utf8')),
+    environment: parseOutputs(readFileSync(envFile, 'utf8')),
+  }
+}
 
-test('VITE_CACHE_PATH from any environment source relocates the cached directory', (t) => {
+test('Vite+ cache setup publishes an explicit restore and save contract', (t) => {
   const root = fixture(t, {
     'package.json': { name: 'a' },
     'node_modules/vite-plus/package.json': { name: 'vite-plus', version: '9.9.9' },
   })
-  // The step process sees the inherited runner environment, not just
-  // workflow/job/step `env:`, so the value is read from process.env and
-  // published under the fixed name the cache `path` references.
   const custom = join(tmpdir(), 'foundry-custom-vite-cache')
+  const detected = toolchainOutputs(root, { VITE_CACHE_PATH: custom })
+  assert.equal(detected.cacheable, 'true')
+  assert.equal(Buffer.from(detected.custom_path_b64, 'base64').toString(), custom)
+
+  // The action step process sees inherited runner env, including relative overrides.
+  const relative = toolchainOutputs(root, { VITE_CACHE_PATH: 'relative/cache' })
   assert.equal(
-    toolchainOutputs(root, { VITE_CACHE_PATH: custom }).exported.CODE_FOUNDRY_VITE_CACHE_PATH,
-    custom
-  )
-  // The documented override is absolute; a relative value is resolved, never dropped.
-  assert.equal(
-    toolchainOutputs(root, { VITE_CACHE_PATH: 'relative/cache' }).exported
-      .CODE_FOUNDRY_VITE_CACHE_PATH,
+    Buffer.from(relative.custom_path_b64, 'base64').toString(),
     resolve(realpathSync(root), 'relative/cache')
   )
-  // Unset leaves the default directories only (an empty line in `path`).
-  assert.equal(toolchainOutputs(root).exported.CODE_FOUNDRY_VITE_CACHE_PATH, '')
+  assert.equal(Buffer.from(toolchainOutputs(root).custom_path_b64, 'base64').toString(), '')
+
+  const contract = viteCacheContract(root, { customPath: custom, save: 'true' })
+  assert.equal(contract.outputs.cacheable, 'true')
+  assert.equal(contract.outputs.save, 'true')
+  assert.match(contract.outputs.key, /^vite-plus-v1-Linux-X64-node24-bun1-vp9\.9\.9-/)
+  assert.deepEqual(contract.outputs.path.split('\n'), [
+    'node_modules/.vite/task-cache',
+    '**/node_modules/.vite/task-cache',
+    custom,
+  ])
+  assert.match(
+    contract.outputs['restore-keys'],
+    /^vite-plus-v1-Linux-X64-node24-bun1-vp9\.9\.9-ci-unit-lock-/
+  )
+  assert.equal(contract.environment.CODE_FOUNDRY_VITE_CACHE_KEY, contract.outputs.key)
+  assert.equal(contract.environment.CODE_FOUNDRY_VITE_CACHE_PATHS, contract.outputs.path)
+  assert.equal(contract.environment.CODE_FOUNDRY_VITE_CACHE_SAVE, 'true')
 })
 
-test('the Vite+ cache is restored after Install and every node_modules archive', () => {
+test('Vite+ save intent is preserved across multiple setup calls in one job', (t) => {
+  const root = fixture(t)
+  assert.equal(
+    viteCacheContract(root, { save: 'false', previousSave: 'true' }).outputs.save,
+    'true'
+  )
+  assert.equal(
+    viteCacheContract(root, { save: 'false', previousSave: 'false' }).outputs.save,
+    'false'
+  )
+})
+
+test('the Vite+ cache restores last and saves through an explicit push-only action', () => {
   const names = [...setupAction.matchAll(/^ {4}- name: (.+)$/gm)].map((match) => match[1])
   const cache = names.indexOf('Cache Vite+ tasks')
-  assert.equal(names[cache - 1], 'Detect Vite+ toolchain')
+  assert.equal(names[cache - 1], 'Publish Vite+ cache contract')
+  assert.equal(names[cache - 2], 'Detect Vite+ toolchain')
   assert.ok(cache > names.indexOf('Install'), 'restored after Install')
   for (const [index, name] of names.entries())
     if (name.startsWith('Save ')) assert.ok(cache > index, `restored after "${name}"`)
   // Nothing follows the cache steps, so later steps cannot replace node_modules.
   assert.equal(cache, names.length - 1)
+
+  const restore = setupAction.slice(setupAction.indexOf('- name: Cache Vite+ tasks'))
+  assert.match(restore, /uses: actions\/cache\/restore@v5/)
+  assert.doesNotMatch(restore, /uses: \.\/\.github\/actions\/cache/)
+  assert.match(restore, /steps\.vite-plus-cache-contract\.outputs\.(?:path|key|restore-keys)/)
+  assert.match(vitePlusCacheSaveAction, /uses: actions\/cache\/save@v5/)
+  assert.match(vitePlusCacheSaveAction, /github\.event_name == 'push'/)
+  assert.match(vitePlusCacheSaveAction, /inputs\.path \|\| env\.CODE_FOUNDRY_VITE_CACHE_PATHS/)
+  assert.match(vitePlusCacheSaveAction, /inputs\.key \|\| env\.CODE_FOUNDRY_VITE_CACHE_KEY/)
+
+  const workflows = [
+    ['.github/workflows/ci.yml', ['format', 'lint', 'type-check', 'build']],
+    ['.github/workflows/test.yml', ['unit', 'performance', 'integration', 'e2e', 'smoke']],
+    ['.github/workflows/eval.yml', ['eval']],
+    [
+      '.github/workflows/validation-billing.yml',
+      ['fast-lanes', 'lint', 'type-check', 'unit', 'e2e'],
+    ],
+  ]
+  for (const [file, jobs] of workflows) {
+    const source = readFileSync(join(packageRoot, file), 'utf8')
+    const lines = source.split('\n')
+    for (const job of jobs) {
+      const start = lines.findIndex((line) => line === `  ${job}:`)
+      assert.notEqual(start, -1, `${file} contains ${job}`)
+      let end = lines.findIndex((line, index) => index > start && /^  [A-Za-z0-9_-]+:$/.test(line))
+      if (end === -1) end = lines.length
+      const block = lines
+        .slice(start, end)
+        .filter((line) => !line.startsWith('  #'))
+        .join('\n')
+        .trimEnd()
+      assert.ok(
+        block.endsWith('uses: ./.github/actions/vite-plus-cache-save'),
+        `${file} ${job} ends with the explicit cache save action`
+      )
+    }
+  }
 })
 
 test('the Vite+ cache key rolls per run and never crosses a compatibility namespace', () => {
-  const step = setupAction.slice(setupAction.indexOf('- name: Cache Vite+ tasks'))
+  const step = setupAction.slice(setupAction.indexOf('- name: Publish Vite+ cache contract'))
   const detect = setupAction.slice(
     setupAction.indexOf('- name: Detect Vite+ toolchain'),
-    setupAction.indexOf('- name: Cache Vite+ tasks')
+    setupAction.indexOf('- name: Publish Vite+ cache contract')
   )
   const namespace = '${{ steps.vite-plus-toolchain.outputs.namespace }}'
   // Detection carries the opt-in gates; the cache step runs only for a resolvable version.
@@ -945,16 +1038,16 @@ test('the Vite+ cache key rolls per run and never crosses a compatibility namesp
   assert.match(detect, /steps\.profile\.outputs\.vite_plus == 'true'/)
   assert.match(detect, /steps\.profile\.outputs\.vite_plus_task == 'true'/)
   assert.match(step, /if: steps\.vite-plus-toolchain\.outputs\.cacheable == 'true'/)
-  assert.match(step, /save: \$\{\{ inputs\.cache-save \}\}/)
+  assert.match(step, /inputs\.cache-save/)
   assert.doesNotMatch(step, /turbo/i)
 
-  const key = step.match(/^ {8}key: (.+)$/m)?.[1] ?? ''
+  const key = step.match(/^ {8}VITE_PLUS_CACHE_KEY: (.+)$/m)?.[1] ?? ''
   assert.ok(key.startsWith(namespace), 'key starts with the namespace')
   assert.match(key, /github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}$/)
   const restoreKeys =
     step
-      .match(/restore-keys: \|\n((?: {10}.+\n?)+)/)?.[1]
-      .trim()
+      .match(/^ {8}VITE_PLUS_CACHE_RESTORE_KEYS: \|\n((?: {10}.+\n?)+)/m)?.[1]
+      ?.trim()
       .split('\n') ?? []
   assert.ok(restoreKeys.length >= 2)
   for (const restoreKey of restoreKeys)

@@ -469,6 +469,9 @@ jobs:
               if-no-files-found: error
               retention-days: 14
 
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
+
   lint:
     name: Lint
     if: vars.CI_BILLING_PAUSED != 'true'
@@ -529,6 +532,9 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
 
   type-check:
     name: Type-Check
@@ -595,6 +601,9 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
 
   unit:
     name: Unit
@@ -681,6 +690,9 @@ jobs:
           compression-level: 1
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
 
   e2e:
     name: E2E
@@ -775,11 +787,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
+
   # Profile and dependency audit merged into one job. The split orchestrators
   # run a profile job that feeds an audit matrix; here the language blocks run
   # sequentially, driven directly by the profile step's outputs, so the second
   # runner spin-up disappears. Python requirements run in one loop inside the
   # audit step because a matrix cannot follow preceding steps in the same job.
+
   audit:
     name: Audit
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'

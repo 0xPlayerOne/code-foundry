@@ -34,9 +34,20 @@ When opted in, the setup action:
   remote-cache step runs;
 - restores `node_modules/.vite/task-cache` as its last step, after Install and
   after every step that archives `node_modules` (Install can replace it);
-- saves it push-only like every other cache, so pull requests and scheduled
-  runs cannot poison it;
+- publishes a cache path, key, and save-intent contract for the explicit
+  `.github/actions/vite-plus-cache-save` action to use after repository tasks;
+- saves it push-only, so pull requests and scheduled runs cannot poison it;
 - keeps it out of the generic JavaScript build-state archive.
+
+The generated CI, test, eval, and billing workflows call the save action at the
+end of each task job. Custom workflows that use `.github/actions/setup` must
+also call it after their Vite+ tasks complete; it reads the setup contract from
+the job environment. A job can disable saving with `cache-save: false` on every
+applicable setup call. With multiple setup calls in one job, save intent is
+combined so an enabled Vite+ task setup is not overridden by a later disabled
+setup. The setup action also exposes `vite-plus-cache-path`,
+`vite-plus-cache-key`, and `vite-plus-cache-save` outputs for workflows that
+prefer to pass these values explicitly to the save action.
 
 Keys are `<namespace>-<workflow>-<job>-<lockfiles>-<vite.config>-<run id>-<attempt>`,
 so every push saves a refreshed entry (more storage than a fixed key). Restore

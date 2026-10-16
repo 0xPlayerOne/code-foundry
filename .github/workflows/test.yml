@@ -161,6 +161,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
+
   performance:
     name: Performance
     if: vars.CI_BILLING_PAUSED != 'true'
@@ -247,6 +250,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
+
   integration:
     name: Integration
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true
@@ -316,6 +322,9 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
 
   e2e:
     name: E2E
@@ -410,6 +419,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save
+
   smoke:
     name: Smoke
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true
@@ -479,3 +491,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+
+      - name: Save Vite+ task cache
+        uses: ./.github/actions/vite-plus-cache-save

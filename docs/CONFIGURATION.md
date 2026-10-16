@@ -298,6 +298,10 @@ behavior:
 - `cache-vite-plus: auto`, `true`, or `false` is an input of the setup action
   (not a config key). It controls the local Vite+ task cache only when
   `monorepo_tool: vite-plus` is set.
+- Custom workflows using the setup action must add
+  `.github/actions/vite-plus-cache-save` after task execution. The generated
+  Code Foundry workflows already include this save boundary; see
+  [Caching and remote caching](CACHING.md).
 
 Use these controls only after measuring a repeatable benefit. See [Caching and
 remote caching](CACHING.md).
