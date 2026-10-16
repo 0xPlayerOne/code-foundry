@@ -967,12 +967,14 @@ runs:
         const paths = custom
           ? [resolve(custom)]
           : ['node_modules/.vite/task-cache', '**/node_modules/.vite/task-cache']
+        // Without a resolvable version the namespace cannot isolate releases.
+        appendFileSync(process.env.GITHUB_OUTPUT, `cacheable=${vitePlus !== 'unknown'}\n`)
         appendFileSync(process.env.GITHUB_OUTPUT, `namespace=${namespace}\n`)
         appendFileSync(process.env.GITHUB_OUTPUT, `cache_paths<<CACHE_PATHS_EOF\n${paths.join('\n')}\nCACHE_PATHS_EOF\n`)
         console.log(`Vite+ cache namespace: ${namespace}`)
         NODE
     - name: Cache Vite+ tasks
-      if: steps.vite-plus-toolchain.outcome == 'success'
+      if: steps.vite-plus-toolchain.outputs.cacheable == 'true'
       uses: ./.github/actions/cache
       with:
         save: ${{ inputs.cache-save }}

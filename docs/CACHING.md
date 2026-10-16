@@ -32,20 +32,18 @@ When opted in, the setup action:
 
 - stops treating a `turbo.json` as the active runner, so no Turborepo cache or
   remote-cache step runs;
-- restores `node_modules/.vite/task-cache` (Vite+'s local task cache) as its
-  last step, after Install and after every step that archives `node_modules`.
-  Install can replace `node_modules`, and the dependency archives must not
-  contain task output;
-- saves it with the same push-only rule as every other cache, so pull requests
-  and scheduled runs cannot poison it;
-- keeps that directory out of the generic JavaScript build-state archive so it
-  is stored once.
+- restores `node_modules/.vite/task-cache` as its last step, after Install and
+  after every step that archives `node_modules` (Install can replace it);
+- saves it push-only like every other cache, so pull requests and scheduled
+  runs cannot poison it;
+- keeps it out of the generic JavaScript build-state archive.
 
 Keys are `<namespace>-<workflow>-<job>-<lockfiles>-<vite.config>-<run id>-<attempt>`,
-so every push saves a refreshed entry (more cache storage than a fixed key).
-Restore keys fall back by lockfiles, job, then any job, but never leave the
-namespace `vite-plus-v1-<OS>-<arch>-node<version>-bun<version>-vp<version>`:
-Vite Task does not fingerprint the Node or Bun binary that runs a task.
+so every push saves a refreshed entry (more storage than a fixed key). Restore
+keys fall back by lockfiles, job, then any job, but never leave the namespace
+`vite-plus-v1-<OS>-<arch>-node<version>-bun<version>-vp<version>`, because Vite
+Task does not fingerprint the Node or Bun binary. If the `vite-plus` version
+cannot be resolved, nothing is restored or saved.
 
 If `VITE_CACHE_PATH` (absolute) is set, Vite+ writes its cache there and the
 setup action caches that directory instead.
@@ -82,9 +80,9 @@ non-shallow checkout or fetch the base commit).
   deleted, renamed, moved, and re-wired packages still select their dependents.
   `removedPackages` lists selected packages that no longer exist at the head.
 - Any changed file that no workspace package owns selects every package
-  (`all: true`): lockfiles, root manifest, runner and TypeScript config, root
-  scripts, CI config. Only Markdown/text files, `LICENSE*`, `NOTICE`,
-  `.gitignore`, and `docs/` are ignored.
+  (`all: true`): lockfiles, root manifest, config, scripts, docs, templates. A
+  build may read any of them. Only `affected_ignore` in `.github/code-foundry.yml`
+  (comma-separated globs, for example `README.md, docs/**`) skips unowned files.
 - Anything the module cannot evaluate faithfully makes the result
   conservative (`all: true`, `conservative: true`): no runner, a git or Turbo
   failure, a malformed or unnamed workspace manifest at either ref, duplicate

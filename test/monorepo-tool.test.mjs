@@ -280,9 +280,26 @@ test('affectedFromChangedFiles adds transitive dependents and fails closed on sh
   // A nested file named like a global file only affects its own package.
   assert.equal(select('packages/tools/package.json').all, false)
 
-  // Docs and other non-build files that no package owns select nothing.
-  for (const file of ['README.md', 'LICENSE', 'docs/guide/setup.png', '.gitignore', 'NOTICE'])
-    assert.deepEqual(select(file).packages, [], file)
+  // Nothing is assumed to be a non-build file: a build may read any of these.
+  for (const file of [
+    'README.md',
+    'LICENSE',
+    'docs/guide/setup.png',
+    'docs/site.mdx',
+    'template.txt',
+    '.gitignore',
+    'NOTICE',
+  ])
+    assert.equal(select(file).all, true, file)
+
+  // Only explicit consumer configuration (affected_ignore globs) skips unowned files.
+  const ignored = (...files) =>
+    affectedFromChangedFiles([packages], files, ['README.md', 'docs/**'])
+  assert.deepEqual(ignored('README.md', 'docs/guide/a.png').packages, [])
+  assert.equal(ignored('README.md', 'docs/guide/a.png').all, false)
+  assert.equal(ignored('README.md', 'template.txt').all, true)
+  assert.equal(ignored('docs/site.mdx', 'scripts/build.mjs').all, true)
+  assert.deepEqual(ignored('README.md', 'packages/tools/src/index.ts').packages, ['@w/tools'])
 
   // Anything else that no package owns can change any package's output.
   for (const file of [
@@ -344,11 +361,27 @@ test('vite-plus selection handles global, non-build, and empty changes', (t) => 
   assert.deepEqual(global.filterArgs, [])
   assert.equal(global.packages.length, 5)
 
-  const readme = workspaceRepo(t, (dir) => write(dir, 'README.md', 'changed\n'))
-  const docsOnly = affectedPackages(readme.root, { ...readme, tool: 'vite-plus' })
-  assert.deepEqual(docsOnly.packages, [])
-  assert.deepEqual(docsOnly.filterArgs, [])
-  assert.equal(docsOnly.all, false)
+  // A root file a workspace build may consume is not skipped by default.
+  for (const [file, content] of [
+    ['docs/site.mdx', '# changed\n'],
+    ['template.txt', 'changed\n'],
+    ['README.md', 'changed\n'],
+  ]) {
+    const repo = workspaceRepo(t, (dir) => write(dir, file, content))
+    const unowned = affectedPackages(repo.root, { ...repo, tool: 'vite-plus' })
+    assert.equal(unowned.all, true, file)
+    assert.equal(unowned.conservative, false, file)
+    assert.match(unowned.reason, new RegExp(file.replace('.', '\\.')), file)
+  }
+
+  // affected_ignore in code-foundry.yml is the explicit opt-out.
+  const configured = workspaceRepo(t, (dir) => write(dir, 'docs/site.mdx', '# changed\n'), {
+    '.github/code-foundry.yml': 'monorepo_tool: vite-plus\naffected_ignore: README.md, docs/**\n',
+  })
+  const skipped = affectedPackages(configured.root, { ...configured })
+  assert.equal(skipped.all, false)
+  assert.deepEqual(skipped.packages, [])
+  assert.deepEqual(skipped.filterArgs, [])
 
   const empty = workspaceRepo(t, () => {})
   const nothing = affectedPackages(empty.root, { ...empty, tool: 'vite-plus' })
@@ -415,6 +448,41 @@ test('a dependency removed or added in a manifest keeps the old dependents selec
   assert.deepEqual(affectedPackages(added.root, { ...added, tool: 'vite-plus' }).packages, [
     '@w/tools',
   ])
+})
+
+test('divergent branches are compared against their merge-base, not the base tip', (t) => {
+  const root = fixture(t, {
+    'package.json': { name: 'root', private: true, workspaces: ['packages/*'] },
+    'packages/core/package.json': pkg('@w/core'),
+    'packages/core/src/index.ts': 'export {}\n',
+    'packages/web/package.json': pkg('@w/web', { '@w/core': 'workspace:*' }),
+  })
+  git(root, 'init', '-q', '-b', 'main')
+  git(root, 'add', '-A')
+  git(root, 'commit', '-qm', 'ancestor')
+  const ancestor = git(root, 'rev-parse', 'HEAD')
+
+  // Base side: rename core and drop web's dependency on it.
+  git(root, 'checkout', '-q', '-b', 'base-side')
+  write(root, 'packages/core/package.json', pkg('@w/new-core'))
+  write(root, 'packages/web/package.json', pkg('@w/web'))
+  git(root, 'add', '-A')
+  git(root, 'commit', '-qm', 'rename core')
+  const base = git(root, 'rev-parse', 'HEAD')
+
+  // Head side: delete core.
+  git(root, 'checkout', '-q', '-b', 'head-side', ancestor)
+  rmSync(join(root, 'packages/core'), { recursive: true })
+  git(root, 'add', '-A')
+  git(root, 'commit', '-qm', 'delete core')
+  const head = git(root, 'rev-parse', 'HEAD')
+
+  const result = affectedPackages(root, { base, head, tool: 'vite-plus' })
+  assert.equal(result.mergeBase, ancestor)
+  assert.equal(result.conservative, false)
+  assert.deepEqual(result.removedPackages, ['@w/core'])
+  assert.deepEqual(result.packages, ['@w/web'])
+  assert.deepEqual(result.filterArgs, ['--filter', '@w/web'])
 })
 
 test('uncertain workspaces fail closed instead of yielding a partial graph', (t) => {
@@ -802,8 +870,12 @@ test('the Vite+ cache namespace isolates OS, architecture, runtime, and Vite+ ve
   // A different Vite+ release, or none resolvable, lands in a different namespace.
   write(root, 'node_modules/vite-plus/package.json', { name: 'vite-plus', version: '9.9.10' })
   assert.match(toolchainOutputs(root).namespace, /-vp9\.9\.10$/)
+  assert.equal(toolchainOutputs(root).cacheable, 'true')
+  // An unresolvable version cannot isolate releases, so caching is skipped.
   rmSync(join(root, 'node_modules'), { recursive: true })
-  assert.match(toolchainOutputs(root).namespace, /-vpunknown$/)
+  const unknown = toolchainOutputs(root)
+  assert.match(unknown.namespace, /-vpunknown$/)
+  assert.equal(unknown.cacheable, 'false')
 
   // Namespaces are cache-key safe.
   assert.match(linux.namespace, /^[A-Za-z0-9._-]+$/)
@@ -834,11 +906,11 @@ test('the Vite+ cache key rolls per run and never crosses a compatibility namesp
     setupAction.indexOf('- name: Cache Vite+ tasks')
   )
   const namespace = '${{ steps.vite-plus-toolchain.outputs.namespace }}'
-  // Detection carries the opt-in gates; the cache step runs only if it succeeded.
+  // Detection carries the opt-in gates; the cache step runs only for a resolvable version.
   assert.match(detect, /inputs\.cache-vite-plus != 'false'/)
   assert.match(detect, /steps\.profile\.outputs\.vite_plus == 'true'/)
   assert.match(detect, /steps\.profile\.outputs\.vite_plus_task == 'true'/)
-  assert.match(step, /if: steps\.vite-plus-toolchain\.outcome == 'success'/)
+  assert.match(step, /if: steps\.vite-plus-toolchain\.outputs\.cacheable == 'true'/)
   assert.match(step, /save: \$\{\{ inputs\.cache-save \}\}/)
   assert.match(step, /path: \$\{\{ steps\.vite-plus-toolchain\.outputs\.cache_paths \}\}/)
   assert.doesNotMatch(step, /turbo/i)

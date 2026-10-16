@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { readConfig } from './config.mjs'
+import { listValue, readConfig } from './config.mjs'
 import { resolveMonorepoTool } from './profile.mjs'
 
 /**
@@ -169,15 +169,13 @@ export function taskAffected(task, filters, paths) {
  *   all: boolean,
  *   conservative: boolean,
  *   reason: string,
+ *   mergeBase?: string,
  *   changedFiles: number,
  *   packages: string[],
  *   removedPackages: string[],
  *   filterArgs: string[],
  * }} AffectedResult
  */
-
-/** Unowned files that cannot change a build; any other unowned file selects all packages. */
-const NON_BUILD_FILE = /^(?:(?:[^/]+\.(?:md|mdx|txt))|LICENSE[^/]*|NOTICE|\.gitignore|docs\/.*)$/i
 
 const SAFE_REF = /^[A-Za-z0-9._/~^@{}-]+$/
 const SAFE_PACKAGE_NAME = /^(?:@[a-z0-9~][a-z0-9._~-]*\/)?[a-z0-9~][a-z0-9._~-]*$/i
@@ -190,6 +188,15 @@ function assertRef(ref, label) {
     throw new Error(`invalid ${label} ref: ${ref}`)
 }
 
+/** @param {string} root @param {string[]} args */
+const git = (root, args) =>
+  execFileSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 256 * 1024 * 1024,
+  })
+
 /**
  * Workspace files as of a git ref (committed objects, not the working tree).
  * @param {string} root
@@ -198,15 +205,8 @@ function assertRef(ref, label) {
  */
 export function gitWorkspaceSource(root, ref) {
   assertRef(ref, 'workspace')
-  const git = (/** @type {string[]} */ args) =>
-    execFileSync('git', args, {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 256 * 1024 * 1024,
-    })
-  const files = git(['ls-tree', '-r', '-z', '--name-only', ref]).split('\0').filter(Boolean)
-  return { label: ref, files, read: (path) => git(['show', `${ref}:${path}`]) }
+  const files = git(root, ['ls-tree', '-r', '-z', '--name-only', ref]).split('\0').filter(Boolean)
+  return { label: ref, files, read: (path) => git(root, ['show', `${ref}:${path}`]) }
 }
 
 /**
@@ -326,13 +326,15 @@ export function listWorkspacePackages(source) {
 
 /**
  * Changed files to affected packages across base and head graphs, so deleted,
- * renamed, and re-wired packages keep their dependents. Unowned build files
- * select every package. Dependents follow the union of all graphs' edges.
+ * renamed, and re-wired packages keep their dependents. An unowned file selects
+ * every package unless `ignore` globs (`affected_ignore`) say otherwise.
  * @param {WorkspacePackage[][]} graphs Head graph first.
  * @param {string[]} changedFiles Repo-relative, forward slashes.
+ * @param {string[]} [ignore] Repo-relative globs of unowned files to skip.
  * @returns {{ all: boolean, packages: string[], reason: string }}
  */
-export function affectedFromChangedFiles(graphs, changedFiles) {
+export function affectedFromChangedFiles(graphs, changedFiles, ignore = []) {
+  const ignored = ignore.map(globToRegExp)
   const everything = [...new Set(graphs.flat().map((item) => item.name))].toSorted()
   const direct = new Set()
   for (const file of changedFiles) {
@@ -345,7 +347,7 @@ export function affectedFromChangedFiles(graphs, changedFiles) {
     }
     if (owners.size > 0) {
       for (const name of owners) direct.add(name)
-    } else if (!NON_BUILD_FILE.test(file)) {
+    } else if (!ignored.some((re) => re.test(file))) {
       return { all: true, packages: everything, reason: `shared or unowned file changed: ${file}` }
     }
   }
@@ -393,16 +395,7 @@ export function vitePlusFilterArgs(packages, names) {
 function gitChangedFiles(root, base, head) {
   assertRef(base, 'base')
   assertRef(head, 'head')
-  const output = execFileSync(
-    'git',
-    ['diff', '--name-only', '--no-renames', '-z', `${base}...${head}`, '--'],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 64 * 1024 * 1024,
-    }
-  )
+  const output = git(root, ['diff', '--name-only', '--no-renames', '-z', `${base}...${head}`, '--'])
   return output.split('\0').filter(Boolean)
 }
 
@@ -508,12 +501,20 @@ export function affectedPackages(root, options) {
     assertRef(head, 'head')
     const headPackages = listWorkspacePackages(gitWorkspaceSource(root, head))
     headNames = headPackages.map((item) => item.name).toSorted()
-    const basePackages = listWorkspacePackages(gitWorkspaceSource(root, base))
-    const files = gitChangedFiles(root, base, head)
-    const selection = affectedFromChangedFiles([headPackages, basePackages], files)
+    // One merge-base serves both the historical graph and the diff, so
+    // divergent branches are compared against their real common ancestor.
+    const mergeBase = git(root, ['merge-base', base, head]).trim()
+    const basePackages = listWorkspacePackages(gitWorkspaceSource(root, mergeBase))
+    const files = gitChangedFiles(root, mergeBase, head)
+    const selection = affectedFromChangedFiles(
+      [headPackages, basePackages],
+      files,
+      listValue(config.affected_ignore ?? '')
+    )
     const existing = selection.packages.filter((name) => headNames.includes(name))
     const removed = selection.packages.filter((name) => !headNames.includes(name))
     return result({
+      mergeBase,
       reason: selection.reason,
       changedFiles: files.length,
       all: selection.all,
