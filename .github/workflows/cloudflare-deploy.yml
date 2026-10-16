@@ -171,7 +171,14 @@ jobs:
             isAbsolute(workspaceRelative) ||
             workspaceRelative === '..' ||
             workspaceRelative.startsWith(`..${sep}`)
-          if (!existsSync('turbo.json') && !existsSync('turbo.jsonc')) {
+          // Vite+ repositories are not served by this Turbo-only check.
+          const config = resolve(workspace, '.github/code-foundry.yml')
+          const optedIntoVitePlus =
+            existsSync(config) &&
+            /^monorepo_tool:\s*["']?vite-plus["']?\s*(?:#.*)?$/m.test(readFileSync(config, 'utf8'))
+          if (optedIntoVitePlus) {
+            conservative('monorepo_tool is vite-plus')
+          } else if (!existsSync('turbo.json') && !existsSync('turbo.jsonc')) {
             conservative('Turbo config not found')
           } else if (outsideWorkspace) {
             conservative('working-directory is outside the workspace')

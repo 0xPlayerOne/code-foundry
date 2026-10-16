@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve, isAbsolute } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
-import { recommendRunners, resolveProfile } from '../lib/profile.mjs'
+import { recommendRunners, resolveMonorepoTool, resolveProfile } from '../lib/profile.mjs'
 import { packageManagerForLockfile } from '../lib/lockfiles.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
 import { isGeneratedEventCaller } from './sync.mjs'
@@ -38,6 +38,10 @@ export function doctor(root, options = {}) {
         : 'Toolchain: native (mise not configured).'
     )
   }
+  const monorepoTool = resolveMonorepoTool(target, config)
+  for (const message of monorepoTool.warnings) warn(message)
+  if (monorepoTool.tool === 'vite-plus')
+    console.log(`Task runner: vite-plus (${monorepoTool.reason}).`)
   const hooks = git(target, ['config', '--get', 'core.hooksPath'])
   if (hooks !== '.githooks') warn('Git hooks are not enabled; run `npx code-foundry init`')
   // A correctly enabled hook that enforces nothing is the failure this check

@@ -289,6 +289,15 @@ behavior:
   `TURBO_TEAM`.
 - `TURBO_TOKEN` and `TURBO_TEAM` provide the Turborepo remote-cache
   credentials.
+- `monorepo_tool: auto`, `turbo`, or `vite-plus` selects the workspace task
+  runner. `auto` (the default) is Turbo when a `turbo.json` or `turbo.jsonc`
+  exists and no runner otherwise, exactly as before Vite+ support. Vite+ is
+  opt-in: only `monorepo_tool: vite-plus` selects it, and it then takes
+  precedence over a turbo config. `doctor` warns when the selected runner has
+  no matching evidence in the repository.
+- `cache-vite-plus: auto`, `true`, or `false` is an input of the setup action
+  (not a config key). It controls the local Vite+ task cache only when
+  `monorepo_tool: vite-plus` is set.
 
 Use these controls only after measuring a repeatable benefit. See [Caching and
 remote caching](CACHING.md).

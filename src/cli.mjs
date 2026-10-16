@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** @typedef {{ target: string, root: string, source: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, versionExplicit: boolean, repository: string, expectedSha: string, assets: string[], rootProvided: boolean, releaseSubcommand?: string, fleetSubcommand?: string, integritySubcommand?: 'settings'|'release'|'manifest', ciSubcommand?: 'pause'|'resume'|'status' }} Options */
+/** @typedef {{ target: string, root: string, source: string, dryRun: boolean, force: boolean, github: boolean, createPr: boolean, exclude: string[], base: string, head: string, tag: string, workflow: string, mode: string, version: string, versionExplicit: boolean, repository: string, expectedSha: string, assets: string[], rootProvided: boolean, tool: string, headProvided: boolean, releaseSubcommand?: string, fleetSubcommand?: string, integritySubcommand?: 'settings'|'release'|'manifest', ciSubcommand?: 'pause'|'resume'|'status' }} Options */
 /** @typedef {{ command: string, options: Options }} ParsedArgs */
 
 const usage = `code-foundry — initialize and maintain agent-ready repositories
@@ -18,6 +18,7 @@ Usage:
   npx code-foundry doctor [--target PATH]
   npx code-foundry plan [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--json]
   npx code-foundry check [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--timeout SECONDS] [--json]
+  npx code-foundry affected [--target PATH] [--base REF] [--head REF] [--tool auto|turbo|vite-plus]
   npx code-foundry ci pause|resume|status [--target PATH]
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW
@@ -37,7 +38,8 @@ Options:
   --force         Replace protected standard documents
   --github        Apply a verified fast-forward through GitHub
   --base BRANCH   Release source branch (default: main)
-  --head BRANCH   Branch to reconcile (default: staging)
+  --head BRANCH   Branch to reconcile (default: staging; HEAD for affected)
+  --tool TOOL     Task runner for affected: auto, turbo, or vite-plus (default: auto)
   --tag TAG       Published release tag for a post-release hook
   --workflow FILE  Workflow to dispatch for a post-release hook
   --mode MODE     auto, workflow-dispatch, release-event, or disabled
@@ -78,6 +80,8 @@ function parseArgs(argv) {
     tag: '',
     workflow: '',
     mode: 'auto',
+    tool: 'auto',
+    headProvided: false,
     version: `v${readPackageVersion(packageRoot)}`,
     versionExplicit: false,
     repository: '',
@@ -128,8 +132,15 @@ function parseArgs(argv) {
     else if (arg === '--force') options.force = true
     else if (arg === '--github') options.github = true
     else if (arg === '--base') options.base = argv.shift() ?? fail('--base requires a branch')
-    else if (arg === '--head') options.head = argv.shift() ?? fail('--head requires a branch')
-    else if (arg === '--tag') options.tag = argv.shift() ?? fail('--tag requires a tag')
+    else if (arg === '--head') {
+      options.head = argv.shift() ?? fail('--head requires a branch')
+      options.headProvided = true
+    } else if (arg === '--tool') {
+      if (command !== 'affected') fail('--tool is only supported by the affected command')
+      options.tool = argv.shift() ?? fail('--tool requires auto, turbo, or vite-plus')
+      if (!['auto', 'turbo', 'vite-plus'].includes(options.tool))
+        fail(`unsupported --tool: ${options.tool}; use auto, turbo, or vite-plus`)
+    } else if (arg === '--tag') options.tag = argv.shift() ?? fail('--tag requires a tag')
     else if (arg === '--repo') {
       if (command !== 'release-integrity')
         fail('--repo is only supported by release-integrity commands')
@@ -203,6 +214,18 @@ async function main() {
     } catch (error) {
       console.error(`code-foundry: ${error instanceof Error ? error.message : String(error)}`)
       process.exitCode = 1
+    }
+  } else if (command === 'affected') {
+    try {
+      const { affectedPackages } = await import('./lib/task-filters.mjs')
+      const result = affectedPackages(target, {
+        base: options.base,
+        head: options.headProvided ? options.head : 'HEAD',
+        tool: options.tool,
+      })
+      console.log(JSON.stringify(result, null, 2))
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
     }
   } else if (command === 'release') {
     try {

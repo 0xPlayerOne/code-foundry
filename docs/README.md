@@ -33,7 +33,7 @@ details before copying any guide elsewhere.
 - [Declarative fleet rollouts](fleet-rollouts.md) — inventory, canaries, staged upgrades, and recovery.
 - [Fleet release eligibility](fleet-release-eligibility.md) — require verified release evidence before upgrades.
 - [Verified Cloudflare delivery](cloudflare-delivery.md) — build, verify, canary, and promote Worker versions.
-- [Caching and remote caching](CACHING.md) — configure package, build, and Turborepo caching.
+- [Caching and remote caching](CACHING.md) — configure package, build, Turborepo, and opt-in Vite+ caching.
 
 ## Repository-specific documentation
 
