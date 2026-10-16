@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -17,6 +27,21 @@ import {
   detectVitePlus,
   resolveMonorepoTool,
 } from '../src/lib/profile.mjs'
+
+/** Workspace files from a plain directory, for tests that need no git history. */
+function fsWorkspaceSource(root) {
+  const files = []
+  const visit = (directory) => {
+    for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.git') continue
+      const child = directory ? `${directory}/${entry.name}` : entry.name
+      if (entry.isDirectory()) visit(child)
+      else files.push(child)
+    }
+  }
+  visit('')
+  return { label: 'working tree', files, read: (path) => readFileSync(join(root, path), 'utf8') }
+}
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const cli = join(packageRoot, 'src/cli.mjs')
@@ -152,15 +177,16 @@ test('script command matchers distinguish the runners', () => {
 })
 
 test('workspace discovery reads package.json and pnpm workspaces with exclusions', (t) => {
-  const npm = fixture(t, workspace)
-  assert.deepEqual(
-    listWorkspacePackages(npm)
-      .map((item) => item.name)
-      .toSorted(),
-    ['root', '@w/core', '@w/tools', '@w/ui', '@w/web'].toSorted()
-  )
-  const ui = listWorkspacePackages(npm).find((item) => item.name === '@w/ui')
-  assert.deepEqual(ui?.dependencies, ['@w/core'])
+  const npm = fsWorkspaceSource(fixture(t, workspace))
+  const packages = listWorkspacePackages(npm)
+  assert.deepEqual(packages.map((item) => item.name).toSorted(), [
+    '@w/core',
+    '@w/tools',
+    '@w/ui',
+    '@w/web',
+    'root',
+  ])
+  assert.deepEqual(packages.find((item) => item.name === '@w/ui')?.dependencies, ['@w/core'])
 
   const pnpm = fixture(t, {
     'package.json': { private: true },
@@ -169,26 +195,96 @@ test('workspace discovery reads package.json and pnpm workspaces with exclusions
     'libs/legacy/package.json': pkg('legacy'),
   })
   assert.deepEqual(
-    listWorkspacePackages(pnpm).map((item) => item.name),
+    listWorkspacePackages(fsWorkspaceSource(pnpm)).map((item) => item.name),
     ['//', 'a']
+  )
+
+  const flow = fixture(t, {
+    'package.json': { name: 'r' },
+    'pnpm-workspace.yaml': 'packages: [\'apps/*\', "packages/*"]\n',
+    'apps/a/package.json': pkg('a'),
+    'packages/b/package.json': pkg('b'),
+  })
+  assert.deepEqual(
+    listWorkspacePackages(fsWorkspaceSource(flow))
+      .map((item) => item.name)
+      .toSorted(),
+    ['a', 'b', 'r']
   )
 })
 
-test('affectedFromChangedFiles adds transitive dependents only', (t) => {
-  const packages = listWorkspacePackages(fixture(t, workspace))
-  assert.deepEqual(affectedFromChangedFiles(packages, ['packages/core/src/index.ts']), {
+const manifest = (workspaces) => ({ name: 'r', workspaces })
+
+test('workspace discovery throws on anything it cannot evaluate faithfully', (t) => {
+  /** @param {Record<string, unknown>} files */
+  const discover = (files) => listWorkspacePackages(fsWorkspaceSource(fixture(t, files)))
+  for (const glob of ['{apps,packages}/*', 'apps/[ab]', 'apps/@(a|b)', 'apps/**x', 'a\\b'])
+    assert.throws(
+      () => discover({ 'package.json': manifest([glob]), 'apps/a/package.json': pkg('a') }),
+      /unsupported workspace glob/,
+      glob
+    )
+  assert.throws(
+    () => discover({ 'package.json': manifest({ nested: true }) }),
+    /unsupported workspaces declaration/
+  )
+  assert.throws(() => discover({ 'package.json': manifest([1]) }), /non-string workspace glob/)
+  assert.throws(
+    () => discover({ 'package.json': { name: 'r' }, 'pnpm-workspace.yaml': 'packages: apps/*\n' }),
+    /unsupported packages declaration/
+  )
+  assert.throws(
+    () =>
+      discover({
+        'package.json': { name: 'r' },
+        'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - { weird: true }\n',
+      }),
+    /unsupported workspace glob/
+  )
+  assert.throws(() => discover({ 'package.json': '{ not json' }), /malformed package\.json/)
+  assert.throws(
+    () =>
+      discover({ 'package.json': manifest(['packages/*']), 'packages/core/package.json': '{oops' }),
+    /malformed manifest packages\/core\/package\.json/
+  )
+  assert.throws(
+    () =>
+      discover({
+        'package.json': manifest(['packages/*']),
+        'packages/core/package.json': { version: '1.0.0' },
+      }),
+    /has no name/
+  )
+  assert.throws(
+    () =>
+      discover({
+        'package.json': manifest(['packages/*']),
+        'packages/a/package.json': pkg('same'),
+        'packages/b/package.json': pkg('same'),
+      }),
+    /duplicate workspace package name: same/
+  )
+})
+
+test('affectedFromChangedFiles adds transitive dependents and fails closed on shared files', (t) => {
+  const packages = listWorkspacePackages(fsWorkspaceSource(fixture(t, workspace)))
+  const select = (...files) => affectedFromChangedFiles([packages], files)
+
+  assert.deepEqual(select('packages/core/src/index.ts'), {
     all: false,
     packages: ['@w/core', '@w/ui', '@w/web'],
+    reason: 'git diff and workspace graphs',
   })
-  assert.deepEqual(affectedFromChangedFiles(packages, ['packages/tools/src/index.ts']), {
-    all: false,
-    packages: ['@w/tools'],
-  })
-  assert.deepEqual(affectedFromChangedFiles(packages, ['README.md']), {
-    all: false,
-    packages: ['root'],
-  })
-  assert.deepEqual(affectedFromChangedFiles(packages, []), { all: false, packages: [] })
+  assert.deepEqual(select('packages/tools/src/index.ts').packages, ['@w/tools'])
+  assert.deepEqual(select().packages, [])
+  // A nested file named like a global file only affects its own package.
+  assert.equal(select('packages/tools/package.json').all, false)
+
+  // Docs and other non-build files that no package owns select nothing.
+  for (const file of ['README.md', 'LICENSE', 'docs/guide/setup.png', '.gitignore', 'NOTICE'])
+    assert.deepEqual(select(file).packages, [], file)
+
+  // Anything else that no package owns can change any package's output.
   for (const file of [
     'bun.lock',
     'package.json',
@@ -197,13 +293,19 @@ test('affectedFromChangedFiles adds transitive dependents only', (t) => {
     'vite.config.ts',
     'tsconfig.base.json',
     '.mise.toml',
-  ])
-    assert.equal(affectedFromChangedFiles(packages, [file]).all, true, file)
-  // A nested file named like a global file only affects its own package.
-  assert.equal(affectedFromChangedFiles(packages, ['packages/tools/package.json']).all, false)
+    'scripts/build.mjs',
+    'scripts/build-cloudflare.mjs',
+    '.github/workflows/ci.yml',
+    'tools/codegen/run.ts',
+  ]) {
+    const result = select(file)
+    assert.equal(result.all, true, file)
+    assert.match(result.reason, /shared or unowned file changed/, file)
+    assert.equal(result.packages.length, 5, file)
+  }
 })
 
-test('vite-plus affected selection uses git and the workspace graph', (t) => {
+test('vite-plus affected selection uses git and the workspace graphs', (t) => {
   const { root, base, head } = workspaceRepo(t, (dir) =>
     write(dir, 'packages/core/src/index.ts', 'export const changed = true\n')
   )
@@ -213,6 +315,7 @@ test('vite-plus affected selection uses git and the workspace graph', (t) => {
   assert.equal(result.conservative, false)
   assert.equal(result.changedFiles, 1)
   assert.deepEqual(result.packages, ['@w/core', '@w/ui', '@w/web'])
+  assert.deepEqual(result.removedPackages, [])
   assert.deepEqual(result.filterArgs, [
     '--filter',
     '@w/core',
@@ -233,7 +336,7 @@ test('vite-plus selection resolves the tool from code-foundry.yml and honors the
   assert.equal(affectedPackages(root, { base, head, tool: 'auto' }).tool, 'vite-plus')
 })
 
-test('vite-plus selection handles global, root-only, and empty changes', (t) => {
+test('vite-plus selection handles global, non-build, and empty changes', (t) => {
   const lock = workspaceRepo(t, (dir) => write(dir, 'bun.lock', 'changed\n'))
   const global = affectedPackages(lock.root, { ...lock, tool: 'vite-plus' })
   assert.equal(global.all, true)
@@ -242,15 +345,111 @@ test('vite-plus selection handles global, root-only, and empty changes', (t) => 
   assert.equal(global.packages.length, 5)
 
   const readme = workspaceRepo(t, (dir) => write(dir, 'README.md', 'changed\n'))
-  const rootOnly = affectedPackages(readme.root, { ...readme, tool: 'vite-plus' })
-  assert.deepEqual(rootOnly.packages, ['root'])
-  assert.deepEqual(rootOnly.filterArgs, ['-w'])
+  const docsOnly = affectedPackages(readme.root, { ...readme, tool: 'vite-plus' })
+  assert.deepEqual(docsOnly.packages, [])
+  assert.deepEqual(docsOnly.filterArgs, [])
+  assert.equal(docsOnly.all, false)
 
   const empty = workspaceRepo(t, () => {})
   const nothing = affectedPackages(empty.root, { ...empty, tool: 'vite-plus' })
   assert.deepEqual(nothing.packages, [])
-  assert.deepEqual(nothing.filterArgs, [])
   assert.equal(nothing.all, false)
+})
+
+test('a changed shared root script selects every package', (t) => {
+  const { root, base, head } = workspaceRepo(
+    t,
+    (dir) => write(dir, 'scripts/build.mjs', 'console.log("changed")\n'),
+    { 'scripts/build.mjs': 'console.log("base")\n' }
+  )
+  const result = affectedPackages(root, { base, head, tool: 'vite-plus' })
+  assert.equal(result.all, true)
+  assert.equal(result.conservative, false)
+  assert.match(result.reason, /scripts\/build\.mjs/)
+  assert.equal(result.packages.length, 5)
+})
+
+test('deleting a package still selects the packages that depended on it', (t) => {
+  const { root, base, head } = workspaceRepo(t, (dir) => {
+    rmSync(join(dir, 'packages/core'), { recursive: true })
+    // web and ui still list the removed package in their manifests.
+  })
+  const result = affectedPackages(root, { base, head, tool: 'vite-plus' })
+  assert.equal(result.all, false)
+  assert.deepEqual(result.removedPackages, ['@w/core'])
+  assert.deepEqual(result.packages, ['@w/ui', '@w/web'])
+  assert.deepEqual(result.filterArgs, ['--filter', '@w/ui', '--filter', '@w/web'])
+})
+
+test('renaming a package selects its dependents through the base graph', (t) => {
+  const { root, base, head } = workspaceRepo(t, (dir) =>
+    write(dir, 'packages/core/package.json', pkg('@w/new-core'))
+  )
+  const result = affectedPackages(root, { base, head, tool: 'vite-plus' })
+  assert.equal(result.all, false)
+  assert.deepEqual(result.packages, ['@w/new-core', '@w/ui', '@w/web'])
+  assert.deepEqual(result.removedPackages, ['@w/core'])
+})
+
+test('moving a package directory selects dependents and the new location', (t) => {
+  const { root, base, head } = workspaceRepo(t, (dir) => {
+    git(dir, 'mv', 'packages/core', 'packages/kernel')
+  })
+  const result = affectedPackages(root, { base, head, tool: 'vite-plus' })
+  assert.equal(result.all, false)
+  assert.deepEqual(result.packages, ['@w/core', '@w/ui', '@w/web'])
+})
+
+test('a dependency removed or added in a manifest keeps the old dependents selected', (t) => {
+  const removed = workspaceRepo(t, (dir) =>
+    write(dir, 'packages/ui/package.json', pkg('@w/ui', {}))
+  )
+  // ui changed itself, and web depended on ui in both graphs.
+  assert.deepEqual(affectedPackages(removed.root, { ...removed, tool: 'vite-plus' }).packages, [
+    '@w/ui',
+    '@w/web',
+  ])
+  const added = workspaceRepo(t, (dir) =>
+    write(dir, 'packages/tools/package.json', pkg('@w/tools', { '@w/core': 'workspace:*' }))
+  )
+  assert.deepEqual(affectedPackages(added.root, { ...added, tool: 'vite-plus' }).packages, [
+    '@w/tools',
+  ])
+})
+
+test('uncertain workspaces fail closed instead of yielding a partial graph', (t) => {
+  const braces = workspaceRepo(t, (dir) => write(dir, 'packages/tools/src/index.ts', 'x\n'), {
+    'package.json': { name: 'root', workspaces: ['{apps,packages}/*'] },
+  })
+  const braced = affectedPackages(braces.root, { ...braces, tool: 'vite-plus' })
+  assert.equal(braced.all, true)
+  assert.equal(braced.conservative, true)
+  assert.match(braced.reason, /unsupported workspace glob/)
+
+  const malformed = workspaceRepo(t, (dir) => write(dir, 'packages/core/package.json', '{broken'))
+  const broken = affectedPackages(malformed.root, { ...malformed, tool: 'vite-plus' })
+  assert.equal(broken.all, true)
+  assert.equal(broken.conservative, true)
+  assert.match(broken.reason, /malformed manifest packages\/core\/package\.json/)
+
+  // Malformed at the base ref only is just as uncertain.
+  const baseBroken = workspaceRepo(
+    t,
+    (dir) => write(dir, 'packages/core/package.json', pkg('@w/core')),
+    { 'packages/core/package.json': '{broken' }
+  )
+  assert.equal(
+    affectedPackages(baseBroken.root, { ...baseBroken, tool: 'vite-plus' }).conservative,
+    true
+  )
+
+  const flowRepo = workspaceRepo(t, (dir) => write(dir, 'packages/tools/src/index.ts', 'y\n'), {
+    'package.json': { name: 'root' },
+    'pnpm-workspace.yaml': "packages: ['apps/*', 'packages/*']\n",
+  })
+  const flow = affectedPackages(flowRepo.root, { ...flowRepo, tool: 'vite-plus' })
+  assert.equal(flow.conservative, false)
+  assert.deepEqual(flow.packages, ['@w/tools'])
 })
 
 test('affected selection is conservative when it cannot prove anything', (t) => {
@@ -267,6 +466,10 @@ test('affected selection is conservative when it cannot prove anything', (t) => 
   })
   assert.equal(injection.conservative, true)
   assert.match(injection.reason, /invalid base ref/)
+
+  // A base commit missing from a shallow clone cannot be compared.
+  const missing = affectedPackages(root, { base: 'f'.repeat(40), head: 'HEAD', tool: 'vite-plus' })
+  assert.equal(missing.conservative, true)
 
   const bare = fixture(t, { 'package.json': { name: 'a' } })
   const none = affectedPackages(bare, { base: 'a', head: 'b' })
@@ -323,6 +526,21 @@ test('turbo affected selection parses turbo query output and keeps Turbo behavio
       JSON.stringify({ data: { affectedTasks: { items: [{ fullName: '@w/core#build' }] } } }),
   })
   assert.deepEqual(taskShape.packages, ['@w/core'])
+})
+
+test('turbo selection never depends on this module parsing the workspace', (t) => {
+  // Turbo evaluates its own graph; unsupported globs must not break it.
+  const root = fixture(t, {
+    'package.json': { name: 'r', workspaces: ['{apps,packages}/*'] },
+    'turbo.json': {},
+  })
+  const result = affectedPackages(root, {
+    base: 'main',
+    head: 'HEAD',
+    run: () => JSON.stringify({ data: { affectedPackages: { items: [{ name: 'x' }] } } }),
+  })
+  assert.equal(result.conservative, false)
+  assert.deepEqual(result.packages, ['x'])
 })
 
 test('turbo affected selection fails closed', (t) => {
@@ -511,17 +729,135 @@ test('setup profile opts into Vite+ and turns the Turbo cache off', (t) => {
   }
 })
 
-test('setup action stores the Vite+ task cache once and gates it on the opt-in', () => {
-  const step = setupAction.slice(
-    setupAction.indexOf('- name: Cache Vite+ tasks'),
-    setupAction.indexOf('- name: Configure remote Turbo')
+/** The shell of a named action step, dedented as the runner would see it. */
+function stepScript(name) {
+  const lines = setupAction.split('\n')
+  const start = lines.findIndex((line) => line.trim() === `- name: ${name}`)
+  assert.notEqual(start, -1, `step ${name} exists`)
+  const run = lines.findIndex((line, index) => index > start && line.startsWith('      run: |'))
+  const script = []
+  for (const line of lines.slice(run + 1)) {
+    if (/^ {4}- name:/.test(line) || /^ {6}(?:env|shell|if|with|uses|id):/.test(line)) break
+    script.push(line.startsWith('        ') ? line.slice(8) : line.trimStart())
+  }
+  return script.join('\n')
+}
+
+/** Parse a GITHUB_OUTPUT file, including `name<<DELIMITER` multi-line values. */
+function parseOutputs(text) {
+  const outputs = {}
+  const lines = text.split('\n')
+  for (let index = 0; index < lines.length; index += 1) {
+    const heredoc = lines[index].match(/^([^=<]+)<<(.+)$/)
+    if (heredoc) {
+      const value = []
+      index += 1
+      while (index < lines.length && lines[index] !== heredoc[2]) value.push(lines[index++])
+      outputs[heredoc[1]] = value.join('\n')
+    } else if (lines[index].includes('=')) {
+      const [name, ...rest] = lines[index].split('=')
+      outputs[name] = rest.join('=')
+    }
+  }
+  return outputs
+}
+
+function toolchainOutputs(root, env = {}) {
+  writeFileSync(join(root, '.toolchain.mjs.sh'), stepScript('Detect Vite+ toolchain'))
+  const output = join(root, '.github-output')
+  writeFileSync(output, '')
+  const result = spawnSync('bash', [join(root, '.toolchain.mjs.sh')], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      GITHUB_OUTPUT: output,
+      REPO_FOUNDRY_RUNNER_OS: 'Linux',
+      REPO_FOUNDRY_RUNNER_ARCH: 'X64',
+      ...env,
+    },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  return parseOutputs(readFileSync(output, 'utf8'))
+}
+
+test('the Vite+ cache namespace isolates OS, architecture, runtime, and Vite+ version', (t) => {
+  const root = fixture(t, {
+    'package.json': { name: 'a' },
+    'node_modules/vite-plus/package.json': { name: 'vite-plus', version: '9.9.9' },
+  })
+  const linux = toolchainOutputs(root)
+  assert.match(linux.namespace, /^vite-plus-v1-Linux-X64-node/)
+  assert.ok(linux.namespace.includes(`node${process.version}`), linux.namespace)
+  assert.match(linux.namespace, /-bun[^-]*-vp9\.9\.9$/)
+  assert.equal(linux.cache_paths, 'node_modules/.vite/task-cache\n**/node_modules/.vite/task-cache')
+
+  const arm = toolchainOutputs(root, { REPO_FOUNDRY_RUNNER_ARCH: 'ARM64' })
+  assert.notEqual(arm.namespace, linux.namespace)
+  assert.match(arm.namespace, /-Linux-ARM64-/)
+  const mac = toolchainOutputs(root, { REPO_FOUNDRY_RUNNER_OS: 'macOS' })
+  assert.notEqual(mac.namespace, linux.namespace)
+
+  // A different Vite+ release, or none resolvable, lands in a different namespace.
+  write(root, 'node_modules/vite-plus/package.json', { name: 'vite-plus', version: '9.9.10' })
+  assert.match(toolchainOutputs(root).namespace, /-vp9\.9\.10$/)
+  rmSync(join(root, 'node_modules'), { recursive: true })
+  assert.match(toolchainOutputs(root).namespace, /-vpunknown$/)
+
+  // Namespaces are cache-key safe.
+  assert.match(linux.namespace, /^[A-Za-z0-9._-]+$/)
+})
+
+test('VITE_CACHE_PATH relocates the cached directory', (t) => {
+  const root = fixture(t, { 'package.json': { name: 'a' } })
+  const custom = join(tmpdir(), 'foundry-custom-vite-cache')
+  const outputs = toolchainOutputs(root, { VITE_CACHE_PATH: custom })
+  assert.equal(outputs.cache_paths, custom)
+})
+
+test('the Vite+ cache is restored after Install and every node_modules archive', () => {
+  const names = [...setupAction.matchAll(/^ {4}- name: (.+)$/gm)].map((match) => match[1])
+  const cache = names.indexOf('Cache Vite+ tasks')
+  assert.equal(names[cache - 1], 'Detect Vite+ toolchain')
+  assert.ok(cache > names.indexOf('Install'), 'restored after Install')
+  for (const [index, name] of names.entries())
+    if (name.startsWith('Save ')) assert.ok(cache > index, `restored after "${name}"`)
+  // Nothing follows the cache steps, so later steps cannot replace node_modules.
+  assert.equal(cache, names.length - 1)
+})
+
+test('the Vite+ cache key rolls per run and never crosses a compatibility namespace', () => {
+  const step = setupAction.slice(setupAction.indexOf('- name: Cache Vite+ tasks'))
+  const detect = setupAction.slice(
+    setupAction.indexOf('- name: Detect Vite+ toolchain'),
+    setupAction.indexOf('- name: Cache Vite+ tasks')
   )
-  assert.match(step, /inputs\.cache-vite-plus != 'false'/)
-  assert.match(step, /steps\.profile\.outputs\.vite_plus == 'true'/)
-  assert.match(step, /steps\.profile\.outputs\.vite_plus_task == 'true'/)
-  assert.match(step, /node_modules\/\.vite\/task-cache/)
+  const namespace = '${{ steps.vite-plus-toolchain.outputs.namespace }}'
+  // Detection carries the opt-in gates; the cache step runs only if it succeeded.
+  assert.match(detect, /inputs\.cache-vite-plus != 'false'/)
+  assert.match(detect, /steps\.profile\.outputs\.vite_plus == 'true'/)
+  assert.match(detect, /steps\.profile\.outputs\.vite_plus_task == 'true'/)
+  assert.match(step, /if: steps\.vite-plus-toolchain\.outcome == 'success'/)
   assert.match(step, /save: \$\{\{ inputs\.cache-save \}\}/)
+  assert.match(step, /path: \$\{\{ steps\.vite-plus-toolchain\.outputs\.cache_paths \}\}/)
   assert.doesNotMatch(step, /turbo/i)
+
+  const key = step.match(/^ {8}key: (.+)$/m)?.[1] ?? ''
+  assert.ok(key.startsWith(namespace), 'key starts with the namespace')
+  assert.match(key, /github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}$/)
+  const restoreKeys =
+    step
+      .match(/restore-keys: \|\n((?: {10}.+\n?)+)/)?.[1]
+      .trim()
+      .split('\n') ?? []
+  assert.ok(restoreKeys.length >= 2)
+  for (const restoreKey of restoreKeys)
+    assert.ok(
+      restoreKey.trim().startsWith(namespace),
+      `restore key stays in namespace: ${restoreKey}`
+    )
+
   // The generic build archive excludes the directory so it is not saved twice.
   assert.match(
     setupAction,
@@ -534,6 +870,143 @@ test('setup action stores the Vite+ task cache once and gates it on the opt-in',
   )
 })
 
+// --- real Vite+ runtime: task-cache restore -------------------------------
+//
+// Needs a directory containing an installed vite-plus (node_modules/.bin/vp),
+// e.g. `bun add -d vite-plus@1.3.0` in a scratch folder. It is not a dependency
+// of this repository, so the suite skips these tests when it is not provided.
+
+const vitePlusDir = process.env.CODE_FOUNDRY_VITE_PLUS_DIR
+const needsVitePlus = vitePlusDir
+  ? false
+  : 'set CODE_FOUNDRY_VITE_PLUS_DIR to run against real Vite+'
+
+/** A two-package workspace whose build scripts read their own source file. */
+function vitePlusWorkspace(t) {
+  const root = fixture(t, {
+    'package.json': { name: 'root', private: true, workspaces: ['packages/*'] },
+    'packages/core/package.json': {
+      name: '@w/core',
+      version: '1.0.0',
+      scripts: { build: 'node build.mjs' },
+    },
+    'packages/ui/package.json': {
+      name: '@w/ui',
+      version: '1.0.0',
+      dependencies: { '@w/core': 'workspace:*' },
+      scripts: { build: 'node build.mjs' },
+    },
+    'packages/core/src/index.ts': 'export const core = 1\n',
+    'packages/ui/src/index.ts': 'export const ui = 1\n',
+    'packages/core/build.mjs':
+      'import {readFileSync} from "node:fs"\nconsole.log("built", readFileSync("src/index.ts", "utf8").trim())\n',
+    'packages/ui/build.mjs':
+      'import {readFileSync} from "node:fs"\nconsole.log("built", readFileSync("src/index.ts", "utf8").trim())\n',
+  })
+  install(root)
+  return root
+}
+
+/** Simulate the Install step: node_modules is replaced from scratch. */
+function install(root) {
+  rmSync(join(root, 'node_modules'), { recursive: true, force: true })
+  mkdirSync(join(root, 'node_modules'))
+  for (const entry of readdirSync(join(vitePlusDir, 'node_modules'))) {
+    if (entry === '.vite') continue
+    symlinkSync(join(vitePlusDir, 'node_modules', entry), join(root, 'node_modules', entry))
+  }
+}
+
+function vp(root, args, env = {}) {
+  const result = spawnSync(join(root, 'node_modules/.bin/vp'), ['run', '--cache', ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env },
+  })
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`)
+  return result.stdout
+}
+
+const taskCache = (root) => join(root, 'node_modules/.vite/task-cache')
+
+test(
+  'real Vite+: a task cache restored after Install replays, one restored before does not',
+  {
+    skip: needsVitePlus,
+  },
+  (t) => {
+    const root = vitePlusWorkspace(t)
+    const store = mkdtempSync(join(tmpdir(), 'foundry-cache-store-'))
+    t.after(() => rmSync(store, { recursive: true, force: true }))
+
+    assert.match(vp(root, ['-r', 'build']), /0\/2 cache hit/)
+    assert.match(vp(root, ['-r', 'build']), /2\/2 cache hit/)
+    cpSync(taskCache(root), join(store, 'task-cache'), { recursive: true })
+
+    // Restoring first and letting Install replace node_modules loses the cache.
+    install(root)
+    mkdirSync(join(root, 'node_modules/.vite'), { recursive: true })
+    cpSync(join(store, 'task-cache'), taskCache(root), { recursive: true })
+    install(root)
+    assert.equal(existsSync(taskCache(root)), false)
+    assert.match(vp(root, ['-r', 'build']), /0\/2 cache hit/)
+
+    // Restoring after Install replays every task.
+    install(root)
+    mkdirSync(join(root, 'node_modules/.vite'), { recursive: true })
+    cpSync(join(store, 'task-cache'), taskCache(root), { recursive: true })
+    assert.match(vp(root, ['-r', 'build']), /2\/2 cache hit/)
+
+    // A changed input re-runs only the affected task.
+    write(root, 'packages/core/src/index.ts', 'export const core = 2\n')
+    const partial = vp(root, ['-r', 'build'])
+    assert.match(partial, /cache miss/)
+    assert.match(partial, /1\/2 cache hit/)
+  }
+)
+
+test(
+  'real Vite+: VITE_CACHE_PATH moves the cache and it restores on another path',
+  {
+    skip: needsVitePlus,
+  },
+  (t) => {
+    const root = vitePlusWorkspace(t)
+    const first = mkdtempSync(join(tmpdir(), 'foundry-vite-cache-a-'))
+    const second = mkdtempSync(join(tmpdir(), 'foundry-vite-cache-b-'))
+    t.after(() => {
+      rmSync(first, { recursive: true, force: true })
+      rmSync(second, { recursive: true, force: true })
+    })
+
+    assert.match(vp(root, ['-r', 'build'], { VITE_CACHE_PATH: first }), /0\/2 cache hit/)
+    assert.equal(existsSync(taskCache(root)), false, 'default location is untouched')
+    assert.ok(readdirSync(first).length > 0, 'cache written to VITE_CACHE_PATH')
+
+    // node_modules replacement cannot affect a cache outside it.
+    install(root)
+    assert.match(vp(root, ['-r', 'build'], { VITE_CACHE_PATH: first }), /2\/2 cache hit/)
+
+    // Restore into a different directory, as a new runner would.
+    cpSync(first, second, { recursive: true })
+    install(root)
+    assert.match(vp(root, ['-r', 'build'], { VITE_CACHE_PATH: second }), /2\/2 cache hit/)
+  }
+)
+
+test(
+  'real Vite+: the namespace step reports the installed Vite+ version',
+  { skip: needsVitePlus },
+  (t) => {
+    const root = vitePlusWorkspace(t)
+    const { namespace } = toolchainOutputs(root)
+    const version = JSON.parse(
+      readFileSync(join(vitePlusDir, 'node_modules/vite-plus/package.json'), 'utf8')
+    ).version
+    assert.ok(namespace.endsWith(`-vp${version}`), namespace)
+  }
+)
+
 test('new repositories receive the monorepo_tool default and stay on auto', (t) => {
   const root = fixture(t, { 'package.json': { name: 'a', version: '1.0.0' } })
   const init = spawnSync(process.execPath, [cli, 'init', '--target', root], { encoding: 'utf8' })
@@ -543,3 +1016,57 @@ test('new repositories receive the monorepo_tool default and stay on auto', (t) 
     /^monorepo_tool: auto$/m
   )
 })
+
+// --- Cloudflare workflows: the Turbo-only affected check ------------------
+
+/** Run a Cloudflare workflow's "Resolve Turbo package" script for real. */
+function resolveTurboPackage(t, workflowFile, files) {
+  const text = readFileSync(join(packageRoot, '.github/workflows', workflowFile), 'utf8')
+  const stepStart = text.indexOf('- name: Resolve Turbo package')
+  const open = text.indexOf("<<'NODE'\n", stepStart)
+  const close = text.indexOf('\n          NODE\n', open)
+  const script = text
+    .slice(open + "<<'NODE'\n".length, close)
+    .split('\n')
+    .map((line) => line.slice(10))
+    .join('\n')
+  const root = fixture(t, files)
+  const output = join(root, 'out')
+  writeFileSync(output, '')
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH,
+      GITHUB_OUTPUT: output,
+      TURBO_FILTER: 'auto',
+      WORKSPACE: root,
+      WORKING_DIRECTORY: '.',
+    },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  return parseOutputs(readFileSync(output, 'utf8'))
+}
+
+for (const workflow of ['cloudflare-deploy.yml', 'cloudflare-delivery.yml']) {
+  test(`${workflow} skips its Turbo-only check for Vite+ repositories`, (t) => {
+    const files = { 'package.json': { name: 'app' }, 'turbo.json': {} }
+    const turbo = resolveTurboPackage(t, workflow, files)
+    assert.equal(turbo.turbo_enabled, 'true')
+    assert.equal(turbo.turbo_package, 'app')
+
+    for (const line of ['monorepo_tool: vite-plus', 'monorepo_tool: "vite-plus" # opt in']) {
+      const vitePlus = resolveTurboPackage(t, workflow, {
+        ...files,
+        '.github/code-foundry.yml': `${line}\n`,
+      })
+      assert.equal(vitePlus.turbo_enabled, 'false', line)
+      assert.equal(vitePlus.should_deploy, 'true', line)
+    }
+    const auto = resolveTurboPackage(t, workflow, {
+      ...files,
+      '.github/code-foundry.yml': 'monorepo_tool: auto\n',
+    })
+    assert.equal(auto.turbo_enabled, 'true')
+  })
+}

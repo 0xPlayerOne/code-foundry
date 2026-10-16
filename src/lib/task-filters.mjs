@@ -1,7 +1,7 @@
 // @ts-check
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { readConfig } from './config.mjs'
 import { resolveMonorepoTool } from './profile.mjs'
@@ -160,6 +160,7 @@ export function taskAffected(task, filters, paths) {
  * @typedef {{ name: string, dir: string, dependencies: string[] }} WorkspacePackage
  * `dir` is repo-relative with forward slashes; the workspace root is ''.
  */
+/** @typedef {{ label: string, files: string[], read: (path: string) => string }} WorkspaceSource */
 /**
  * @typedef {{
  *   tool: 'turbo'|'vite-plus'|'none',
@@ -170,16 +171,18 @@ export function taskAffected(task, filters, paths) {
  *   reason: string,
  *   changedFiles: number,
  *   packages: string[],
+ *   removedPackages: string[],
  *   filterArgs: string[],
  * }} AffectedResult
  */
 
-/** Root files whose change can alter every package's build or cache key. */
-const GLOBAL_FILE =
-  /^(?:package\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|pnpm-workspace\.yaml|turbo\.jsonc?|vite\.config\.[^/]+|tsconfig(?:\.[^/]*)?\.json|\.npmrc|bunfig\.toml|\.mise\.toml|mise\.lock)$/
+/** Unowned files that cannot change a build; any other unowned file selects all packages. */
+const NON_BUILD_FILE = /^(?:(?:[^/]+\.(?:md|mdx|txt))|LICENSE[^/]*|NOTICE|\.gitignore|docs\/.*)$/i
 
 const SAFE_REF = /^[A-Za-z0-9._/~^@{}-]+$/
 const SAFE_PACKAGE_NAME = /^(?:@[a-z0-9~][a-z0-9._~-]*\/)?[a-z0-9~][a-z0-9._~-]*$/i
+/** Workspace glob syntax this module cannot evaluate faithfully. */
+const UNSUPPORTED_GLOB = /[{}[\]()+@\\]|^!!|\*\*[^/]|[^/]\*\*/
 
 /** @param {string} ref @param {string} label */
 function assertRef(ref, label) {
@@ -188,89 +191,125 @@ function assertRef(ref, label) {
 }
 
 /**
- * Workspace globs from package.json `workspaces` (array or `{ packages }`) and
- * pnpm-workspace.yaml `packages:`.
+ * Workspace files as of a git ref (committed objects, not the working tree).
  * @param {string} root
+ * @param {string} ref
+ * @returns {WorkspaceSource}
+ */
+export function gitWorkspaceSource(root, ref) {
+  assertRef(ref, 'workspace')
+  const git = (/** @type {string[]} */ args) =>
+    execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 256 * 1024 * 1024,
+    })
+  const files = git(['ls-tree', '-r', '-z', '--name-only', ref]).split('\0').filter(Boolean)
+  return { label: ref, files, read: (path) => git(['show', `${ref}:${path}`]) }
+}
+
+/**
+ * Workspace globs from package.json `workspaces` and pnpm-workspace.yaml.
+ * Throws on syntax it cannot evaluate so callers fail closed.
+ * @param {WorkspaceSource} source
  * @returns {string[]}
  */
-export function workspaceGlobs(root) {
+export function workspaceGlobs(source) {
   /** @type {string[]} */
   const globs = []
-  try {
-    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-    const workspaces = packageJson.workspaces
+  if (source.files.includes('package.json')) {
+    let manifest
+    try {
+      manifest = JSON.parse(source.read('package.json'))
+    } catch {
+      throw new Error(`malformed package.json at ${source.label}`)
+    }
+    const workspaces = manifest.workspaces
     const list = Array.isArray(workspaces) ? workspaces : workspaces?.packages
-    if (Array.isArray(list)) globs.push(...list.filter((item) => typeof item === 'string'))
-  } catch {
-    // No readable package.json: no declared workspaces.
-  }
-  const pnpm = join(root, 'pnpm-workspace.yaml')
-  if (existsSync(pnpm)) {
-    let inPackages = false
-    for (const line of readFileSync(pnpm, 'utf8').split(/\r?\n/)) {
-      if (/^packages:\s*$/.test(line)) inPackages = true
-      else if (/^\S/.test(line)) inPackages = false
-      else if (inPackages) {
-        const item = line.match(/^\s*-\s*['"]?([^'"#]+?)['"]?\s*(?:#.*)?$/)
-        if (item) globs.push(item[1])
+    if (workspaces !== undefined && !Array.isArray(list))
+      throw new Error('unsupported workspaces declaration in package.json')
+    if (Array.isArray(list)) {
+      for (const item of list) {
+        if (typeof item !== 'string') throw new Error('non-string workspace glob in package.json')
+        globs.push(item)
       }
     }
+  }
+  if (source.files.includes('pnpm-workspace.yaml')) {
+    let inPackages = false
+    for (const line of source.read('pnpm-workspace.yaml').split(/\r?\n/)) {
+      if (/^packages:\s*$/.test(line)) inPackages = true
+      else if (/^packages:\s*\S/.test(line)) {
+        // Flow style: packages: ['apps/*', 'packages/*']
+        const flow = line.match(/^packages:\s*\[(.*)\]\s*(?:#.*)?$/)
+        if (!flow) throw new Error('unsupported packages declaration in pnpm-workspace.yaml')
+        for (const part of flow[1].split(',')) {
+          const entry = part.trim()
+          if (!entry) continue
+          const item = entry.match(/^(['"]?)([^'"]+)\1$/)
+          if (!item) throw new Error(`unsupported pnpm-workspace.yaml entry: ${entry}`)
+          globs.push(item[2])
+        }
+      } else if (/^\S/.test(line)) inPackages = false
+      else if (inPackages) {
+        if (/^\s*(?:#.*)?$/.test(line)) continue
+        const item = line.match(/^\s*-\s*(['"]?)([^'"#]+?)\1\s*(?:#.*)?$/)
+        if (!item) throw new Error(`unsupported pnpm-workspace.yaml entry: ${line.trim()}`)
+        globs.push(item[2])
+      }
+    }
+  }
+  for (const glob of globs) {
+    const body = glob.startsWith('!') ? glob.slice(1) : glob
+    if (!body || UNSUPPORTED_GLOB.test(body)) throw new Error(`unsupported workspace glob: ${glob}`)
   }
   return globs
 }
 
-/** @param {string} root @returns {string[]} repo-relative package directories */
-function packageDirectories(root) {
-  /** @type {string[]} */
-  const found = []
-  /** @param {string} directory */
-  function visit(directory) {
-    for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
-      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
-      const child = directory ? `${directory}/${entry.name}` : entry.name
-      if (existsSync(join(root, child, 'package.json'))) found.push(child)
-      visit(child)
-    }
-  }
-  visit('')
-  return found
-}
-
 /**
- * Discover workspace packages, including the root package when it has a name.
- * @param {string} root
+ * Workspace packages including the root. Throws when a member cannot be read or named.
+ * @param {WorkspaceSource} source
  * @returns {WorkspacePackage[]}
  */
-export function listWorkspacePackages(root) {
-  const globs = workspaceGlobs(root)
+export function listWorkspacePackages(source) {
+  const globs = workspaceGlobs(source)
   const includes = globs.filter((glob) => !glob.startsWith('!')).map(globToRegExp)
   const excludes = globs
     .filter((glob) => glob.startsWith('!'))
     .map((glob) => globToRegExp(glob.slice(1)))
-  const directories = packageDirectories(root).filter(
-    (dir) => includes.some((re) => re.test(dir)) && !excludes.some((re) => re.test(dir))
-  )
+  const directories = source.files
+    .filter((file) => file.endsWith('/package.json') && !file.split('/').includes('node_modules'))
+    .map((file) => file.slice(0, -'/package.json'.length))
+    .filter((dir) => includes.some((re) => re.test(dir)) && !excludes.some((re) => re.test(dir)))
 
   /** @type {Array<{ name: string, dir: string, manifest: Record<string, any> }>} */
   const manifests = []
-  /** @param {string} dir */
-  const load = (dir) => {
+  /** @param {string} dir @param {boolean} isRoot */
+  const load = (dir, isRoot) => {
+    const path = dir ? `${dir}/package.json` : 'package.json'
+    let manifest
     try {
-      const manifest = JSON.parse(readFileSync(join(root, dir, 'package.json'), 'utf8'))
-      if (typeof manifest.name === 'string' && manifest.name) {
-        manifests.push({ name: manifest.name, dir, manifest })
-      } else if (dir === '') {
-        manifests.push({ name: '//', dir, manifest })
-      }
+      manifest = JSON.parse(source.read(path))
     } catch {
-      // Malformed manifests are reported by doctor; skip them here.
+      throw new Error(`malformed manifest ${path} at ${source.label}`)
+    }
+    if (typeof manifest.name === 'string' && manifest.name) {
+      manifests.push({ name: manifest.name, dir, manifest })
+    } else if (isRoot) {
+      manifests.push({ name: '//', dir, manifest })
+    } else {
+      throw new Error(`workspace package ${path} has no name`)
     }
   }
-  load('')
-  for (const dir of directories) load(dir)
+  if (source.files.includes('package.json')) load('', true)
+  for (const dir of directories) load(dir, false)
 
-  const names = new Set(manifests.map((item) => item.name))
+  const seen = new Set()
+  for (const item of manifests) {
+    if (seen.has(item.name)) throw new Error(`duplicate workspace package name: ${item.name}`)
+    seen.add(item.name)
+  }
   return manifests.map(({ name, dir, manifest }) => ({
     name,
     dir,
@@ -278,7 +317,7 @@ export function listWorkspacePackages(root) {
       ...new Set(
         ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].flatMap(
           (table) =>
-            Object.keys(manifest[table] ?? {}).filter((dep) => names.has(dep) && dep !== name)
+            Object.keys(manifest[table] ?? {}).filter((dep) => seen.has(dep) && dep !== name)
         )
       ),
     ],
@@ -286,31 +325,36 @@ export function listWorkspacePackages(root) {
 }
 
 /**
- * Map changed files to affected packages: the owning package of each file plus
- * its transitive workspace dependents. A change to a global root file (lockfile,
- * root manifest, runner or TypeScript config) affects every package.
- * @param {WorkspacePackage[]} packages
+ * Changed files to affected packages across base and head graphs, so deleted,
+ * renamed, and re-wired packages keep their dependents. Unowned build files
+ * select every package. Dependents follow the union of all graphs' edges.
+ * @param {WorkspacePackage[][]} graphs Head graph first.
  * @param {string[]} changedFiles Repo-relative, forward slashes.
- * @returns {{ all: boolean, packages: string[] }}
+ * @returns {{ all: boolean, packages: string[], reason: string }}
  */
-export function affectedFromChangedFiles(packages, changedFiles) {
-  const everything = packages.map((item) => item.name).toSorted()
-  if (changedFiles.some((file) => GLOBAL_FILE.test(file)))
-    return { all: true, packages: everything }
-
-  const byDepth = packages.toSorted((a, b) => b.dir.length - a.dir.length)
+export function affectedFromChangedFiles(graphs, changedFiles) {
+  const everything = [...new Set(graphs.flat().map((item) => item.name))].toSorted()
   const direct = new Set()
   for (const file of changedFiles) {
-    const owner = byDepth.find((item) => item.dir !== '' && file.startsWith(`${item.dir}/`))
-    const resolved = owner ?? packages.find((item) => item.dir === '')
-    if (resolved) direct.add(resolved.name)
+    const owners = new Set()
+    for (const graph of graphs) {
+      const owner = graph
+        .filter((item) => item.dir !== '' && file.startsWith(`${item.dir}/`))
+        .toSorted((a, b) => b.dir.length - a.dir.length)[0]
+      if (owner) owners.add(owner.name)
+    }
+    if (owners.size > 0) {
+      for (const name of owners) direct.add(name)
+    } else if (!NON_BUILD_FILE.test(file)) {
+      return { all: true, packages: everything, reason: `shared or unowned file changed: ${file}` }
+    }
   }
 
   const dependents = new Map()
-  for (const item of packages)
+  for (const item of graphs.flat())
     for (const dep of item.dependencies) {
-      if (!dependents.has(dep)) dependents.set(dep, [])
-      dependents.get(dep).push(item.name)
+      if (!dependents.has(dep)) dependents.set(dep, new Set())
+      dependents.get(dep).add(item.name)
     }
   const affected = new Set(direct)
   const queue = [...direct]
@@ -322,12 +366,11 @@ export function affectedFromChangedFiles(packages, changedFiles) {
       }
     }
   }
-  return { all: false, packages: [...affected].toSorted() }
+  return { all: false, packages: [...affected].toSorted(), reason: 'git diff and workspace graphs' }
 }
 
 /**
- * Arguments for `vp run` that select the given packages. The workspace root
- * package has no name filter; Vite+ selects it with `-w`.
+ * `vp run` arguments selecting the given packages (the root is `-w`).
  * @param {WorkspacePackage[]} packages
  * @param {string[]} names
  */
@@ -401,12 +444,13 @@ const defaultRun = (command, args, cwd) =>
     maxBuffer: 64 * 1024 * 1024,
   })
 
+/** @param {unknown} error */
+const describe = (error) => (error instanceof Error ? error.message.split('\n')[0] : String(error))
+
 /**
- * Select the packages affected between two refs using the repository's task
- * runner. Turbo asks `turbo query affected`; Vite+ has no equivalent query, so
- * the change set comes from git and the workspace dependency graph. Whenever
- * affectedness cannot be proven the result is conservative (`all: true`), so a
- * caller that skips unaffected packages never skips a changed one.
+ * Packages affected between two refs. Turbo uses `turbo query affected`; Vite+
+ * has no such query, so git and the workspace graphs at both refs decide.
+ * Anything unprovable is conservative (`all: true`).
  * @param {string} root
  * @param {{ base: string, head: string, tool?: string, run?: (command: string, args: string[], cwd: string) => string }} options
  * @returns {AffectedResult}
@@ -418,8 +462,6 @@ export function affectedPackages(root, options) {
     root,
     requested ? { ...config, monorepo_tool: requested } : config
   )
-  const packages = listWorkspacePackages(root)
-  const everything = packages.map((item) => item.name).toSorted()
   const { base, head } = options
 
   /** @param {Partial<AffectedResult> & { reason: string }} partial @returns {AffectedResult} */
@@ -431,46 +473,60 @@ export function affectedPackages(root, options) {
     conservative: false,
     changedFiles: 0,
     packages: [],
+    removedPackages: [],
     filterArgs: [],
     ...partial,
   })
-  /** @param {string} reason */
-  const conservative = (reason) =>
-    result({
-      all: true,
-      conservative: true,
-      reason,
-      packages: everything,
-    })
+  /** @param {string} reason @param {string[]} [names] */
+  const conservative = (reason, names = []) =>
+    result({ all: true, conservative: true, reason, packages: names })
 
   if (resolution.tool === 'none')
     return conservative(
       `no task runner configured (${resolution.reason}); treating all packages as affected`
     )
 
-  try {
-    if (resolution.tool === 'turbo') {
-      const names = turboAffected(root, base, head, options.run ?? defaultRun)
+  if (resolution.tool === 'turbo') {
+    // Turbo owns its own graph; this module's workspace parsing is never a
+    // prerequisite for the Turbo path.
+    try {
       return result({
         reason: 'turbo query affected',
-        packages: names,
-        all: everything.length > 0 && names.length === everything.length,
+        packages: turboAffected(root, base, head, options.run ?? defaultRun),
       })
+    } catch (error) {
+      return conservative(
+        `affected selection failed (${describe(error)}); treating all packages as affected`
+      )
     }
+  }
+
+  /** @type {string[]} */
+  let headNames = []
+  try {
+    assertRef(base, 'base')
+    assertRef(head, 'head')
+    const headPackages = listWorkspacePackages(gitWorkspaceSource(root, head))
+    headNames = headPackages.map((item) => item.name).toSorted()
+    const basePackages = listWorkspacePackages(gitWorkspaceSource(root, base))
     const files = gitChangedFiles(root, base, head)
-    const selection = affectedFromChangedFiles(packages, files)
+    const selection = affectedFromChangedFiles([headPackages, basePackages], files)
+    const existing = selection.packages.filter((name) => headNames.includes(name))
+    const removed = selection.packages.filter((name) => !headNames.includes(name))
     return result({
-      reason: selection.all ? 'global workspace file changed' : 'git diff and workspace graph',
+      reason: selection.reason,
       changedFiles: files.length,
       all: selection.all,
-      packages: selection.packages,
+      packages: selection.all ? headNames : existing,
+      removedPackages: selection.all ? [] : removed,
       // An empty selection must stay empty: callers skip the run instead of
       // passing no filters, which would run every package.
-      filterArgs: selection.all ? [] : vitePlusFilterArgs(packages, selection.packages),
+      filterArgs: selection.all ? [] : vitePlusFilterArgs(headPackages, existing),
     })
   } catch (error) {
     return conservative(
-      `affected selection failed (${error instanceof Error ? error.message.split('\n')[0] : String(error)}); treating all packages as affected`
+      `affected selection failed (${describe(error)}); treating all packages as affected`,
+      headNames
     )
   }
 }

@@ -32,37 +32,67 @@ When opted in, the setup action:
 
 - stops treating a `turbo.json` as the active runner, so no Turborepo cache or
   remote-cache step runs;
-- restores and saves `node_modules/.vite/task-cache` (Vite+'s local task
-  cache) keyed by the lockfiles, `vite.config.*`, and mise files, using the same
-  push-only save rule as every other cache so pull requests and scheduled runs
-  cannot poison it;
+- restores `node_modules/.vite/task-cache` (Vite+'s local task cache) as its
+  last step, after Install and after every step that archives `node_modules`.
+  Install can replace `node_modules`, and the dependency archives must not
+  contain task output;
+- saves it with the same push-only rule as every other cache, so pull requests
+  and scheduled runs cannot poison it;
 - keeps that directory out of the generic JavaScript build-state archive so it
   is stored once.
 
-Vite+ has no remote cache and this repository does not configure one. Vite+
-validates every restored entry against the task's current inputs and
-environment, so a stale restore-key match can only cause a cache miss, never a
-wrong replay.
+Keys are `<namespace>-<workflow>-<job>-<lockfiles>-<vite.config>-<run id>-<attempt>`,
+so every push saves a refreshed entry (more cache storage than a fixed key).
+Restore keys fall back by lockfiles, job, then any job, but never leave the
+namespace `vite-plus-v1-<OS>-<arch>-node<version>-bun<version>-vp<version>`:
+Vite Task does not fingerprint the Node or Bun binary that runs a task.
 
-`package.json` scripts are not cached by Vite+ unless the consumer sets
-`run.cache.scripts: true` in its root `vite.config.ts` or passes `--cache` to
-`vp run`; Code Foundry does not change consumer config. Commands that read no
-files, such as a bare `echo`, are never cached.
+If `VITE_CACHE_PATH` (absolute) is set, Vite+ writes its cache there and the
+setup action caches that directory instead.
+
+Vite+ has no remote cache and this repository does not configure one.
+
+Known limits (not parity with Turbo):
+
+- Vite Task keeps one cache entry per task, so alternating between states
+  (A, B, A) re-runs the task instead of hitting the cache.
+- `package.json` scripts are not cached unless the consumer sets
+  `run.cache.scripts: true` in its root `vite.config.ts` or passes `--cache` to
+  `vp run`. Code Foundry does not change consumer config. Commands that read no
+  files, such as a bare `echo`, are never cached.
+- Tasks reading files that only Bun loads may need explicit input globs in the
+  consumer's Vite+ config (untested here).
+- `cloudflare-deploy.yml` and `cloudflare-delivery.yml` keep a Turbo-only
+  affected check. With `monorepo_tool: vite-plus` they skip it and deploy
+  conservatively, even with a leftover `turbo.json`.
 
 ### Affected packages
 
 `npx code-foundry affected --base <ref> --head <ref>` prints the affected
-packages as JSON (`tool`, `packages`, `all`, `conservative`, `filterArgs`):
+packages as JSON (`tool`, `packages`, `removedPackages`, `all`, `conservative`,
+`reason`, `filterArgs`). Both refs must be present in the clone (use a
+non-shallow checkout or fetch the base commit).
 
-- Turbo repositories use `turbo query affected --packages`.
+- Turbo repositories use `turbo query affected --packages`; this module does
+  not parse their workspace.
 - Vite+ repositories compute the set from `git diff base...head` and the
-  workspace dependency graph, because Vite+ has no equivalent query. Each
-  changed file marks its owning package; dependents are added transitively.
-  A change to a root lockfile, root manifest, runner config, or TypeScript
-  config affects every package. Other root files affect only the root package.
+  workspace graphs read from the committed trees at both refs, because Vite+
+  has no equivalent query. Each changed file marks the package that owns it;
+  dependents are added transitively over the union of both graphs' edges, so
+  deleted, renamed, moved, and re-wired packages still select their dependents.
+  `removedPackages` lists selected packages that no longer exist at the head.
+- Any changed file that no workspace package owns selects every package
+  (`all: true`): lockfiles, root manifest, runner and TypeScript config, root
+  scripts, CI config. Only Markdown/text files, `LICENSE*`, `NOTICE`,
+  `.gitignore`, and `docs/` are ignored.
+- Anything the module cannot evaluate faithfully makes the result
+  conservative (`all: true`, `conservative: true`): no runner, a git or Turbo
+  failure, a malformed or unnamed workspace manifest at either ref, duplicate
+  package names, or workspace syntax it does not support (brace, bracket, or
+  extglob patterns). Supported syntax is `package.json` `workspaces` (array or
+  `{ packages }`) and pnpm `packages:` as a block or flow list, with `*`, `**`,
+  `?`, and `!` exclusions.
 - `--tool turbo|vite-plus` overrides `monorepo_tool` for one invocation.
-- If affectedness cannot be proven (no runner, git or Turbo failure), the
-  result is conservative: `all: true` with `conservative: true`.
 - For Vite+, `filterArgs` is ready to append to `vp run`. When `all` is true
   run with `-r` instead, and when `packages` is empty skip the run: an empty
   filter list would otherwise select every package.

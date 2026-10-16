@@ -162,15 +162,10 @@ function detectReleaseType(root) {
 export { includesValue }
 
 /**
- * Task-runner selection for JavaScript workspaces. Turbo remains the default:
- * `auto` resolves to Turbo when a turbo config exists and to `none` otherwise,
- * exactly as before Vite+ support. Vite+ is strictly opt-in through
- * `monorepo_tool: vite-plus` in .github/code-foundry.yml.
+ * Workspace task runner. `auto` (default) is Turbo when a turbo config exists,
+ * else none; Vite+ needs an explicit `monorepo_tool: vite-plus`.
  */
 export const MONOREPO_TOOLS = ['auto', 'turbo', 'vite-plus']
-
-/** Local task-cache directory Vite+ (`vp run`) writes, relative to a workspace root. */
-export const VITE_PLUS_CACHE_DIR = 'node_modules/.vite/task-cache'
 
 /** @typedef {'turbo'|'vite-plus'|'none'} ResolvedTool */
 /** @typedef {{ configured: string, tool: ResolvedTool, reason: string, warnings: string[] }} ToolResolution */
