@@ -160,3 +160,128 @@ function detectReleaseType(root) {
 }
 
 export { includesValue }
+
+/**
+ * Task-runner selection for JavaScript workspaces. Turbo remains the default:
+ * `auto` resolves to Turbo when a turbo config exists and to `none` otherwise,
+ * exactly as before Vite+ support. Vite+ is strictly opt-in through
+ * `monorepo_tool: vite-plus` in .github/code-foundry.yml.
+ */
+export const MONOREPO_TOOLS = ['auto', 'turbo', 'vite-plus']
+
+/** Local task-cache directory Vite+ (`vp run`) writes, relative to a workspace root. */
+export const VITE_PLUS_CACHE_DIR = 'node_modules/.vite/task-cache'
+
+/** @typedef {'turbo'|'vite-plus'|'none'} ResolvedTool */
+/** @typedef {{ configured: string, tool: ResolvedTool, reason: string, warnings: string[] }} ToolResolution */
+
+/** @param {string} root @returns {Record<string, any> | null} */
+function readPackageJson(root) {
+  try {
+    return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/** @param {string} root */
+export function hasTurboConfig(root) {
+  return existsSync(join(root, 'turbo.json')) || existsSync(join(root, 'turbo.jsonc'))
+}
+
+/**
+ * Whether a shell command invokes the Vite+ task runner. `vp run ...` and the
+ * `vpr` shorthand populate the task cache; plain `vp build` or `vp test` do
+ * not, so they are intentionally not matched.
+ * @param {string} command
+ */
+export function commandUsesVitePlus(command) {
+  return /(?:^|[\s;&|(])(?:vp\s+(?:-C\s+\S+\s+)?run|vpr)(?:\s|$)/.test(command)
+}
+
+/** @param {string} command */
+export function commandUsesTurbo(command) {
+  return /\bturbo(?:\s|$)/.test(command)
+}
+
+/**
+ * Evidence that a repository declares Vite+: the `vite-plus` package in any
+ * dependency table or a script that runs `vp run` / `vpr`.
+ * @param {string} root
+ * @returns {{ declared: boolean, via: string[] }}
+ */
+export function detectVitePlus(root) {
+  const packageJson = readPackageJson(root)
+  /** @type {string[]} */
+  const via = []
+  if (!packageJson) return { declared: false, via }
+  for (const table of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+    if (
+      packageJson[table] &&
+      typeof packageJson[table] === 'object' &&
+      packageJson[table]['vite-plus']
+    )
+      via.push(`${table}.vite-plus`)
+  }
+  const scripts =
+    packageJson.scripts && typeof packageJson.scripts === 'object' ? packageJson.scripts : {}
+  for (const [name, command] of Object.entries(scripts)) {
+    if (typeof command === 'string' && commandUsesVitePlus(command)) via.push(`scripts.${name}`)
+  }
+  return { declared: via.length > 0, via }
+}
+
+/**
+ * Resolve which task runner a repository uses. Never throws: invalid or
+ * unsatisfied configuration falls back to the legacy behavior and is reported
+ * in `warnings` so doctor can surface it.
+ * @param {string} root
+ * @param {Record<string, string>} [config] Defaults to .github/code-foundry.yml.
+ * @returns {ToolResolution}
+ */
+export function resolveMonorepoTool(
+  root,
+  config = readConfig(join(root, '.github/code-foundry.yml'))
+) {
+  /** @type {string[]} */
+  const warnings = []
+  let selected = (config.monorepo_tool ?? '').trim() || 'auto'
+  if (!MONOREPO_TOOLS.includes(selected)) {
+    warnings.push(
+      `unsupported monorepo_tool: ${selected}; use auto, turbo, or vite-plus. Falling back to auto.`
+    )
+    selected = 'auto'
+  }
+  const turbo = hasTurboConfig(root)
+
+  if (selected === 'vite-plus') {
+    const evidence = detectVitePlus(root)
+    if (!evidence.declared)
+      warnings.push(
+        'monorepo_tool: vite-plus but neither a vite-plus dependency nor a `vp run` script was found in package.json.'
+      )
+    return {
+      configured: selected,
+      tool: 'vite-plus',
+      reason: turbo
+        ? 'monorepo_tool: vite-plus (turbo config present but ignored)'
+        : 'monorepo_tool: vite-plus',
+      warnings,
+    }
+  }
+  if (selected === 'turbo') {
+    if (!turbo) warnings.push('monorepo_tool: turbo but no turbo.json or turbo.jsonc was found.')
+    return {
+      configured: selected,
+      tool: turbo ? 'turbo' : 'none',
+      reason: 'monorepo_tool: turbo',
+      warnings,
+    }
+  }
+  return {
+    configured: selected,
+    tool: turbo ? 'turbo' : 'none',
+    reason: turbo ? 'turbo config detected' : 'no task runner configured',
+    warnings,
+  }
+}

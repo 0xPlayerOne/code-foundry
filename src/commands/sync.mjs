@@ -2168,6 +2168,7 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     coverage_metrics: 'lines',
     coverage_report: '',
     turbo_remote: 'auto',
+    monorepo_tool: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node',
     npm_publish: 'false',
     post_release: 'false',

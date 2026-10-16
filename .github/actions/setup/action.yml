@@ -54,6 +54,10 @@ inputs:
     description: Cache local Turborepo artifacts; auto skips duplicate archives when TURBO_TOKEN enables remote caching.
     required: false
     default: auto
+  cache-vite-plus:
+    description: Cache the local Vite+ task cache (node_modules/.vite/task-cache); only applies when code-foundry.yml sets monorepo_tool to vite-plus. Use true/false to override.
+    required: false
+    default: auto
   task:
     description: Optional CI task used to scope test dependency installation.
     required: false
@@ -122,11 +126,11 @@ runs:
         NODE
         }
 
-        script_uses_turbo() {
+        script_uses_runner() {
           [ -f package.json ] || return 1
-          REPO_FOUNDRY_TURBO_TASK="$REPO_FOUNDRY_TASK" node <<'NODE'
+          REPO_FOUNDRY_RUNNER="$1" REPO_FOUNDRY_RUNNER_TASK="$REPO_FOUNDRY_TASK" node <<'NODE'
         const fs = require('node:fs');
-        const task = process.env.REPO_FOUNDRY_TURBO_TASK || '';
+        const task = process.env.REPO_FOUNDRY_RUNNER_TASK || '';
         const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
         const scripts = packageJson.scripts || {};
         const candidates = {
@@ -141,8 +145,11 @@ runs:
           performance: ['performance:check', 'perf:check'],
         }[task] || [];
         const selected = candidates.find((name) => scripts[name]);
-        const usesTurbo = Boolean(selected && /\bturbo(?:\s|$)/.test(scripts[selected]));
-        process.exit(usesTurbo ? 0 : 1);
+        const pattern = process.env.REPO_FOUNDRY_RUNNER === 'vite-plus'
+          ? /(?:^|[\s;&|(])(?:vp\s+(?:-C\s+\S+\s+)?run|vpr)(?:\s|$)/
+          : /\bturbo(?:\s|$)/;
+        const usesRunner = Boolean(selected && pattern.test(scripts[selected]));
+        process.exit(usesRunner ? 0 : 1);
         NODE
         }
 
@@ -298,8 +305,18 @@ runs:
           echo 'rust=false' >> "$GITHUB_OUTPUT"
         fi
 
+        # Vite+ is strictly opt-in: only an explicit monorepo_tool: vite-plus
+        # selects it. Every other value, or none, keeps the Turbo behavior.
+        vite_plus=false
+        if [ -f .github/code-foundry.yml ] &&
+          grep -Eq "^monorepo_tool:\s*[\"']?vite-plus[\"']?\s*(#.*)?$" .github/code-foundry.yml; then
+          vite_plus=true
+        fi
+        printf 'vite_plus=%s\n' "$vite_plus" >> "$GITHUB_OUTPUT"
+
         turbo=false
-        if [ -f turbo.json ] || [ -f turbo.jsonc ] || has_tracked_regex '(^|/)turbo\.jsonc?$'; then
+        if [ "$vite_plus" != true ] &&
+          { [ -f turbo.json ] || [ -f turbo.jsonc ] || has_tracked_regex '(^|/)turbo\.jsonc?$'; }; then
           turbo=true
           echo 'turbo=true' >> "$GITHUB_OUTPUT"
         else
@@ -342,10 +359,17 @@ runs:
         printf 'eslint_fallback=%s\n' "$eslint_fallback" >> "$GITHUB_OUTPUT"
 
         turbo_task=false
-        if [ -z "$REPO_FOUNDRY_TASK" ] || script_uses_turbo; then
+        if [ -z "$REPO_FOUNDRY_TASK" ] || script_uses_runner turbo; then
           turbo_task=true
         fi
         printf 'turbo_task=%s\n' "$turbo_task" >> "$GITHUB_OUTPUT"
+
+        vite_plus_task=false
+        if [ "$vite_plus" = true ] &&
+          { [ -z "$REPO_FOUNDRY_TASK" ] || script_uses_runner vite-plus; }; then
+          vite_plus_task=true
+        fi
+        printf 'vite_plus_task=%s\n' "$vite_plus_task" >> "$GITHUB_OUTPUT"
 
         build=false
         if has_tracked_regex '(^|/)(next\.config\.[^/]*|vite\.config\.[^/]*|tsconfig[^/]*\.json)$'; then
@@ -630,6 +654,7 @@ runs:
         path: |
           **/.next/cache
           **/node_modules/.vite
+          !**/node_modules/.vite/task-cache
           **/*.tsbuildinfo
         key: ${{ runner.os }}-javascript-build-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/next.config.*', '**/vite.config.*', '**/tsconfig*.json', '.mise.toml', 'mise.lock') }}
         # Keep primary saves isolated so parallel jobs cannot race. A cache
@@ -703,6 +728,27 @@ runs:
         key: ${{ runner.os }}-turbo-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/turbo.json', '**/turbo.jsonc', '.mise.toml', 'mise.lock') }}
         restore-keys: |
           ${{ runner.os }}-turbo-
+    - name: Cache Vite+ tasks
+      if: >-
+        inputs.install == 'true' &&
+        inputs.install-javascript == 'true' &&
+        inputs.cache-vite-plus != 'false' &&
+        steps.profile.outputs.vite_plus == 'true' &&
+        steps.profile.outputs.vite_plus_task == 'true' &&
+        hashFiles('**/package.json') != ''
+      uses: ./.github/actions/cache
+      with:
+        save: ${{ inputs.cache-save }}
+        # Vite+ validates each restored entry against the task's current
+        # inputs, so a stale restore-key match can only miss, never replay a
+        # wrong result.
+        path: |
+          node_modules/.vite/task-cache
+          **/node_modules/.vite/task-cache
+        key: ${{ runner.os }}-vite-plus-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/vite.config.*', '.mise.toml', 'mise.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-vite-plus-${{ github.workflow }}-${{ github.job }}-
+          ${{ runner.os }}-vite-plus-
     - name: Configure remote Turbo
       if: >-
         inputs.install == 'true' &&
