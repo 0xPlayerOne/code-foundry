@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.0...v1.48.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* vite-plus-cache-post-job-save ([#765](https://github.com/0xPlayerOne/code-foundry/issues/765)) ([3f82e85](https://github.com/0xPlayerOne/code-foundry/commit/3f82e850f5c09af6cea4de6f1a791d098bbd2f6e))
+
 ## [1.48.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.47.5...v1.48.0) (2026-10-16)
 
 
