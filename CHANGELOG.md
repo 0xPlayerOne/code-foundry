@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.1...v1.48.2) (2026-10-17)
+
+
+### Maintenance
+
+* **bun:** align Bun runtime pins to 1.4.3 ([#767](https://github.com/0xPlayerOne/code-foundry/issues/767)) ([402343f](https://github.com/0xPlayerOne/code-foundry/commit/402343fed2b41be3b2a55ddbc56d2256cc511b1a))
+
 ## [1.48.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.0...v1.48.1) (2026-10-16)
 
 
