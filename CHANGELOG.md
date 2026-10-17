@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.2...v1.48.3) (2026-10-17)
+
+
+### Tests
+
+* read the chained hook fixture with fs.readFileSync ([#769](https://github.com/0xPlayerOne/code-foundry/issues/769)) ([5d5925a](https://github.com/0xPlayerOne/code-foundry/commit/5d5925ac38975f5b1cc9b0785aa492db029e420c))
+
 ## [1.48.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.1...v1.48.2) (2026-10-17)
 
 
