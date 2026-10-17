@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -56,9 +56,7 @@ test('doctor warns when a machine-level pre-commit predates hook chaining', (t) 
 test('doctor stays quiet when the installed hook chains to the machine', (t) => {
   const { root, gitconfig } = consumer(
     t,
-    spawnSync('cat', [new URL('../.githooks/pre-commit', import.meta.url).pathname], {
-      encoding: 'utf8',
-    }).stdout
+    readFileSync(new URL('../.githooks/pre-commit', import.meta.url), 'utf8')
   )
   const result = runDoctor(root, gitconfig)
   assert.doesNotMatch(
