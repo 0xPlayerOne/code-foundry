@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { createHash } from 'node:crypto'
 import { listValue, readConfig } from './config.mjs'
+import { formatterChoice } from './formatter.mjs'
 
 export const TASKS = Object.freeze([
   'format',
@@ -36,6 +37,7 @@ export const TASK_SCRIPTS = Object.freeze({
 /** @param {string} root */
 export function readTaskPolicy(root) {
   const config = readConfig(resolve(root, '.github/code-foundry.yml'))
+  formatterChoice(config.formatter)
   const required = listValue(config.required_capabilities ?? '')
   for (const capability of required) {
     if (![...TASKS, 'coverage'].includes(capability))
@@ -114,7 +116,9 @@ export function describeTask(root, task, profile) {
       rust ||
       (['format', 'lint'].includes(task) && python) ||
       (task === 'type_check' && existsSync(resolve(root, 'tsconfig.json'))) ||
-      (js && task === 'format' && hasNativeToolSetup(root, pkg, 'oxfmt')) ||
+      (js &&
+        task === 'format' &&
+        (Boolean(policy.config.formatter) || hasNativeToolSetup(root, pkg, 'oxfmt'))) ||
       (js && task === 'lint' && hasNativeToolSetup(root, pkg, 'oxlint'))
     if (!native) {
       applicable = false

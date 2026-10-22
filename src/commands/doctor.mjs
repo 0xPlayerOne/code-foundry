@@ -8,6 +8,7 @@ import { recommendRunners, resolveMonorepoTool, resolveProfile } from '../lib/pr
 import { packageManagerForLockfile } from '../lib/lockfiles.mjs'
 import { doctorGithub } from '../lib/github-doctor.mjs'
 import { isGeneratedEventCaller } from './sync.mjs'
+import { formatterChoice } from '../lib/formatter.mjs'
 
 /** @param {string} message */
 function warn(message) {
@@ -28,6 +29,11 @@ export function doctor(root, options = {}) {
   }
 
   const toolchain = config.toolchain ?? 'auto'
+  try {
+    formatterChoice(config.formatter)
+  } catch (cause) {
+    error(cause instanceof Error ? cause.message : String(cause))
+  }
   if (!['auto', 'native', 'mise'].includes(toolchain)) error(`unsupported toolchain: ${toolchain}`)
   if (toolchain === 'mise' && !existsSync(join(target, '.mise.toml')))
     error('.mise.toml is required when toolchain: mise')

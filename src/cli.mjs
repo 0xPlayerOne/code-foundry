@@ -16,6 +16,7 @@ Usage:
   npx code-foundry init [--target PATH]
   npx code-foundry sync [--target PATH]
   npx code-foundry doctor [--target PATH]
+  npx code-foundry format [--target PATH] [--check] [--staged | --changed REF]
   npx code-foundry plan [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--json]
   npx code-foundry check [--target PATH] [--tier fast|audit] [--changed] [--base REF] [--timeout SECONDS] [--json]
   npx code-foundry affected [--target PATH] [--base REF] [--head REF] [--tool auto|turbo|vite-plus]
@@ -179,6 +180,19 @@ function parseArgs(argv) {
 }
 
 async function main() {
+  if (process.argv[2] === 'format') {
+    if (process.argv.slice(3).some((arg) => arg === '--help' || arg === '-h')) {
+      console.log('Usage: code-foundry format [--target PATH] [--check] [--staged | --changed REF]')
+      return
+    }
+    try {
+      const { formatCommand } = await import('./commands/format.mjs')
+      process.exitCode = formatCommand(process.argv.slice(3))
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error))
+    }
+    return
+  }
   if (['plan', 'check'].includes(process.argv[2])) {
     const { agentCommand } = await import('./commands/agent-check.mjs')
     process.exitCode = agentCommand(process.argv.slice(2))

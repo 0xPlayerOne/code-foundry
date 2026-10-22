@@ -38,7 +38,7 @@ on:
       bun-version:
         required: false
         type: string
-        default: '1.4.0'
+        default: '1.4.4'
       runner:
         required: false
         type: string

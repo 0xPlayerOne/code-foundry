@@ -516,12 +516,12 @@ runs:
 
     - name: Setup Bun
       if: >-
-        steps.profile.outputs.toolchain_mode != 'mise' &&
         steps.profile.outputs.javascript == 'true' &&
-        steps.profile.outputs.javascript_package_manager == 'bun'
+        (steps.profile.outputs.toolchain_mode != 'mise' ||
+        !contains(steps.profile.outputs.mise_tools, 'bun'))
       uses: oven-sh/setup-bun@v2
       with:
-        bun-version: 1.4.3
+        bun-version: 1.4.4
 
     - name: Enable Corepack
       if: >-

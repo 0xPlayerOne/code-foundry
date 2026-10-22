@@ -20,7 +20,8 @@ const LINTABLE = /\.(?:[cm]?[jt]sx?|vue|svelte|astro)$/i
 const TYPED = /\.(?:ts|tsx|mts|cts)$|(?:^|\/)tsconfig[^/]*\.json$/i
 /** JavaScript sources, type-checked only when the repository opts in with a root jsconfig. */
 const JAVASCRIPT = /\.(?:js|jsx|mjs|cjs)$|(?:^|\/)jsconfig[^/]*\.json$/i
-const FORMAT_CONFIG = /^(?:\.oxfmtrc\.jsonc?|oxfmt\.config\.[^/]+|\.prettierignore)$/
+const FORMAT_CONFIG =
+  /^(?:\.oxfmtrc\.jsonc?|oxfmt\.config\.[^/]+|\.prettierrc(?:\.[^/]+)?|prettier\.config\.[^/]+|\.prettierignore|bunfig\.toml|\.github\/code-foundry\.yml)$/
 const LINT_CONFIG = /^(?:\.oxlintrc\.json|oxlint\.config\.[^/]+)$/
 const PYTHON = /\.pyi?$/i
 const PYTHON_CONFIG =

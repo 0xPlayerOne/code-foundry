@@ -27,6 +27,7 @@ import {
 } from '../lib/config.mjs'
 import { buildReleaseConfig, buildReleaseManifest } from '../lib/release-manifest.mjs'
 import { customWorkflowFiles, overlayPolicy } from '../lib/overlay.mjs'
+import { formatterChoice } from '../lib/formatter.mjs'
 import {
   inspectQueueCaller,
   mergeQueueEnabled,
@@ -54,6 +55,7 @@ const standardFiles = [
   '.github/PULL_REQUEST_TEMPLATE.md',
   '.github/SECURITY.md',
   '.github/dependabot.yml',
+  '.github/code-foundry.schema.json',
   '.github/ISSUE_TEMPLATE/bug_report.yml',
   '.github/ISSUE_TEMPLATE/config.yml',
   '.github/ISSUE_TEMPLATE/feature_request.yml',
@@ -153,6 +155,7 @@ function synchronize(options) {
   }
   const defaults = createDefaultConfig(target, source, existingConfig.git_workflow)
   let config = { ...defaults, ...existingConfig }
+  formatterChoice(config.formatter)
   const workflow = gitWorkflow(config.git_workflow)
   if (!['direct', 'staging-release'].includes(workflow)) {
     throw new Error(`Unsupported git_workflow: ${workflow}; use direct or staging-release.`)
@@ -514,7 +517,7 @@ function synchronize(options) {
       else rmSync(join(target, file), { force: true })
     }
   }
-  if (includesValue(languages, 'typescript')) {
+  if (includesValue(languages, 'typescript') && formatterChoice(config.formatter) === 'oxfmt') {
     // The Oxfmt baseline supersedes .prettierrc/.prettierignore. Entries the
     // consumer added beyond the baseline survive the migration inside the
     // .oxfmtrc.json ignorePatterns list.
@@ -543,7 +546,7 @@ function synchronize(options) {
       changed,
       dryRun
     )
-  } else {
+  } else if (!includesValue(languages, 'typescript')) {
     for (const file of ['.prettierrc', '.prettierignore']) {
       if (existsSync(join(target, file))) {
         changed.push(file)
@@ -690,9 +693,11 @@ function renderReleaseConfig(target, sourceFile, config) {
 
 /** @param {string} file @param {string} languages @param {string} features @param {Record<string, string>} config */
 function shouldInclude(file, languages, features, config) {
+  if (file === '.github/code-foundry.schema.json') return includesValue(languages, 'typescript')
   if (file === 'ruff.toml') return includesValue(languages, 'python')
-  if (file === '.oxfmtrc.json' || file === '.oxlintrc.json')
-    return includesValue(languages, 'typescript')
+  if (file === '.oxfmtrc.json')
+    return includesValue(languages, 'typescript') && formatterChoice(config.formatter) === 'oxfmt'
+  if (file === '.oxlintrc.json') return includesValue(languages, 'typescript')
   if (file === '.github/dependabot.yml')
     return (
       configured(config.dependency_updater, 'dependabot') === 'dependabot' &&

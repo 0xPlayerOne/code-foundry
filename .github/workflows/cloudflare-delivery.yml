@@ -48,7 +48,7 @@ on:
       bun-version:
         required: false
         type: string
-        default: '1.4.0'
+        default: '1.4.4'
       wrangler-version:
         description: 'local uses the locked workspace installation; otherwise specify an exact version.'
         required: false

@@ -47,7 +47,7 @@
     "performance:check": "node scripts/performance-check.mjs",
     "test": "node --test",
     "test:unit": "node --test",
-    "type-check": "tsc --project jsconfig.json",
+    "type-check": "bun check --no-script -p jsconfig.json",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test && npm run pack:check"
   },
@@ -60,5 +60,5 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "bun@1.4.3"
+  "packageManager": "bun@1.4.4"
 }
