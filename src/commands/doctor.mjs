@@ -243,7 +243,7 @@ export function doctor(root, options = {}) {
       error('validation caller registers draft-time checks; run code-foundry sync.')
     }
     if (
-      !/uses:\s+(?:\.\/\.github\/workflows\/validation(?:-no-codeql)?\.yml|\S+\/\.github\/workflows\/validation(?:-no-codeql)?\.yml@)/.test(
+      !/uses:\s+(?:\.\/\.github\/workflows\/validation(?:-no-codeql|-billing)?\.yml|\S+\/\.github\/workflows\/validation(?:-no-codeql|-billing)?\.yml@)/.test(
         caller
       )
     ) {
