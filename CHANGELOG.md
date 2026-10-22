@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.3...v1.48.4) (2026-10-22)
+
+
+### Maintenance
+
+* bun-1.4.4-cloud ([#771](https://github.com/0xPlayerOne/code-foundry/issues/771)) ([c99f0ed](https://github.com/0xPlayerOne/code-foundry/commit/c99f0ed8b66129f3b599326bc67d900719b921f4))
+
 ## [1.48.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.2...v1.48.3) (2026-10-17)
 
 
