@@ -28,6 +28,7 @@ import {
   freshCloneBuildHint,
 } from './lib/pre-commit.mjs'
 import { runNodePackagePerformance } from './lib/node-package-performance.mjs'
+import { formatterChoice, formatterCommand } from './lib/formatter.mjs'
 import {
   EVAL_BUDGET_FILE_DEFAULT,
   EVAL_REPORT_FILE,
@@ -38,6 +39,7 @@ import {
 
 const root = process.cwd()
 const config = readConfig(resolve(root, '.github/code-foundry.yml'))
+formatterChoice(config.formatter)
 const repoProfile = resolveProfile(root)
 /** @type {string[]} */
 const languages = configured(config.languages, repoProfile.languages).split(',').filter(Boolean)
@@ -737,7 +739,8 @@ function ci(task) {
     return
   }
   if (task === 'format') {
-    const scripted = runScript(['format:check', 'format', 'fmt'])
+    if (config.formatter && hasRootJavascriptProject()) runSelectedFormatter()
+    const scripted = config.formatter || runScript(['format:check', 'format', 'fmt'])
     if (
       !scripted &&
       (hasLanguage('typescript') || hasLanguage('javascript')) &&
@@ -774,7 +777,8 @@ function ci(task) {
   }
   if (task === 'type_check') {
     const scripted = runScript(['type-check', 'typecheck', 'type:check'])
-    if (!scripted && existsSync(resolve(root, 'tsconfig.json'))) runTool('tsc', ['--noEmit'])
+    if (!scripted && existsSync(resolve(root, 'tsconfig.json')))
+      run('bun', ['check', '--no-script', '-p', 'tsconfig.json'])
     if (hasLanguage('rust') && hasRootRustProject()) run('cargo', ['check', '--all-targets'])
     return
   }
@@ -1189,6 +1193,13 @@ function runToolOnFiles(tool, args, files) {
   for (const chunk of chunkFiles(files)) runTool(tool, [...args, ...chunk])
 }
 
+/** @param {{staged?: boolean, files?: string[]}} [options] */
+function runSelectedFormatter(options = {}) {
+  const [tool, ...args] = formatterCommand(config.formatter, options)
+  if (tool === 'bun') run(tool, args)
+  else runTool(tool, args)
+}
+
 /**
  * The local commit gate.
  *
@@ -1221,7 +1232,15 @@ export function preCommit() {
   const js = (hasLanguage('typescript') || hasLanguage('javascript')) && hasRootJavascriptProject()
 
   if (js && (plan.formatAll || plan.formatFiles.length)) {
-    if (plan.formatAll) {
+    if (config.formatter) {
+      runSelectedFormatter(
+        plan.formatAll
+          ? {}
+          : config.formatter === 'bun'
+            ? { staged: true }
+            : { files: plan.formatFiles }
+      )
+    } else if (plan.formatAll) {
       if (!runScript(['format:check', 'format', 'fmt']) && hasOxfmtSetup())
         runTool('oxfmt', ['--check', '.'])
     } else if (hasOxfmtSetup()) {
@@ -1265,7 +1284,7 @@ export function preCommit() {
       onFailure: buildHint,
     })
     if (!scripted && existsSync(resolve(root, 'tsconfig.json')))
-      runTool('tsc', ['--noEmit'], { onFailure: buildHint })
+      run('bun', ['check', '--no-script', '-p', 'tsconfig.json'], { onFailure: buildHint })
   }
   if (plan.rust) {
     run('cargo', ['fmt', '--check'])

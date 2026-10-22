@@ -1,5 +1,43 @@
 # Configuration reference
 
+## JavaScript formatter
+
+Set `formatter: oxfmt`, `formatter: prettier`, or `formatter: bun` in
+`.github/code-foundry.yml` to select the formatter explicitly. The shipped
+`.github/code-foundry.schema.json` describes this enum; sync, doctor, task
+discovery and execution reject unknown choices. With no key, existing package
+format scripts retain precedence and the existing Oxfmt fallback is unchanged.
+Current application repositories continue to use Oxfmt.
+
+An explicit choice controls the format gate without changing lint, type-check,
+test or build scripts. Sync retains repository-owned Prettier configuration
+for Prettier/Bun choices, and only installs/migrates the Oxfmt baseline for
+Oxfmt. It does not install packages or rewrite dependency lockfiles: install
+the selected Prettier/Oxfmt dependency using the repository's package manager,
+or install official Bun 1.4.4 for the Bun choice.
+
+`code-foundry format --check` checks the selected formatter; omit `--check`
+to write. Bun opt-in also supports `code-foundry format --staged` and
+`code-foundry format --changed REF`, with optional `--check`. These invoke
+`bun fmt --no-script --staged` and `bun fmt --no-script --changed=REF`.
+The scopes are mutually exclusive and fail for other formatters. Changed mode
+does not stage files. Staged write mode restages formatted files and refuses
+partially staged files before running Bun, protecting intentionally unstaged
+edits. The commit gate uses check-only staged formatting and continues its
+independent staged lint, type-check, Python and Rust checks.
+
+For Bun opt-in, a hook can replace its **formatter-only** lint-staged operation
+with `code-foundry format --staged`. Retain every other lint-staged lint/test
+command and any hook ordering. Remove the lint-staged dependency only when no
+remaining command needs it, and regenerate the dependency lockfile normally.
+Sync never removes lint-staged, its configuration or other hook operations
+automatically. Oxfmt/Prettier consumers retain them unchanged.
+
+Type-check-only native fallbacks use `bun check --no-script -p tsconfig.json`
+on Bun 1.4.4. Repository scripts remain authoritative, including framework
+checks and declaration-emitting builds. Bun's checker emits no files; it must
+not replace a `tsc` build that emits declarations or other compiler output.
+
 Code Foundry has one repository-owned control plane:
 `.github/code-foundry.yml`. `init` creates it, `sync` renders the selected
 baseline, and `doctor` checks local and GitHub-facing prerequisites.

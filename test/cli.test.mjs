@@ -1811,6 +1811,36 @@ describe('code-foundry CLI', () => {
     assert.match(setup, /uses: jdx\/mise-action@[a-f0-9]{40}[\s\S]*?version: 2026\.9\.2/)
   })
 
+  it('accepts generated billing orchestrators and still rejects unknown orchestrators', () => {
+    for (const codeql of ['true', 'false']) {
+      const root = mkdtempSync(join(tmpdir(), 'code-foundry-billing-doctor-'))
+      try {
+        mkdirSync(join(root, '.github'), { recursive: true })
+        writeFileSync(
+          join(root, '.github/code-foundry.yml'),
+          `languages: typescript\npackage_manager: bun\nfeatures: validation\nbilling_lanes: true\ncodeql: ${codeql}\nmerge_strategy: squash\n`
+        )
+        writeFileSync(join(root, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n')
+        syncRepository({ target: root, source: process.cwd() })
+        assert.doesNotThrow(() => doctor(root))
+        const path = join(root, '.github/workflows/validation.yml')
+        const generated = readFileSync(path, 'utf8')
+        assert.match(generated, /validation-billing\.yml@/)
+        writeFileSync(
+          path,
+          generated.replaceAll('validation-billing.yml', 'validation-unknown.yml')
+        )
+        assert.ok(
+          captureConsole('error', () => doctor(root)).some((line) =>
+            line.includes('does not reference the validation orchestrator')
+          )
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  })
+
   it('accepts source self-CI workflow names during doctor checks', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-self-ci-doctor-'))
     mkdirSync(join(root, '.github/workflows'), { recursive: true })
