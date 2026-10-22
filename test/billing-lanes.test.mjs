@@ -142,6 +142,109 @@ test('CPU-bound lanes stay on separate runners so the merged job is never the cr
   assert.match(template, /runs-on: \$\{\{ inputs\.unit-runner \}\}/)
 })
 
+test('billing uploads run sequentially after all parallel executions join', () => {
+  const template = billingTemplate()
+  const fastLanes = template.split('\n  fast-lanes:')[1].split('\n  lint:')[0]
+  const groups = fastLanes.split('      - parallel:\n')
+  assert.equal(groups.length, 2, 'only task execution belongs in a parallel group')
+  const [execution, ...followingSteps] = groups[1].split(/(?=^      - name:)/m)
+  assert.deepEqual(
+    [...execution.matchAll(/^            id: (\w+)_execute$/gm)].map((match) => match[1]),
+    ['format', 'build', 'performance', 'smoke', 'eval', 'integration']
+  )
+  assert.doesNotMatch(execution, /uses:|continue-on-error:/)
+  for (const lane of ['format', 'build', 'performance', 'smoke', 'eval', 'integration']) {
+    assert.ok(execution.includes(`ci ${lane}\n`), `missing execution for ${lane}`)
+    const condition =
+      `steps.${lane}_applicability.outputs.applicable == 'true' && ` +
+      `steps.${lane}_applicability.outputs.affected != 'false'`
+    assert.ok(
+      execution.includes(
+        lane === 'format'
+          ? `if: ${condition}\n`
+          : `if: \${{ !cancelled() && ${lane === 'build' ? '' : "inputs.mode == 'audit' && "}${condition} }}\n`
+      ),
+      `execution condition changed for ${lane}`
+    )
+  }
+  assert.deepEqual(
+    followingSteps.slice(0, -1).map((step) => step.split('\n')[0].trim()),
+    [
+      'Retain format task receipt',
+      'Retain build task receipt',
+      'Retain performance task receipt',
+      'Upload performance results',
+      'Retain smoke task receipt',
+      'Retain eval task receipt',
+      'Retain eval report',
+      'Retain integration task receipt',
+    ].map((name) => `- name: ${name}`)
+  )
+  assert.match(followingSteps.at(-1), /^      - name: Save Vite\+ task cache/)
+  assert.equal([...fastLanes.matchAll(/uses: actions\/upload-artifact@/g)].length, 8)
+})
+
+test('sequential billing receipts preserve success, failure, explicit skip and artifact contracts', () => {
+  const template = billingTemplate()
+  for (const lane of ['format', 'build', 'performance', 'smoke', 'eval', 'integration']) {
+    const receipt = template
+      .split(`      - name: Retain ${lane} task receipt\n`)[1]
+      .split(/\n      - name:/)[0]
+    assert.ok(receipt, `missing sequential receipt for ${lane}`)
+    const audit = ['format', 'build'].includes(lane) ? '' : "          inputs.mode == 'audit' &&\n"
+    assert.equal(
+      receipt.trimEnd(),
+      `        if: >-\n` +
+        `          always() &&\n` +
+        audit +
+        `          (steps.${lane}_execute.outcome == 'success' || steps.${lane}_execute.outcome == 'failure' ||\n` +
+        `          steps.${lane}_applicability.outputs.applicable == 'false' || steps.${lane}_applicability.outputs.affected == 'false') &&\n` +
+        `          hashFiles('.code-foundry/results/${lane}.json') != ''\n` +
+        `        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\n` +
+        `        with:\n` +
+        `          name: \${{ inputs.artifact-prefix }}-\${{ github.run_id }}-\${{ github.run_attempt }}-${lane}\n` +
+        `          path: .code-foundry/results/${lane}.json\n` +
+        `          include-hidden-files: true\n` +
+        `          if-no-files-found: error\n` +
+        `          retention-days: 14`
+    )
+  }
+})
+
+test('sequential billing reports preserve applicability, paths and retention', () => {
+  const template = billingTemplate()
+  const performance = template
+    .split('      - name: Upload performance results\n')[1]
+    .split(/\n      - name:/)[0]
+  assert.match(
+    performance,
+    /always\(\) &&\n          inputs.mode == 'audit' &&\n          steps.performance_applicability.outputs.applicable == 'true' &&\n          hashFiles\('artifacts\/performance\/\*\*', 'performance-results.json', 'performance-results\/\*\*'\) != ''/
+  )
+  assert.match(performance, /name: performance-\$\{\{ github.run_id \}\}/)
+  assert.match(
+    performance,
+    /path: \|\n            artifacts\/performance\/\*\*\n            performance-results.json\n            performance-results\/\*\*/
+  )
+  assert.match(
+    performance,
+    /compression-level: 1\n          if-no-files-found: ignore\n          retention-days: 14/
+  )
+  const report = template.split('      - name: Retain eval report\n')[1].split(/\n      - name:/)[0]
+  assert.match(
+    report,
+    /always\(\) &&\n          inputs.mode == 'audit' &&\n          steps.eval_execute.outcome == 'failure' &&\n          hashFiles\('eval-results\/result.json'\) != ''/
+  )
+  assert.ok(
+    report.includes(
+      'name: ${{ inputs.artifact-prefix }}-${{ github.run_id }}-${{ github.run_attempt }}-eval-report\n'
+    )
+  )
+  assert.match(
+    report,
+    /path: \|\n            eval-results\/result.json\n            eval-results\/summary.json\n          if-no-files-found: error\n          retention-days: 14/
+  )
+})
+
 test('profile and dependency audit share one matrix-free job', () => {
   const template = billingTemplate()
   const audit = template.slice(template.indexOf('\n  audit:'), template.indexOf('\n  codeql:'))
