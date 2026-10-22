@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.4...v1.48.5) (2026-10-22)
+
+
+### Bug Fixes
+
+* **ci:** serialize billing receipt and report uploads ([#773](https://github.com/0xPlayerOne/code-foundry/issues/773)) ([6497225](https://github.com/0xPlayerOne/code-foundry/commit/6497225bf2d672380b6b5231378b424dffb8afbb))
+
 ## [1.48.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.3...v1.48.4) (2026-10-22)
 
 
