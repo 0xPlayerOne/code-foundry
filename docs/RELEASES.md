@@ -137,6 +137,27 @@ A failed audit leaves the version PR unmerged. Re-run the Release workflow
 (`workflow_dispatch`) so Release Please regenerates the branch from the current
 `main`; do not edit the generated branch or release manually.
 
+## Lockfile workspace versions
+
+Release Please's Node updater bumps every workspace `package.json` but has no
+updater for `bun.lock`, which records each workspace's `version`. A version PR
+therefore leaves the lock naming the previous version of every workspace (the
+agent-sim 0.15.14 release left all 14 workspaces at 0.15.10).
+
+- `validation release_diff` fails a generated release whose `bun.lock` records a
+  workspace version that differs from its `package.json`, and names the first
+  workspaces and the fix.
+- `code-foundry release sync-lock [--target PATH] [--dry-run]` rewrites only
+  those drifted `version` values; it never touches dependencies, the `packages`
+  section or line endings, and does nothing when the lock already matches.
+- The Release workflow runs it on each open generated release branch before the
+  draft-state and merge steps read the PR head, then pushes one
+  `chore(release): sync bun.lock workspace versions` commit with the validated
+  automation token so the required checks run on it. With the fallback workflow
+  token (whose pushes start no workflows) the step is skipped and the gate
+  reports the stale lock instead. A push rejected because Release Please moved
+  the branch is left for the next run.
+
 ## Pull request permissions
 
 The release job validates the configured automation token

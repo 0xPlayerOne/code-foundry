@@ -17,6 +17,7 @@ import {
   selectReconciliationPullRequest,
   validateReleasePullRequests,
 } from '../lib/release-policy.mjs'
+import { syncBunLockWorkspaceVersions } from '../lib/bun-lock.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib/release-hook.mjs'
 
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */
@@ -766,6 +767,27 @@ export function dispatchPostReleaseHook(root, options) {
   if (result.status !== 0)
     throw new Error(`Failed to dispatch post-release workflow ${options.workflow}.`)
   return { ...decision, deliveryKey: key, dispatched: true }
+}
+
+/**
+ * Rewrite the workspace versions `bun.lock` records to match the manifests a
+ * Release Please run just bumped.
+ * @param {string} root
+ * @param {{ dryRun: boolean }} options
+ */
+export function syncReleaseLock(root, options) {
+  const changes = syncBunLockWorkspaceVersions(root, { dryRun: options.dryRun })
+  if (!changes.length) {
+    console.log('bun.lock workspace versions already match package.json; nothing to sync.')
+    return changes
+  }
+  const verb = options.dryRun ? 'Would update' : 'Updated'
+  for (const change of changes) {
+    console.log(
+      `${verb} bun.lock ${change.path || '.'} (${change.name}): ${change.from} -> ${change.to}`
+    )
+  }
+  return changes
 }
 
 /** @param {string} root */
