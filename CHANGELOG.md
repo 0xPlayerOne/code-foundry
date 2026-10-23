@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.6...v1.48.7) (2026-10-23)
+
+
+### Bug Fixes
+
+* **release:** sync bun.lock workspace versions on generated release PRs ([#777](https://github.com/0xPlayerOne/code-foundry/issues/777)) ([b24bfae](https://github.com/0xPlayerOne/code-foundry/commit/b24bfae309ac7003fcc4cd57f79ddc418c27b039))
+
 ## [1.48.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.5...v1.48.6) (2026-10-23)
 
 
