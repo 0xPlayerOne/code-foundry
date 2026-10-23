@@ -395,6 +395,15 @@ function validation(task) {
     const changedPaths = baseSha
       ? capture('git', ['diff', '--name-only', `${baseSha}...HEAD`]).split(/\r?\n/)
       : []
+    // The content audit needs the real diff. An unreadable diff must fail the
+    // gate, not pass as an empty patch.
+    const diff = baseSha
+      ? spawnSync(
+          'git',
+          ['diff', '--no-color', '--no-ext-diff', '--no-renames', '-U0', `${baseSha}...HEAD`],
+          { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+        )
+      : undefined
     const result = validateGeneratedReleaseDiff({
       headRef: process.env.FOUNDRY_HEAD_REF ?? '',
       headRepo: process.env.FOUNDRY_HEAD_REPO ?? '',
@@ -402,6 +411,7 @@ function validation(task) {
       changedPaths,
       config: readReleaseConfig(root),
       root,
+      patch: diff ? (diff.status === 0 ? diff.stdout : null) : undefined,
     })
     if (!result.valid) {
       for (const error of result.errors) console.error(`::error::${error}`)

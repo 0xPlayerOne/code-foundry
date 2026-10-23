@@ -108,6 +108,35 @@ and sync never overwrites existing manifest versions. Legacy configs without
 manifest; `code-foundry doctor` fails when a manifest-mode config is missing
 its manifest.
 
+## Generated release content audit
+
+Release Please writes the release commit from file bodies it reads over the
+GitHub API. A run that starts on one push and finishes after another can commit
+bodies read before the second push onto the newer `main`, so the version PR
+silently reverts the merged change inside an approved file (agent-sim #133
+reverted `@adea-ai/ui` from `^0.144.0` to `^0.143.0` in six `package.json`
+files). A path audit cannot see this, because every changed path is an approved
+release file.
+
+Both release checks therefore read the unified diff against the base and require
+every added or removed line to be a release mutation: a version assignment
+(`"version": "1.2.3"`, `version = "1.2.3"`, a bare version file, a line carrying
+an `x-release-please-*` annotation, or a `jsonpath` key declared in
+`extra-files`), a `.release-please-manifest.json` package version, or an addition
+to a changelog. Any other change, a deleted file, or a rename fails closed and
+names the file and the first offending lines. A minified single-line JSON
+manifest passes when only its version keys differ. An unreadable diff also
+fails; it is never treated as empty.
+
+- `validation release_diff` (the required release-tier gate) audits
+  `base...HEAD` of the pull request merge commit, so a branch that is behind
+  `main` is judged by what merging it would do.
+- `release validate-prs` audits `gh pr diff` before auto-merge is requested.
+
+A failed audit leaves the version PR unmerged. Re-run the Release workflow
+(`workflow_dispatch`) so Release Please regenerates the branch from the current
+`main`; do not edit the generated branch or release manually.
+
 ## Pull request permissions
 
 The release job validates the configured automation token
