@@ -209,6 +209,187 @@ export function validateReleasePullRequests(prs, changedPathsByPr, allowed) {
   return { valid: errors.length === 0, generated, errors }
 }
 
+/** A `key = value` or `"key": value` assignment whose key names a version. */
+const VERSION_ASSIGNMENT =
+  /^\s*["']?[\w.-]*version[\w.-]*["']?\s*[:=]\s*["'][^"']*["']\s*[,;]?\s*$/i
+const BARE_VERSION = /^\s*v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\s*$/
+const MANIFEST_ENTRY = /^\s*"[^"]+"\s*:\s*"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?"\s*,?\s*$/
+const RELEASE_ANNOTATION = /x-release-please-(?:version|major|minor|patch|start-\w+|end)/
+
+/**
+ * JSON keys that a configured `jsonpath` extra file is allowed to rewrite,
+ * beyond `version`. Keyed by repository-relative path.
+ * @param {Record<string, unknown>} config
+ * @returns {Map<string, Set<string>>}
+ */
+function extraFileJsonKeys(config) {
+  /** @type {Map<string, Set<string>>} */
+  const keys = new Map()
+  /** @param {unknown} entries @param {string} prefix */
+  const collect = (entries, prefix) => {
+    if (!Array.isArray(entries)) return
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || typeof entry.path !== 'string') continue
+      if (typeof entry.jsonpath !== 'string') continue
+      const key = /(?:\.|\["|\['|\[)?([^.[\]"']+)(?:"\]|'\]|\])?$/.exec(entry.jsonpath)?.[1]
+      if (!key) continue
+      const clean = entry.path.replace(/^\.\//, '').replace(/\\/g, '/')
+      const path = prefix ? `${prefix}/${clean}` : clean
+      keys.set(path, (keys.get(path) ?? new Set()).add(key))
+    }
+  }
+  collect(config['extra-files'], '')
+  const packages = config.packages
+  if (packages && typeof packages === 'object' && !Array.isArray(packages)) {
+    for (const [directory, value] of Object.entries(packages)) {
+      if (value && typeof value === 'object' && !Array.isArray(value))
+        collect(value['extra-files'], directory === '.' ? '' : directory.replace(/\/$/, ''))
+    }
+  }
+  return keys
+}
+
+/**
+ * @param {{ removed: string[], added: string[] }} entry
+ * @param {Set<string>|undefined} extraKeys
+ * @returns {boolean}
+ */
+function sameJsonExceptVersions(entry, extraKeys) {
+  if (!entry.removed.length || entry.removed.length !== entry.added.length) return false
+  const ignored = new Set(['version', ...(extraKeys ?? [])])
+  /** @param {string} text */
+  const normalize = (text) => {
+    const parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error('not an object')
+    for (const key of ignored) delete parsed[key]
+    return JSON.stringify(parsed)
+  }
+  try {
+    return entry.removed.every((line, index) => normalize(line) === normalize(entry.added[index]))
+  } catch {
+    return false
+  }
+}
+
+/** @param {string[]} values @returns {string} */
+function summarize(values) {
+  if (!values.length) return 'none'
+  const more = values.length > 3 ? ` (+${values.length - 3} more)` : ''
+  return `${values.slice(0, 3).join(' | ')}${more}`
+}
+
+/** @param {string} line @returns {string} */
+function clip(line) {
+  const text = line.trim()
+  return text.length > 100 ? `${text.slice(0, 97)}...` : text
+}
+
+/**
+ * Decide whether one changed line is a legitimate Release Please mutation of
+ * `path`. Only version assignments, the manifest's package versions, and
+ * changelog additions qualify; any other line means the generator wrote
+ * content it did not read from the branch it is releasing.
+ * @param {string} path @param {'-'|'+'} side @param {string} line
+ * @param {Map<string, Set<string>>} extraKeys
+ */
+function isReleaseMutation(path, side, line, extraKeys) {
+  const name = path.split('/').pop() ?? path
+  if (name === '.release-please-manifest.json')
+    return MANIFEST_ENTRY.test(line) || /^\s*[{}]\s*$/.test(line)
+  if (/^CHANGELOG(?:\.\w+)?$/i.test(name)) return side === '+'
+  if (VERSION_ASSIGNMENT.test(line) || BARE_VERSION.test(line) || RELEASE_ANNOTATION.test(line))
+    return true
+  for (const key of extraKeys.get(path) ?? []) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (new RegExp(`^\\s*"${escaped}"\\s*:\\s*"[^"]*"\\s*,?\\s*$`).test(line)) return true
+  }
+  return false
+}
+
+/**
+ * Audit the content of a generated release diff. The path audit only proves
+ * that approved files changed; a Release Please run that straddles a push to
+ * main can write the release commit with file bodies read before that push,
+ * silently reverting the merged change inside an approved file (for example a
+ * dependency range in package.json). Every added or removed line must be a
+ * release mutation, so a reverted range, script or dependency fails closed.
+ * @param {string} patch Unified diff of the release PR against its base.
+ * @param {{ config?: Record<string, unknown> }} [options]
+ * @returns {string[]}
+ */
+export function auditReleaseDiffContent(patch, options = {}) {
+  const extraKeys = extraFileJsonKeys(options.config ?? {})
+  /** @type {string[]} */
+  const errors = []
+  /** @type {Map<string, { removed: string[], added: string[] }>} */
+  const foreign = new Map()
+  const lines = String(patch).split(/\r?\n/)
+  let oldPath = ''
+  let path = ''
+  let inHunk = false
+  let removedLeft = 0
+  let addedLeft = 0
+  for (const line of lines) {
+    if (inHunk && (removedLeft > 0 || addedLeft > 0)) {
+      if (line.startsWith('\\')) continue
+      if (line.startsWith('-') && removedLeft > 0) {
+        removedLeft -= 1
+        record(path, '-', line.slice(1))
+        continue
+      }
+      if (line.startsWith('+') && addedLeft > 0) {
+        addedLeft -= 1
+        record(path, '+', line.slice(1))
+        continue
+      }
+      if (line.startsWith(' ')) {
+        // -U0 emits no context; tolerate it when a caller passes a wider diff.
+        if (removedLeft > 0) removedLeft -= 1
+        if (addedLeft > 0) addedLeft -= 1
+        continue
+      }
+    }
+    if (line.startsWith('diff --git ')) {
+      inHunk = false
+      oldPath = ''
+      path = /^diff --git a\/.* b\/(.*)$/.exec(line)?.[1] ?? ''
+    } else if (line.startsWith('--- ')) {
+      oldPath = line.slice(4).replace(/^a\//, '')
+    } else if (line.startsWith('+++ ')) {
+      const next = line.slice(4)
+      path = next === '/dev/null' ? oldPath : next.replace(/^b\//, '')
+    } else if (line.startsWith('deleted file mode')) {
+      errors.push(`Generated release diff deletes ${path || oldPath || 'a file'}.`)
+    } else if (line.startsWith('rename from ')) {
+      errors.push(`Generated release diff renames ${line.slice('rename from '.length)}.`)
+    } else if (line.startsWith('@@')) {
+      const match = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line)
+      inHunk = Boolean(match)
+      removedLeft = match ? Number(match[1] ?? 1) : 0
+      addedLeft = match ? Number(match[2] ?? 1) : 0
+    }
+  }
+  /** @param {string} file @param {'-'|'+'} side @param {string} text */
+  function record(file, side, text) {
+    if (isReleaseMutation(file, side, text, extraKeys)) return
+    const entry = foreign.get(file) ?? { removed: [], added: [] }
+    entry[side === '-' ? 'removed' : 'added'].push(text)
+    foreign.set(file, entry)
+  }
+  for (const [file, entry] of foreign) {
+    // A minified manifest holds the whole document on one line, so its version
+    // bump cannot be isolated by line. Accept it when only version keys differ.
+    if (sameJsonExceptVersions(entry, extraKeys.get(file))) continue
+    entry.removed = entry.removed.map(clip)
+    entry.added = entry.added.map(clip)
+    errors.push(
+      `Generated release PR changes ${file} beyond release metadata (stale or foreign content). Removed: ${summarize(entry.removed)}. Added: ${summarize(entry.added)}.`
+    )
+  }
+  return errors
+}
+
 /** Files that must change for a generated release PR to count as a version bump. */
 const VERSION_METADATA_FILES = new Set([
   '.release-please-manifest.json',
@@ -223,7 +404,7 @@ const VERSION_METADATA_FILES = new Set([
  * must carry the exact approved Release Please prefix, come from the same
  * repository, change at least one path, change no unexpected paths, and bump
  * at least one version-metadata file (or a declared extra file).
- * @param {{ headRef?: string, headRepo?: string, repository?: string, changedPaths?: string[], config?: Record<string, unknown>, root?: string }} input
+ * @param {{ headRef?: string, headRepo?: string, repository?: string, changedPaths?: string[], config?: Record<string, unknown>, root?: string, patch?: string|null }} input
  * @returns {{ valid: boolean, errors: string[], changedPaths: string[] }}
  */
 export function validateGeneratedReleaseDiff(input) {
@@ -234,6 +415,7 @@ export function validateGeneratedReleaseDiff(input) {
     changedPaths = [],
     config = {},
     root = process.cwd(),
+    patch,
   } = input
   /** @type {string[]} */
   const errors = []
@@ -271,6 +453,13 @@ export function validateGeneratedReleaseDiff(input) {
     errors.push('Generated release pull request changes no version metadata.')
   }
   errors.push(...validateCargoLockVersions(root, config))
+  // Callers that can read the unified diff opt into the content audit. A null
+  // patch means the diff was requested but unreadable, which must not pass.
+  if (typeof patch === 'string') errors.push(...auditReleaseDiffContent(patch, { config }))
+  else if (patch === null)
+    errors.push(
+      'Unable to read the release content diff; refusing to pass an unaudited release PR.'
+    )
   return { valid: errors.length === 0, errors, changedPaths: paths }
 }
 

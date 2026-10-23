@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import {
   approvedReleaseFiles,
   buildReleaseRecoveryPlan,
+  auditReleaseDiffContent,
   buildReconciliationPullRequestBody,
   classifyReconciliation,
   readReleaseConfig,
@@ -794,6 +795,8 @@ export function validateReleasePullRequestDiffs(root) {
   const paths = new Map()
   /** @type {string[]} */
   const headErrors = []
+  /** @type {string[]} */
+  const contentErrors = []
   for (const pr of generated) {
     const number = Number(pr.number)
     const result = spawnSync(
@@ -802,6 +805,25 @@ export function validateReleasePullRequestDiffs(root) {
       { cwd: resolve(root), encoding: 'utf8' }
     )
     paths.set(number, result.status === 0 ? result.stdout.split(/\r?\n/).filter(Boolean) : [])
+
+    // Paths prove only which files changed. Audit the content too, so a release
+    // generated from a stale snapshot cannot revert merged changes inside an
+    // approved file and still be queued for merge.
+    const content = spawnSync(
+      'gh',
+      ['pr', 'diff', String(number), '--repo', repository, '--color', 'never'],
+      { cwd: resolve(root), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+    )
+    if (content.status === 0) {
+      for (const error of auditReleaseDiffContent(content.stdout, {
+        config: readReleaseConfig(root),
+      }))
+        contentErrors.push(`Generated release PR #${number}: ${error}`)
+    } else {
+      contentErrors.push(
+        `Generated release PR #${number}: unable to read its content diff; refusing to pass an unaudited release PR.`
+      )
+    }
 
     const auditedHead = typeof pr.headRefOid === 'string' ? pr.headRefOid : ''
     const currentPr = ghJson(root, [
@@ -828,9 +850,9 @@ export function validateReleasePullRequestDiffs(root) {
     paths,
     approvedReleaseFiles(readReleaseConfig(root))
   )
-  if (headErrors.length) {
+  if (headErrors.length || contentErrors.length) {
     validation.valid = false
-    validation.errors.push(...headErrors)
+    validation.errors.push(...headErrors, ...contentErrors)
   }
   console.log(JSON.stringify(validation, null, 2))
   if (!validation.valid) throw new Error(validation.errors.join(' '))
