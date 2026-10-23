@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.5...v1.48.6) (2026-10-23)
+
+
+### Bug Fixes
+
+* **release:** audit generated release content for stale snapshots ([#775](https://github.com/0xPlayerOne/code-foundry/issues/775)) ([f842c27](https://github.com/0xPlayerOne/code-foundry/commit/f842c271e6b270b63a6d9b839795a849237c7a7d))
+
 ## [1.48.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.4...v1.48.5) (2026-10-22)
 
 
