@@ -2,6 +2,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { validateBunLockVersions } from './bun-lock.mjs'
 import { isReleasePleaseHead } from './validation-policy.mjs'
 
 const DEFAULT_RELEASE_FILES = new Set([
@@ -453,6 +454,7 @@ export function validateGeneratedReleaseDiff(input) {
     errors.push('Generated release pull request changes no version metadata.')
   }
   errors.push(...validateCargoLockVersions(root, config))
+  errors.push(...validateBunLockVersions(root))
   // Callers that can read the unified diff opt into the content audit. A null
   // patch means the diff was requested but unreadable, which must not pass.
   if (typeof patch === 'string') errors.push(...auditReleaseDiffContent(patch, { config }))

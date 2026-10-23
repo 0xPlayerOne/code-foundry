@@ -23,6 +23,7 @@ Usage:
   npx code-foundry ci pause|resume|status [--target PATH]
   npx code-foundry release reconcile [--github] [--base BRANCH] [--head BRANCH]
   npx code-foundry release hook --tag TAG --workflow WORKFLOW
+  npx code-foundry release sync-lock [--target PATH] [--dry-run]
   npx code-foundry release-integrity settings --repo OWNER/REPO
   npx code-foundry release-integrity release --repo OWNER/REPO --tag TAG
   npx code-foundry release-integrity manifest --asset PATH [--root PATH]
@@ -93,9 +94,9 @@ function parseArgs(argv) {
 
   if (command === 'release') {
     const subcommand = argv.shift() ?? ''
-    if (!['reconcile', 'hook', 'validate-prs', 'recovery-plan'].includes(subcommand))
+    if (!['reconcile', 'hook', 'validate-prs', 'recovery-plan', 'sync-lock'].includes(subcommand))
       fail(
-        `unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, release validate-prs, or release recovery-plan`
+        `unknown release command: ${subcommand ?? '(missing)'}; use release reconcile, release hook, release validate-prs, release recovery-plan, or release sync-lock`
       )
     options.releaseSubcommand = subcommand
   } else if (command === 'release-integrity') {
@@ -247,11 +248,13 @@ async function main() {
         dispatchPostReleaseHook,
         reconcileRelease,
         releaseRecoveryPlan,
+        syncReleaseLock,
         validateReleasePullRequestDiffs,
       } = await import('./commands/release.mjs')
       if (options.releaseSubcommand === 'hook') dispatchPostReleaseHook(target, options)
       else if (options.releaseSubcommand === 'validate-prs') validateReleasePullRequestDiffs(target)
       else if (options.releaseSubcommand === 'recovery-plan') releaseRecoveryPlan(target)
+      else if (options.releaseSubcommand === 'sync-lock') syncReleaseLock(target, options)
       else reconcileRelease(target, options)
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error))
