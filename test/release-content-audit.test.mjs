@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { describe, it } from 'node:test'
 import { validateReleasePullRequestDiffs } from '../src/commands/release.mjs'
@@ -305,6 +306,109 @@ describe('release_diff gate against a release generated mid-push', () => {
       rmSync(root, { recursive: true, force: true })
     }
   })
+
+  it('needs historical blobs to audit offline after checkout credentials are removed', () => {
+    const { root, baseSha } = fixture('^0.144.0')
+    const directory = mkdtempSync(join(tmpdir(), 'code-foundry-release-clones-'))
+    try {
+      const remote = join(directory, 'origin.git')
+      git(directory, ['clone', '--bare', root, remote])
+      git(remote, ['config', 'uploadpack.allowFilter', 'true'])
+      const oldBlob = git(root, ['rev-parse', `${baseSha}:package.json`])
+      for (const partial of [true, false]) {
+        const clone = join(directory, partial ? 'partial' : 'full')
+        git(directory, [
+          'clone',
+          '--no-local',
+          ...(partial ? ['--filter=blob:none'] : []),
+          pathToFileURL(remote).href,
+          clone,
+        ])
+        // A missing local remote models checkout's authentication no longer being available,
+        // without making a network request or creating/persisting credentials.
+        git(clone, ['remote', 'set-url', 'origin', join(directory, 'unavailable.git')])
+        const blob = spawnSync('git', ['--no-lazy-fetch', 'cat-file', '-e', oldBlob], {
+          cwd: clone,
+          encoding: 'utf8',
+        })
+        assert.equal(blob.status === 0, !partial)
+        assert.match(git(clone, ['diff', '--name-only', `${baseSha}...HEAD`]), /package.json/)
+        const result = gate(clone, baseSha)
+        if (partial) {
+          assert.notEqual(result.status, 0)
+          assert.match(result.stderr, /Unable to read the release content diff/)
+          assert.match(result.stderr, /historical blob .* unavailable from promisor remote/)
+        } else {
+          assert.equal(result.status, 0, result.stderr)
+          assert.match(result.stdout, /Release policy passed/)
+        }
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('reports bounded Git failure categories without replaying remote secrets or annotations', () => {
+    const { root, baseSha } = fixture('^0.144.0')
+    const bin = mkdtempSync(join(tmpdir(), 'code-foundry-release-git-'))
+    try {
+      const actualGit = spawnSync('which', ['git'], { encoding: 'utf8' }).stdout.trim()
+      writeFileSync(
+        join(bin, 'git'),
+        `#!/bin/sh
+if [ "$1" = diff ] && [ "$2" = --no-color ]; then
+  printf '%s\\n' 'fatal: Authentication failed for https://user:private-secret@example.test/repo?token=private-secret' '::warning::injected annotation' >&2
+  exit 128
+fi
+exec "${actualGit}" "$@"
+`
+      )
+      chmodSync(join(bin, 'git'), 0o755)
+      const result = spawnSync(process.execPath, [runtime, 'validation', 'release_diff'], {
+        cwd: root,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          FOUNDRY_BASE_SHA: baseSha,
+          FOUNDRY_HEAD_REF: HEAD_REF,
+          FOUNDRY_HEAD_REPO: 'owner/repo',
+          FOUNDRY_REPOSITORY: 'owner/repo',
+        },
+      })
+      assert.notEqual(result.status, 0)
+      assert.match(
+        result.stderr,
+        /Git content diff failed \(status 128\): authentication unavailable/
+      )
+      assert.match(result.stderr, /Unable to read the release content diff/)
+      assert.doesNotMatch(result.stderr, /private-secret|example\.test|::warning::/)
+      assert.ok(result.stderr.length < 2048)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+      rmSync(bin, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('release content checkout', () => {
+  for (const file of ['validation.yml', 'validation-no-codeql.yml', 'validation-billing.yml']) {
+    it(`${file} obtains historical blobs before removing checkout credentials`, () => {
+      const workflow = readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        'utf8'
+      )
+      const checkout = workflow.match(
+        /- name: Checkout consumer repository\n\s+if: \$\{\{ inputs\.mode == 'release' \}\}[\s\S]*?(?=\n\s+- name:)/
+      )?.[0]
+      assert.ok(checkout, 'release-only consumer checkout must be present')
+      assert.match(checkout, /persist-credentials: false/)
+      assert.match(checkout, /fetch-depth: 0/)
+      assert.doesNotMatch(checkout, /filter:/)
+      assert.doesNotMatch(checkout, /sparse-checkout:/)
+    })
+  }
 })
 
 describe('release validate-prs content audit', () => {
