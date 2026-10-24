@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.7...v1.48.8) (2026-10-24)
+
+
+### Bug Fixes
+
+* **release:** hydrate audit blobs and refresh changing PR state ([#779](https://github.com/0xPlayerOne/code-foundry/issues/779)) ([8734ed7](https://github.com/0xPlayerOne/code-foundry/commit/8734ed77d159818cd5ff613f40a5dab796789d8a))
+
 ## [1.48.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.6...v1.48.7) (2026-10-23)
 
 
