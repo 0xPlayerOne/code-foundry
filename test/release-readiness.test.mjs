@@ -55,14 +55,18 @@ if (args[0] === 'pr' && args[1] === 'list') { console.log('17'); save(); }
 else if (args[0] === 'pr' && args[1] === 'view') {
   state.views += 1;
   if (state.views > 1 && state.changeHead) state.head = 'b'.repeat(40);
+  Object.assign(state, state.viewStates?.[state.views] ?? {});
   const json = args[args.indexOf('--json') + 1];
   if (json === 'isDraft') console.log(state.draft);
   else console.log([state.draft, state.head, state.branch].join('\\t'));
   save();
 } else if (args[0] === 'api') {
   state.apiUsedReadToken = process.env.GH_TOKEN === 'workflow-test-token';
-  save(); if (state.apiFailure) { console.error('lookup unavailable'); process.exit(1); }
-  console.log(JSON.stringify(state.malformed ? {} : { workflow_runs: state.runs, total_count: state.responseCount ?? state.runs.length }));
+  state.apiCalls = (state.apiCalls ?? 0) + 1;
+  save(); if (state.apiFailure || state.apiFailureAt === state.apiCalls) { console.error('lookup unavailable'); process.exit(1); }
+  const requestedHead = args.find((value) => value.startsWith('head_sha='))?.slice('head_sha='.length);
+  const runs = state.runsByHead?.[requestedHead] ?? state.runs;
+  console.log(JSON.stringify(state.malformed ? {} : { workflow_runs: runs, total_count: state.responseCount ?? runs.length }));
 } else if (args[0] === 'pr' && args[1] === 'ready') {
   if (args.includes('--undo')) { state.draft = true; state.cancellations += 1; }
   else { state.draft = false; state.allocations += 1; }
@@ -159,8 +163,8 @@ test('invalid automation credential fallback keeps a ready release in draft', (t
   assert.equal(result.state.allocations, 0)
   assert.equal(result.state.apiUsedReadToken, undefined)
 })
-for (const options of [{ apiFailure: true }, { malformed: true }, { changeHead: true }])
-  test(`unconfirmed owner or changed PR state causes no readiness mutation: ${JSON.stringify(options)}`, (t) => {
+for (const options of [{ apiFailure: true }, { malformed: true }])
+  test(`unconfirmed owner causes no readiness mutation: ${JSON.stringify(options)}`, (t) => {
     const result = execute(t, options)
     assert.notEqual(result.status, 0)
     assert.equal(result.state.cancellations, 0)
@@ -231,3 +235,102 @@ for (const [name, path] of [
     assert.equal(result.state.cancellations, 0)
     assert.equal(result.state.allocations, 0)
   })
+
+const movedHead = 'b'.repeat(40)
+const ownerQueries = (result) => result.state.calls.filter(([command]) => command === 'api')
+const requestedHeads = (result) =>
+  ownerQueries(result).map((args) => args.find((value) => value.startsWith('head_sha=')))
+
+test('a moved ready head reads its complete fresh state and owner before preserving readiness', (t) => {
+  const result = execute(t, {
+    changeHead: true,
+    runsByHead: { [movedHead]: [{ ...run('queued', null), head_sha: movedHead }] },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(requestedHeads(result), [`head_sha=${head}`, `head_sha=${movedHead}`])
+  assert.equal(result.state.views, 4)
+  assert.equal(result.state.draft, false)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+test('an old owner cannot bless a moved head with no current owner', (t) => {
+  const result = execute(t, { changeHead: true })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(requestedHeads(result), [`head_sha=${head}`, `head_sha=${movedHead}`])
+  assert.equal(result.state.draft, false)
+  assert.equal(result.state.cancellations, 1)
+  assert.equal(result.state.allocations, 1)
+})
+
+test('a failed owner of the fresh head fails without retry or readiness mutation', (t) => {
+  const result = execute(t, {
+    changeHead: true,
+    runsByHead: { [movedHead]: [{ ...run('completed', 'failure'), head_sha: movedHead }] },
+  })
+  assert.notEqual(result.status, 0)
+  assert.deepEqual(requestedHeads(result), [`head_sha=${head}`, `head_sha=${movedHead}`])
+  assert.equal(result.state.views, 4)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+test('a moved branch outside the generated namespace fails before another owner lookup', (t) => {
+  const result = execute(t, { viewStates: { 2: { branch: 'ordinary-topic' } } })
+  assert.notEqual(result.status, 0)
+  assert.equal(ownerQueries(result).length, 1)
+  assert.match(result.stderr, /left the generated namespace/)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+test('continuous valid head churn exhausts the bounded state reads without mutation', (t) => {
+  const viewStates = Object.fromEntries(
+    ['a', 'b', 'c', 'd', 'e', 'f'].map((value, index) => [index + 1, { head: value.repeat(40) }])
+  )
+  const result = execute(t, { viewStates })
+  assert.notEqual(result.status, 0)
+  assert.equal(ownerQueries(result).length, 3)
+  assert.equal(result.state.views, 6)
+  assert.match(result.stderr, /did not stabilize/)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+test('a fresh draft state gets its first transition without using old ready-head eligibility', (t) => {
+  const result = execute(t, { viewStates: { 2: { draft: true } } })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.state.views, 3)
+  assert.equal(ownerQueries(result).length, 1)
+  assert.equal(result.state.draft, false)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 1)
+})
+
+test('a generated branch transition cannot inherit the previous branch owner', (t) => {
+  const result = execute(t, { viewStates: { 2: { branch: branch + '--component' } } })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(ownerQueries(result).length, 2)
+  assert.equal(result.state.views, 4)
+  assert.equal(result.state.cancellations, 1)
+  assert.equal(result.state.allocations, 1)
+})
+
+test('an invalid fresh head fails validation before another ownership query or mutation', (t) => {
+  const result = execute(t, { viewStates: { 2: { head: 'invalid' } } })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /Unable to verify generated release PR state/)
+  assert.equal(ownerQueries(result).length, 1)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+test('an API error during the fresh lookup fails closed without retrying it', (t) => {
+  const result = execute(t, { changeHead: true, apiFailureAt: 2 })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /lookup unavailable/)
+  assert.equal(ownerQueries(result).length, 2)
+  assert.equal(result.state.views, 3)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})

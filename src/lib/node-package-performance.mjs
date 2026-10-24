@@ -17,6 +17,42 @@ const METRICS = new Set([
   'productionDependencyCount',
 ])
 
+/**
+ * npm 12 keys pack reports by package name; older npm versions return an array.
+ * Count reports before validating their shape so an extra malformed entry cannot be ignored.
+ * @param {unknown} value
+ * @returns {{filename: string, size: number, unpackedSize: number, files: Array<{path: string}>}}
+ */
+export function singleNpmPackReport(value) {
+  let reports
+  if (Array.isArray(value)) reports = value
+  else if (value && typeof value === 'object') {
+    const object = /** @type {Record<string, unknown>} */ (value)
+    reports = typeof object.filename === 'string' ? [object] : Object.values(object)
+  } else reports = []
+  if (reports.length !== 1) throw new Error('Expected one npm pack report.')
+  const packed = reports[0]
+  if (!packed || typeof packed !== 'object' || Array.isArray(packed))
+    throw new Error('npm pack returned no package result.')
+  if (typeof packed.filename !== 'string' || packed.filename.length === 0)
+    throw new Error('npm pack result is missing filename.')
+  for (const field of ['size', 'unpackedSize'])
+    if (typeof packed[field] !== 'number' || !Number.isFinite(packed[field]) || packed[field] < 0)
+      throw new Error(`npm pack result is missing non-negative numeric ${field}.`)
+  if (
+    !Array.isArray(packed.files) ||
+    !packed.files.every(
+      (/** @type {unknown} */ file) =>
+        file !== null &&
+        typeof file === 'object' &&
+        !Array.isArray(file) &&
+        typeof (/** @type {{path?: unknown}} */ (file).path) === 'string'
+    )
+  )
+    throw new Error('npm pack result is missing a valid files list.')
+  return packed
+}
+
 /** @param {number[]} values @param {number} percent */
 export function percentile(values, percent) {
   if (values.length === 0) throw new Error('percentile requires at least one value')
@@ -59,8 +95,7 @@ export function runNodePackagePerformance(
     ? measureImports(root, String(policy.controlImport), samples)
     : null
   const pack = npmJson(root, ['pack', '--dry-run', '--json', '--ignore-scripts'], 'npm pack')
-  const packed = Array.isArray(pack) ? pack[0] : pack
-  if (!packed || typeof packed !== 'object') throw new Error('npm pack returned no package result.')
+  const packed = singleNpmPackReport(pack)
   /** @type {Array<{path?: string}>} */
   const files = Array.isArray(packed.files) ? packed.files : []
   const productionDependencyCount = npmProductionDependencyCount(root)

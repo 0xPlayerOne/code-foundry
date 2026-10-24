@@ -205,8 +205,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          # The content audit needs historical blobs after checkout removes credentials.
           fetch-depth: 0
-          filter: blob:none
       - name: Validate generated release diff
         if: ${{ inputs.mode == 'release' }}
         env:

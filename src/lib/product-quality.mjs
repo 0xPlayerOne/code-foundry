@@ -17,6 +17,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { gzipSync } from 'node:zlib'
+import { singleNpmPackReport } from './node-package-performance.mjs'
 
 /** @typedef {Record<string, any>} Profile */
 /** @param {unknown} condition @param {string} message @returns {asserts condition} */
@@ -602,24 +603,23 @@ export function checkPackage(root, profile, output) {
   // Pack outside the consumer repository so test installations cannot become package input.
   const temporary = mkdtempSync(join(tmpdir(), 'foundry-package-quality-'))
   try {
-    const pack = JSON.parse(
-      runQualityCommand(
-        ['npm', 'pack', '--ignore-scripts', '--json', '--pack-destination', temporary],
-        root,
-        output
+    const pack = singleNpmPackReport(
+      JSON.parse(
+        runQualityCommand(
+          ['npm', 'pack', '--ignore-scripts', '--json', '--pack-destination', temporary],
+          root,
+          output
+        )
       )
     )
+    requireValue(/^[A-Za-z0-9._-]+\.tgz$/.test(pack.filename), 'Expected one package archive')
     requireValue(
-      Array.isArray(pack) && pack.length === 1 && /^[A-Za-z0-9._-]+\.tgz$/.test(pack[0].filename),
-      'Expected one package archive'
-    )
-    requireValue(
-      pack[0].files.every(
+      pack.files.every(
         (/** @type {{path:string}} */ file) => !/^\.code-foundry(?:\/|$)/.test(file.path)
       ),
       'Exclude .code-foundry quality evidence from the published package'
     )
-    const archive = ownedPath(temporary, pack[0].filename)
+    const archive = ownedPath(temporary, pack.filename)
     const archiveSha256 = createHash('sha256').update(readFileSync(archive)).digest('hex')
     const consumer = join(temporary, 'consumer')
     mkdirSync(consumer)

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { singleNpmPackReport } from '../src/lib/node-package-performance.mjs'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
 
@@ -13,7 +14,7 @@ test('the npm package keeps runtime templates and excludes repository-local acti
   })
   assert.equal(result.status, 0, result.stderr)
 
-  const [archive] = JSON.parse(result.stdout)
+  const archive = singleNpmPackReport(JSON.parse(result.stdout))
   const files = new Set(archive.files.map(({ path }) => path))
   assert.equal(
     [...files].some((path) => path.startsWith('.github/actions/')),

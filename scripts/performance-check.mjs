@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { trimChangelog } from './package-changelog.mjs'
+import { singleNpmPackReport } from '../src/lib/node-package-performance.mjs'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 // The packed budget is a guard against publishing a runaway artifact, not a
@@ -77,9 +78,9 @@ function benchmarkNode(label, args, env = process.env) {
  * budget measures the source artifact, not accumulated release notes.
  */
 function measurePackWithoutChangelog() {
-  const listed = JSON.parse(
-    run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts']).stdout
-  )[0]
+  const listed = singleNpmPackReport(
+    JSON.parse(run('npm', ['pack', '--dry-run', '--json', '--ignore-scripts']).stdout)
+  )
   const stage = mkdtempSync(join(tmpdir(), 'code-foundry-pack-'))
   try {
     for (const { path } of listed.files) {
@@ -99,7 +100,7 @@ function measurePackWithoutChangelog() {
       maxBuffer: 10 * 1024 * 1024,
     })
     if (result.status !== 0) throw new Error(`staged npm pack failed: ${result.stderr}`)
-    const staged = JSON.parse(result.stdout)[0]
+    const staged = singleNpmPackReport(JSON.parse(result.stdout))
     const expected = listed.files.filter(
       (/** @type {{ path: string }} */ file) => file.path !== 'CHANGELOG.md'
     ).length

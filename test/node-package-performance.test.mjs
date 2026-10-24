@@ -3,7 +3,63 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { percentile, runNodePackagePerformance } from '../src/lib/node-package-performance.mjs'
+import {
+  percentile,
+  runNodePackagePerformance,
+  singleNpmPackReport,
+} from '../src/lib/node-package-performance.mjs'
+
+const packReport = {
+  filename: 'fixture-package-1.0.0.tgz',
+  size: 100,
+  unpackedSize: 200,
+  files: [{ path: 'index.js' }],
+}
+
+test('npm pack accepts legacy arrays, direct reports and npm 12 package-name maps', () => {
+  for (const report of [
+    [packReport],
+    packReport,
+    { 'fixture-package': packReport },
+    { filename: packReport },
+  ])
+    assert.deepEqual(singleNpmPackReport(report), packReport)
+  const withMetadata = { ...packReport, metadata: { source: 'fixture' } }
+  assert.deepEqual(singleNpmPackReport(withMetadata), withMetadata)
+})
+
+test('npm pack counts every entry before validating report shapes', () => {
+  for (const report of [
+    [],
+    {},
+    [packReport, packReport],
+    [packReport, null],
+    { first: packReport, second: packReport },
+    { first: packReport, malformed: null },
+    { filename: packReport, malformed: null },
+  ])
+    assert.throws(() => singleNpmPackReport(report), /Expected one npm pack report/)
+})
+
+test('npm pack refuses malformed reports instead of defaulting missing metrics or file lists', () => {
+  for (const report of [
+    null,
+    'report',
+    { fixture: null },
+    { fixture: [] },
+    { ...packReport, filename: '' },
+    { ...packReport, size: undefined },
+    { ...packReport, size: '100' },
+    { ...packReport, size: -1 },
+    { ...packReport, size: Infinity },
+    { ...packReport, unpackedSize: NaN },
+    { ...packReport, files: undefined },
+    { ...packReport, files: [null] },
+    { ...packReport, files: [{}] },
+    { ...packReport, files: [{ path: 1 }] },
+  ])
+    assert.throws(() => singleNpmPackReport(report), /npm pack/)
+})
 
 function fixture(budgets) {
   const root = mkdtempSync(join(tmpdir(), 'code-foundry-node-performance-'))

@@ -404,6 +404,28 @@ function validation(task) {
           { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
         )
       : undefined
+    if (diff && diff.status !== 0) {
+      // Git can relay arbitrary remote messages, URLs and credentials on stderr. Emit only
+      // bounded, recognised failure facts; never replay remote text as workflow annotations.
+      const stderr = (diff.stderr ?? '').slice(0, 8192)
+      const missingBlob = /could not fetch ([0-9a-f]{40,64}) from promisor remote/i.exec(stderr)
+      const reason = missingBlob
+        ? `historical blob ${missingBlob[1]} unavailable from promisor remote`
+        : /authentication failed|could not read (?:username|password)|terminal prompts disabled/i.test(
+              stderr
+            )
+          ? 'authentication unavailable'
+          : /could not read from remote repository/i.test(stderr)
+            ? 'remote repository unavailable'
+            : /bad object|unknown revision|invalid symmetric difference|ambiguous argument/i.test(
+                  stderr
+                )
+              ? 'revision unavailable'
+              : 'Git error details omitted'
+      console.error(
+        `::error::Git content diff failed (status ${diff.status ?? 'unavailable'}): ${reason}.`
+      )
+    }
     const result = validateGeneratedReleaseDiff({
       headRef: process.env.FOUNDRY_HEAD_REF ?? '',
       headRepo: process.env.FOUNDRY_HEAD_REPO ?? '',
