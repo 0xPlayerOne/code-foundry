@@ -327,11 +327,13 @@ describe('release_diff gate against a release generated mid-push', () => {
         // A missing local remote models checkout's authentication no longer being available,
         // without making a network request or creating/persisting credentials.
         git(clone, ['remote', 'set-url', 'origin', join(directory, 'unavailable.git')])
-        const blob = spawnSync('git', ['--no-lazy-fetch', 'cat-file', '-e', oldBlob], {
+        // cat-file -e is supported by the hosted Git 2.43, unlike the newer global
+        // --no-lazy-fetch option. Any lazy fetch can reach only the missing local origin.
+        const blob = spawnSync('git', ['cat-file', '-e', oldBlob], {
           cwd: clone,
           encoding: 'utf8',
         })
-        assert.equal(blob.status === 0, !partial)
+        assert.equal(blob.status === 0, !partial, blob.stderr)
         assert.match(git(clone, ['diff', '--name-only', `${baseSha}...HEAD`]), /package.json/)
         const result = gate(clone, baseSha)
         if (partial) {
