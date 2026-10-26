@@ -271,11 +271,12 @@ jobs:
           // Writes intermittently hit GitHub's secondary rate limiting from
           // busy automation accounts (403 with the generic not-accessible
           // message); back off and retry before giving up.
-          const gh = (args) => {
+          const gh = (args, options = {}) => {
             for (const wait of [0, 10, 30]) {
               try {
                 if (wait) sleep(wait);
                 return execFileSync('gh', args, {
+                  ...options,
                   encoding: 'utf8',
                   maxBuffer: 32 * 1024 * 1024,
                 });
@@ -316,6 +317,18 @@ jobs:
           const latestTag = versionedTags[0] ?? '';
           const prefix = latestTag.replace(/v?\d+\.\d+\.\d+.*$/, '') || 'v';
 
+          // Include drafts and every page before deciding an object is absent.
+          const releasePages = JSON.parse(gh([
+            'api', `repos/${repo}/releases`, '-X', 'GET', '-f', 'per_page=100',
+            '--paginate', '--slurp',
+          ]));
+          if (!Array.isArray(releasePages) || releasePages.some((page) =>
+            !Array.isArray(page) || page.some((release) =>
+              !release || typeof release.tag_name !== 'string' || !release.tag_name))) {
+            throw new Error('Invalid existing release listing; refusing release creation');
+          }
+          const existingReleaseTags = new Set(releasePages.flat().map((release) => release.tag_name));
+
           let ensured = 0;
           let failures = 0;
           let lastTag = '';
@@ -324,12 +337,7 @@ jobs:
             const version = /^chore\(main\): release (\S+)/.exec(pull.title)?.[1];
             if (!version) continue;
             const tag = `${prefix}v${version}`;
-            // Draft releases are invisible to get-release-by-tag, so scan
-            // the list endpoint (which returns drafts) for the tag.
-            const releasesForCheck = JSON.parse(gh([
-              'api', `repos/${repo}/releases`, '-X', 'GET', '-f', 'per_page=100',
-            ]));
-            if (releasesForCheck.some((release) => release.tag_name === tag)) {
+            if (existingReleaseTags.has(tag)) {
               console.log(`${tag}: release object already exists`);
             } else {
               // No release object for this tag: create it. The tag may also
@@ -354,6 +362,7 @@ jobs:
                   prerelease: version.includes('-'),
                 });
                 gh(['api', `repos/${repo}/releases`, '-X', 'POST', '--input', '-'], { input: body });
+                existingReleaseTags.add(tag);
                 console.log(`${tag}: release object created`);
               } catch (error) {
                 failures += 1;
