@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.8...v1.48.9) (2026-10-26)
+
+
+### Bug Fixes
+
+* **release:** preserve fallback stdin and paginate existing releases ([#781](https://github.com/0xPlayerOne/code-foundry/issues/781)) ([ede4d2c](https://github.com/0xPlayerOne/code-foundry/commit/ede4d2c7e3bc7d1174580c9a0bc83bdaa160c2da))
+
 ## [1.48.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.7...v1.48.8) (2026-10-24)
 
 
