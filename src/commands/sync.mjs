@@ -1170,6 +1170,22 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
   if (configured(config.draft_protection, 'true') === 'false') {
     rendered = rendered.replaceAll(' && github.event.pull_request.draft == false', '')
   }
+  const integrationShards =
+    config.integration_shards === undefined || config.integration_shards === ''
+      ? 1
+      : Number(config.integration_shards)
+  if (!Number.isInteger(integrationShards) || integrationShards < 1 || integrationShards > 2) {
+    throw new Error(`Unsupported integration_shards: ${config.integration_shards}; use 1 or 2.`)
+  }
+  if (integrationShards > 1 && configured(config.billing_lanes, 'false') === 'true') {
+    throw new Error('integration_shards cannot be combined with billing_lanes.')
+  }
+  if (integrationShards > 1 && file === '.github/workflows/validation.yml') {
+    rendered = rendered.replace(
+      /^(\s+integration-total-shards:)\s+.*$/gm,
+      `$1 ${integrationShards}`
+    )
+  }
   // E2E sharding fans the managed E2E job into one runner per shard; shards
   // stay isolated because each job owns a runner-local test database. Fail
   // closed on a malformed count rather than silently rendering a single shard.

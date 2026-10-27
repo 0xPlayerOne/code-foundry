@@ -74,3 +74,35 @@ test('fails closed on a malformed e2e_shards config', () => {
     )
   }
 })
+
+test('integration shards are opt-in, isolated and fail closed', () => {
+  const defaultCaller = readFileSync(
+    join(syncConsumer(), '.github/workflows/validation.yml'),
+    'utf8'
+  )
+  const shardedCaller = readFileSync(
+    join(syncConsumer({ integration_shards: '2' }), '.github/workflows/validation.yml'),
+    'utf8'
+  )
+  assert.match(defaultCaller, /integration-total-shards: '1'/)
+  assert.match(shardedCaller, /integration-total-shards: 2/)
+  const lane = readFileSync(join(source, '.github/workflows/test.yml'), 'utf8')
+  const integration = lane.slice(lane.indexOf('  integration:\n'), lane.indexOf('  e2e:\n'))
+  assert.match(integration, /integration-total-shards != '2'/)
+  assert.match(integration, /run: test "\$SHARDS" = 1/)
+  assert.match(integration, /integration-total-shards == '2'/)
+  assert.match(integration, /fail-fast: false/)
+  assert.match(integration, /shard: \[1, 2\]/)
+  assert.match(integration, /INTEGRATION_SHARD_INDEX: \$\{\{ matrix\.shard \}\}/)
+  assert.match(
+    integration,
+    /INTEGRATION_TOTAL_SHARDS: \$\{\{ inputs\.integration-total-shards \}\}/
+  )
+  assert.match(integration, /-integration-s\$\{\{ matrix\.shard \}\}/)
+  for (const bad of ['0', '3', '-1', 'two', '1.5'])
+    assert.throws(() => syncConsumer({ integration_shards: bad }), /Unsupported integration_shards/)
+  assert.throws(
+    () => syncConsumer({ integration_shards: '2', billing_lanes: 'true' }),
+    /cannot be combined/
+  )
+})

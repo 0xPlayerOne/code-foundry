@@ -95,6 +95,11 @@ on:
         required: false
         type: string
         default: task-result
+      integration-total-shards:
+        description: Integration partitions (1 or 2); sharded scripts must honor INTEGRATION_SHARD_INDEX and INTEGRATION_TOTAL_SHARDS.
+        required: false
+        type: string
+        default: '1'
       e2e-shard-list:
         description: Comma-separated E2E shard indices passed to the test lane's matrix, e.g. "1,2".
         required: false
@@ -151,6 +156,10 @@ jobs:
     runs-on: ${{ inputs.ci-runner }}
     timeout-minutes: 45
     steps:
+      - name: Validate integration shard count
+        env:
+          SHARDS: ${{ inputs.integration-total-shards }}
+        run: test "$SHARDS" = 1
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
