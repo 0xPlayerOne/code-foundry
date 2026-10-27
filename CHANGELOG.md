@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.9...v1.49.0) (2026-10-27)
+
+
+### Features
+
+* support isolated integration test shards ([#783](https://github.com/0xPlayerOne/code-foundry/issues/783)) ([ad1123f](https://github.com/0xPlayerOne/code-foundry/commit/ad1123ff3bb9654bfbdaef4219490cca3e7e3d20))
+
 ## [1.48.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.8...v1.48.9) (2026-10-26)
 
 
