@@ -36,11 +36,11 @@ jobs:
             exit 1
           fi
 
-          read -r draft head_ref head_sha updated_at < <(
+          read -r draft head_ref head_sha updated_at node_id < <(
             gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
-              --jq '[.draft, .head.ref, .head.sha, .updated_at] | @tsv'
+              --jq '[.draft, .head.ref, .head.sha, .updated_at, .node_id] | @tsv'
           )
-          if [ -z "$draft" ] || [ -z "$head_ref" ] || [ -z "$head_sha" ] || [ -z "$updated_at" ]; then
+          if [ -z "$draft" ] || [ -z "$head_ref" ] || [ -z "$head_sha" ] || [ -z "$updated_at" ] || [ -z "$node_id" ]; then
             echo '::error title=Draft guard cannot verify current state::The GitHub API response did not include the required pull-request metadata.'
             exit 1
           fi
@@ -70,9 +70,13 @@ jobs:
             exit 1
           fi
 
-          gh api \
-            --method PATCH \
-            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" \
-            -F draft=true \
-            --silent >/dev/null
+          result=$(gh api graphql \
+            -f query='mutation($pullRequestId: ID!) { convertPullRequestToDraft(input: {pullRequestId: $pullRequestId}) { pullRequest { id isDraft } } }' \
+            -f pullRequestId="$node_id" \
+            --jq '.data.convertPullRequestToDraft.pullRequest | [.id, .isDraft] | @tsv')
+          read -r returned_id is_draft <<< "$result"
+          if [ "$returned_id" != "$node_id" ] || [ "$is_draft" != true ]; then
+            echo '::error title=Draft guard conversion failed::GraphQL did not confirm the expected pull request is a draft.'
+            exit 1
+          fi
           echo "Converted ordinary pull request #$PR_NUMBER to draft; validation waits for ready_for_review."

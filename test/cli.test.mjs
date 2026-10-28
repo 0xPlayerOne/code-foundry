@@ -734,7 +734,9 @@ describe('code-foundry CLI', () => {
     assert.match(guard, /pull-requests: write/)
     assert.match(guard, /EVENT_HEAD_SHA/)
     assert.match(guard, /EVENT_UPDATED_AT/)
-    assert.match(guard, /--method PATCH/)
+    assert.match(guard, /convertPullRequestToDraft/)
+    assert.match(guard, /\[ "\$returned_id" != "\$node_id" \] \|\| \[ "\$is_draft" != true \]/)
+    assert.doesNotMatch(guard, /--method PATCH/)
     assert.match(guard, /release-please--branches--main--\*/)
     assert.doesNotMatch(guard, /actions\/checkout/)
     assert.match(guard, /branches: \[main\]/)
@@ -2039,7 +2041,9 @@ describe('code-foundry CLI', () => {
     assert.match(draftGuard, /pull-requests: write/)
     assert.match(draftGuard, /EVENT_HEAD_SHA/)
     assert.match(draftGuard, /EVENT_UPDATED_AT/)
-    assert.match(draftGuard, /--method PATCH/)
+    assert.match(draftGuard, /convertPullRequestToDraft/)
+    assert.match(draftGuard, /\[ "\$returned_id" != "\$node_id" \] \|\| \[ "\$is_draft" != true \]/)
+    assert.doesNotMatch(draftGuard, /--method PATCH/)
     assert.match(draftGuard, /release-please--branches--main--\*/)
     assert.doesNotMatch(draftGuard, /actions\/checkout/)
   })
@@ -2737,6 +2741,11 @@ jobs:
     assert.doesNotMatch(workflow, /^  dependency-audit-python:\s*$/m)
     assert.doesNotMatch(workflow, /python-gate/)
     assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
+    // Empty matrices must not be expanded; missing or malformed outputs fail closed.
+    assert.match(
+      workflow,
+      /needs\.profile\.result == 'success' && needs\.profile\.outputs\.audit_matrix != '\[\]'/
+    )
     assert.doesNotMatch(workflow, /^  dependency-review:\s*$/m)
     assert.match(workflow, /^      - name: Dependency Review$/m)
     assert.match(
