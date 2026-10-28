@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.0...v1.49.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* handle empty security audit matrices ([#785](https://github.com/0xPlayerOne/code-foundry/issues/785)) ([02f0565](https://github.com/0xPlayerOne/code-foundry/commit/02f05652e68267a2aa2df5d5af8f13df9ba1e3aa))
+
 ## [1.49.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.48.9...v1.49.0) (2026-10-27)
 
 
