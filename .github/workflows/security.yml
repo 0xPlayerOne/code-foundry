@@ -140,7 +140,9 @@ jobs:
   dependency-audit:
     name: Dependency Audit (${{ matrix.entry.display }})
     needs: profile
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success'
+    # Avoid expanding an empty matrix; skip only the explicitly empty result.
+    # Missing or malformed output still fails closed during matrix expansion.
+    if: vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success' && needs.profile.outputs.audit_matrix != '[]'
     strategy:
       fail-fast: false
       max-parallel: 8
