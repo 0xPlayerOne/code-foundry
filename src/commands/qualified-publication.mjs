@@ -31,6 +31,29 @@ export const REQUIRED_FIXTURES = [
 function ensure(condition, message) {
   if (!condition) throw new Error(message)
 }
+// Extract only fixed categories from npm's code line. Never echo stderr or the
+// captured code: npm output may contain credentials, paths, or registry URLs.
+/** @param {string} stderr */
+export function npmFailureCategory(stderr) {
+  const categories = {
+    E401: 'authentication',
+    E403: 'authorization-or-policy',
+    E404: 'registry-or-package',
+    E409: 'version-conflict',
+    EOTP: 'authentication',
+    ENEEDAUTH: 'authentication',
+    ECONNRESET: 'network',
+    ECONNREFUSED: 'network',
+    ENOTFOUND: 'network',
+    ETIMEDOUT: 'network',
+  }
+  for (const line of stderr.split(/\r?\n/)) {
+    const code = /^npm (?:ERR!|error) code ([A-Z0-9]+)\s*$/.exec(line)?.[1]
+    if (code && Object.hasOwn(categories, code))
+      return categories[/** @type {keyof typeof categories} */ (code)]
+  }
+  return 'unknown'
+}
 /** @type {Run} */
 export function runCommand(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -40,6 +63,10 @@ export function runCommand(command, args, cwd) {
     maxBuffer: 8 * 1024 * 1024,
     env: { ...process.env, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1' },
   })
+  if (command === 'npm' && (result.error || result.status !== 0)) {
+    const category = npmFailureCategory(result.stderr ?? '')
+    throw new Error(`npm failed (category: ${category}); publication remains blocked`)
+  }
   ensure(
     !result.error && result.status === 0,
     `${command} failed (${result.status ?? result.error?.message}); publication remains blocked`

@@ -168,6 +168,11 @@ publisher from the same source-bound workflow after confirming npm has not alrea
 accepted that version. Never weaken the SHA guard, move an immutable tag, or treat
 npm's version-conflict response as success.
 
+If npm fails, the publisher reports only a fixed diagnostic category for known
+npm error codes. Unknown errors remain generic; stderr, registry URLs, paths, and
+credentials are not logged by this diagnostic. A category is a clue, not proof
+of the cause, and does not change the publication gates.
+
 ## Validation
 
 Run the focused local suites before changing this path:
