@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os'
 import {
   downloadVerifiedArchive,
   publishQualifiedArchive,
+  npmFailureCategory,
+  runCommand,
   qualifyArchive,
   REQUIRED_FIXTURES,
   REQUIRED_NODES,
@@ -341,3 +343,57 @@ for (const [name, overrides] of [
     await assert.rejects(() => stageQualifiedRelease(candidate, reportPaths, { run, verify }))
     assert.equal(writes.length, 0)
   })
+
+test('npm failure categories are a fixed allowlist and never include untrusted text', () => {
+  const secret = 'synthetic-token-DO-NOT-LOG'
+  for (const [stderr, expected] of [
+    [
+      `npm error code E401\nnpm error ${secret} https://example.invalid/${secret}`,
+      'authentication',
+    ],
+    [`npm ERR! code E403\n${secret}`, 'authorization-or-policy'],
+    ['npm error code ECONNRESET', 'network'],
+    ['npm error code E409', 'version-conflict'],
+    [`npm error code E401 ${secret}`, 'unknown'],
+    [`npm error code ${secret}`, 'unknown'],
+    [`${secret} /tmp/${secret} https://example.invalid/${secret}`, 'unknown'],
+    ['npm error code EPROVENANCE', 'unknown'],
+    ['', 'unknown'],
+  ]) {
+    const category = npmFailureCategory(stderr)
+    assert.equal(category, expected)
+    assert.ok(!category.includes(secret))
+  }
+})
+
+test('failed npm command reports only an allowlisted category, not output or spawn details', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'npm-diagnostic-'))
+  const originalPath = process.env.PATH
+  t.after(() => {
+    process.env.PATH = originalPath
+    rmSync(directory, { recursive: true, force: true })
+  })
+  const secret = 'synthetic-token-DO-NOT-LOG'
+  const executable = join(directory, 'npm')
+  writeFileSync(
+    executable,
+    `#!/bin/sh\necho 'npm error code E401' >&2\necho '${secret} /private/${secret} https://example.invalid/${secret}' >&2\necho '${secret}'\nexit 1\n`,
+    { mode: 0o755 }
+  )
+  process.env.PATH = directory
+  assert.throws(
+    () => runCommand('npm', ['publish']),
+    (error) => {
+      assert.equal(
+        error.message,
+        'npm failed (category: authentication); publication remains blocked'
+      )
+      assert.ok(!error.stack.includes(secret))
+      return true
+    }
+  )
+  rmSync(executable)
+  assert.throws(() => runCommand('npm', ['publish']), {
+    message: 'npm failed (category: unknown); publication remains blocked',
+  })
+})
