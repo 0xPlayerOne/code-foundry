@@ -112,15 +112,12 @@ jobs:
 
   # CodeQL requires a push analysis to populate default-branch code-scanning
   # alerts. Keep the full validation gate pull-request-only so main pushes do
-  # not duplicate CI, test, or security work. Release Please version merges
-  # change manifests only, so the code tree is identical to the content merge
-  # whose default-branch scan is still current; re-scanning it on every release
-  # wastes the Rust-heavy analysis budget, and the scheduled audit covers drift.
+  # not duplicate CI, test, or security work. Run CodeQL for every main push:
+  # commit subjects do not prove that a push contains only release metadata.
   default-branch-codeql:
     name: CodeQL (default branch)
     if: >-
-      vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'push' &&
-      !startsWith(github.event.head_commit.message, 'chore(main): release ')
+      vars.CI_BILLING_PAUSED != 'true' && github.event_name == 'push'
     permissions:
       actions: read
       contents: read

@@ -1517,6 +1517,41 @@ describe('code-foundry CLI', () => {
     assert.match(defaultBranch, /rust-max-parallel: 2/)
   })
 
+  it('keeps default-branch CodeQL enabled for release-looking pushes with source changes', () => {
+    const sourceBearingReleasePush = {
+      subject: 'chore(main): release 1.51.1',
+      changedPaths: ['src/commands/sync.mjs'],
+    }
+    assert.match(sourceBearingReleasePush.subject, /^chore\(main\): release /)
+    assert.ok(sourceBearingReleasePush.changedPaths.some((path) => path.startsWith('src/')))
+
+    const root = mkdtempSync(join(tmpdir(), 'code-foundry-codeql-release-subject-'))
+    mkdirSync(join(root, '.github'), { recursive: true })
+    writeFileSync(
+      join(root, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: all\n'
+    )
+
+    syncRepository({ target: root, source: process.cwd() })
+    const workflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    const defaultBranch = workflow.slice(workflow.indexOf('\n  default-branch-codeql:'))
+
+    assert.match(
+      defaultBranch,
+      /if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push'/
+    )
+    assert.doesNotMatch(defaultBranch, /head_commit\.message|startsWith\(/)
+    assert.match(
+      defaultBranch,
+      /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/codeql\.yml@v1\.51\.0/
+    )
+    assert.match(workflow, /pull_request:/)
+    const audit = readFileSync(join(root, '.github/workflows/validation-audit.yml'), 'utf8')
+    assert.match(audit, /schedule:/)
+
+    rmSync(root, { recursive: true, force: true })
+  })
+
   it('renders the configured unit runner independently from the test runner', () => {
     const root = mkdtempSync(join(tmpdir(), 'code-foundry-unit-runner-'))
     mkdirSync(join(root, '.github'), { recursive: true })
@@ -2003,8 +2038,9 @@ describe('code-foundry CLI', () => {
     assert.match(validationCaller, /on:\n  push:\n    branches: \[main\]\n  pull_request:/)
     assert.match(
       validationCaller,
-      /default-branch-codeql:[\s\S]*?if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push' &&\n\s+!startsWith\(github\.event\.head_commit\.message, 'chore\(main\): release '\)/
+      /default-branch-codeql:[\s\S]*?if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push'/
     )
+    assert.doesNotMatch(validationCaller, /head_commit\.message/)
     assert.match(
       validationCaller,
       /default-branch-codeql:[\s\S]*?uses: \.\/\.github\/workflows\/codeql\.yml/
@@ -5011,10 +5047,7 @@ jobs:
     assert.match(caller, /^  push:\n\s+branches: \[main\]/m)
     assert.match(caller, /pull_request:\n\s+branches: \[main, staging\]/)
     assert.match(caller, /default-branch-codeql:[\s\S]*?github\.event_name == 'push'/)
-    assert.match(
-      caller,
-      /!startsWith\(github\.event\.head_commit\.message, 'chore\(main\): release '\)/
-    )
+    assert.doesNotMatch(caller, /head_commit\.message/)
     assert.doesNotMatch(caller, /schedule:/)
     assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
