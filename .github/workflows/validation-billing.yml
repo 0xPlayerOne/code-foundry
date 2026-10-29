@@ -1286,5 +1286,4 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
         {"ci":"${{ needs.lint.result == 'success' && needs.type-check.result == 'success' && needs.fast-lanes.result == 'success' && 'success' || 'failure' }}","test":"${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && needs.e2e.result == 'success' && 'success' || 'failure' }}","security":"${{ needs.audit.result }}","codeql":"${{ inputs.codeql == true && needs.codeql.result || 'not-configured' }}","eval":"${{ needs.fast-lanes.result }}","gate":"${{ needs.gate.result }}"}
-      required-job-names-json: >-
-        '["Validation / Gate"]'
+      required-job-names-json: '["Validation / Gate"]'

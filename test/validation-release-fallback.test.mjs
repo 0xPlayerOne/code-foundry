@@ -11,6 +11,37 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
+function workflowJob(source, name) {
+  const start = source.indexOf(`\n  ${name}:\n`)
+  assert.notEqual(start, -1, `${name} job exists`)
+  const jobStart = start + 1
+  const next = /\n  [a-z0-9_-]+:\n/.exec(source.slice(jobStart))
+  return source.slice(jobStart, next ? jobStart + next.index : undefined)
+}
+
+function workflowInputScalar(job, name) {
+  const lines = job.split(/\r?\n/)
+  const index = lines.findIndex((line) => new RegExp(`^\\s+${name}:`).test(line))
+  assert.notEqual(index, -1, `${name} input exists`)
+  const line = lines[index]
+  const indent = line.length - line.trimStart().length
+  const value = line.slice(line.indexOf(':') + 1).trim()
+  if (value === '>-') {
+    const block = []
+    for (const next of lines.slice(index + 1)) {
+      const nextIndent = next.length - next.trimStart().length
+      if (next.trim() && nextIndent <= indent) break
+      block.push(next.trim())
+    }
+    return block.join(' ').replace(/\s+$/, '')
+  }
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replaceAll("''", "'")
+  }
+  if (value.startsWith('"')) return JSON.parse(value)
+  return value
+}
+
 test('Release Please keeps CI, unit tests, and CodeQL without exact successful source evidence', () => {
   const mode = classifyValidationMode({
     eventName: 'pull_request',
@@ -201,5 +232,25 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
   assert.match(
     billing,
     /needs: qualification[\s\S]*inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'/
+  )
+
+  const billingReceiptProducer = workflowJob(billing, 'qualification-receipt')
+  assert.deepEqual(
+    JSON.parse(workflowInputScalar(billingReceiptProducer, 'required-job-names-json')),
+    ['Validation / Gate']
+  )
+
+  const buildWorkflowJob = workflowJob(ci, 'build')
+  const runtimeStepStart = buildWorkflowJob.indexOf('      - name: Runtime\n')
+  const runtimeStepEnd = buildWorkflowJob.indexOf('\n      - name:', runtimeStepStart + 1)
+  const runtimeStep = buildWorkflowJob.slice(runtimeStepStart, runtimeStepEnd)
+  const sparseCheckout = runtimeStep.match(/sparse-checkout:\s*\|\n((?:\s{12,}.+\n?)+)/)
+  assert.ok(sparseCheckout, 'Build runtime checkout has an explicit sparse path list')
+  assert.ok(
+    sparseCheckout[1]
+      .split(/\r?\n/)
+      .map((path) => path.trim())
+      .includes('src/commands/qualification-receipt.mjs'),
+    'Build checkout includes the package-contract command it executes'
   )
 })
