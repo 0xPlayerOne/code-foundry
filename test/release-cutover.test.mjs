@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
   rmSync,
   symlinkSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { syncRepository } from '../src/commands/sync.mjs'
@@ -331,6 +334,99 @@ test('consumer private-read credentials stay inside install and never reach OIDC
   assert.match(tokenPublish, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
   assert.match(oidcPublish, /if: inputs\['npm-publish-auth'\] == 'oidc'/)
   assert.doesNotMatch(oidcPublish, /NODE_AUTH_TOKEN|secrets\.NPM_TOKEN/)
+})
+
+test('token publication resolves npmjs auth from a temporary publish-step config', async (t) => {
+  const npm = release.split('\n  npm:\n')[1]
+  const tokenPublish = npm
+    .split('- name: Publish npm with token\n')[1]
+    .split('\n      - name: Publish npm with trusted publishing')[0]
+  const publishScript = tokenPublish
+    .split('\n        run: |\n')[1]
+    .split('\n')
+    .map((line) => line.slice(10))
+    .join('\n')
+  const directory = mkdtempSync(join(tmpdir(), 'release-npm-token-config-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  const bin = join(directory, 'bin')
+  mkdirSync(bin)
+  const capturedConfig = join(directory, 'captured.npmrc')
+  const globalConfig = join(directory, 'global.npmrc')
+  writeFileSync(globalConfig, '')
+  const fakeNpm = join(bin, 'npm')
+  writeFileSync(
+    fakeNpm,
+    `#!/bin/sh
+set -eu
+if [ "$1" != publish ]; then
+  echo 'unexpected npm command' >&2
+  exit 2
+fi
+if [ -z "\${NPM_CONFIG_USERCONFIG:-}" ] || [ ! -f "$NPM_CONFIG_USERCONFIG" ]; then
+  echo 'publish step did not receive its temporary npm config' >&2
+  exit 3
+fi
+cp "$NPM_CONFIG_USERCONFIG" "$CAPTURE_CONFIG"
+chmod 600 "$CAPTURE_CONFIG"
+printf 'captured publish config\\n'
+`
+  )
+  chmodSync(fakeNpm, 0o755)
+  const dummyToken = 'test-only-npm-token-never-published'
+  const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', publishScript], {
+    cwd: directory,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      CAPTURE_CONFIG: capturedConfig,
+      NPM_CONFIG_GLOBALCONFIG: globalConfig,
+      NPM_CONFIG_LOGS_DIR: '/tmp/code-foundry-npm-oidc-npm-logs',
+      NPM_CONFIG_USERCONFIG: '/dev/null',
+      NPM_CONFIG_CACHE: '/tmp/code-foundry-npm-oidc-npm-cache',
+      NODE_AUTH_TOKEN: dummyToken,
+      PATH: `${bin}:${process.env.PATH}`,
+      TMPDIR: directory,
+    },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /captured publish config/)
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(dummyToken))
+  assert.deepEqual(readdirSync(directory).toSorted(), ['bin', 'captured.npmrc', 'global.npmrc'])
+
+  const npmGlobalRoot = execFileSync('npm', ['root', '-g'], {
+    cwd: directory,
+    encoding: 'utf8',
+    env: {
+      HOME: directory,
+      NPM_CONFIG_GLOBALCONFIG: globalConfig,
+      NPM_CONFIG_LOGS_DIR: '/tmp/code-foundry-npm-oidc-npm-logs',
+      NPM_CONFIG_USERCONFIG: '/dev/null',
+      NPM_CONFIG_CACHE: '/tmp/code-foundry-npm-oidc-npm-cache',
+      PATH: process.env.PATH,
+    },
+  }).trim()
+  const npmPath = join(npmGlobalRoot, 'npm')
+  const npmRequire = createRequire(join(npmPath, 'lib/npm.js'))
+  const NpmConfig = npmRequire('@npmcli/config')
+  const definitions = npmRequire('@npmcli/config/lib/definitions')
+  const config = new NpmConfig({
+    definitions: definitions.definitions,
+    flatten: definitions.flatten,
+    nerfDarts: definitions.nerfDarts,
+    shorthands: definitions.shorthands,
+    npmPath,
+    argv: [],
+    cwd: directory,
+    env: {
+      HOME: directory,
+      NPM_CONFIG_GLOBALCONFIG: globalConfig,
+      NPM_CONFIG_USERCONFIG: capturedConfig,
+    },
+    excludeNpmCwd: true,
+    warn: false,
+  })
+  await config.load()
+  assert.equal(config.get('//registry.npmjs.org/:_authToken'), dummyToken)
 })
 
 test('sync rejects an unsupported npm publication auth mode before writing', (t) => {

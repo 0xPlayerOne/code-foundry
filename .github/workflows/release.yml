@@ -909,7 +909,13 @@ jobs:
         if: inputs['npm-publish-auth'] == 'token' || (inputs['npm-publish-auth'] == 'auto' && env.HAS_NPM_TOKEN == 'true')
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: |
+          set -euo pipefail
+          npmrc="$(mktemp)"
+          chmod 600 "$npmrc"
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$npmrc"
+          trap 'rm -f "$npmrc"' EXIT
+          NPM_CONFIG_USERCONFIG="$npmrc" npm publish --provenance --access public
       - name: Publish npm with trusted publishing
         if: inputs['npm-publish-auth'] == 'oidc' || (inputs['npm-publish-auth'] == 'auto' && env.HAS_NPM_TOKEN != 'true')
         run: npm publish --provenance --access public
