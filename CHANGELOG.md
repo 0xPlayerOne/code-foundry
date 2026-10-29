@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.50.0...v1.50.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **sync:** replace complete consumer runtime ref ([#793](https://github.com/0xPlayerOne/code-foundry/issues/793)) ([6a0b5ef](https://github.com/0xPlayerOne/code-foundry/commit/6a0b5ef4f9a02c781745fa64f2f9748ea679f2d5))
+
 ## [1.50.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.3...v1.50.0) (2026-10-29)
 
 
