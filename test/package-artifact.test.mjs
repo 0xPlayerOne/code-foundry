@@ -24,6 +24,7 @@ test('the npm package keeps runtime templates and excludes repository-local acti
 
   for (const path of [
     '.github/workflows/validation.yml',
+    '.github/workflows/qualification-receipt.yml',
     '.github/workflows/release.yml',
     '.github/workflows/release-integrity.yml',
     '.github/ISSUE_TEMPLATE/bug_report.yml',
@@ -33,5 +34,17 @@ test('the npm package keeps runtime templates and excludes repository-local acti
     'src/templates/workflows/validation-audit.yml',
   ]) {
     assert.ok(files.has(path), `${path} remains in the npm archive`)
+  }
+
+  for (const path of [
+    'src/commands/qualification-receipt.mjs',
+    'src/lib/qualification-receipt.mjs',
+    'src/lib/release-package-contract.mjs',
+  ]) {
+    assert.equal(
+      files.has(path),
+      false,
+      `${path} is loaded from the GitHub repository by workflows, not the CLI package`
+    )
   }
 })

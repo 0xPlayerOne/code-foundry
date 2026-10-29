@@ -7,6 +7,11 @@ on:
         description: Validation tier (fast, audit, or release).
         required: true
         type: string
+      release-qualification-receipts:
+        description: Reuse a recent exact-tree audit receipt for Release Please PRs.
+        required: false
+        type: boolean
+        default: false
       runtime-repository:
         description: Repository containing the Code Foundry runtime.
         required: false
@@ -103,12 +108,35 @@ permissions:
   actions: read
   contents: read
   packages: read
+  pull-requests: read
   security-events: write
 
 jobs:
+  qualification:
+    name: Qualification
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
+      inputs.release-qualification-receipts == true && inputs.mode == 'release'
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/qualification-receipt.yml
+    with:
+      phase: verify
+      mode: ${{ inputs.mode }}
+      enabled: ${{ inputs.release-qualification-receipts }}
+      codeql-enabled: true
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      required-job-names-json: '["Validation / Gate"]'
+
   ci:
     name: CI
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    needs: qualification
+    if: >-
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
     # Type-Check reads the issue-backed requirements ledger with github.token.
     permissions:
       actions: read
@@ -121,13 +149,23 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.ci-runner }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
+      release-build-only: ${{ inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true' }}
+      release-package-check: ${{ inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true' }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
 
   test:
     name: Test
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    needs: qualification
+    if: >-
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs.mode == 'fast' || inputs.mode == 'audit' ||
+      (inputs.mode == 'release' && needs.qualification.outputs.reuse != 'true'))
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -135,9 +173,9 @@ jobs:
       runner: ${{ inputs.test-runner }}
       unit-runner: ${{ inputs.unit-runner }}
       performance-runner: ${{ inputs.performance-runner }}
-      # Release pull requests change version metadata only; their content was
-      # audited on the pull requests that merged into main. Integration, E2E,
-      # smoke, and performance lanes stay in the audit and scheduled lanes.
+      # Fast and Release Please pull requests run unit tests only. Until a
+      # successful full qualification is verifiable for the exact main tree,
+      # release mode keeps its CI and unit-test fallback.
       unit-only: ${{ inputs.mode == 'fast' || inputs.mode == 'release' }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
       integration-total-shards: ${{ inputs.integration-total-shards }}
@@ -149,6 +187,8 @@ jobs:
   security:
     name: Security
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    permissions:
+      contents: read
     uses: ./.github/workflows/security.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -160,6 +200,11 @@ jobs:
     # Release-please pull requests also analyze with CodeQL so repository
     # rulesets requiring code scanning results never deadlock the release.
     if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
     uses: ./.github/workflows/codeql.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -171,10 +216,12 @@ jobs:
 
   eval:
     name: Eval
-    # Behavior evals cover content changes; the lean release lane skips them
-    # because its diff is version metadata only. The reusable workflow skips
-    # cleanly when the repository has no eval harness.
+    # Behavior evals are part of audit qualification. A release-only run may
+    # reuse that work only through the exact, unexpired source receipt below.
+    # The reusable workflow skips cleanly when there is no eval harness.
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    permissions:
+      contents: read
     uses: ./.github/workflows/eval.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -184,16 +231,16 @@ jobs:
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
-  # The release tier requires the fast suite plus CodeQL: its diff is version
-  # metadata (validated against the release policy below), its content was
-  # audited on the pull requests that merged into main, and the scheduled
-  # audit lane re-covers drift. Its generated release diff policy executes
-  # as a conditional step below, so ordinary pull requests still render no
-  # skipped release-policy row.
+  # Release Please branches require CI, CodeQL, and the exact generated-diff
+  # audit below. The runtime gate also requires unit tests unless the separate
+  # qualification job verified a matching source receipt. Ordinary PRs still
+  # render no skipped release-policy row.
   gate:
     name: Gate
-    needs: [ci, test, security, codeql, eval]
+    needs: [ci, test, security, codeql, eval, qualification]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
+    permissions:
+      contents: read
     runs-on: ubuntu-slim
     timeout-minutes: 10
     env:
@@ -203,6 +250,8 @@ jobs:
       FOUNDRY_SECURITY: ${{ needs.security.result }}
       FOUNDRY_CODEQL: ${{ needs.codeql.result }}
       FOUNDRY_EVAL: ${{ needs.eval.result }}
+      FOUNDRY_SOURCE_QUALIFICATION: ${{ needs.qualification.outputs.reuse }}
+      FOUNDRY_QUALIFICATION: ${{ needs.qualification.result }}
     steps:
       - name: Checkout runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -234,3 +283,29 @@ jobs:
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
       - name: Evaluate aggregate gate
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation gate
+
+  qualification-receipt:
+    name: Qualification receipt
+    needs: [ci, test, security, codeql, eval, gate]
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
+      inputs.release-qualification-receipts == true &&
+      github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
+      needs.ci.result == 'success' && needs.test.result == 'success' &&
+      needs.security.result == 'success' && needs.codeql.result == 'success' &&
+      needs.eval.result == 'success' && needs.gate.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/qualification-receipt.yml
+    with:
+      phase: produce
+      mode: ${{ inputs.mode }}
+      enabled: ${{ inputs.release-qualification-receipts }}
+      codeql-enabled: true
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      job-results-json: >-
+        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"${{ needs.codeql.result }}","eval":"${{ needs.eval.result }}","gate":"${{ needs.gate.result }}"}
+      required-job-names-json: '["Validation / Gate"]'

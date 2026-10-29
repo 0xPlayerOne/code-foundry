@@ -21,7 +21,7 @@ const METRICS = new Set([
  * npm 12 keys pack reports by package name; older npm versions return an array.
  * Count reports before validating their shape so an extra malformed entry cannot be ignored.
  * @param {unknown} value
- * @returns {{filename: string, size: number, unpackedSize: number, files: Array<{path: string}>}}
+ * @returns {{filename: string, size: number, unpackedSize: number, files: Array<{path: string}>, name?: string, version?: string}}
  */
 export function singleNpmPackReport(value) {
   let reports
@@ -50,6 +50,26 @@ export function singleNpmPackReport(value) {
     )
   )
     throw new Error('npm pack result is missing a valid files list.')
+  return packed
+}
+
+/**
+ * Verify the single npm pack report used to inspect a versioned root package.
+ * Supports both npm's legacy array and npm 12's package-name keyed object.
+ * @param {unknown} value
+ * @param {{name?:unknown,version?:unknown}} manifest
+ */
+export function verifyNpmPackPackage(value, manifest) {
+  const packed = singleNpmPackReport(value)
+  if (
+    typeof manifest?.name !== 'string' ||
+    typeof manifest.version !== 'string' ||
+    packed.name !== manifest.name ||
+    packed.version !== manifest.version ||
+    !packed.files.some((file) => file.path === 'package.json')
+  ) {
+    throw new Error('npm pack result does not match the root package manifest.')
+  }
   return packed
 }
 

@@ -33,6 +33,10 @@ function syncConsumer(extraConfig = {}) {
   return readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
 }
 
+function shouldRunReleaseBuild({ mode, reuse, applicable, affected }) {
+  return applicable && ((mode === 'release' && reuse === 'true') || affected !== 'false')
+}
+
 test('the default render keeps the split orchestrators', () => {
   const caller = syncConsumer({ codeql: 'false' })
   assert.match(caller, /uses: .*\/\.github\/workflows\/validation-no-codeql\.yml@/)
@@ -50,10 +54,24 @@ test('billing_lanes routes both CodeQL flavors through the billing orchestrator'
   assert.match(withCodeql, /^      codeql: true$/m)
 })
 
+test('release qualification receipt reuse is explicitly opt-in and validates its config value', () => {
+  const defaultCaller = syncConsumer({ codeql: 'false' })
+  assert.doesNotMatch(defaultCaller, /release-qualification-receipts: true/)
+
+  const optedInCaller = syncConsumer({ release_qualification_receipts: 'true' })
+  assert.match(optedInCaller, /^      release-qualification-receipts: true$/m)
+
+  assert.throws(
+    () => syncConsumer({ release_qualification_receipts: 'yes' }),
+    /Unsupported release_qualification_receipts: yes/
+  )
+})
+
 test('the billing orchestrator declares the full input contract', () => {
   const template = billingTemplate()
   for (const input of [
     'mode',
+    'release-qualification-receipts',
     'codeql',
     'runtime-repository',
     'runtime-ref',
@@ -155,21 +173,32 @@ test('billing uploads run sequentially after all parallel executions join', () =
   assert.doesNotMatch(execution, /uses:|continue-on-error:/)
   for (const lane of ['format', 'build', 'performance', 'smoke', 'eval', 'integration']) {
     assert.ok(execution.includes(`ci ${lane}\n`), `missing execution for ${lane}`)
-    const condition =
-      `steps.${lane}_applicability.outputs.applicable == 'true' && ` +
-      `steps.${lane}_applicability.outputs.affected != 'false'`
-    assert.ok(
-      execution.includes(
-        lane === 'format'
-          ? `if: ${condition}\n`
-          : `if: \${{ !cancelled() && ${lane === 'build' ? '' : "inputs.mode == 'audit' && "}${condition} }}\n`
-      ),
-      `execution condition changed for ${lane}`
-    )
+    if (lane === 'format') {
+      assert.match(
+        execution,
+        /if: >-\n              \$\{\{ !\(inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'\) &&\n              steps\.format_applicability\.outputs\.applicable == 'true' &&\n              steps\.format_applicability\.outputs\.affected != 'false' \}\}/
+      )
+    } else if (lane === 'build') {
+      assert.match(
+        execution,
+        /if: >-\n              \$\{\{ !cancelled\(\) && steps\.build_applicability\.outputs\.applicable == 'true' &&\n              \(\(inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'\) \|\|\n              steps\.build_applicability\.outputs\.affected != 'false'\) \}\}/
+      )
+    } else {
+      const condition =
+        `steps.${lane}_applicability.outputs.applicable == 'true' && ` +
+        `steps.${lane}_applicability.outputs.affected != 'false'`
+      assert.ok(
+        execution.includes(
+          `if: \${{ !cancelled() && ${lane === 'build' ? '' : "inputs.mode == 'audit' && "}${condition} }}\n`
+        ),
+        `execution condition changed for ${lane}`
+      )
+    }
   }
   assert.deepEqual(
     followingSteps.slice(0, -1).map((step) => step.split('\n')[0].trim()),
     [
+      'Inspect versioned npm package contents',
       'Retain format task receipt',
       'Retain build task receipt',
       'Retain performance task receipt',
@@ -182,6 +211,64 @@ test('billing uploads run sequentially after all parallel executions join', () =
   )
   assert.match(followingSteps.at(-1), /^      - name: Save Vite\+ task cache/)
   assert.equal([...fastLanes.matchAll(/uses: actions\/upload-artifact@/g)].length, 8)
+})
+
+test('verified billing release reuse still validates and builds the versioned package when unaffected', () => {
+  const template = billingTemplate()
+  const fastLanes = template.split('\n  fast-lanes:')[1].split('\n  lint:')[0]
+  const runtimeStart = fastLanes.indexOf('      - name: Runtime\n')
+  const runtimeEnd = fastLanes.indexOf('\n      - name:', runtimeStart + 1)
+  const runtime = fastLanes.slice(runtimeStart, runtimeEnd)
+  assert.match(runtime, /src\/commands\/qualification-receipt\.mjs/)
+  assert.match(runtime, /src\/lib/)
+
+  const contractStart = fastLanes.indexOf('      - name: Verify versioned package build contract\n')
+  const contractEnd = fastLanes.indexOf('\n      - name:', contractStart + 1)
+  const contract = fastLanes.slice(contractStart, contractEnd)
+  assert.match(
+    contract,
+    /inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'/
+  )
+  assert.match(
+    contract,
+    /FOUNDRY_BUILD_TASK_APPLICABLE: \$\{\{ steps\.build_applicability\.outputs\.applicable \}\}/
+  )
+  assert.match(contract, /qualification-receipt\.mjs" package-contract/)
+
+  const setupStart = fastLanes.indexOf('      - name: Setup build\n')
+  const setupEnd = fastLanes.indexOf('\n      - name:', setupStart + 1)
+  const setup = fastLanes.slice(setupStart, setupEnd)
+  const buildStart = fastLanes.indexOf('          - name: Build\n')
+  const buildEnd = fastLanes.indexOf('\n          - name:', buildStart + 1)
+  const build = fastLanes.slice(buildStart, buildEnd)
+  for (const step of [setup, build]) {
+    assert.match(step, /steps\.build_applicability\.outputs\.applicable == 'true'/)
+    assert.match(
+      step,
+      /inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'/
+    )
+    assert.match(step, /steps\.build_applicability\.outputs\.affected != 'false'/)
+  }
+
+  assert.equal(
+    shouldRunReleaseBuild({ mode: 'release', reuse: 'true', applicable: true, affected: 'false' }),
+    true,
+    'a verified receipt must not skip the fresh versioned build when affected is false'
+  )
+  assert.equal(
+    shouldRunReleaseBuild({ mode: 'release', reuse: 'false', applicable: true, affected: 'false' }),
+    false
+  )
+  assert.equal(
+    shouldRunReleaseBuild({ mode: 'release', reuse: 'true', applicable: false, affected: 'false' }),
+    false,
+    'an inapplicable build remains skipped even if a receipt exists'
+  )
+
+  const inspect = fastLanes.split('      - name: Inspect versioned npm package contents\n')[1]
+  assert.match(inspect, /node-package-performance\.mjs/)
+  assert.match(inspect, /verifyNpmPackPackage\(report, manifest\)/)
+  assert.doesNotMatch(inspect, /Array\.isArray\(result\)/)
 })
 
 test('sequential billing receipts preserve success, failure, explicit skip and artifact contracts', () => {
@@ -263,7 +350,10 @@ test('the gate folds merged lanes back into the shared category vocabulary', () 
   const template = billingTemplate()
   const gate = template.slice(template.indexOf('\n  gate:'))
   assert.match(gate, /name: Gate/)
-  assert.match(gate, /needs: \[fast-lanes, lint, type-check, unit, e2e, audit, codeql\]/)
+  assert.match(
+    gate,
+    /needs: \[fast-lanes, lint, type-check, unit, e2e, audit, codeql, qualification\]/
+  )
   assert.match(gate, /FOUNDRY_MODE: \$\{\{ inputs\.mode \}\}/)
   assert.match(
     gate,

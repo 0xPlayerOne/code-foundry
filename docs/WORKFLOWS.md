@@ -56,15 +56,27 @@ workflow_dispatch:
 ```
 
 In the `staging-release` topology, pull requests into `staging` run the fast
-tier, ordinary pull requests into `main` run the full audit tier, and exact
-Release Please pull requests into `main` run a lean release lane — CI, unit
-tests, and CodeQL plus the release-diff policy. Their diff is version
-metadata only: the content was fully audited on the pull requests that
-merged into `main`, and the scheduled audit lane re-covers drift, so the
-release lane keeps repository rulesets satisfiable without re-running the
-runner-heavy suites. The managed branch rulesets require only the aggregate
-`Validation / Gate` check, so skipped non-required jobs never deadlock the
-release; do not hand-require individual job contexts on release branches.
+tier and ordinary pull requests into `main` run the full audit tier. Exact
+Release Please pull requests into `main` must pass the release-diff policy and
+configured CodeQL scan. They also run the full CI and unit-test fallback unless
+the workflow verifies a seven-day source qualification receipt. A receipt is
+usable only when a successful full audit tested the exact current `main` tree
+with the same validation workflow, Code Foundry runtime, CodeQL policy, and
+pull-request/run identity. Verification checks the merged source PR, the
+aggregate gate's success in the exact run attempt, the required component
+results, and the artifact's bounded download size and SHA-256 digest. The release-diff preflight must confirm a
+version-only patch. Reuse is currently supported only for a public npm package
+released from the repository root; private roots, workspaces, and unknown
+Release Please layouts use the full CI and test fallback. A root package may
+use `prepublishOnly` only when it exactly invokes the configured package
+manager's `run build` task; other lifecycle hooks and custom prepublish commands
+use the full fallback. With a verified
+receipt, the applicable build is forced even when path filtering would skip it,
+and the versioned root npm package inspection still runs. Only duplicate
+format, lint, type-check, and unit-test work is skipped. The receipt never
+replaces the release-diff audit or configured CodeQL scan.
+The managed branch rulesets require only the aggregate `Validation / Gate`
+check; do not hand-require individual job contexts on release branches.
 In the
 `direct` topology (the default) every pull request targets `main` and runs the
 full audit tier, because there is no integration branch for a fast pass.
@@ -185,9 +197,10 @@ Use concise job names such as `CI / Format`, `Test / Unit`, and
 included) and security audits run through a detection-built matrix, so a
 repository only ever shows checks for languages it actually uses — never
 skipped rows for other languages. The release tier validates the generated
-diff as a step inside the gate rather than a separate job, for the same
-reason. Required checks should match the jobs actually enabled for the
-repository profile — in practice, require only the aggregate
+diff inside the gate and requires CodeQL when configured. It reuses prior
+source tests only when the short-lived exact-tree receipt verifies; otherwise
+it runs the full CI and unit-test fallback. Required checks should match the
+jobs actually enabled for the repository profile — in practice, require only the aggregate
 `Validation / Gate`, which fails closed unless every generated check
 succeeds.
 

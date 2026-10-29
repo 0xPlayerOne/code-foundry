@@ -1264,7 +1264,7 @@ describe('code-foundry CLI', () => {
 
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
-    assert.match(orchestrator, /needs: \[ci, test, security, eval\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, eval, qualification\]/)
     const warnings = captureConsole('warn', () => assert.doesNotThrow(() => doctor(root)), {
       propagateError: true,
     })
@@ -2384,7 +2384,7 @@ jobs:
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
     assert.match(
       contributing,
-      /Exact Release Please pull request targeting `main`.*Full validation: CI, full tests, Security, and CodeQL/
+      /Exact Release Please PR targeting `main`.*Release diff, configured CodeQL, build\/package check, and either a verified receipt or full CI\/tests/
     )
     assert.doesNotMatch(contributing, /Release-policy validation only/)
     assert.doesNotMatch(contributing, /staging/i)
@@ -2464,7 +2464,7 @@ jobs:
       )
       assert.match(
         rendered,
-        /Exact Release Please pull request targeting `main`.*Full validation: CI, full tests, Security, and CodeQL/
+        /Exact Release Please PR targeting `main`.*Release diff, configured CodeQL, build\/package check, and either a verified receipt or full CI\/tests/
       )
       assert.doesNotMatch(rendered, /Release-policy validation only/)
       // No unpadded separator line may survive: prettier pads markdown tables.
@@ -2835,8 +2835,14 @@ jobs:
 
   it('documents that GitHub Stacks is outside the merge topology', () => {
     const workflows = readFileSync('docs/WORKFLOWS.md', 'utf8')
-    assert.match(workflows, /Release Please pull requests into `main` run a lean release lane/)
-    assert.match(workflows, /the content was fully audited on the pull requests that/)
+    assert.match(
+      workflows,
+      /Release Please pull requests into `main` must pass the release-diff policy and\s+configured CodeQL scan\. They also run the full CI and unit-test fallback unless\s+the workflow verifies a seven-day source qualification receipt/
+    )
+    assert.match(
+      workflows,
+      /private roots, workspaces, and unknown\s+Release Please layouts use the full CI and test fallback/
+    )
     assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)
     assert.match(workflows, /does\s+not reduce required workflow runs/)
@@ -4898,12 +4904,12 @@ jobs:
     assert.equal(
       evaluateValidationGate({
         mode: 'release',
-        results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'success' },
+        results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'success' },
       }).valid,
-      false
+      true
     )
-    // The release lane skips security by design; a skipped security job never
-    // blocks it, but a missing CodeQL analysis does.
+    // Release mode retains source CI and unit tests while skipping security
+    // and eval; a missing CodeQL analysis still blocks the gate.
     assert.equal(
       evaluateValidationGate({
         mode: 'release',
@@ -4951,8 +4957,8 @@ jobs:
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
-    // The release lane requires the fast suite plus CodeQL and rejects every
-    // skipped required gate.
+    // Release mode requires CI and tests until exact source evidence is
+    // available, and also requires the pull-request CodeQL result.
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
@@ -5013,7 +5019,10 @@ jobs:
     assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
     assert.match(caller, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/)
-    assert.match(caller, /runtime-ref: \$\{\{ github\.sha \}\}/)
+    assert.match(
+      caller,
+      /runtime-ref: >-[\s\S]*startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)[\s\S]*github\.event\.pull_request\.base\.sha[\s\S]*github\.sha/
+    )
 
     assert.doesNotMatch(audit, /pull_request:/)
     assert.match(audit, /schedule:/)
@@ -5081,6 +5090,7 @@ jobs:
     assert.doesNotMatch(caller, /secrets:\s*inherit/)
     // Least-permission union needed for the CodeQL chain; no extra write scopes.
     assert.match(caller, /security-events: write/)
+    assert.match(caller, /pull-requests: read/)
     assert.doesNotMatch(caller, /pull-requests: write/)
     assert.doesNotMatch(caller, /contents: write/)
   })
@@ -5291,7 +5301,7 @@ jobs:
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     assert.match(caller, /^  validation:\n    name: Validation/m)
     assert.match(orchestrator, /^  gate:\n    name: Gate/m)
-    assert.match(orchestrator, /needs: \[ci, test, security, codeql, eval\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, codeql, eval, qualification\]/)
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && always\(\)/)
     assert.match(orchestrator, /validation gate/)
     assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
@@ -5301,9 +5311,10 @@ jobs:
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
   })
 
-  it('runs the lean release lane in both orchestrators', () => {
+  it('runs the lean release lane in every orchestrator', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     const noCodeqlOrchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
+    const billingOrchestrator = readFileSync('.github/workflows/validation-billing.yml', 'utf8')
     for (const job of ['ci', 'test', 'security', 'codeql', 'eval']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
@@ -5312,7 +5323,7 @@ jobs:
     assert.doesNotMatch(orchestrator, /^  release-policy:/m)
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
+      /if: >-\n\s+!cancelled\(\) && vars\.CI_BILLING_PAUSED != 'true' &&\n\s+\(inputs\.mode == 'fast' \|\| inputs\.mode == 'audit' \|\| inputs\.mode == 'release'\)/
     )
     // CodeQL stays on release pull requests so code-scanning rulesets never
     // deadlock the release; the security job is audit-only.
@@ -5355,7 +5366,10 @@ jobs:
     for (const job of ['ci', 'test']) {
       assert.match(
         noCodeqlOrchestrator,
-        new RegExp(`^  ${job}:[\\s\\S]*?inputs\\.mode == 'release'`, 'm')
+        new RegExp(
+          `^  ${job}:[\\s\\S]*?inputs\\.mode == 'fast'[\\s\\S]*?inputs\\.mode == 'audit'[\\s\\S]*?inputs\\.mode == 'release'`,
+          'm'
+        )
       )
     }
     assert.match(
@@ -5365,7 +5379,18 @@ jobs:
     assert.match(noCodeqlOrchestrator, /^  eval:\n    name: Eval\n    #/m)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
-    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval\]/)
+    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval, qualification\]/)
+    for (const job of ['fast-lanes', 'lint', 'type-check', 'unit']) {
+      assert.match(
+        billingOrchestrator,
+        new RegExp(`^  ${job}:[\\s\\S]*?if: vars\\.CI_BILLING_PAUSED != 'true'`, 'm')
+      )
+    }
+    assert.match(
+      billingOrchestrator,
+      /codeql:[\s\S]*?inputs\.mode == 'audit' \|\| inputs\.mode == 'release'/
+    )
+    assert.match(billingOrchestrator, /validation release_diff/)
   })
 
   it('pins all external workflow/action refs to approved immutable SHAs', () => {

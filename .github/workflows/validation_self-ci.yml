@@ -80,15 +80,17 @@ jobs:
       contents: read
       issues: read
       packages: read
+      pull-requests: read
       security-events: write
     uses: ./.github/workflows/validation.yml
     with:
       mode: ${{ needs.mode.outputs.mode }}
       runtime-repository: 0xPlayerOne/code-foundry
-      # Pull requests validate the proposed runtime commit. Scheduled and
-      # manually dispatched audits use a separate default-branch-pinned caller,
-      # so this caller-selected ref never runs with default-branch cache access.
-      runtime-ref: ${{ github.sha }}
+      # Source PRs validate their proposed runtime commit. A Release Please PR
+      # uses its main base, keeping version-only metadata out of the runtime
+      # content identity. Scheduled audits use a separate default-branch caller.
+      runtime-ref: >-
+        ${{ startsWith(github.event.pull_request.head.ref, 'release-please--branches--main') && github.event.pull_request.base.sha || github.sha }}
       ci-runner: ubuntu-latest
       test-runner: ubuntu-latest
       unit-runner: ubuntu-slim

@@ -23,6 +23,16 @@ on:
         required: false
         type: string
         default: task-result
+      release-build-only:
+        description: Run only the build lane after an exact successful source qualification receipt.
+        required: false
+        type: boolean
+        default: false
+      release-package-check:
+        description: Inspect the versioned npm package contents on release pull requests.
+        required: false
+        type: boolean
+        default: false
     secrets:
       TURBO_TOKEN:
         required: false
@@ -55,7 +65,7 @@ concurrency:
 jobs:
   format:
     name: Format
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.release-build-only != true
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
@@ -124,7 +134,7 @@ jobs:
 
   lint:
     name: Lint
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.release-build-only != true
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
@@ -188,7 +198,7 @@ jobs:
 
   type-check:
     name: Type-Check
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.release-build-only != true
     permissions:
       contents: read
       issues: read
@@ -279,6 +289,7 @@ jobs:
           path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
+            src/commands/qualification-receipt.mjs
             src/lib
             src/runtime-core.mjs
             src/runtime.mjs
@@ -287,6 +298,11 @@ jobs:
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Set up Node.js 24.18.0 for package inspection
+        if: inputs.release-package-check == true
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
       - name: Detect
         id: applicability
         env:
@@ -296,8 +312,13 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
+      - name: Verify versioned package build contract
+        if: inputs.release-package-check == true
+        env:
+          FOUNDRY_BUILD_TASK_APPLICABLE: ${{ steps.applicability.outputs.applicable }}
+        run: node "$RUNNER_TEMP/code-foundry/src/commands/qualification-receipt.mjs" package-contract
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        if: steps.applicability.outputs.applicable == 'true' && (inputs.release-build-only == true || steps.applicability.outputs.affected != 'false')
         uses: ./.github/actions/setup
         with:
           install: 'true'
@@ -305,8 +326,23 @@ jobs:
           task: build
       - name: Build
         id: execute
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        if: steps.applicability.outputs.applicable == 'true' && (inputs.release-build-only == true || steps.applicability.outputs.affected != 'false')
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
+      - name: Inspect versioned npm package contents
+        if: inputs.release-package-check == true && hashFiles('package.json') != ''
+        run: |
+          npm pack --dry-run --ignore-scripts --json > "$RUNNER_TEMP/foundry-package-inspection.json"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { pathToFileURL } from "node:url";
+
+            const runtime = join(process.env.RUNNER_TEMP, "code-foundry", "src/lib/node-package-performance.mjs");
+            const { verifyNpmPackPackage } = await import(pathToFileURL(runtime).href);
+            const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+            const report = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            verifyNpmPackPackage(report, manifest);
+          ' "$RUNNER_TEMP/foundry-package-inspection.json"
       - name: Retain task receipt
         if: >-
           always() &&
