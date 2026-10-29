@@ -35,4 +35,16 @@ test('the npm package keeps runtime templates and excludes repository-local acti
   ]) {
     assert.ok(files.has(path), `${path} remains in the npm archive`)
   }
+
+  for (const path of [
+    'src/commands/qualification-receipt.mjs',
+    'src/lib/qualification-receipt.mjs',
+    'src/lib/release-package-contract.mjs',
+  ]) {
+    assert.equal(
+      files.has(path),
+      false,
+      `${path} is loaded from the GitHub repository by workflows, not the CLI package`
+    )
+  }
 })

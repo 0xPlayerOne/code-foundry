@@ -170,7 +170,9 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
   assert.match(ci, /release-build-only:[\s\S]*default: false/)
   assert.match(ci, /release-package-check:[\s\S]*default: false/)
   assert.match(ci, /Build[\s\S]*npm pack --dry-run --ignore-scripts --json/)
-  assert.match(ci, /result\[0\]\?\.version !== manifest\.version/)
+  assert.match(ci, /node --input-type=module -e/)
+  assert.match(ci, /src\/lib\/node-package-performance\.mjs/)
+  assert.match(ci, /verifyNpmPackPackage\(report, manifest\)/)
   assert.match(
     ci,
     /Verify versioned package build contract[\s\S]*FOUNDRY_BUILD_TASK_APPLICABLE:[\s\S]*qualification-receipt\.mjs" package-contract/

@@ -7,6 +7,7 @@ import {
   percentile,
   runNodePackagePerformance,
   singleNpmPackReport,
+  verifyNpmPackPackage,
 } from '../src/lib/node-package-performance.mjs'
 
 const packReport = {
@@ -26,6 +27,41 @@ test('npm pack accepts legacy arrays, direct reports and npm 12 package-name map
     assert.deepEqual(singleNpmPackReport(report), packReport)
   const withMetadata = { ...packReport, metadata: { source: 'fixture' } }
   assert.deepEqual(singleNpmPackReport(withMetadata), withMetadata)
+})
+
+test('versioned npm package inspection accepts npm 11 arrays and npm 12 package maps', () => {
+  const manifest = { name: 'fixture-package', version: '1.0.0' }
+  const report = {
+    ...packReport,
+    name: manifest.name,
+    version: manifest.version,
+    files: [{ path: 'package.json' }],
+  }
+  for (const value of [[report], { [manifest.name]: report }]) {
+    assert.equal(verifyNpmPackPackage(value, manifest), report)
+  }
+})
+
+test('versioned npm package inspection rejects mismatched identity and missing package.json', () => {
+  const manifest = { name: 'fixture-package', version: '1.0.0' }
+  const report = {
+    ...packReport,
+    name: manifest.name,
+    version: manifest.version,
+    files: [{ path: 'package.json' }],
+  }
+  assert.throws(
+    () => verifyNpmPackPackage([{ ...report, name: 'other-package' }], manifest),
+    /does not match the root package manifest/
+  )
+  assert.throws(
+    () => verifyNpmPackPackage({ [manifest.name]: { ...report, version: '2.0.0' } }, manifest),
+    /does not match the root package manifest/
+  )
+  assert.throws(
+    () => verifyNpmPackPackage([{ ...report, files: [{ path: 'index.js' }] }], manifest),
+    /does not match the root package manifest/
+  )
 })
 
 test('npm pack counts every entry before validating report shapes', () => {

@@ -443,6 +443,24 @@ test('unsupported package and release layouts fall back before any receipt API l
         scripts: { prepack: 'node build-package.mjs' },
       },
     },
+    {
+      packageManifest: {
+        name: 'fixture-consumer',
+        version: '1.0.0',
+        scripts: {
+          build: 'node build.mjs',
+          prepublishOnly: 'bun run build && node extra-step.mjs',
+        },
+      },
+    },
+    {
+      packageManifest: {
+        name: 'fixture-consumer',
+        version: '1.0.0',
+        scripts: { build: 'node build.mjs', prepublishOnly: 'bun run build' },
+      },
+      packageManager: 'npm',
+    },
   ]
   for (const layout of unsupportedLayouts) {
     const source = sourceFixture(t)
@@ -454,6 +472,12 @@ test('unsupported package and release layouts fall back before any receipt API l
       writeFileSync(
         join(source.directory, 'release-please-config.json'),
         JSON.stringify(layout.releaseConfig)
+      )
+    }
+    if (layout.packageManager) {
+      writeFileSync(
+        join(source.directory, '.github', 'code-foundry.yml'),
+        `package_manager: ${layout.packageManager}\n`
       )
     }
     writeFileSync(
@@ -486,24 +510,43 @@ test('unsupported package and release layouts fall back before any receipt API l
   }
 })
 
-test('a version-dependent root npm build cannot be classified for reuse when its build lane is inapplicable', (t) => {
+test('a build-only prepublishOnly hook is allowed only when the versioned build lane runs', (t) => {
   const source = sourceFixture(t)
   writeFileSync(
     join(source.directory, 'package.json'),
     JSON.stringify({
       name: 'fixture-consumer',
       version: '1.0.0',
-      scripts: { build: 'node build.mjs' },
+      scripts: { build: 'node build.mjs', prepublishOnly: 'bun run build' },
     })
   )
+  writeFileSync(join(source.directory, '.github', 'code-foundry.yml'), 'package_manager: bun\n')
   execFileSync('node', [join(root, 'src/commands/qualification-receipt.mjs'), 'package-contract'], {
     cwd: source.directory,
     env: {
       ...process.env,
       FOUNDRY_BUILD_TASK_APPLICABLE: 'true',
       FOUNDRY_BUILD_TASK_AFFECTED: 'false',
+      REPO_FOUNDRY_PACKAGE_MANAGER: 'bun',
     },
   })
+  assert.throws(
+    () =>
+      execFileSync(
+        'node',
+        [join(root, 'src/commands/qualification-receipt.mjs'), 'package-contract'],
+        {
+          cwd: source.directory,
+          env: {
+            ...process.env,
+            FOUNDRY_BUILD_TASK_APPLICABLE: 'true',
+            REPO_FOUNDRY_PACKAGE_MANAGER: 'npm',
+          },
+          stdio: 'pipe',
+        }
+      ),
+    (error) => error.status === 1
+  )
   assert.throws(
     () =>
       execFileSync(

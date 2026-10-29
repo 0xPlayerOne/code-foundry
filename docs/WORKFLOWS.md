@@ -67,7 +67,10 @@ aggregate gate's success in the exact run attempt, the required component
 results, and the artifact's bounded download size and SHA-256 digest. The release-diff preflight must confirm a
 version-only patch. Reuse is currently supported only for a public npm package
 released from the repository root; private roots, workspaces, and unknown
-Release Please layouts use the full CI and test fallback. With a verified
+Release Please layouts use the full CI and test fallback. A root package may
+use `prepublishOnly` only when it exactly invokes the configured package
+manager's `run build` task; other lifecycle hooks and custom prepublish commands
+use the full fallback. With a verified
 receipt, the applicable build is forced even when path filtering would skip it,
 and the versioned root npm package inspection still runs. Only duplicate
 format, lint, type-check, and unit-test work is skipped. The receipt never

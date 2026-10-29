@@ -16,6 +16,9 @@
   },
   "files": [
     "src",
+    "!src/commands/qualification-receipt.mjs",
+    "!src/lib/qualification-receipt.mjs",
+    "!src/lib/release-package-contract.mjs",
     "docs",
     ".github",
     "!.github/actions/**",

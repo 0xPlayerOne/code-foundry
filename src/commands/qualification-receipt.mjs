@@ -13,6 +13,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import { configured as configuredValue, readConfig } from '../lib/config.mjs'
 import {
   createQualificationReceipt,
   QUALIFICATION_RECEIPT_ARTIFACT_PREFIX,
@@ -22,6 +23,7 @@ import {
   verifyQualificationReceipt,
 } from '../lib/qualification-receipt.mjs'
 import { supportsRootNpmReleaseContract } from '../lib/release-package-contract.mjs'
+import { detectPackageManager } from '../lib/profile.mjs'
 
 const MAX_RUNS_TO_INSPECT = 30
 const MAX_RECEIPT_BYTES = 1024 * 1024
@@ -97,8 +99,9 @@ function readJsonFile(path) {
  * The fast path currently supports only a public npm package released from
  * the repository root. Unknown Release Please layouts fail closed to full CI.
  * @param {string} cwd
+ * @param {Record<string, string | undefined>} env
  */
-function supportsReleasePackageContract(cwd) {
+function supportsReleasePackageContract(cwd, env = process.env) {
   if (['Cargo.toml', 'pyproject.toml', 'version.txt'].some((file) => existsSync(join(cwd, file)))) {
     return false
   }
@@ -135,10 +138,16 @@ function supportsReleasePackageContract(cwd) {
     ...new Set([...knownConfigs.filter((path) => existsSync(join(cwd, path))), ...callerConfigs]),
   ]
   const releaseConfigs = configPaths.map((path) => readJsonFile(join(cwd, path)))
+  const foundryConfig = readConfig(join(cwd, '.github/code-foundry.yml'))
+  const packageManager = configuredValue(
+    env.REPO_FOUNDRY_PACKAGE_MANAGER,
+    configuredValue(foundryConfig.package_manager, detectPackageManager(cwd))
+  )
   return supportsRootNpmReleaseContract({
     packageManifest: readJsonFile(join(cwd, 'package.json')),
     releaseManifest: readJsonFile(join(cwd, '.release-please-manifest.json')),
     releaseConfigs,
+    packageManager,
   })
 }
 
@@ -543,7 +552,7 @@ export async function findQualificationReceipt(env = process.env, options = {}) 
     'GitHub event'
   )
   const pullRequest = pullRequestFromEvent(event, env)
-  if (!supportsReleasePackageContract(cwd)) {
+  if (!supportsReleasePackageContract(cwd, env)) {
     return {
       verified: false,
       reason: 'unsupported package release contract; using full validation',

@@ -332,7 +332,17 @@ jobs:
         if: inputs.release-package-check == true && hashFiles('package.json') != ''
         run: |
           npm pack --dry-run --ignore-scripts --json > "$RUNNER_TEMP/foundry-package-inspection.json"
-          node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync("package.json", "utf8")); const result = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!Array.isArray(result) || result.length !== 1 || result[0]?.name !== manifest.name || result[0]?.version !== manifest.version || !result[0]?.files?.some((file) => file.path === "package.json")) process.exit(1)' "$RUNNER_TEMP/foundry-package-inspection.json"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { pathToFileURL } from "node:url";
+
+            const runtime = join(process.env.RUNNER_TEMP, "code-foundry", "src/lib/node-package-performance.mjs");
+            const { verifyNpmPackPackage } = await import(pathToFileURL(runtime).href);
+            const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+            const report = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            verifyNpmPackPackage(report, manifest);
+          ' "$RUNNER_TEMP/foundry-package-inspection.json"
       - name: Retain task receipt
         if: >-
           always() &&

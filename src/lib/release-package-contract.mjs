@@ -28,10 +28,10 @@ const ROOT_PACKAGE_CONFIG_KEYS = new Set([
  * Reuse source-test evidence only for a public npm package released from the
  * repository root. Workspace and private-root layouts need package-specific
  * build and archive contracts, so they keep the full validation path.
- * @param {{packageManifest:unknown, releaseManifest:unknown, releaseConfigs:unknown[]}} input
+ * @param {{packageManifest:unknown, releaseManifest:unknown, releaseConfigs:unknown[], packageManager?:unknown}} input
  */
 export function supportsRootNpmReleaseContract(input) {
-  const { packageManifest, releaseManifest, releaseConfigs } = input
+  const { packageManifest, releaseManifest, releaseConfigs, packageManager } = input
   if (
     !object(packageManifest) ||
     packageManifest.private === true ||
@@ -77,13 +77,23 @@ export function supportsRootNpmReleaseContract(input) {
   }
 
   const lifecycleScripts = packageManifest.scripts
-  if (
-    object(lifecycleScripts) &&
-    ['prepare', 'prepack', 'postpack', 'prepublishOnly'].some(
-      (name) => typeof lifecycleScripts[name] === 'string'
-    )
-  ) {
-    return false
+  if (lifecycleScripts !== undefined && !object(lifecycleScripts)) return false
+  if (object(lifecycleScripts)) {
+    if (['prepare', 'prepack', 'postpack', 'prepublish'].some((name) => name in lifecycleScripts))
+      return false
+    if ('prepublishOnly' in lifecycleScripts) {
+      const expectedBuild = ['bun', 'npm', 'pnpm', 'yarn'].includes(
+        /** @type {string} */ (packageManager)
+      )
+        ? `${packageManager} run build`
+        : null
+      if (
+        typeof lifecycleScripts.build !== 'string' ||
+        lifecycleScripts.prepublishOnly !== expectedBuild
+      ) {
+        return false
+      }
+    }
   }
 
   return true
