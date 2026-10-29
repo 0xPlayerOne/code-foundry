@@ -201,6 +201,7 @@ jobs:
           path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
+            src/commands/qualification-receipt.mjs
             src/lib
             src/runtime-core.mjs
             src/runtime.mjs
@@ -236,6 +237,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
+      - name: Verify versioned package build contract
+        if: ${{ inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true' }}
+        env:
+          FOUNDRY_BUILD_TASK_APPLICABLE: ${{ steps.build_applicability.outputs.applicable }}
+        run: node "$RUNNER_TEMP/code-foundry/src/commands/qualification-receipt.mjs" package-contract
       # --- Performance lane (mirror of test.yml performance; audit tier only) ---
       - name: Detect performance
         id: performance_applicability
@@ -296,7 +302,10 @@ jobs:
           cache-build: 'false'
           task: format
       - name: Setup build
-        if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
+        if: >-
+          ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' &&
+          ((inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true') ||
+          steps.build_applicability.outputs.affected != 'false') }}
         uses: ./.github/actions/setup
         with:
           install: 'true'
@@ -376,7 +385,10 @@ jobs:
           # --- Build execute ---
           - name: Build
             id: build_execute
-            if: ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' && steps.build_applicability.outputs.affected != 'false' }}
+            if: >-
+              ${{ !cancelled() && steps.build_applicability.outputs.applicable == 'true' &&
+              ((inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true') ||
+              steps.build_applicability.outputs.affected != 'false') }}
             env:
               NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'code-foundry-ci-placeholder-0123456789' }}
             run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
@@ -404,7 +416,17 @@ jobs:
         if: ${{ inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true' && hashFiles('package.json') != '' }}
         run: |
           npm pack --dry-run --ignore-scripts --json > "$RUNNER_TEMP/foundry-package-inspection.json"
-          node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync("package.json", "utf8")); const result = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!Array.isArray(result) || result.length !== 1 || result[0]?.name !== manifest.name || result[0]?.version !== manifest.version || !result[0]?.files?.some((file) => file.path === "package.json")) process.exit(1)' "$RUNNER_TEMP/foundry-package-inspection.json"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { join } from "node:path";
+            import { pathToFileURL } from "node:url";
+
+            const runtime = join(process.env.RUNNER_TEMP, "code-foundry", "src/lib/node-package-performance.mjs");
+            const { verifyNpmPackPackage } = await import(pathToFileURL(runtime).href);
+            const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+            const report = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            verifyNpmPackPackage(report, manifest);
+          ' "$RUNNER_TEMP/foundry-package-inspection.json"
       # Upload only after execution joins, and keep uploads sequential: the
       # runner rewrites GITHUB_EVENT_PATH for each action, racing the event
       # JSON read in upload-artifact's context initialization (runner#4641).

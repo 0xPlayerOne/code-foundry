@@ -230,7 +230,23 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
     billing.indexOf('\n  lint:')
   )
   assert.match(billingFastPath, /name: Build/)
+  assert.match(billingFastPath, /name: Verify versioned package build contract/)
   assert.match(billingFastPath, /name: Inspect versioned npm package contents/)
+  assert.match(billingFastPath, /src\/commands\/qualification-receipt\.mjs/)
+  assert.match(billingFastPath, /qualification-receipt\.mjs" package-contract/)
+  assert.match(billingFastPath, /verifyNpmPackPackage\(report, manifest\)/)
+  assert.doesNotMatch(billingFastPath, /Array\.isArray\(result\)/)
+  for (const laneName of ['Setup build', 'Build']) {
+    const start = billingFastPath.indexOf(`- name: ${laneName}\n`)
+    const end = billingFastPath.indexOf('\n      - name:', start + 1)
+    const step = billingFastPath.slice(start, end < 0 ? undefined : end)
+    assert.match(step, /steps\.build_applicability\.outputs\.applicable == 'true'/)
+    assert.match(
+      step,
+      /inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'/
+    )
+    assert.match(step, /steps\.build_applicability\.outputs\.affected != 'false'/)
+  }
   assert.match(
     billing,
     /needs: qualification[\s\S]*inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'/
