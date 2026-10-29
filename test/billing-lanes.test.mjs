@@ -50,10 +50,24 @@ test('billing_lanes routes both CodeQL flavors through the billing orchestrator'
   assert.match(withCodeql, /^      codeql: true$/m)
 })
 
+test('release qualification receipt reuse is explicitly opt-in and validates its config value', () => {
+  const defaultCaller = syncConsumer({ codeql: 'false' })
+  assert.doesNotMatch(defaultCaller, /release-qualification-receipts: true/)
+
+  const optedInCaller = syncConsumer({ release_qualification_receipts: 'true' })
+  assert.match(optedInCaller, /^      release-qualification-receipts: true$/m)
+
+  assert.throws(
+    () => syncConsumer({ release_qualification_receipts: 'yes' }),
+    /Unsupported release_qualification_receipts: yes/
+  )
+})
+
 test('the billing orchestrator declares the full input contract', () => {
   const template = billingTemplate()
   for (const input of [
     'mode',
+    'release-qualification-receipts',
     'codeql',
     'runtime-repository',
     'runtime-ref',
@@ -155,21 +169,27 @@ test('billing uploads run sequentially after all parallel executions join', () =
   assert.doesNotMatch(execution, /uses:|continue-on-error:/)
   for (const lane of ['format', 'build', 'performance', 'smoke', 'eval', 'integration']) {
     assert.ok(execution.includes(`ci ${lane}\n`), `missing execution for ${lane}`)
-    const condition =
-      `steps.${lane}_applicability.outputs.applicable == 'true' && ` +
-      `steps.${lane}_applicability.outputs.affected != 'false'`
-    assert.ok(
-      execution.includes(
-        lane === 'format'
-          ? `if: ${condition}\n`
-          : `if: \${{ !cancelled() && ${lane === 'build' ? '' : "inputs.mode == 'audit' && "}${condition} }}\n`
-      ),
-      `execution condition changed for ${lane}`
-    )
+    if (lane === 'format') {
+      assert.match(
+        execution,
+        /if: >-\n              \$\{\{ !\(inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true'\) &&\n              steps\.format_applicability\.outputs\.applicable == 'true' &&\n              steps\.format_applicability\.outputs\.affected != 'false' \}\}/
+      )
+    } else {
+      const condition =
+        `steps.${lane}_applicability.outputs.applicable == 'true' && ` +
+        `steps.${lane}_applicability.outputs.affected != 'false'`
+      assert.ok(
+        execution.includes(
+          `if: \${{ !cancelled() && ${lane === 'build' ? '' : "inputs.mode == 'audit' && "}${condition} }}\n`
+        ),
+        `execution condition changed for ${lane}`
+      )
+    }
   }
   assert.deepEqual(
     followingSteps.slice(0, -1).map((step) => step.split('\n')[0].trim()),
     [
+      'Inspect versioned npm package contents',
       'Retain format task receipt',
       'Retain build task receipt',
       'Retain performance task receipt',
@@ -263,7 +283,10 @@ test('the gate folds merged lanes back into the shared category vocabulary', () 
   const template = billingTemplate()
   const gate = template.slice(template.indexOf('\n  gate:'))
   assert.match(gate, /name: Gate/)
-  assert.match(gate, /needs: \[fast-lanes, lint, type-check, unit, e2e, audit, codeql\]/)
+  assert.match(
+    gate,
+    /needs: \[fast-lanes, lint, type-check, unit, e2e, audit, codeql, qualification\]/
+  )
   assert.match(gate, /FOUNDRY_MODE: \$\{\{ inputs\.mode \}\}/)
   assert.match(
     gate,

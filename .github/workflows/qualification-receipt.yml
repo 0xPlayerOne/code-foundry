@@ -1,0 +1,193 @@
+name: Code Foundry Qualification Receipt
+
+on:
+  workflow_call:
+    inputs:
+      phase:
+        description: Produce evidence after a full audit or verify it for a release PR.
+        required: true
+        type: string
+      mode:
+        description: Validation tier associated with this receipt operation.
+        required: true
+        type: string
+      enabled:
+        description: Consumer opt-in for qualification receipt reuse.
+        required: false
+        type: boolean
+        default: false
+      codeql-enabled:
+        description: Whether the consumer requires CodeQL in its audit and release lanes.
+        required: false
+        type: boolean
+        default: true
+      runtime-repository:
+        description: Repository containing the Code Foundry runtime.
+        required: true
+        type: string
+      runtime-ref:
+        description: Runtime commit, tag, or ref used by source validation.
+        required: true
+        type: string
+      job-results-json:
+        description: Normalized component results for the successful full audit.
+        required: false
+        type: string
+        default: '{}'
+    outputs:
+      reuse:
+        description: True only when a matching recent source receipt was verified.
+        value: ${{ jobs.verify.outputs.reuse }}
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    name: Verify source receipt
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.enabled == true &&
+      inputs.phase == 'verify' && inputs.mode == 'release'
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    outputs:
+      reuse: ${{ steps.verify.outputs.reuse }}
+    steps:
+      - name: Checkout release PR source
+        id: source
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Checkout runtime
+        id: runtime
+        if: steps.source.outcome == 'success'
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            src/commands/qualification-receipt.mjs
+            src/lib
+            src/runtime-core.mjs
+            src/runtime.mjs
+      - name: Install runtime
+        id: install
+        if: steps.runtime.outcome == 'success'
+        continue-on-error: true
+        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Set up Node.js 24.18.0
+        id: node
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+      - name: Check version-only release diff
+        id: release-policy
+        if: steps.node.outcome == 'success'
+        continue-on-error: true
+        env:
+          FOUNDRY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FOUNDRY_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          FOUNDRY_REPOSITORY: ${{ github.repository }}
+          RUNTIME_PATH: ${{ runner.temp }}/code-foundry
+        run: node "$RUNTIME_PATH/src/runtime.mjs" validation release_diff
+      - name: Verify source qualification receipt
+        id: verify
+        if: always()
+        continue-on-error: true
+        env:
+          SOURCE_READY: ${{ steps.source.outcome }}
+          RUNTIME_READY: ${{ steps.install.outcome }}
+          NODE_READY: ${{ steps.node.outcome }}
+          POLICY_READY: ${{ steps.release-policy.outcome }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RUNTIME_PATH: ${{ runner.temp }}/code-foundry
+          RUNTIME_REPOSITORY: ${{ inputs.runtime-repository }}
+          FOUNDRY_MODE: ${{ inputs.mode }}
+          FOUNDRY_CODEQL_ENABLED: ${{ inputs.codeql-enabled }}
+        run: |
+          if [ "$SOURCE_READY" = success ] && [ "$RUNTIME_READY" = success ] && [ "$NODE_READY" = success ] && [ "$POLICY_READY" = success ] && [ -f "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" ]; then
+            node "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" verify >> "$GITHUB_OUTPUT"
+          else
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+            echo 'reason=qualification or version-only release policy unavailable; using full validation' >> "$GITHUB_OUTPUT"
+          fi
+
+  produce:
+    name: Produce source receipt
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.enabled == true &&
+      inputs.phase == 'produce' && inputs.mode == 'audit'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tested source tree
+        id: source
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+      - name: Checkout runtime
+        id: runtime
+        if: steps.source.outcome == 'success'
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.runtime-repository }}
+          ref: ${{ inputs.runtime-ref }}
+          path: .github/.code-foundry
+          sparse-checkout: |
+            src/commands/qualification-receipt.mjs
+            src/lib
+      - name: Install runtime
+        id: install
+        if: steps.runtime.outcome == 'success'
+        continue-on-error: true
+        run: mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
+      - name: Set up Node.js 24.18.0
+        id: node
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+      - name: Create qualification receipt
+        id: produce
+        if: always()
+        continue-on-error: true
+        env:
+          SOURCE_READY: ${{ steps.source.outcome }}
+          RUNTIME_READY: ${{ steps.install.outcome }}
+          NODE_READY: ${{ steps.node.outcome }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RUNTIME_PATH: ${{ runner.temp }}/code-foundry
+          RUNTIME_REPOSITORY: ${{ inputs.runtime-repository }}
+          FOUNDRY_MODE: ${{ inputs.mode }}
+          FOUNDRY_JOB_RESULTS_JSON: ${{ inputs.job-results-json }}
+        run: |
+          if [ "$SOURCE_READY" = success ] && [ "$RUNTIME_READY" = success ] && [ "$NODE_READY" = success ] && [ -f "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" ]; then
+            node "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" produce >> "$GITHUB_OUTPUT"
+          else
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+            echo 'reason=receipt setup unavailable' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload qualification receipt
+        if: steps.produce.outputs.reuse == 'true'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: code-foundry-qualification-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: qualification-receipt.json
+          if-no-files-found: error
+          retention-days: 7

@@ -24,6 +24,7 @@ test('the npm package keeps runtime templates and excludes repository-local acti
 
   for (const path of [
     '.github/workflows/validation.yml',
+    '.github/workflows/qualification-receipt.yml',
     '.github/workflows/release.yml',
     '.github/workflows/release-integrity.yml',
     '.github/ISSUE_TEMPLATE/bug_report.yml',

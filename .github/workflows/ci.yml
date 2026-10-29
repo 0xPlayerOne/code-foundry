@@ -23,6 +23,16 @@ on:
         required: false
         type: string
         default: task-result
+      release-build-only:
+        description: Run only the build lane after an exact successful source qualification receipt.
+        required: false
+        type: boolean
+        default: false
+      release-package-check:
+        description: Inspect the versioned npm package contents on release pull requests.
+        required: false
+        type: boolean
+        default: false
     secrets:
       TURBO_TOKEN:
         required: false
@@ -55,7 +65,7 @@ concurrency:
 jobs:
   format:
     name: Format
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.release-build-only != true
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
@@ -124,7 +134,7 @@ jobs:
 
   lint:
     name: Lint
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.release-build-only != true
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
@@ -188,7 +198,7 @@ jobs:
 
   type-check:
     name: Type-Check
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.release-build-only != true
     permissions:
       contents: read
       issues: read
@@ -287,6 +297,11 @@ jobs:
           mkdir -p .github/actions
           mv .github/.code-foundry "$RUNNER_TEMP/code-foundry"
           cp -R "$RUNNER_TEMP/code-foundry/.github/actions/." .github/actions/
+      - name: Set up Node.js 24.18.0 for package inspection
+        if: inputs.release-package-check == true
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
       - name: Detect
         id: applicability
         env:
@@ -307,6 +322,11 @@ jobs:
         id: execute
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
+      - name: Inspect versioned npm package contents
+        if: inputs.release-package-check == true && hashFiles('package.json') != ''
+        run: |
+          npm pack --dry-run --ignore-scripts --json > "$RUNNER_TEMP/foundry-package-inspection.json"
+          node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync("package.json", "utf8")); const result = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!Array.isArray(result) || result.length !== 1 || result[0]?.name !== manifest.name || result[0]?.version !== manifest.version || !result[0]?.files?.some((file) => file.path === "package.json")) process.exit(1)' "$RUNNER_TEMP/foundry-package-inspection.json"
       - name: Retain task receipt
         if: >-
           always() &&

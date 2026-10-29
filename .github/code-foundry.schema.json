@@ -7,6 +7,11 @@
       "description": "Explicit JavaScript formatter. Omit to preserve repository scripts and the Oxfmt fallback.",
       "type": "string",
       "enum": ["oxfmt", "prettier", "bun"]
+    },
+    "release_qualification_receipts": {
+      "description": "Opt in to seven-day exact-tree qualification receipts for Release Please validation.",
+      "type": "string",
+      "enum": ["true", "false"]
     }
   },
   "additionalProperties": true

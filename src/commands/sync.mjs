@@ -164,6 +164,12 @@ function synchronize(options) {
   if (!['true', 'false'].includes(draftProtection)) {
     throw new Error(`Unsupported draft_protection: ${draftProtection}; use true or false.`)
   }
+  const qualificationReceipts = configured(config.release_qualification_receipts, 'false')
+  if (!['true', 'false'].includes(qualificationReceipts)) {
+    throw new Error(
+      `Unsupported release_qualification_receipts: ${qualificationReceipts}; use true or false.`
+    )
+  }
   // Validate the dependency-update bot policy before any sync writes so a
   // typo fails fast instead of leaving a half-switched updater behind.
   const dependencyUpdater = configured(config.dependency_updater, 'dependabot')
@@ -1302,6 +1308,19 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       if (!value) continue
       rendered = rendered.replace(new RegExp(`^(\\s+${input}:)\\s+.*$`, 'm'), `$1 ${value}`)
     }
+    if (
+      workflow === 'validation' &&
+      configured(config.release_qualification_receipts, 'false') === 'true'
+    ) {
+      const qualified = rendered.replace(
+        /^(\s+mode:)\s+(\$\{\{\s*needs\.mode\.outputs\.mode\s*\}\})\s*$/m,
+        '$1 $2\n      release-qualification-receipts: true'
+      )
+      if (qualified === rendered) {
+        throw new Error('Validation caller cannot render release-qualification-receipts opt-in.')
+      }
+      rendered = qualified
+    }
     // Every Rust CodeQL lane in the caller must carry the configured shard
     // list. A SARIF category is derived from the shard string, so a caller that
     // renders the configuration into the pull-request lane while a second lane
@@ -1541,8 +1560,8 @@ const DIRECT_DOC_REPLACEMENTS = {
       '7. Push to the fork and open a pull request targeting `main`.',
     ],
     [
-      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                    |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                 |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | CI, unit tests, CodeQL, and release diff audit, ending in `Validation / Gate`         |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                    |\n| Push to `main`                                     | Release workflow; CodeQL skips release-only merges (audit covers drift)               |\n',
-      '| Event                                              | Expected automation                                                                   |\n| -------------------------------------------------- | ------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |\n| Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |\n| Exact Release Please pull request targeting `main` | CI, unit tests, CodeQL, and release diff audit, ending in `Validation / Gate`         |\n| Scheduled or manual validation                     | Full audit tier                                                                       |\n| Push to a working branch                           | Draft PR workflow                                                                     |\n| Push to `main`                                     | Release workflow; CodeQL skips release-only merges (audit covers drift)               |\n',
+      '| Event                                              | Expected automation                                                                                                                       |\n| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |\n| Draft pull request targeting `staging`             | No runner-heavy validation; run local checks before requesting review                                                                     |\n| Ready pull request targeting `staging`             | Fast validation: CI plus unit tests, ending in `Validation / Gate`                                                                        |\n| Draft ordinary pull request targeting `main`       | No runner-heavy validation; run local checks before requesting review                                                                     |\n| Ready ordinary pull request targeting `main`       | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`                                                     |\n| Exact Release Please PR targeting `main`           | Release diff, configured CodeQL, build/package check, and either a verified receipt or full CI/tests                                      |\n| Scheduled or manual validation                     | Full audit tier                                                                                                                           |\n| Push to a working branch                           | Draft PR workflow                                                                                                                         |\n| Push to `staging`                                  | Promotion PR workflow; canonical validation waits for the PR event                                                                        |\n| Push to `main`                                     | Release workflow; CodeQL skips release-only merges (audit covers drift)                                                                    |\n',
+      '| Event                                    | Expected automation                                                                                  |\n| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |\n| Draft pull request targeting `main`      | No runner-heavy validation; run local checks before requesting review                                |\n| Ready pull request targeting `main`      | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate`                |\n| Exact Release Please PR targeting `main` | Release diff, configured CodeQL, build/package check, and either a verified receipt or full CI/tests |\n| Scheduled or manual validation           | Full audit tier                                                                                      |\n| Push to a working branch                 | Draft PR workflow                                                                                    |\n| Push to `main`                           | Release workflow; CodeQL skips release-only merges (audit covers drift)                              |\n',
     ],
     [
       '| Change                       | Target    | Merge method                                    | Merge gate                                                |\n| ---------------------------- | --------- | ----------------------------------------------- | --------------------------------------------------------- |\n| Working branch               | `staging` | Squash                                          | All applicable required checks pass                       |\n| `staging` → `main` promotion | `main`    | Rebase (`merge_strategy`)                       | Current staging checks, release review, and rollout notes |\n| Release Please version PR    | `main`    | Rebase (`release_merge_strategy`, fails closed) | Validation gate and release policy pass                   |\n',
@@ -2165,6 +2184,7 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     languages,
     features: 'all',
     codeql: 'auto',
+    release_qualification_receipts: 'false',
     dependency_review: 'auto',
     package_manager: packageManager,
     codeql_rust_shards: '["all"]',

@@ -380,7 +380,9 @@ function validation(task) {
         security: process.env.FOUNDRY_SECURITY,
         codeql: process.env.FOUNDRY_CODEQL,
         eval: process.env.FOUNDRY_EVAL,
+        qualification: process.env.FOUNDRY_QUALIFICATION,
       },
+      sourceQualification: process.env.FOUNDRY_SOURCE_QUALIFICATION === 'true',
     })
     if (gate.valid) {
       console.log(`Validation gate passed for ${mode} mode.`)

@@ -82,9 +82,9 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql', 'eval'],
-  // A verified source-tree qualification receipt is not available yet, so
-  // Release Please keeps CI and unit tests. CodeQL remains required because
-  // some rulesets require a pull-request analysis before a release can merge.
+  // Release Please uses the full CI and unit-test fallback unless the
+  // orchestrator has verified an exact short-lived source receipt. CodeQL
+  // remains required because some rulesets require a PR analysis to merge.
   release: ['ci', 'test', 'codeql'],
 }
 
@@ -92,9 +92,13 @@ const REQUIRED_JOBS_BY_MODE = {
  * Job ids that the aggregate gate requires for a mode. Expected skips never
  * appear here: anything outside the returned list is not part of the gate.
  * @param {string} mode
+ * @param {{sourceQualification?:boolean}} [options]
  * @returns {string[]}
  */
-export function requiredValidationJobs(mode) {
+export function requiredValidationJobs(mode, options = {}) {
+  if (mode === 'release' && options.sourceQualification === true) {
+    return ['ci', 'codeql', 'qualification']
+  }
   const jobs = REQUIRED_JOBS_BY_MODE[/** @type {'fast'|'audit'|'release'} */ (mode)]
   if (!jobs) {
     throw new Error(
@@ -110,14 +114,14 @@ export function requiredValidationJobs(mode) {
  * non-required jobs never fail the gate. Every required job must report
  * exactly `success`; failure, cancellation, an unexpected skip, a missing
  * result, or an unknown result fails the gate (fail closed).
- * @param {{ mode: string, results?: Record<string, string | null | undefined> }} input
+ * @param {{ mode: string, results?: Record<string, string | null | undefined>, sourceQualification?:boolean }} input
  * @returns {{ valid: boolean, required: string[], failures: Array<{ job: string, result: string }> }}
  */
 export function evaluateValidationGate(input) {
-  const { mode, results = {} } = input
+  const { mode, results = {}, sourceQualification = false } = input
   let required
   try {
-    required = requiredValidationJobs(mode)
+    required = requiredValidationJobs(mode, { sourceQualification })
   } catch (error) {
     return {
       valid: false,

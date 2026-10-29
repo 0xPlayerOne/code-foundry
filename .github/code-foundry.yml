@@ -5,6 +5,7 @@ languages: typescript
 features: all
 draft_protection: true
 codeql: auto
+release_qualification_receipts: false
 codeql_rust_shards: '["all"]'
 codeql_rust_threads: 1
 codeql_rust_max_parallel: 1

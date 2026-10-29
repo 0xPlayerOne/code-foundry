@@ -7,6 +7,11 @@ on:
         description: Validation tier (fast, audit, or release).
         required: true
         type: string
+      release-qualification-receipts:
+        description: Reuse a recent exact-tree audit receipt for Release Please PRs.
+        required: false
+        type: boolean
+        default: false
       runtime-repository:
         description: Repository containing the Code Foundry runtime.
         required: false
@@ -106,9 +111,29 @@ permissions:
   security-events: write
 
 jobs:
+  qualification:
+    name: Qualification
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' &&
+      inputs.release-qualification-receipts == true && inputs.mode == 'release'
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/qualification-receipt.yml
+    with:
+      phase: verify
+      mode: ${{ inputs.mode }}
+      enabled: ${{ inputs.release-qualification-receipts }}
+      codeql-enabled: false
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+
   ci:
     name: CI
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    needs: qualification
+    if: >-
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
     # Forward issue-read only to the CI workflow that runs Type-Check.
     permissions:
       actions: read
@@ -121,13 +146,19 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.ci-runner }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
+      release-build-only: ${{ inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true' }}
+      release-package-check: ${{ inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true' }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
 
   test:
     name: Test
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    needs: qualification
+    if: >-
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
+      (inputs.mode == 'fast' || inputs.mode == 'audit' ||
+      (inputs.mode == 'release' && needs.qualification.outputs.reuse != 'true'))
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -157,9 +188,9 @@ jobs:
 
   eval:
     name: Eval
-    # Behavior evals cover content changes; the lean release lane skips them
-    # because its diff is version metadata only. The reusable workflow skips
-    # cleanly when the repository has no eval harness.
+    # Behavior evals are part of audit qualification. A release-only run may
+    # reuse that work only through the exact, unexpired source receipt below.
+    # The reusable workflow skips cleanly when there is no eval harness.
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
     uses: ./.github/workflows/eval.yml
     with:
@@ -170,12 +201,13 @@ jobs:
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
-  # Release Please branches require CI, unit tests, and the exact
-  # generated-diff audit below. Ordinary PRs still render no skipped
-  # release-policy row.
+  # Release Please branches require CI and the exact generated-diff audit
+  # below. The runtime gate also requires unit tests unless the separate
+  # qualification job verified a matching source receipt. Ordinary PRs still
+  # render no skipped release-policy row.
   gate:
     name: Gate
-    needs: [ci, test, security, eval]
+    needs: [ci, test, security, eval, qualification]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
     runs-on: ubuntu-slim
     timeout-minutes: 10
@@ -185,6 +217,8 @@ jobs:
       FOUNDRY_TEST: ${{ needs.test.result }}
       FOUNDRY_SECURITY: ${{ needs.security.result }}
       FOUNDRY_EVAL: ${{ needs.eval.result }}
+      FOUNDRY_SOURCE_QUALIFICATION: ${{ needs.qualification.outputs.reuse }}
+      FOUNDRY_QUALIFICATION: ${{ needs.qualification.result }}
       # This workflow is selected only for repositories whose canonical
       # configuration explicitly disables unavailable CodeQL. Treat that
       # policy decision as satisfied without registering a skipped PR check.
@@ -220,3 +254,27 @@ jobs:
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation release_diff
       - name: Evaluate aggregate gate
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation gate
+
+  qualification-receipt:
+    name: Qualification receipt
+    needs: [ci, test, security, eval, gate]
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
+      inputs.release-qualification-receipts == true &&
+      github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
+      needs.ci.result == 'success' && needs.test.result == 'success' &&
+      needs.security.result == 'success' && needs.eval.result == 'success' &&
+      needs.gate.result == 'success'
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/qualification-receipt.yml
+    with:
+      phase: produce
+      mode: ${{ inputs.mode }}
+      enabled: ${{ inputs.release-qualification-receipts }}
+      codeql-enabled: false
+      runtime-repository: ${{ inputs.runtime-repository }}
+      runtime-ref: ${{ inputs.runtime-ref }}
+      job-results-json: >-
+        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"not-configured","eval":"${{ needs.eval.result }}","gate":"${{ needs.gate.result }}"}

@@ -1,0 +1,312 @@
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import test from 'node:test'
+import { fileURLToPath } from 'node:url'
+import {
+  findQualificationReceipt,
+  produceQualificationReceipt,
+} from '../src/commands/qualification-receipt.mjs'
+import {
+  QUALIFICATION_RECEIPT_ARTIFACT_PREFIX,
+  QUALIFICATION_RECEIPT_KIND,
+  QUALIFICATION_RECEIPT_SCHEMA_VERSION,
+} from '../src/lib/qualification-receipt.mjs'
+
+const now = Date.parse('2026-10-29T12:00:00.000Z')
+const sha = (digit) => digit.repeat(40)
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+function response(value) {
+  return { ok: true, status: 200, json: async () => value }
+}
+
+function git(cwd, args) {
+  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
+}
+
+function sourceFixture(t) {
+  const directory = mkdtempSync(join(tmpdir(), 'foundry-receipt-source-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  execFileSync('git', ['init', '--quiet', directory])
+  mkdirSync(join(directory, '.github', 'workflows'), { recursive: true })
+  writeFileSync(join(directory, '.github', 'workflows', 'validation.yml'), 'name: Validation\n')
+  execFileSync('git', ['-C', directory, 'add', '.'])
+  execFileSync('git', [
+    '-C',
+    directory,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  ])
+  const commit = git(directory, ['rev-parse', 'HEAD'])
+  return {
+    directory,
+    commit,
+    tree: git(directory, ['rev-parse', `${commit}^{tree}`]),
+    workflowBlob: git(directory, ['rev-parse', `${commit}:.github/workflows/validation.yml`]),
+  }
+}
+
+function mergedSourceFixture(t) {
+  const source = sourceFixture(t)
+  const baseCommit = source.commit
+  execFileSync('git', ['-C', source.directory, 'switch', '-c', 'receipt-pr-head'])
+  writeFileSync(join(source.directory, 'src.mjs'), 'export const tested = true\n')
+  execFileSync('git', ['-C', source.directory, 'add', 'src.mjs'])
+  execFileSync('git', [
+    '-C',
+    source.directory,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'PR head',
+  ])
+  const headCommit = git(source.directory, ['rev-parse', 'HEAD'])
+  execFileSync('git', ['-C', source.directory, 'switch', '-c', 'receipt-base', baseCommit])
+  execFileSync('git', [
+    '-C',
+    source.directory,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'merge',
+    '--no-ff',
+    '--no-edit',
+    'receipt-pr-head',
+  ])
+  const mergeCommit = git(source.directory, ['rev-parse', 'HEAD'])
+  return {
+    ...source,
+    baseCommit,
+    headCommit,
+    commit: mergeCommit,
+    tree: git(source.directory, ['rev-parse', `${mergeCommit}^{tree}`]),
+  }
+}
+
+test('producer binds the receipt to the tested merge tree, run attempt, and exact PR identity', async (t) => {
+  const source = mergedSourceFixture(t)
+  const eventPath = join(source.directory, 'event.json')
+  const sourceHead = source.headCommit
+  const sourceEvent = {
+    pull_request: {
+      number: 18,
+      base: { ref: 'main', sha: source.baseCommit, repo: { full_name: 'acme/consumer' } },
+      head: { ref: 'fix/source', sha: sourceHead, repo: { full_name: 'acme/consumer' } },
+    },
+  }
+  writeFileSync(eventPath, JSON.stringify(sourceEvent))
+  const run = {
+    id: 303,
+    run_attempt: 2,
+    event: 'pull_request',
+    status: 'completed',
+    conclusion: 'success',
+    head_sha: sourceHead,
+    head_branch: 'fix/source',
+    workflow_id: 42,
+    path: '.github/workflows/validation.yml',
+    repository: { full_name: 'acme/consumer' },
+    created_at: '2026-10-29T10:00:00.000Z',
+    pull_requests: [{ number: 18 }],
+  }
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url)
+    if (parsed.pathname.endsWith('/actions/workflows/validation.yml')) {
+      return response({ id: 42, path: '.github/workflows/validation.yml', state: 'active' })
+    }
+    if (parsed.pathname.endsWith('/actions/runs/303')) return response(run)
+    throw new Error(`Unexpected API request: ${parsed.pathname}`)
+  }
+  const env = {
+    GITHUB_EVENT_NAME: 'pull_request',
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_REPOSITORY: 'acme/consumer',
+    GITHUB_API_URL: 'https://api.github.com',
+    GITHUB_WORKFLOW_REF: 'acme/consumer/.github/workflows/validation.yml@refs/pull/18/merge',
+    GITHUB_WORKFLOW_SHA: source.commit,
+    GITHUB_SHA: source.commit,
+    GITHUB_RUN_ID: '303',
+    GITHUB_RUN_ATTEMPT: '2',
+    FOUNDRY_MODE: 'audit',
+    FOUNDRY_JOB_RESULTS_JSON: JSON.stringify({
+      ci: 'success',
+      test: 'success',
+      security: 'success',
+      codeql: 'success',
+      eval: 'success',
+      gate: 'success',
+    }),
+    GITHUB_TOKEN: 'fixture-token',
+    RUNTIME_PATH: root,
+    RUNTIME_REPOSITORY: 'acme/code-foundry',
+  }
+
+  const receipt = await produceQualificationReceipt(env, { fetchImpl, cwd: source.directory })
+  assert.equal(receipt.pull_request.number, 18)
+  assert.equal(receipt.run.attempt, 2)
+  assert.equal(receipt.tested.tree_sha, source.tree)
+
+  writeFileSync(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        ...sourceEvent.pull_request,
+        base: { ...sourceEvent.pull_request.base, sha: sha('4') },
+      },
+    })
+  )
+  await assert.rejects(
+    produceQualificationReceipt(env, { fetchImpl, cwd: source.directory }),
+    /Tested merge commit does not match the source event/
+  )
+
+  writeFileSync(eventPath, JSON.stringify(sourceEvent))
+  run.pull_requests = [{ number: 19 }]
+  await assert.rejects(
+    produceQualificationReceipt(env, { fetchImpl, cwd: source.directory }),
+    /does not match the source event/
+  )
+})
+
+test('finds a receipt only from the exact workflow run and attempt for the current main tree', async (t) => {
+  const source = sourceFixture(t)
+  const runtimeSha = git(root, ['rev-parse', 'HEAD'])
+  const createdAt = '2026-10-28T10:00:00.000Z'
+  const run = {
+    id: 202,
+    run_attempt: 1,
+    event: 'pull_request',
+    status: 'completed',
+    conclusion: 'success',
+    head_sha: sha('3'),
+    head_branch: 'fix/source-tree',
+    workflow_id: 42,
+    path: '.github/workflows/validation.yml',
+    repository: { full_name: 'acme/consumer' },
+    head_repository: { full_name: 'acme/consumer' },
+    created_at: createdAt,
+    updated_at: '2026-10-28T11:00:00.000Z',
+    pull_requests: [{ number: 17 }],
+  }
+  const artifact = {
+    id: 900,
+    name: `${QUALIFICATION_RECEIPT_ARTIFACT_PREFIX}-202-1`,
+    expired: false,
+    size_in_bytes: 400,
+    created_at: '2026-10-28T11:00:00.000Z',
+    expires_at: '2026-11-04T11:00:00.000Z',
+    archive_download_url: 'https://api.github.com/repos/acme/consumer/actions/artifacts/900/zip',
+    workflow_run: { id: 202, head_sha: sha('3') },
+  }
+  const receipt = {
+    schema_version: QUALIFICATION_RECEIPT_SCHEMA_VERSION,
+    kind: QUALIFICATION_RECEIPT_KIND,
+    repository: 'acme/consumer',
+    workflow: {
+      id: 42,
+      path: '.github/workflows/validation.yml',
+      sha: source.commit,
+      blob_sha: source.workflowBlob,
+    },
+    run: { id: 202, attempt: 1, event: 'pull_request', head_sha: sha('3'), created_at: createdAt },
+    pull_request: {
+      number: 17,
+      base_repository: 'acme/consumer',
+      base_ref: 'main',
+      base_sha: source.commit,
+      head_repository: 'acme/consumer',
+      head_ref: 'fix/source-tree',
+      head_sha: sha('3'),
+    },
+    mode: 'audit',
+    tested: { sha: source.commit, tree_sha: source.tree },
+    runtime: { repository: 'acme/code-foundry', sha: runtimeSha },
+    jobs: {
+      ci: 'success',
+      test: 'success',
+      security: 'success',
+      codeql: 'success',
+      eval: 'success',
+      gate: 'success',
+    },
+  }
+  const eventPath = join(source.directory, 'event.json')
+  writeFileSync(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        number: 18,
+        base: { ref: 'main', sha: source.commit, repo: { full_name: 'acme/consumer' } },
+        head: {
+          ref: 'release-please--branches--main',
+          sha: sha('5'),
+          repo: { full_name: 'acme/consumer' },
+        },
+      },
+    })
+  )
+
+  const apiCalls = []
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url)
+    apiCalls.push(parsed.pathname)
+    if (parsed.pathname.endsWith('/actions/workflows/validation.yml')) {
+      return response({ id: 42, path: '.github/workflows/validation.yml', state: 'active' })
+    }
+    if (parsed.pathname.endsWith('/actions/workflows/42/runs')) {
+      return response({ total_count: 1, workflow_runs: [run] })
+    }
+    if (parsed.pathname.endsWith('/actions/runs/202/artifacts')) {
+      return response({ total_count: 1, artifacts: [artifact] })
+    }
+    if (parsed.pathname.endsWith('/actions/runs/202')) return response(run)
+    throw new Error(`Unexpected API request: ${parsed.pathname}`)
+  }
+
+  const result = await findQualificationReceipt(
+    {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_REPOSITORY: 'acme/consumer',
+      GITHUB_API_URL: 'https://api.github.com/api/v3',
+      GITHUB_WORKFLOW_REF: 'acme/consumer/.github/workflows/validation.yml@refs/pull/18/merge',
+      GITHUB_WORKFLOW_SHA: source.commit,
+      FOUNDRY_MODE: 'release',
+      FOUNDRY_CODEQL_ENABLED: 'true',
+      GITHUB_TOKEN: 'fixture-token',
+      RUNTIME_PATH: root,
+      RUNTIME_REPOSITORY: 'acme/code-foundry',
+    },
+    {
+      fetchImpl,
+      cwd: source.directory,
+      now,
+      readArtifact: async (candidate) => {
+        assert.equal(candidate.id, artifact.id)
+        return receipt
+      },
+    }
+  )
+
+  assert.equal(result.verified, true)
+  assert.deepEqual(apiCalls, [
+    '/api/v3/repos/acme/consumer/actions/workflows/validation.yml',
+    '/api/v3/repos/acme/consumer/actions/workflows/42/runs',
+    '/api/v3/repos/acme/consumer/actions/runs/202/artifacts',
+    '/api/v3/repos/acme/consumer/actions/runs/202',
+  ])
+})

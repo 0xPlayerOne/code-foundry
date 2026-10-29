@@ -1264,7 +1264,7 @@ describe('code-foundry CLI', () => {
 
     const orchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
     assert.doesNotMatch(orchestrator, /^  codeql:\s*$/m)
-    assert.match(orchestrator, /needs: \[ci, test, security, eval\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, eval, qualification\]/)
     const warnings = captureConsole('warn', () => assert.doesNotThrow(() => doctor(root)), {
       propagateError: true,
     })
@@ -2384,7 +2384,7 @@ jobs:
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
     assert.match(
       contributing,
-      /Exact Release Please pull request targeting `main`.*CI, unit tests, CodeQL, and release diff audit/
+      /Exact Release Please PR targeting `main`.*Release diff, configured CodeQL, build\/package check, and either a verified receipt or full CI\/tests/
     )
     assert.doesNotMatch(contributing, /Release-policy validation only/)
     assert.doesNotMatch(contributing, /staging/i)
@@ -2464,7 +2464,7 @@ jobs:
       )
       assert.match(
         rendered,
-        /Exact Release Please pull request targeting `main`.*CI, unit tests, CodeQL, and release diff audit/
+        /Exact Release Please PR targeting `main`.*Release diff, configured CodeQL, build\/package check, and either a verified receipt or full CI\/tests/
       )
       assert.doesNotMatch(rendered, /Release-policy validation only/)
       // No unpadded separator line may survive: prettier pads markdown tables.
@@ -2837,9 +2837,9 @@ jobs:
     const workflows = readFileSync('docs/WORKFLOWS.md', 'utf8')
     assert.match(
       workflows,
-      /Release Please pull requests into `main` run CI, unit tests, and CodeQL plus\s+the release-diff policy/
+      /Release Please pull requests into `main` must pass the release-diff policy and\s+configured CodeQL scan\. They also run the full CI and unit-test fallback unless\s+the workflow verifies a seven-day source qualification receipt/
     )
-    assert.match(workflows, /release mode keeps its CI and unit-test fallback/)
+    assert.match(workflows, /the full CI and unit-test fallback runs/)
     assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)
     assert.match(workflows, /does\s+not reduce required workflow runs/)
@@ -5294,7 +5294,7 @@ jobs:
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     assert.match(caller, /^  validation:\n    name: Validation/m)
     assert.match(orchestrator, /^  gate:\n    name: Gate/m)
-    assert.match(orchestrator, /needs: \[ci, test, security, codeql, eval\]/)
+    assert.match(orchestrator, /needs: \[ci, test, security, codeql, eval, qualification\]/)
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && always\(\)/)
     assert.match(orchestrator, /validation gate/)
     assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
@@ -5316,7 +5316,7 @@ jobs:
     assert.doesNotMatch(orchestrator, /^  release-policy:/m)
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
+      /if: >-\n\s+!cancelled\(\) && vars\.CI_BILLING_PAUSED != 'true' &&\n\s+\(inputs\.mode == 'fast' \|\| inputs\.mode == 'audit' \|\| inputs\.mode == 'release'\)/
     )
     // CodeQL stays on release pull requests so code-scanning rulesets never
     // deadlock the release; the security job is audit-only.
@@ -5372,7 +5372,7 @@ jobs:
     assert.match(noCodeqlOrchestrator, /^  eval:\n    name: Eval\n    #/m)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
-    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval\]/)
+    assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval, qualification\]/)
     for (const job of ['fast-lanes', 'lint', 'type-check', 'unit']) {
       assert.match(
         billingOrchestrator,
