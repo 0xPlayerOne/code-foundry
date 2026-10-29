@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.2...v1.49.3) (2026-10-29)
+
+
+### CI
+
+* **validation:** require release checks until evidence exists ([#789](https://github.com/0xPlayerOne/code-foundry/issues/789)) ([a5f8be6](https://github.com/0xPlayerOne/code-foundry/commit/a5f8be64b7b28d2248aa71b80e321aa0fe82f30a))
+
 ## [1.49.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.1...v1.49.2) (2026-10-29)
 
 
