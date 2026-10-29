@@ -5,6 +5,7 @@ import { describe, it } from 'node:test'
 import {
   appendFileSync,
   chmodSync,
+  cpSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -1518,8 +1519,9 @@ describe('code-foundry CLI', () => {
   })
 
   it('keeps default-branch CodeQL enabled for release-looking pushes with source changes', () => {
+    const nextReleaseVersion = '1.52.0'
     const sourceBearingReleasePush = {
-      subject: 'chore(main): release 1.51.1',
+      subject: `chore(main): release ${nextReleaseVersion}`,
       changedPaths: ['src/commands/sync.mjs'],
     }
     assert.match(sourceBearingReleasePush.subject, /^chore\(main\): release /)
@@ -1541,15 +1543,55 @@ describe('code-foundry CLI', () => {
       /if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && github\.event_name == 'push'/
     )
     assert.doesNotMatch(defaultBranch, /head_commit\.message|startsWith\(/)
-    assert.match(
-      defaultBranch,
-      /uses: 0xPlayerOne\/code-foundry\/\.github\/workflows\/codeql\.yml@v1\.51\.0/
+    assert.ok(
+      defaultBranch.includes(
+        `uses: 0xPlayerOne/code-foundry/.github/workflows/codeql.yml@${sourceRuntimeRef}`
+      )
     )
     assert.match(workflow, /pull_request:/)
     const audit = readFileSync(join(root, '.github/workflows/validation-audit.yml'), 'utf8')
     assert.match(audit, /schedule:/)
 
+    // Simulate the next Release Please version commit. The generated runtime
+    // pin must follow source package metadata rather than a hardcoded release.
+    const versionedSource = mkdtempSync(join(tmpdir(), 'code-foundry-codeql-versioned-source-'))
+    for (const directory of ['.github', '.githooks', 'docs', 'src/templates']) {
+      cpSync(join(process.cwd(), directory), join(versionedSource, directory), {
+        recursive: true,
+      })
+    }
+    for (const file of [
+      '.editorconfig',
+      '.gitattributes',
+      '.gitignore',
+      '.oxfmtrc.json',
+      '.oxlintrc.json',
+      'AGENTS.md',
+      'LICENSE',
+      'NOTICE',
+      'release-please-config.json',
+      'ruff.toml',
+    ]) {
+      cpSync(join(process.cwd(), file), join(versionedSource, file))
+    }
+    const packageManifest = JSON.parse(readFileSync('package.json', 'utf8'))
+    writeFileSync(
+      join(versionedSource, 'package.json'),
+      `${JSON.stringify({ ...packageManifest, version: nextReleaseVersion }, null, 2)}\n`
+    )
+
+    syncRepository({ target: root, source: versionedSource })
+    const nextWorkflow = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+    const nextDefaultBranch = nextWorkflow.slice(nextWorkflow.indexOf('\n  default-branch-codeql:'))
+    assert.ok(
+      nextDefaultBranch.includes(
+        `uses: 0xPlayerOne/code-foundry/.github/workflows/codeql.yml@v${nextReleaseVersion}`
+      )
+    )
+    assert.ok(nextWorkflow.includes(`runtime-ref: v${nextReleaseVersion}`))
+
     rmSync(root, { recursive: true, force: true })
+    rmSync(versionedSource, { recursive: true, force: true })
   })
 
   it('renders the configured unit runner independently from the test runner', () => {
