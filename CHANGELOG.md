@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.51.0...v1.51.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **ci:** run CodeQL on every main push ([#797](https://github.com/0xPlayerOne/code-foundry/issues/797)) ([d6d299d](https://github.com/0xPlayerOne/code-foundry/commit/d6d299dd5b073d6a5e13ffc2aa016d856208d2e4))
+
 ## [1.51.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.50.1...v1.51.0) (2026-10-29)
 
 
