@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.3...v1.50.0) (2026-10-29)
+
+
+### Features
+
+* **release:** support npm OIDC publishing ([#791](https://github.com/0xPlayerOne/code-foundry/issues/791)) ([74b5155](https://github.com/0xPlayerOne/code-foundry/commit/74b5155157b9f163d70b00b138673c981e19c925))
+
 ## [1.49.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.2...v1.49.3) (2026-10-29)
 
 
