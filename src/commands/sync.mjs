@@ -1095,6 +1095,26 @@ export function renderDevChannel(config) {
 }
 
 /**
+ * Pin consumer runtime refs without retaining the self-CI expression used by
+ * the Code Foundry repository. Self callers keep their event-relative refs.
+ *
+ * @param {string} content
+ * @param {string} ref
+ * @param {boolean} selfRepository
+ */
+export function pinRuntimeRefs(content, ref, selfRepository) {
+  if (selfRepository) return content
+  const foldedRuntimeRef =
+    /^([ \t]*runtime-ref:)[ \t]*>-[ \t]*\r?\n(?:[ \t]+\$\{\{[^\r\n]*\}\}[ \t]*(?:\r?\n|$))+/gm
+  return content
+    .replace(
+      foldedRuntimeRef,
+      (match, key) => `${key} ${ref}${match.endsWith('\r\n') ? '\r\n' : '\n'}`
+    )
+    .replace(/^([ \t]*runtime-ref:)[ \t]+.*$/gm, (_, key) => `${key} ${ref}`)
+}
+
+/**
  * @param {string} content
  * @param {Record<string,string>} config
  * @param {string} repository
@@ -1149,11 +1169,12 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     new RegExp(`${escapeRegExp(remotePrefix)}([^\\s@]+)`, 'g'),
     `$&@${ref}`
   )
-  // Pin every runtime reference in the rendered caller: the orchestrator input
-  // in the `with:` block and the mode job's runtime checkout. Self templates
-  // use ${{ github.sha }} and are only rewritten when rendered for consumers.
-  rendered = rendered.replace(/^(\s+runtime-ref:)\s+.*$/gm, `$1 ${ref}`)
-  rendered = rendered.replace(/^(\s+ref:)\s+\$\{\{\s*github\.sha\s*\}\}\s*$/gm, `$1 ${ref}`)
+  // Replace complete folded self-CI runtime expressions when rendering a
+  // consumer. The source repository keeps its event-relative runtime refs.
+  rendered = pinRuntimeRefs(rendered, ref, selfRepository)
+  if (!selfRepository) {
+    rendered = rendered.replace(/^(\s+ref:)\s+\$\{\{\s*github\.sha\s*\}\}\s*$/gm, `$1 ${ref}`)
+  }
   rendered = rendered.replace(/^(\s+runtime-repository:)\s+.*$/gm, `$1 ${repository}`)
   rendered = rendered.replace(
     new RegExp(`^(\\s+repository:)\\s+0xPlayerOne\\/code-foundry\\s*$`, 'gm'),
