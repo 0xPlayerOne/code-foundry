@@ -29,17 +29,19 @@ package.
 The publishing job serializes publication for a tag and has no dependency
 installation/build step. Qualification has no npm credential. This self-only
 publisher has no environment approval gate; publication is automatic after its
-completed gates. npm trusted publishing is preferred; an explicit optional token
-supports environments that cannot use it. Configure the trusted publisher for the
-**actual caller and reusable-workflow relationship** before enabling this route.
+completed gates and uses OIDC only. Configure npm trusted publishing for the
+actual caller workflow filename, `release_self-ci.yml`, in repository
+`0xPlayerOne/code-foundry`, with direct publish permission and no GitHub
+environment. Both the caller and reusable publisher grant `id-token: write`.
+For generated consumer workflows, the caller filename is `release.yml` and the
+auth mode remains configurable with `npm_publish_auth`.
 Existing version publication is not overwritten: retrying an already-published
 version fails rather than treating a registry conflict or network error as proof
 of identity.
 
 The publisher never rebuilds the package, publishes a directory, or treats an
-already-published version conflict as proof of success. The workflow uses npm
-trusted publishing when no `NPM_TOKEN` is supplied; the optional token is a
-fallback for environments that cannot use trusted publishing.
+already-published version conflict as proof of success. It never accepts or
+forwards `NPM_TOKEN`.
 
 Qualification and publication are gated on `main` push or an explicitly
 requested `workflow_dispatch`. The shared billing pause blocks normal runs. A
@@ -89,15 +91,16 @@ jobs:
     with:
       tag: ${{ needs.release-producer.outputs.tag }}
       asset: ${{ needs.release-producer.outputs.npm-asset }}
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
 For the self repository, `release_self-ci.yml` supplies the release output and
-uses the protected `npm` environment. Configure trusted publishing for the
-actual caller/reusable-workflow relationship, not only for a similarly named
-workflow. Protect both the `release` and `npm` environments with the intended
-branch restrictions and approvals.
+uses the qualified publisher job without a GitHub environment. The actual
+caller filename must match npm's trusted-publisher configuration; a similarly
+named reusable workflow does not match. A prior publisher entry named
+`release.yml` did not match the self-publish caller; the repository owner reports
+adding the `release_self-ci.yml` entry. A successful OIDC publication still
+needs to verify that identity before any old trust entry or secret is removed.
+This source change does not edit npm trust settings.
 
 ## Identity and retry rules
 
@@ -131,8 +134,8 @@ administration-read, contents-write, and verification access; it is never expose
 to qualification jobs. Preflight and staging reuse the producer's validated
 credential selection, falling back to the workflow token only when the configured
 token is rejected. Configure npm trusted-publisher identity for the actual
-caller/reusable-workflow relationship, or explicitly retain the optional npm
-token in the final publisher.
+caller workflow filename. This self-only publisher does not support a token
+fallback.
 
 ## Trust boundaries
 

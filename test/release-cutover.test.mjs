@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -245,6 +253,10 @@ test('all legacy downstream jobs are disabled together during external publicati
   // and qualification executes only when a release (or a stuck draft) needs it.
   assert.match(producer, /needs: \[preflight\]/)
   assert.doesNotMatch(producer, /needs: \[qualification/)
+  assert.doesNotMatch(caller, /NPM_TOKEN/)
+  assert.match(caller, /id-token: write/)
+  assert.doesNotMatch(publisher, /NPM_TOKEN|NODE_AUTH_TOKEN|token publishing/i)
+  assert.match(publisher, /id-token: write/)
 })
 
 test('staging consumes verified current-attempt bytes without a rebuild and keeps publication automatic', () => {
@@ -261,6 +273,68 @@ test('staging consumes verified current-attempt bytes without a rebuild and keep
   assert.doesNotMatch(caller, /environment: npm/)
   assert.match(caller, /cancel-in-progress: false/)
   assert.doesNotMatch(publisher, /environment:/)
+})
+
+test('qualified self publication uses caller-bound OIDC without a publishing token', () => {
+  const publish = caller.split('\n  publish:\n')[1]
+  assert.match(publish, /uses: \.\/\.github\/workflows\/qualified-foundry-publish\.yml/)
+  assert.match(publish, /id-token: write/)
+  assert.doesNotMatch(publish, /secrets:\s+NPM_TOKEN|NPM_TOKEN/)
+  assert.doesNotMatch(publisher, /secrets:\s+NPM_TOKEN|HAS_NPM_TOKEN/)
+  assert.match(publisher, /qualified-publication\.mjs publish/)
+  assert.doesNotMatch(publisher, /NODE_AUTH_TOKEN/)
+})
+
+test('generated consumers select npm auth explicitly and keep read credentials separate', (t) => {
+  for (const [mode, expectsPublishToken] of [
+    ['auto', true],
+    ['token', true],
+    ['oidc', false],
+  ]) {
+    const { directory } = fixture(t)
+    writeFileSync(
+      join(directory, '.github/code-foundry.yml'),
+      `git_workflow: direct\nrelease_merge_strategy: squash\nrelease_type: auto\nnpm_publish: true\nnpm_publish_auth: ${mode}\n`
+    )
+    syncRepository({ target: directory, source: root })
+    const generated = readFileSync(join(directory, '.github/workflows/release.yml'), 'utf8')
+    assert.match(generated, new RegExp(`npm-publish-auth: ${mode}`))
+    assert.match(generated, /NPM_READ_TOKEN: \$\{\{ secrets\.NPM_READ_TOKEN \}\}/)
+    assert.equal(/NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/.test(generated), expectsPublishToken)
+    assert.match(release, /npm-publish-auth:\n\s+description:/)
+    assert.match(release, /NPM_READ_TOKEN:\n\s+required: false/)
+  }
+})
+
+test('consumer private-read credentials stay inside install and never reach OIDC publish', () => {
+  const npm = release.split('\n  npm:\n')[1]
+  const install = npm
+    .split('- name: Install dependencies\n')[1]
+    .split('- name: Publish npm with token')[0]
+  const tokenPublish = npm
+    .split('- name: Publish npm with token\n')[1]
+    .split('- name: Publish npm with trusted publishing')[0]
+  const oidcPublish = npm.split('- name: Publish npm with trusted publishing\n')[1]
+  assert.match(install, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_READ_TOKEN \|\|/)
+  assert.match(install, /inputs\['npm-publish-auth'\] != 'oidc' && secrets\.NPM_TOKEN/)
+  assert.match(install, /NPM_CONFIG_USERCONFIG/)
+  assert.match(tokenPublish, /if: inputs\['npm-publish-auth'\] == 'token'/)
+  assert.match(tokenPublish, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
+  assert.match(oidcPublish, /if: inputs\['npm-publish-auth'\] == 'oidc'/)
+  assert.doesNotMatch(oidcPublish, /NODE_AUTH_TOKEN|secrets\.NPM_TOKEN/)
+})
+
+test('sync rejects an unsupported npm publication auth mode before writing', (t) => {
+  const { directory } = fixture(t)
+  writeFileSync(
+    join(directory, '.github/code-foundry.yml'),
+    'git_workflow: direct\nrelease_merge_strategy: squash\nrelease_type: auto\nnpm_publish_auth: bearer\n'
+  )
+  assert.throws(
+    () => syncRepository({ target: directory, source: root }),
+    /Unsupported npm_publish_auth: bearer; use auto, oidc, or token\./
+  )
+  assert.equal(existsSync(join(directory, '.github/workflows/release.yml')), false)
 })
 test('staging and publication download and pass one report per required node', () => {
   // The report arguments are hand-maintained next to the download loops, so

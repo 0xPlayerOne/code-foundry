@@ -43,6 +43,11 @@ on:
         required: false
         type: boolean
         default: false
+      npm-publish-auth:
+        description: Select automatic token compatibility or force trusted OIDC publication.
+        required: false
+        type: string
+        default: auto
     outputs:
       release_created:
         description: Whether Release Please created a release (possibly a draft).
@@ -62,6 +67,8 @@ on:
       STAGING_DEPLOY_KEY:
         required: false
       NPM_TOKEN:
+        required: false
+      NPM_READ_TOKEN:
         required: false
 
 permissions:
@@ -843,24 +850,30 @@ jobs:
       contents: read
       id-token: write
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_PUBLISH_AUTH: ${{ inputs['npm-publish-auth'] }}
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+      HAS_NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN != '' }}
     steps:
       - name: Checkout release
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
           ref: ${{ needs.release.outputs.tag_name }}
-      - name: Setup Node (trusted)
-        if: env.NPM_TOKEN == ''
+      - name: Validate npm publication authentication
+        run: |
+          set -euo pipefail
+          case "$NPM_PUBLISH_AUTH" in
+            auto|oidc|token) ;;
+            *) echo "Unsupported npm-publish-auth: $NPM_PUBLISH_AUTH" >&2; exit 1 ;;
+          esac
+          if [ "$NPM_PUBLISH_AUTH" = token ] && [ "$HAS_NPM_TOKEN" != true ]; then
+            echo 'npm-publish-auth token requires the NPM_TOKEN secret.' >&2
+            exit 1
+          fi
+      - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - name: Setup Node (token)
-        if: env.NPM_TOKEN != ''
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
       - name: Setup Bun (lockfile managers)
         # The install step below dispatches on lockfile: bun, pnpm, yarn, or
         # npm. Stock runners only provide Node, so provision Bun (oven-sh)
@@ -874,8 +887,18 @@ jobs:
       - name: Install dependencies
         # npm publish runs prepublishOnly (usually a build), which needs
         # devDependencies present. Install with the project's own manager.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN || (inputs['npm-publish-auth'] != 'oidc' && secrets.NPM_TOKEN) || '' }}
         run: |
           set -euo pipefail
+          npmrc=''
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            npmrc="$(mktemp)"
+            chmod 600 "$npmrc"
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$npmrc"
+            export NPM_CONFIG_USERCONFIG="$npmrc"
+          fi
+          trap '[ -z "$npmrc" ] || rm -f "$npmrc"' EXIT
           if [ -f bun.lock ] || [ -f bun.lockb ]; then bun install --frozen-lockfile
           elif [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile
           elif [ -f yarn.lock ]; then yarn install --immutable
@@ -883,10 +906,10 @@ jobs:
           elif [ -f package.json ]; then npm install --no-audit --fund=false --package-lock=false
           fi
       - name: Publish npm with token
-        if: env.NPM_TOKEN != ''
+        if: inputs['npm-publish-auth'] == 'token' || (inputs['npm-publish-auth'] == 'auto' && env.HAS_NPM_TOKEN == 'true')
         env:
-          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
       - name: Publish npm with trusted publishing
-        if: env.NPM_TOKEN == ''
+        if: inputs['npm-publish-auth'] == 'oidc' || (inputs['npm-publish-auth'] == 'auto' && env.HAS_NPM_TOKEN != 'true')
         run: npm publish --provenance --access public

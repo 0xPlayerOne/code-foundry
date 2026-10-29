@@ -12,8 +12,13 @@ Choose the release path that matches the repository:
 ## npm publication for consumer repositories
 
 Set `npm_publish: true` only when the repository owns an npm package. Configure
-npm trusted publishing for the generated `release.yml` workflow whenever
-possible. Use an `NPM_TOKEN` secret only when trusted publishing is unavailable.
+npm trusted publishing for the generated `release.yml` workflow. The
+`npm_publish_auth` setting defaults to `auto`: existing `NPM_TOKEN` users keep
+token publication, and tokenless repositories use OIDC. Set it to `oidc` to
+force trusted publishing and keep `NPM_TOKEN` out of publication and install;
+use `NPM_READ_TOKEN` separately when private dependencies must be installed.
+Set `npm_publish_auth: token` only when a long-lived publishing token is still
+required.
 
 Declare the package's intended visibility explicitly:
 
@@ -26,8 +31,11 @@ Declare the package's intended visibility explicitly:
 ```
 
 Publication occurs only from a Release Please tag; ordinary pushes do not
-publish. The release workflow fails clearly when npm publication is enabled but
-neither trusted publishing nor a token is configured.
+publish. `token` mode fails clearly unless `NPM_TOKEN` is configured. `auto`
+uses OIDC when the publishing token is absent, and `oidc` always uses the
+workflow's short-lived trusted identity. For private dependency installation,
+the workflow consumes `NPM_READ_TOKEN` first; `NPM_TOKEN` is an install fallback
+only outside explicit OIDC mode.
 
 After enabling publication, make one controlled release and verify both the
 registry version and its provenance link before treating the setup as complete.
@@ -43,7 +51,7 @@ callers:
 3. Publish the immutable GitHub Release after verifying the tag, source commit,
    archive digest, immutable-release setting, and qualification reports.
 4. Publish the already-qualified archive through the qualified publisher using npm
-   trusted publishing or the optional token fallback.
+   trusted publishing.
 
 The final publisher does not rebuild or reinstall the package. It publishes only
 the bytes selected from the same workflow run and attempt. See [Consumer

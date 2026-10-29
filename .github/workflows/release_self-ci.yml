@@ -256,5 +256,3 @@ jobs:
       tag: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
       asset: ${{ needs.qualification.outputs.filename }}
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
