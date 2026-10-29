@@ -146,12 +146,20 @@ test('producer binds the receipt to the tested merge tree, run attempt, and exac
     created_at: '2026-10-29T10:00:00.000Z',
     pull_requests: [{ number: 18 }],
   }
+  const associatedPullRequest = {
+    number: 18,
+    base: { repo: { full_name: 'acme/consumer' }, ref: 'main' },
+    head: { repo: { full_name: 'acme/consumer' }, ref: 'fix/source', sha: sourceHead },
+  }
   const fetchImpl = async (url) => {
     const parsed = new URL(url)
     if (parsed.pathname.endsWith('/actions/workflows/validation.yml')) {
       return response({ id: 42, path: '.github/workflows/validation.yml', state: 'active' })
     }
     if (parsed.pathname.endsWith('/actions/runs/303')) return response(run)
+    if (parsed.pathname.endsWith(`/commits/${sourceHead}/pulls`)) {
+      return response([associatedPullRequest])
+    }
     if (parsed.pathname.endsWith('/actions/runs/303/attempts/2/jobs')) {
       return response({ total_count: requiredJobNames.length, jobs: jobResults(303, sourceHead) })
     }
@@ -187,6 +195,13 @@ test('producer binds the receipt to the tested merge tree, run attempt, and exac
   assert.equal(receipt.run.attempt, 2)
   assert.equal(receipt.tested.tree_sha, source.tree)
 
+  run.pull_requests = []
+  const receiptWithoutRunAssociation = await produceQualificationReceipt(env, {
+    fetchImpl,
+    cwd: source.directory,
+  })
+  assert.equal(receiptWithoutRunAssociation.pull_request.number, 18)
+
   writeFileSync(
     eventPath,
     JSON.stringify({
@@ -205,7 +220,7 @@ test('producer binds the receipt to the tested merge tree, run attempt, and exac
   run.pull_requests = [{ number: 19 }]
   await assert.rejects(
     produceQualificationReceipt(env, { fetchImpl, cwd: source.directory }),
-    /does not match the source event/
+    /does not map uniquely/
   )
 })
 
@@ -228,7 +243,7 @@ test('finds a receipt only from the exact workflow run and attempt for the curre
     head_repository: { full_name: 'acme/consumer' },
     created_at: createdAt,
     updated_at: '2026-10-28T11:00:00.000Z',
-    pull_requests: [{ number: 17 }],
+    pull_requests: [],
   }
   const artifact = {
     id: 900,
@@ -310,6 +325,7 @@ test('finds a receipt only from the exact workflow run and attempt for the curre
 
   const apiCalls = []
   const jobPages = []
+  let associatedPullRequests = [sourcePullRequest]
   const fetchImpl = async (url) => {
     const parsed = new URL(url)
     apiCalls.push(parsed.pathname)
@@ -323,6 +339,9 @@ test('finds a receipt only from the exact workflow run and attempt for the curre
       return response({ total_count: 1, artifacts: [artifact] })
     }
     if (parsed.pathname.endsWith('/actions/runs/202')) return response(run)
+    if (parsed.pathname.endsWith(`/commits/${run.head_sha}/pulls`)) {
+      return response(associatedPullRequests)
+    }
     if (parsed.pathname.endsWith('/pulls/17')) return response(sourcePullRequest)
     if (parsed.pathname.endsWith('/actions/runs/202/attempts/1/jobs')) {
       const page = Number(parsed.searchParams.get('page'))
@@ -368,17 +387,43 @@ test('finds a receipt only from the exact workflow run and attempt for the curre
     }
   )
 
-  assert.equal(result.verified, true)
+  assert.equal(result.verified, true, `${result.reason}\n${apiCalls.join('\n')}`)
   assert.deepEqual(apiCalls, [
     '/api/v3/repos/acme/consumer/actions/workflows/validation.yml',
     '/api/v3/repos/acme/consumer/actions/workflows/42/runs',
     '/api/v3/repos/acme/consumer/actions/runs/202/artifacts',
     '/api/v3/repos/acme/consumer/actions/runs/202',
+    `/api/v3/repos/acme/consumer/commits/${run.head_sha}/pulls`,
     '/api/v3/repos/acme/consumer/pulls/17',
     '/api/v3/repos/acme/consumer/actions/runs/202/attempts/1/jobs',
     '/api/v3/repos/acme/consumer/actions/runs/202/attempts/1/jobs',
   ])
   assert.deepEqual(jobPages, [1, 2])
+
+  associatedPullRequests = [sourcePullRequest, { ...sourcePullRequest, number: 19 }]
+  const ambiguous = await findQualificationReceipt(
+    {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_REPOSITORY: 'acme/consumer',
+      GITHUB_API_URL: 'https://api.github.com/api/v3',
+      GITHUB_WORKFLOW_REF: 'acme/consumer/.github/workflows/validation.yml@refs/pull/18/merge',
+      GITHUB_WORKFLOW_SHA: source.commit,
+      FOUNDRY_MODE: 'release',
+      FOUNDRY_CODEQL_ENABLED: 'true',
+      FOUNDRY_REQUIRED_JOB_NAMES_JSON: JSON.stringify(requiredJobNames),
+      GITHUB_TOKEN: 'fixture-token',
+      RUNTIME_PATH: root,
+      RUNTIME_REPOSITORY: 'acme/code-foundry',
+    },
+    {
+      fetchImpl,
+      cwd: source.directory,
+      now,
+      readArtifact: async () => ({ receipt, digest_verified: true }),
+    }
+  )
+  assert.equal(ambiguous.verified, false)
 })
 
 test('unsupported package and release layouts fall back before any receipt API lookup', async (t) => {

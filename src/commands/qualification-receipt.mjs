@@ -282,12 +282,19 @@ export async function produceQualificationReceipt(env = process.env, options = {
     run?.head_sha !== pullRequest.head_sha ||
     run?.repository?.full_name !== repository ||
     run?.head_branch !== pullRequest.head_ref ||
-    !Array.isArray(run?.pull_requests) ||
-    run.pull_requests.length !== 1 ||
-    run.pull_requests[0]?.number !== pullRequest.number ||
     !run?.created_at
   ) {
     throw new Error('Current run metadata does not match the source event')
+  }
+  const hasPullRequestAssociation = await runHasPullRequestAssociation(
+    run,
+    pullRequest,
+    api.href,
+    token,
+    fetchImpl
+  )
+  if (!hasPullRequestAssociation) {
+    throw new Error('Current run does not map uniquely to the source pull request')
   }
   const attemptJobs = await listAttemptJobs(api.href, runId, runAttempt, token, fetchImpl)
   const jobEvidence = verifyQualificationJobEvidence({
@@ -327,6 +334,44 @@ export async function produceQualificationReceipt(env = process.env, options = {
 /** @param {string} base @param {string} path */
 function endpoint(base, path) {
   return `${base.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
+}
+
+/**
+ * GitHub can omit a pull-request association from workflow-run metadata (for
+ * example, when a PR head lives in a fork). If the run reports a PR, require
+ * that exact single association. Only an absent or empty list may fall back to
+ * GitHub's commit-to-PR relation; ambiguous or conflicting data stays
+ * ineligible for receipt reuse.
+ * @param {any} run
+ * @param {{number:number,base_repository:string,base_ref:string,head_repository:string,head_ref:string,head_sha:string}} expected
+ * @param {string} api
+ * @param {string} token
+ * @param {typeof fetch} fetchImpl
+ */
+async function runHasPullRequestAssociation(run, expected, api, token, fetchImpl) {
+  const pullRequests = run?.pull_requests
+  if (Array.isArray(pullRequests) && pullRequests.length > 0) {
+    return pullRequests.length === 1 && pullRequests[0]?.number === expected.number
+  }
+  if (pullRequests !== undefined && !(Array.isArray(pullRequests) && pullRequests.length === 0)) {
+    return false
+  }
+
+  const associated = await getJson(
+    endpoint(api, `commits/${encodeURIComponent(expected.head_sha)}/pulls?per_page=100`),
+    token,
+    fetchImpl
+  )
+  if (!Array.isArray(associated) || associated.length !== 1) return false
+  const [pullRequest] = associated
+  return (
+    pullRequest?.number === expected.number &&
+    pullRequest?.base?.repo?.full_name === expected.base_repository &&
+    pullRequest?.base?.ref === expected.base_ref &&
+    pullRequest?.head?.repo?.full_name === expected.head_repository &&
+    pullRequest?.head?.ref === expected.head_ref &&
+    pullRequest?.head?.sha === expected.head_sha
+  )
 }
 
 /** @param {any} value @returns {Record<string, any>[]} */
@@ -602,13 +647,25 @@ export async function findQualificationReceipt(env = process.env, options = {}) 
       await getJson(endpoint(api, `actions/runs/${listedRun.id}`), token, fetchImpl),
       'Workflow run'
     )
-    if (
-      !Array.isArray(currentRun.pull_requests) ||
-      currentRun.pull_requests.length !== 1 ||
-      currentRun.pull_requests[0]?.number !== receipt.pull_request.number
-    ) {
+    const hasPullRequestAssociation = await runHasPullRequestAssociation(
+      currentRun,
+      receipt.pull_request,
+      api,
+      token,
+      fetchImpl
+    )
+    if (!hasPullRequestAssociation) {
       continue
     }
+    // Preserve the pure verifier's single-PR invariant while normalizing a
+    // uniquely verified commit-to-PR relation when Actions omitted the field.
+    const runForVerification =
+      Array.isArray(currentRun.pull_requests) && currentRun.pull_requests.length > 0
+        ? currentRun
+        : {
+            ...currentRun,
+            pull_requests: [{ number: receipt.pull_request.number }],
+          }
     const sourcePullRequest = record(
       await getJson(endpoint(api, `pulls/${receipt.pull_request.number}`), token, fetchImpl),
       'Source pull request'
@@ -632,7 +689,7 @@ export async function findQualificationReceipt(env = process.env, options = {}) 
     }
     const result = verifyQualificationReceipt({
       receipt,
-      run: currentRun,
+      run: runForVerification,
       pullRequest: sourcePullRequest,
       jobs: sourceJobs,
       expectedJobNames,
