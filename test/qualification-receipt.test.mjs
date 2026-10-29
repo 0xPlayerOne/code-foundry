@@ -5,6 +5,7 @@ import {
   QUALIFICATION_RECEIPT_KIND,
   QUALIFICATION_RECEIPT_MAX_AGE_MS,
   QUALIFICATION_RECEIPT_SCHEMA_VERSION,
+  createQualificationReceipt,
   isQualificationReceipt,
   verifyQualificationReceipt,
 } from '../src/lib/qualification-receipt.mjs'
@@ -65,7 +66,7 @@ function fixture(overrides = {}) {
     head_repository: { full_name: '0xPlayerOne/consumer' },
     created_at: '2026-10-27T10:00:00.000Z',
     updated_at: '2026-10-27T11:00:00.000Z',
-    pull_requests: [],
+    pull_requests: [{ number: 77 }],
   }
   const pullRequest = {
     number: 77,
@@ -119,11 +120,30 @@ test('validates the strict receipt schema', () => {
   )
 })
 
+test('creates only complete schema-versioned receipts', () => {
+  const valid = fixture().receipt
+  const input = { ...valid }
+  delete input.kind
+  delete input.schema_version
+  assert.deepEqual(createQualificationReceipt(input), valid)
+  assert.throws(
+    () => createQualificationReceipt({ ...input, tested: { sha: sha('5') } }),
+    /incomplete qualification receipt/
+  )
+})
+
 test('accepts exact recent merged-PR evidence for the current tree and runtime', () => {
   assert.deepEqual(verifyQualificationReceipt(fixture()), {
     verified: true,
     reason: 'exact recent source qualification verified',
   })
+})
+
+test('run-level PR association is mandatory when the merged PR record is unavailable', () => {
+  const input = fixture()
+  delete input.pullRequest
+  assert.equal(verifyQualificationReceipt(input).verified, true)
+  assert.equal(verifyQualificationReceipt(fixture({ run: { pull_requests: [] } })).verified, false)
 })
 
 test('allows an explicitly no-CodeQL profile only when the target also disables CodeQL', () => {
@@ -163,6 +183,9 @@ test('rejects an unmerged, wrong, or ambiguous pull request association', () => 
     ).verified,
     false
   )
+  for (const pull_requests of [undefined, [], [{ number: 76 }]]) {
+    assert.equal(verifyQualificationReceipt(fixture({ run: { pull_requests } })).verified, false)
+  }
 })
 
 test('rejects a stale or unsuccessful run and every skipped source component', () => {

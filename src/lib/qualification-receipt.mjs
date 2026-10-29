@@ -90,17 +90,39 @@ export function isQualificationReceipt(value) {
 }
 
 /**
+ * Create a schema-versioned receipt and reject any producer input that would
+ * not be safe to upload.
+ * @param {Record<string, any>} input
+ */
+export function createQualificationReceipt(input) {
+  const receipt = {
+    ...input,
+    schema_version: QUALIFICATION_RECEIPT_SCHEMA_VERSION,
+    kind: QUALIFICATION_RECEIPT_KIND,
+  }
+  if (!isQualificationReceipt(receipt)) {
+    throw new Error('Refusing to create an incomplete qualification receipt')
+  }
+  return receipt
+}
+
+/**
  * Return whether a candidate receipt proves reusable source qualification.
  * Every mismatch is a normal `verified: false` result so callers can run the
  * full release fallback instead of turning missing evidence into a skip.
- * @param {{receipt:unknown, run:any, pullRequest:any, artifact:any, target:any, now?:number}} input
+ * @param {{receipt:unknown, run:any, pullRequest?:any, artifact:any, target:any, now?:number}} input
  * @returns {{verified:boolean, reason:string}}
  */
 export function verifyQualificationReceipt(input) {
   const { receipt, run, pullRequest, artifact, target, now = Date.now() } = input
 
   if (!isQualificationReceipt(receipt)) return notVerified('malformed or incomplete receipt')
-  if (!object(run) || !object(pullRequest) || !object(artifact) || !object(target)) {
+  if (
+    !object(run) ||
+    (pullRequest !== undefined && pullRequest !== null && !object(pullRequest)) ||
+    !object(artifact) ||
+    !object(target)
+  ) {
     return notVerified('missing GitHub or target evidence')
   }
   if (!Number.isSafeInteger(now)) return notVerified('invalid verification clock')
@@ -180,27 +202,30 @@ export function verifyQualificationReceipt(input) {
   }
 
   if (
-    Array.isArray(run.pull_requests) &&
-    run.pull_requests.length > 0 &&
-    (run.pull_requests.length !== 1 || run.pull_requests[0]?.number !== receipt.pull_request.number)
+    !Array.isArray(run.pull_requests) ||
+    run.pull_requests.length !== 1 ||
+    run.pull_requests[0]?.number !== receipt.pull_request.number
   ) {
     return notVerified('workflow run is associated with a different or ambiguous pull request')
   }
 
-  const pr = pullRequest
-  if (
-    pr.number !== receipt.pull_request.number ||
-    pr.state !== 'closed' ||
-    pr.merged !== true ||
-    !timestamp(pr.merged_at) ||
-    pr.base?.repo?.full_name !== receipt.pull_request.base_repository ||
-    pr.base?.ref !== receipt.pull_request.base_ref ||
-    pr.head?.repo?.full_name !== receipt.pull_request.head_repository ||
-    pr.head?.ref !== receipt.pull_request.head_ref ||
-    pr.head?.sha !== receipt.pull_request.head_sha ||
-    receipt.run.head_sha !== receipt.pull_request.head_sha
-  ) {
-    return notVerified('pull request does not match the successful source run')
+  if (pullRequest) {
+    if (
+      pullRequest.number !== receipt.pull_request.number ||
+      pullRequest.state !== 'closed' ||
+      pullRequest.merged !== true ||
+      !timestamp(pullRequest.merged_at) ||
+      pullRequest.base?.repo?.full_name !== receipt.pull_request.base_repository ||
+      pullRequest.base?.ref !== receipt.pull_request.base_ref ||
+      pullRequest.head?.repo?.full_name !== receipt.pull_request.head_repository ||
+      pullRequest.head?.ref !== receipt.pull_request.head_ref ||
+      pullRequest.head?.sha !== receipt.pull_request.head_sha ||
+      receipt.run.head_sha !== receipt.pull_request.head_sha
+    ) {
+      return notVerified('pull request does not match the successful source run')
+    }
+  } else if (receipt.run.head_sha !== receipt.pull_request.head_sha) {
+    return notVerified('pull request identity is not bound to the workflow run')
   }
 
   const createdAt = Date.parse(run.created_at)
