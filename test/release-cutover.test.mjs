@@ -304,6 +304,15 @@ test('generated consumers select npm auth explicitly and keep read credentials s
     assert.match(release, /npm-publish-auth:\n\s+description:/)
     assert.match(release, /NPM_READ_TOKEN:\n\s+required: false/)
   }
+
+  const { directory } = fixture(t)
+  writeFileSync(
+    join(directory, '.github/code-foundry.yml'),
+    'git_workflow: direct\nrelease_merge_strategy: squash\nrelease_type: auto\nnpm_publish: false\nnpm_publish_auth: auto\n'
+  )
+  syncRepository({ target: directory, source: root })
+  const disabled = readFileSync(join(directory, '.github/workflows/release.yml'), 'utf8')
+  assert.doesNotMatch(disabled, /NPM_TOKEN|NPM_READ_TOKEN/)
 })
 
 test('consumer private-read credentials stay inside install and never reach OIDC publish', () => {

@@ -2351,7 +2351,7 @@ jobs:
 
     const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
     assert.match(release, /CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}/)
-    assert.match(release, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
+    assert.doesNotMatch(release, /NPM_TOKEN|NPM_READ_TOKEN/)
     assert.doesNotMatch(release, /STAGING_DEPLOY_KEY/)
     assert.doesNotMatch(release, /consumer-qualification\.yml/)
     assert.doesNotMatch(release, /needs: qualification/)

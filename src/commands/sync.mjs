@@ -1252,9 +1252,13 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
         )
       }
     }
+    const npmSecrets =
+      configured(config.npm_publish, 'false') !== 'true'
+        ? ''
+        : `${npmPublishAuth === 'oidc' ? '' : '      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n'}      NPM_READ_TOKEN: \${{ secrets.NPM_READ_TOKEN }}\n`
     rendered = rendered.replace(
       /(\n    secrets:\n      CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}\n)/,
-      `$1${npmPublishAuth === 'oidc' ? '' : '      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n'}      NPM_READ_TOKEN: \${{ secrets.NPM_READ_TOKEN }}\n`
+      `$1${npmSecrets}`
     )
   }
   // The staging-release topology validates and scans pull requests against
