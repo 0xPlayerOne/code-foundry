@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.1...v1.49.2) (2026-10-29)
+
+
+### Bug Fixes
+
+* safely categorize npm publication failures ([#787](https://github.com/0xPlayerOne/code-foundry/issues/787)) ([a4268af](https://github.com/0xPlayerOne/code-foundry/commit/a4268af5ce7cd0a32407420424419c0cad01dce8))
+
 ## [1.49.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.49.0...v1.49.1) (2026-10-28)
 
 
