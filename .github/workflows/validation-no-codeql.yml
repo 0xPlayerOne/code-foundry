@@ -108,7 +108,7 @@ permissions:
 jobs:
   ci:
     name: CI
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
     # Forward issue-read only to the CI workflow that runs Type-Check.
     permissions:
       actions: read
@@ -127,7 +127,7 @@ jobs:
 
   test:
     name: Test
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit' || inputs.mode == 'release')
+    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'fast' || inputs.mode == 'audit')
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -135,10 +135,10 @@ jobs:
       runner: ${{ inputs.test-runner }}
       unit-runner: ${{ inputs.unit-runner }}
       performance-runner: ${{ inputs.performance-runner }}
-      # Release pull requests change version metadata only; their content was
-      # audited on the pull requests that merged into main. Integration, E2E,
-      # smoke, and performance lanes stay in the audit and scheduled lanes.
-      unit-only: ${{ inputs.mode == 'fast' || inputs.mode == 'release' }}
+      # Fast pull requests run unit tests only; release PRs rely on the strict
+      # metadata diff audit in the aggregate gate plus their existing main CI.
+      # Integration, E2E, smoke, and performance remain in audit runs.
+      unit-only: ${{ inputs.mode == 'fast' }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
       integration-total-shards: ${{ inputs.integration-total-shards }}
       e2e-shard-list: ${{ inputs.e2e-shard-list }}
@@ -170,12 +170,10 @@ jobs:
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
-  # The release tier requires the available fast suite; its diff is version
-  # metadata (validated against the release policy below), its content was
-  # audited on the pull requests that merged into main, and the scheduled
-  # audit lane re-covers drift. Its generated release diff policy executes
-  # as a conditional step below, so no separate release-policy job renders
-  # skipped checks on ordinary pull requests.
+  # Release Please branches require the exact generated-diff audit below.
+  # Their code tree is already on protected main, while source PR checks and
+  # scheduled audits cover code and dependency changes. Ordinary PRs still
+  # render no skipped release-policy row.
   gate:
     name: Gate
     needs: [ci, test, security, eval]

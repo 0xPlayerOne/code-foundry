@@ -2384,7 +2384,7 @@ jobs:
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
     assert.match(
       contributing,
-      /Exact Release Please pull request targeting `main`.*Full validation: CI, full tests, Security, and CodeQL/
+      /Exact Release Please pull request targeting `main`.*Release diff audit and CodeQL/
     )
     assert.doesNotMatch(contributing, /Release-policy validation only/)
     assert.doesNotMatch(contributing, /staging/i)
@@ -2464,7 +2464,7 @@ jobs:
       )
       assert.match(
         rendered,
-        /Exact Release Please pull request targeting `main`.*Full validation: CI, full tests, Security, and CodeQL/
+        /Exact Release Please pull request targeting `main`.*Release diff audit and CodeQL/
       )
       assert.doesNotMatch(rendered, /Release-policy validation only/)
       // No unpadded separator line may survive: prettier pads markdown tables.
@@ -4825,7 +4825,7 @@ jobs:
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
     assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql', 'eval'])
-    assert.deepEqual(requiredValidationJobs('release'), ['ci', 'test', 'codeql'])
+    assert.deepEqual(requiredValidationJobs('release'), ['codeql'])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
     assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql', 'eval'])
@@ -4864,11 +4864,11 @@ jobs:
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
-        results: { ci: 'success', test: 'success', codeql: 'success' },
+        results: { ci: 'skipped', test: 'skipped', codeql: 'success' },
       }),
       {
         valid: true,
-        required: ['ci', 'test', 'codeql'],
+        required: ['codeql'],
         failures: [],
       }
     )
@@ -4900,7 +4900,7 @@ jobs:
         mode: 'release',
         results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'success' },
       }).valid,
-      false
+      true
     )
     // The release lane skips security by design; a skipped security job never
     // blocks it, but a missing CodeQL analysis does.
@@ -4951,8 +4951,8 @@ jobs:
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
-    // The release lane requires the fast suite plus CodeQL and rejects every
-    // skipped required gate.
+    // The release lane skips duplicate source CI/tests and still requires the
+    // pull-request CodeQL result.
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
@@ -4960,7 +4960,7 @@ jobs:
       }),
       {
         valid: false,
-        required: ['ci', 'test', 'codeql'],
+        required: ['codeql'],
         failures: [{ job: 'codeql', result: 'skipped' }],
       }
     )
@@ -5301,9 +5301,10 @@ jobs:
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
   })
 
-  it('runs the lean release lane in both orchestrators', () => {
+  it('runs the lean release lane in every orchestrator', () => {
     const orchestrator = readFileSync('.github/workflows/validation.yml', 'utf8')
     const noCodeqlOrchestrator = readFileSync('.github/workflows/validation-no-codeql.yml', 'utf8')
+    const billingOrchestrator = readFileSync('.github/workflows/validation-billing.yml', 'utf8')
     for (const job of ['ci', 'test', 'security', 'codeql', 'eval']) {
       assert.match(orchestrator, new RegExp(`^  ${job}:`, 'm'))
     }
@@ -5312,7 +5313,7 @@ jobs:
     assert.doesNotMatch(orchestrator, /^  release-policy:/m)
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
+      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/
     )
     // CodeQL stays on release pull requests so code-scanning rulesets never
     // deadlock the release; the security job is audit-only.
@@ -5325,10 +5326,7 @@ jobs:
       /security:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/m
     )
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
-    assert.match(
-      orchestrator,
-      /unit-only: \$\{\{ inputs.mode == 'fast' \|\| inputs.mode == 'release' \}\}/
-    )
+    assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
     // The eval lane covers content-bearing audits only and needs a
     // Chrome-capable runner for browser harnesses.
     assert.match(orchestrator, /^  eval:\n    name: Eval\n    #/m)
@@ -5355,7 +5353,17 @@ jobs:
     for (const job of ['ci', 'test']) {
       assert.match(
         noCodeqlOrchestrator,
-        new RegExp(`^  ${job}:[\\s\\S]*?inputs\\.mode == 'release'`, 'm')
+        new RegExp(
+          `^  ${job}:[\\s\\S]*?inputs\\.mode == 'fast'[\\s\\S]*?inputs\\.mode == 'audit'`,
+          'm'
+        )
+      )
+      assert.doesNotMatch(
+        noCodeqlOrchestrator.slice(
+          noCodeqlOrchestrator.indexOf(`  ${job}:`),
+          noCodeqlOrchestrator.indexOf(job === 'ci' ? '\n  test:' : '\n  security:')
+        ),
+        /inputs\.mode == 'release'/
       )
     }
     assert.match(
@@ -5366,6 +5374,20 @@ jobs:
     assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
     assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval\]/)
+    for (const job of ['fast-lanes', 'lint', 'type-check', 'unit']) {
+      assert.match(
+        billingOrchestrator,
+        new RegExp(
+          `^  ${job}:[\\s\\S]*?if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.mode != 'release'`,
+          'm'
+        )
+      )
+    }
+    assert.match(
+      billingOrchestrator,
+      /codeql:[\s\S]*?inputs\.mode == 'audit' \|\| inputs\.mode == 'release'/
+    )
+    assert.match(billingOrchestrator, /validation release_diff/)
   })
 
   it('pins all external workflow/action refs to approved immutable SHAs', () => {

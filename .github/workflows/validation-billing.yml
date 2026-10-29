@@ -152,7 +152,7 @@ jobs:
   # never hides another lane's result.
   fast-lanes:
     name: Fast lanes
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode != 'release'
     runs-on: ${{ inputs.ci-runner }}
     timeout-minutes: 45
     steps:
@@ -482,7 +482,7 @@ jobs:
 
   lint:
     name: Lint
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode != 'release'
     runs-on: ${{ inputs.ci-runner }}
     timeout-minutes: 30
     steps:
@@ -546,7 +546,7 @@ jobs:
 
   type-check:
     name: Type-Check
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode != 'release'
     permissions:
       contents: read
       issues: read
@@ -615,7 +615,7 @@ jobs:
 
   unit:
     name: Unit
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode != 'release'
     runs-on: ${{ inputs.unit-runner }}
     timeout-minutes: 30
     steps:

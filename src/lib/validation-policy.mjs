@@ -82,14 +82,11 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql', 'eval'],
-  // Release Please pull requests change version metadata only, and the gate
-  // validates that diff against the release policy before anything publishes.
-  // The content tree was already fully audited by the pull requests that
-  // merged into main, and the scheduled audit lane re-covers drift. The
-  // release tier therefore requires the fast suite plus CodeQL, whose
-  // per-pull-request code scanning results some repository rulesets require
-  // to keep the release from deadlocking.
-  release: ['ci', 'test', 'codeql'],
+  // Release diff validation runs in the aggregate gate and rejects any change
+  // beyond generated version metadata. The source tree was already qualified
+  // on protected main; CodeQL remains here because some rulesets require a
+  // pull-request analysis before a release can merge.
+  release: ['codeql'],
 }
 
 /**

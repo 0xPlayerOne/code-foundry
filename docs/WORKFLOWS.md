@@ -185,8 +185,9 @@ Use concise job names such as `CI / Format`, `Test / Unit`, and
 included) and security audits run through a detection-built matrix, so a
 repository only ever shows checks for languages it actually uses — never
 skipped rows for other languages. The release tier validates the generated
-diff as a step inside the gate rather than a separate job, for the same
-reason. Required checks should match the jobs actually enabled for the
+diff inside the gate and requires CodeQL, but skips duplicate CI and unit tests
+because its strict diff audit rejects source, dependency, toolchain, and
+non-version metadata changes. Required checks should match the jobs actually enabled for the
 repository profile — in practice, require only the aggregate
 `Validation / Gate`, which fails closed unless every generated check
 succeeds.
