@@ -58,10 +58,10 @@ workflow_dispatch:
 In the `staging-release` topology, pull requests into `staging` run the fast
 tier, ordinary pull requests into `main` run the full audit tier, and exact
 Release Please pull requests into `main` run CI, unit tests, and CodeQL plus
-the release-diff policy. Although the diff is version metadata only, source
-checks are skipped only when successful prior evidence for the exact main
-tree and relevant workflow/toolchain can be verified. Until that evidence
-contract is implemented, release mode keeps its CI and unit-test fallback.
+the release-diff policy. The diff is version metadata only, but this release
+lane does not yet verify prior qualification evidence for the exact main tree.
+It therefore keeps CI and unit tests enabled; a missing receipt fast path is
+never treated as successful validation.
 The managed branch rulesets require only the aggregate `Validation / Gate`
 check; do not hand-require individual job contexts on release branches.
 In the
@@ -184,9 +184,9 @@ Use concise job names such as `CI / Format`, `Test / Unit`, and
 included) and security audits run through a detection-built matrix, so a
 repository only ever shows checks for languages it actually uses — never
 skipped rows for other languages. The release tier validates the generated
-diff inside the gate and requires CodeQL, but skips duplicate CI and unit tests
-because its strict diff audit rejects source, dependency, toolchain, and
-non-version metadata changes. Required checks should match the jobs actually enabled for the
+diff inside the gate and requires CodeQL. It currently runs CI and unit tests;
+the diff audit does not prove that a prior run tested the exact current source
+tree. Required checks should match the jobs actually enabled for the
 repository profile — in practice, require only the aggregate
 `Validation / Gate`, which fails closed unless every generated check
 succeeds.
