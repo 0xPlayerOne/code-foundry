@@ -273,6 +273,7 @@ installed hook predates chaining.
 | ------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `release_type`            | `auto`, `node`, `python`, `rust`, `simple`, `none`                               | Select a release manifest; `auto` detects one.                          |
 | `npm_publish`             | `true`, `false`                                                                  | Opt into npm publication.                                               |
+| `npm_publish_auth`        | `auto`, `oidc`, `token`                                                          | Select trusted OIDC publication or preserve an explicit token workflow. |
 | `license`                 | `gpl-3.0-or-later`, `agpl-3.0-or-later`, `apache-2.0`, `mit`, `preserve`, `none` | License policy for initialized repositories.                            |
 | `git_workflow`            | `direct`, `staging-release`                                                      | Choose the branch topology.                                             |
 | `merge_strategy`          | `squash` or `rebase`                                                             | Required topology-specific merge method.                                |
@@ -300,6 +301,15 @@ callers; Code Foundry's own repository uses the qualified publication path
 described in [Qualified publication](qualified-publication.md). A self-sync of
 the Code Foundry source does not advance its own `runtime_ref`; this prevents a
 self-referencing runtime pin from creating a release loop.
+
+`npm_publish_auth` defaults to `auto`: a configured `NPM_TOKEN` keeps the
+legacy token publisher, while a missing token uses npm trusted publishing.
+Choose `oidc` to force trusted publishing and prevent `NPM_TOKEN` from reaching
+the reusable release workflow; choose `token` to require `NPM_TOKEN`. The
+separate optional `NPM_READ_TOKEN` is passed only to dependency installation
+when private npm packages need read access. For OIDC, configure npm's trusted
+publisher for the package repository and its generated `.github/workflows/release.yml`
+caller, with `id-token: write` available to both caller and reusable job.
 
 ## Synchronization and extensions
 

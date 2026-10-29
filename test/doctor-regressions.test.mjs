@@ -28,7 +28,7 @@ function runGithubDoctor(t, options = {}) {
   mkdirSync(join(root, 'bin'))
   writeFileSync(
     join(root, '.github/code-foundry.yml'),
-    'git_workflow: direct\nrelease_type: none\n'
+    options.config ?? 'git_workflow: direct\nrelease_type: none\n'
   )
 
   const state = {
@@ -36,6 +36,7 @@ function runGithubDoctor(t, options = {}) {
     protection: options.protection ?? null,
     rulesetsUnavailable: options.rulesetsUnavailable ?? false,
     protectionUnavailable: options.protectionUnavailable ?? false,
+    secrets: options.secrets ?? [],
     repository: {
       private: options.privateRepository ?? false,
       visibility: options.privateRepository ? 'private' : 'public',
@@ -72,7 +73,9 @@ if (args[0] === 'api') {
   } else {
     console.log('{}')
   }
-} else if (args[0] === 'secret' || args[0] === 'variable' || args[0] === 'pr') {
+} else if (args[0] === 'secret') {
+  console.log(JSON.stringify(state.secrets.map((name) => ({name}))))
+} else if (args[0] === 'variable' || args[0] === 'pr') {
   console.log('[]')
 } else {
   console.log('{}')
@@ -144,6 +147,33 @@ test('GitHub doctor does not assume enforcement when the ruleset state is missin
   assert.doesNotMatch(report.errors.join(' '), /main ruleset .*enforcement/i)
 })
 
+test('GitHub doctor respects OIDC, token, and separate read-token publication modes', (t) => {
+  const oidc = runGithubDoctor(t, {
+    config: 'git_workflow: direct\nrelease_type: node\nnpm_publish: true\nnpm_publish_auth: oidc\n',
+    secrets: ['NPM_TOKEN'],
+  })
+  assert.equal(oidc.details.credentials.npmPublishAuth, 'oidc')
+  assert.ok(
+    oidc.warnings.some((message) => /NPM_TOKEN is not used for publishing or install/.test(message))
+  )
+  assert.doesNotMatch(oidc.errors.join(' '), /NPM_TOKEN/)
+
+  const tokenMissing = runGithubDoctor(t, {
+    config:
+      'git_workflow: direct\nrelease_type: node\nnpm_publish: true\nnpm_publish_auth: token\n',
+  })
+  assert.ok(
+    tokenMissing.errors.some((message) =>
+      /npm_publish_auth is token but NPM_TOKEN is not configured/.test(message)
+    )
+  )
+
+  const automaticOidc = runGithubDoctor(t, {
+    config: 'git_workflow: direct\nrelease_type: node\nnpm_publish: true\nnpm_publish_auth: auto\n',
+  })
+  assert.ok(automaticOidc.warnings.some((message) => /auto and NPM_TOKEN is absent/.test(message)))
+})
+
 test('GitHub doctor preserves the unsupported private-plan warning path', (t) => {
   const report = runGithubDoctor(t, {
     privateRepository: true,
@@ -203,7 +233,7 @@ for (const topology of ['direct', 'staging-release']) {
     assert.deepEqual(report.errors, [
       'post-release workflow-dispatch mode requires CODE_FOUNDRY_TOKEN to be present.',
     ])
-    assert.ok(report.warnings.some((message) => message.startsWith('npm_publish is enabled')))
+    assert.ok(report.warnings.some((message) => message.startsWith('npm_publish_auth is auto')))
     assert.ok(report.warnings.some((message) => message.startsWith('turbo_remote is enabled')))
   })
 }

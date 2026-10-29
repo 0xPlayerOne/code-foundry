@@ -144,6 +144,7 @@ export function doctorGithub(root) {
     : undefined
   const credentialChecks = {
     npmTokenPresent: secretNames.includes('NPM_TOKEN'),
+    npmReadTokenPresent: secretNames.includes('NPM_READ_TOKEN'),
     turboTokenPresent: secretNames.includes('TURBO_TOKEN'),
     turboTeamPresent: Boolean(
       repositoryVariables.some(
@@ -153,10 +154,30 @@ export function doctorGithub(root) {
     opencodeApiKeyPresent: secretNames.includes('OPENCODE_API_KEY'),
   }
   details.credentials = credentialChecks
-  if (config.npm_publish === 'true' && !credentialChecks.npmTokenPresent)
+  const npmPublishAuth = config.npm_publish_auth ?? 'auto'
+  details.credentials.npmPublishAuth = npmPublishAuth
+  if (!['auto', 'oidc', 'token'].includes(npmPublishAuth)) {
+    errors.push('npm_publish_auth must be auto, oidc, or token.')
+  } else if (config.npm_publish === 'true' && npmPublishAuth === 'token') {
+    if (!credentialChecks.npmTokenPresent)
+      errors.push('npm_publish_auth is token but NPM_TOKEN is not configured.')
+  } else if (
+    config.npm_publish === 'true' &&
+    npmPublishAuth === 'auto' &&
+    !credentialChecks.npmTokenPresent
+  ) {
     warnings.push(
-      'npm_publish is enabled but NPM_TOKEN is not configured; npm trusted publishing must be configured for tokenless publication.'
+      'npm_publish_auth is auto and NPM_TOKEN is absent; publication uses OIDC, so npm trust must match this repository and the generated release.yml caller.'
     )
+  } else if (
+    config.npm_publish === 'true' &&
+    npmPublishAuth === 'oidc' &&
+    credentialChecks.npmTokenPresent
+  ) {
+    warnings.push(
+      'npm_publish_auth is oidc; NPM_TOKEN is not used for publishing or install. Use NPM_READ_TOKEN only when private dependencies require read access.'
+    )
+  }
   if (
     ['true', 'auto'].includes(config.turbo_remote ?? 'false') &&
     (!credentialChecks.turboTokenPresent || !credentialChecks.turboTeamPresent)

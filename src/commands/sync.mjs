@@ -170,6 +170,10 @@ function synchronize(options) {
       `Unsupported release_qualification_receipts: ${qualificationReceipts}; use true or false.`
     )
   }
+  const npmPublishAuth = configured(config.npm_publish_auth, 'auto')
+  if (!['auto', 'oidc', 'token'].includes(npmPublishAuth)) {
+    throw new Error(`Unsupported npm_publish_auth: ${npmPublishAuth}; use auto, oidc, or token.`)
+  }
   // Validate the dependency-update bot policy before any sync writes so a
   // typo fails fast instead of leaving a half-switched updater behind.
   const dependencyUpdater = configured(config.dependency_updater, 'dependabot')
@@ -1100,6 +1104,7 @@ export function renderDevChannel(config) {
  * @param {boolean} selfRepository
  */
 function renderWorkflow(content, config, repository, ref, rustCodeql, file, selfRepository) {
+  const npmPublishAuth = configured(config.npm_publish_auth, 'auto')
   const localPrefix = 'uses: ./.github/workflows/'
   const remotePrefix = `uses: ${repository}/.github/workflows/`
   let rendered = content.replaceAll(localPrefix, remotePrefix)
@@ -1168,7 +1173,7 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
   if (workflow === 'release' && !selfRepository) {
     rendered = rendered.replace(
       /^(\s+runtime-ref:)\s+.*$/m,
-      `$1 ${ref}\n      git-workflow: ${isStagingRelease(config.git_workflow) ? 'staging-release' : 'direct'}`
+      `$1 ${ref}\n      git-workflow: ${isStagingRelease(config.git_workflow) ? 'staging-release' : 'direct'}\n      npm-publish-auth: ${npmPublishAuth}`
     )
   }
   // Generated PR callers protect drafts by default. Consumers that intentionally
@@ -1247,9 +1252,13 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
         )
       }
     }
+    const npmSecrets =
+      configured(config.npm_publish, 'false') !== 'true'
+        ? ''
+        : `${npmPublishAuth === 'oidc' ? '' : '      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n'}      NPM_READ_TOKEN: \${{ secrets.NPM_READ_TOKEN }}\n`
     rendered = rendered.replace(
       /(\n    secrets:\n      CODE_FOUNDRY_TOKEN: \$\{\{ secrets\.CODE_FOUNDRY_TOKEN \}\}\n)/,
-      '$1      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n'
+      `$1${npmSecrets}`
     )
   }
   // The staging-release topology validates and scans pull requests against
@@ -2212,6 +2221,7 @@ function createDefaultConfig(root, source, configuredWorkflow) {
     monorepo_tool: 'auto',
     release_type: detectPackageManager(root) === 'none' ? 'auto' : 'node',
     npm_publish: 'false',
+    npm_publish_auth: 'auto',
     post_release: 'false',
     post_release_workflow: '',
     post_release_mode: 'auto',
