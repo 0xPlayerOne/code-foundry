@@ -275,23 +275,26 @@ jobs:
 
           const sleep = (seconds) =>
             execFileSync('sleep', [String(seconds)]);
-          // Writes intermittently hit GitHub's secondary rate limiting from
-          // busy automation accounts (403 with the generic not-accessible
-          // message); back off and retry before giving up.
+          // gh reports a process exit code, not an HTTP status, in error.status.
+          // Retry only recognized transient read failures; a failed write may
+          // already have taken effect and must not be repeated blindly.
           const gh = (args, options = {}) => {
-            for (const wait of [0, 10, 30]) {
+            const isRead = args.includes('GET');
+            for (let attempt = 0; attempt < 3; attempt += 1) {
               try {
-                if (wait) sleep(wait);
                 return execFileSync('gh', args, {
                   ...options,
                   encoding: 'utf8',
                   maxBuffer: 32 * 1024 * 1024,
                 });
               } catch (error) {
-                const status = error.status;
-                const retriable = status === null || status === 403 || status === 429 || status >= 500;
-                if (!retriable || wait === 30) throw error;
-                console.log(`gh call failed (status ${status ?? 'unknown'}); retrying in ${wait === 0 ? 10 : 30}s`);
+                const detail = String(error.stderr ?? error.message ?? '');
+                const secondary = /secondary rate limit|HTTP 429/i.test(detail);
+                const unavailable = /HTTP 50[0234]\b/i.test(detail);
+                if (!isRead || attempt === 2 || (!secondary && !unavailable)) throw error;
+                const wait = secondary ? [60, 120][attempt] : [10, 30][attempt];
+                console.log(`Transient GitHub read failure; retrying in ${wait}s`);
+                sleep(wait);
               }
             }
             throw new Error('unreachable');

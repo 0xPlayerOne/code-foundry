@@ -23,7 +23,13 @@ const pull = {
   body: 'Release notes',
 }
 
-function run({ pages = [[]], pulls = [pull], failRead = false, failWrite = false } = {}) {
+function run({
+  pages = [[]],
+  pulls = [pull],
+  failRead = false,
+  failWrite = false,
+  pullErrors = [],
+} = {}) {
   const calls = []
   let output = ''
   let error
@@ -42,14 +48,28 @@ function run({ pages = [[]], pulls = [pull], failRead = false, failWrite = false
         assert.equal(name, 'node:child_process')
         return {
           execFileSync(command, args, options) {
-            assert.equal(command, 'gh', 'no sleeps or other subprocesses expected')
+            if (command === 'sleep') {
+              calls.push({ sleep: Number(args[0]) })
+              return ''
+            }
+            assert.equal(command, 'gh')
             calls.push({ args, options })
             const endpoint = args[1]
-            if (endpoint.endsWith('/pulls')) return JSON.stringify(pulls)
+            if (endpoint.endsWith('/pulls')) {
+              if (pullErrors.length) {
+                const message = pullErrors.shift()
+                throw Object.assign(new Error(message), { status: 1, stderr: message })
+              }
+              return JSON.stringify(pulls)
+            }
             if (endpoint.endsWith('/tags')) return JSON.stringify([{ name: 'workspace-v1.114.0' }])
             assert.equal(endpoint, 'repos/example/project/releases')
             if (args.includes('POST')) {
-              if (failWrite) throw Object.assign(new Error('HTTP 422'), { status: 1 })
+              if (failWrite)
+                throw Object.assign(
+                  new Error(typeof failWrite === 'string' ? failWrite : 'HTTP 422'),
+                  { status: 1 }
+                )
               return '{}'
             }
             assert.ok(args.includes('--paginate'))
@@ -69,7 +89,7 @@ function run({ pages = [[]], pulls = [pull], failRead = false, failWrite = false
   }
   return { calls, output, error }
 }
-const writes = (result) => result.calls.filter(({ args }) => args.includes('POST'))
+const writes = (result) => result.calls.filter(({ args }) => args?.includes('POST'))
 
 test('fallback forwards release JSON stdin and preserves draft/output behavior', () => {
   const result = run()
@@ -185,4 +205,47 @@ if (args.includes('POST')) {
   assert.equal(received.body, 'Release notes')
   assert.equal(received.draft, true)
   assert.match(readFileSync(join(root, 'output'), 'utf8'), /fallback_created=true/)
+})
+
+test('retry only recognized transient reads using gh exit status 1', () => {
+  for (const [message, expectedWait] of [
+    ['secondary rate limit exceeded', 60],
+    ['gh: HTTP 429', 60],
+    ['gh: HTTP 503', 10],
+  ]) {
+    const result = run({ pullErrors: [message] })
+    assert.ifError(result.error)
+    assert.deepEqual(
+      result.calls.filter((call) => call.sleep).map((call) => call.sleep),
+      [expectedWait]
+    )
+    assert.equal(writes(result).length, 1)
+  }
+})
+
+test('primary quota and permission errors fail without retry or writes', () => {
+  for (const message of ['API rate limit exceeded for user', 'gh: HTTP 403 Forbidden']) {
+    const result = run({ pullErrors: [message] })
+    assert.ok(result.error)
+    assert.equal(result.calls.filter((call) => call.sleep).length, 0)
+    assert.equal(writes(result).length, 0)
+  }
+})
+
+test('transient failure is not retried for a possibly completed release write', () => {
+  const result = run({ failWrite: 'secondary rate limit exceeded' })
+  assert.ok(result.error)
+  assert.equal(writes(result).length, 1)
+  assert.equal(result.calls.filter((call) => call.sleep).length, 0)
+})
+
+test('exhausted transient reads fail closed without a release write', () => {
+  const result = run({ pullErrors: Array(3).fill('secondary rate limit exceeded') })
+  assert.ok(result.error)
+  assert.deepEqual(
+    result.calls.filter((call) => call.sleep).map((call) => call.sleep),
+    [60, 120]
+  )
+  assert.equal(writes(result).length, 0)
+  assert.equal(result.output, '')
 })
