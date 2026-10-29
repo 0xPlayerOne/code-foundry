@@ -2839,7 +2839,10 @@ jobs:
       workflows,
       /Release Please pull requests into `main` must pass the release-diff policy and\s+configured CodeQL scan\. They also run the full CI and unit-test fallback unless\s+the workflow verifies a seven-day source qualification receipt/
     )
-    assert.match(workflows, /the full CI and unit-test fallback runs/)
+    assert.match(
+      workflows,
+      /private roots, workspaces, and unknown\s+Release Please layouts use the full CI and test fallback/
+    )
     assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)
     assert.match(workflows, /does\s+not reduce required workflow runs/)
@@ -5016,7 +5019,10 @@ jobs:
     assert.doesNotMatch(caller, /workflow_dispatch:/)
     assert.match(caller, /code-foundry-validation-\$\{\{ github\.event_name \}\}/)
     assert.match(caller, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/)
-    assert.match(caller, /runtime-ref: \$\{\{ github\.sha \}\}/)
+    assert.match(
+      caller,
+      /runtime-ref: >-[\s\S]*startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)[\s\S]*github\.event\.pull_request\.base\.sha[\s\S]*github\.sha/
+    )
 
     assert.doesNotMatch(audit, /pull_request:/)
     assert.match(audit, /schedule:/)
@@ -5084,6 +5090,7 @@ jobs:
     assert.doesNotMatch(caller, /secrets:\s*inherit/)
     // Least-permission union needed for the CodeQL chain; no extra write scopes.
     assert.match(caller, /security-events: write/)
+    assert.match(caller, /pull-requests: read/)
     assert.doesNotMatch(caller, /pull-requests: write/)
     assert.doesNotMatch(caller, /contents: write/)
   })

@@ -114,16 +114,19 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
   assert.match(receiptWorkflow, /name: Code Foundry Qualification Receipt/)
   assert.match(receiptWorkflow, /actions: read/)
   assert.match(receiptWorkflow, /contents: read/)
+  assert.match(receiptWorkflow, /pull-requests: read/)
   assert.match(receiptWorkflow, /node-version: 24\.18\.0/)
   assert.match(receiptWorkflow, /Check version-only release diff/)
   assert.match(receiptWorkflow, /validation release_diff/)
   assert.match(receiptWorkflow, /POLICY_READY: \$\{\{ steps\.release-policy\.outcome \}\}/)
   assert.match(receiptWorkflow, /reuse=false/)
   assert.match(receiptWorkflow, /using full validation/)
+  assert.match(receiptWorkflow, /required-job-names-json/)
+  assert.match(receiptWorkflow, /FOUNDRY_REQUIRED_JOB_NAMES_JSON/)
   assert.match(receiptWorkflow, /retention-days: 7/)
   assert.match(
     receiptWorkflow,
-    /code-foundry-qualification-v1-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/
+    /code-foundry-qualification-v2-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/
   )
 
   assert.match(workflow, /name: CodeQL/)
@@ -138,6 +141,21 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
   assert.match(ci, /Build[\s\S]*npm pack --dry-run --ignore-scripts --json/)
   assert.match(ci, /result\[0\]\?\.version !== manifest\.version/)
   assert.match(
+    ci,
+    /Verify versioned package build contract[\s\S]*FOUNDRY_BUILD_TASK_APPLICABLE:[\s\S]*qualification-receipt\.mjs" package-contract/
+  )
+  const buildJob = ci.slice(ci.indexOf('\n  build:'))
+  for (const lane of ['Setup', 'Build']) {
+    const start = buildJob.indexOf(`      - name: ${lane}\n`)
+    const end = buildJob.indexOf('\n      - name:', start + 1)
+    const step = buildJob.slice(start, end < 0 ? undefined : end)
+    assert.match(step, /applicability\.outputs\.applicable == 'true'/)
+    assert.match(
+      step,
+      /inputs\.release-build-only == true \|\| steps\.applicability\.outputs\.affected != 'false'/
+    )
+  }
+  assert.match(
     workflow,
     /release-build-only: \$\{\{ inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true' \}\}/
   )
@@ -153,6 +171,26 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
     noCodeql,
     /release-package-check: \$\{\{ inputs\.mode == 'release' && needs\.qualification\.outputs\.reuse == 'true' \}\}/
   )
+  assert.match(workflow, /required-job-names-json: '\["Validation \/ Gate"\]'/)
+  assert.match(noCodeql, /required-job-names-json: '\["Validation \/ Gate"\]'/)
+  assert.match(billing, /required-job-names-json: '\["Validation \/ Gate"\]'/)
+  assert.match(
+    readFileSync(join(root, '.github/workflows/validation_self-ci.yml'), 'utf8'),
+    /pull-requests: read[\s\S]*runtime-ref: >-[\s\S]*startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)[\s\S]*github\.event\.pull_request\.base\.sha/
+  )
+  for (const [source, jobs] of [
+    [workflow, ['ci', 'test', 'security', 'codeql', 'eval', 'gate']],
+    [noCodeql, ['ci', 'test', 'security', 'eval', 'gate']],
+    [billing, ['fast-lanes', 'lint', 'type-check', 'unit', 'e2e', 'audit', 'codeql', 'gate']],
+  ]) {
+    for (const name of jobs) {
+      const start = source.indexOf(`\n  ${name}:\n`)
+      assert.ok(start >= 0, `${name} job is present`)
+      const section = source.slice(start + 1).split(/\n  [a-z0-9_-]+:\n/)[0]
+      assert.match(section, /permissions:/, `${name} has a bounded job permission set`)
+      assert.doesNotMatch(section, /pull-requests:/, `${name} does not inherit PR metadata access`)
+    }
+  }
 
   const billingFastPath = billing.slice(
     billing.indexOf('  fast-lanes:'),

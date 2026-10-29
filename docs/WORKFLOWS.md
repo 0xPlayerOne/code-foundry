@@ -62,12 +62,16 @@ configured CodeQL scan. They also run the full CI and unit-test fallback unless
 the workflow verifies a seven-day source qualification receipt. A receipt is
 usable only when a successful full audit tested the exact current `main` tree
 with the same validation workflow, Code Foundry runtime, CodeQL policy, and
-pull-request/run identity, and the release-diff preflight confirms a version-only
-patch. If any evidence is missing, stale, or ambiguous,
-the full CI and unit-test fallback runs. With a verified receipt, Build and
-the versioned npm package inspection still run; only duplicate format, lint,
-type-check, and unit-test work is skipped. The receipt never replaces the
-release-diff audit or configured CodeQL scan.
+pull-request/run identity. Verification checks the merged source PR, the
+aggregate gate's success in the exact run attempt, the required component
+results, and the artifact's bounded download size and SHA-256 digest. The release-diff preflight must confirm a
+version-only patch. Reuse is currently supported only for a public npm package
+released from the repository root; private roots, workspaces, and unknown
+Release Please layouts use the full CI and test fallback. With a verified
+receipt, the applicable build is forced even when path filtering would skip it,
+and the versioned root npm package inspection still runs. Only duplicate
+format, lint, type-check, and unit-test work is skipped. The receipt never
+replaces the release-diff audit or configured CodeQL scan.
 The managed branch rulesets require only the aggregate `Validation / Gate`
 check; do not hand-require individual job contexts on release branches.
 In the

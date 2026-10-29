@@ -30,6 +30,7 @@ function fixture(overrides = {}) {
       event: 'pull_request',
       head_sha: sha('3'),
       created_at: '2026-10-27T10:00:00.000Z',
+      required_job_names: ['CI', 'Test', 'Security', 'CodeQL', 'Eval', 'Gate'],
     },
     pull_request: {
       number: 77,
@@ -42,7 +43,7 @@ function fixture(overrides = {}) {
     },
     mode: 'audit',
     tested: { sha: sha('5'), tree_sha: sha('6') },
-    runtime: { repository: '0xPlayerOne/code-foundry', sha: sha('7') },
+    runtime: { repository: '0xPlayerOne/code-foundry', sha: sha('7'), tree_sha: sha('8') },
     jobs: {
       ci: 'success',
       test: 'success',
@@ -86,6 +87,9 @@ function fixture(overrides = {}) {
     created_at: '2026-10-27T11:00:00.000Z',
     expires_at: '2026-11-03T11:00:00.000Z',
     workflow_run: { id: 1234, head_sha: sha('3') },
+    size_in_bytes: 512,
+    digest: `sha256:${'a'.repeat(64)}`,
+    digest_verified: true,
   }
   const target = {
     repository: '0xPlayerOne/consumer',
@@ -95,7 +99,7 @@ function fixture(overrides = {}) {
     workflow_path: '.github/workflows/validation.yml',
     workflow_blob_sha: sha('2'),
     runtime_repository: '0xPlayerOne/code-foundry',
-    runtime_sha: sha('7'),
+    runtime_tree_sha: sha('8'),
     codeql_enabled: true,
   }
   return {
@@ -104,6 +108,16 @@ function fixture(overrides = {}) {
     pullRequest: { ...pullRequest, ...overrides.pullRequest },
     artifact: { ...artifact, ...overrides.artifact },
     target: { ...target, ...overrides.target },
+    expectedJobNames: overrides.expectedJobNames ?? receipt.run.required_job_names,
+    jobs:
+      overrides.jobs ??
+      receipt.run.required_job_names.map((name) => ({
+        name,
+        run_id: 1234,
+        head_sha: sha('3'),
+        status: 'completed',
+        conclusion: 'success',
+      })),
     now: overrides.now ?? NOW,
   }
 }
@@ -139,10 +153,10 @@ test('accepts exact recent merged-PR evidence for the current tree and runtime',
   })
 })
 
-test('run-level PR association is mandatory when the merged PR record is unavailable', () => {
+test('merged PR metadata and the exact run association are mandatory', () => {
   const input = fixture()
   delete input.pullRequest
-  assert.equal(verifyQualificationReceipt(input).verified, true)
+  assert.equal(verifyQualificationReceipt(input).verified, false)
   assert.equal(verifyQualificationReceipt(fixture({ run: { pull_requests: [] } })).verified, false)
 })
 
@@ -160,7 +174,7 @@ test('rejects a different source tree, workflow, runtime, or repository', () => 
   for (const target of [
     { base_tree_sha: sha('9') },
     { workflow_blob_sha: sha('8') },
-    { runtime_sha: sha('8') },
+    { runtime_tree_sha: sha('9') },
     { repository: 'other/repository' },
   ]) {
     assert.equal(verifyQualificationReceipt(fixture({ target })).verified, false)
@@ -226,4 +240,30 @@ test('rejects missing, expired, mismatched, or wrong-attempt artifacts', () => {
   ]) {
     assert.equal(verifyQualificationReceipt(fixture({ artifact })).verified, false)
   }
+})
+
+test('requires live successful jobs from the exact run attempt and current job contract', () => {
+  const input = fixture()
+  const requiredGate = input.expectedJobNames[0]
+  const failures = [
+    input.jobs.filter((job) => job.name !== requiredGate),
+    input.jobs.map((job) => (job.name === requiredGate ? { ...job, conclusion: 'skipped' } : job)),
+    input.jobs.map((job) => (job.name === requiredGate ? { ...job, run_id: 999 } : job)),
+    input.jobs.map((job) => (job.name === requiredGate ? { ...job, head_sha: sha('9') } : job)),
+    [...input.jobs, { ...input.jobs[0] }],
+  ]
+  for (const jobs of failures)
+    assert.equal(verifyQualificationReceipt({ ...input, jobs }).verified, false)
+  assert.equal(
+    verifyQualificationReceipt({ ...input, expectedJobNames: ['CI', 'Test', 'Gate'] }).verified,
+    false
+  )
+})
+
+test('compares runtime content trees while retaining differing commit IDs for provenance', () => {
+  const input = fixture()
+  input.receipt.runtime.sha = sha('9')
+  assert.equal(verifyQualificationReceipt(input).verified, true)
+  input.receipt.runtime.tree_sha = sha('9')
+  assert.equal(verifyQualificationReceipt(input).verified, false)
 })

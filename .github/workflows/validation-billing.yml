@@ -128,6 +128,7 @@ permissions:
   actions: read
   contents: read
   packages: read
+  pull-requests: read
   security-events: write
 
 env:
@@ -159,6 +160,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     uses: ./.github/workflows/qualification-receipt.yml
     with:
       phase: verify
@@ -167,12 +169,17 @@ jobs:
       codeql-enabled: ${{ inputs.codeql }}
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
+      required-job-names-json: '["Validation / Gate"]'
 
   fast-lanes:
     name: Fast lanes
     needs: qualification
     if: >-
       !cancelled() && vars.CI_BILLING_PAUSED != 'true'
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     runs-on: ${{ inputs.ci-runner }}
     timeout-minutes: 45
     steps:
@@ -523,6 +530,10 @@ jobs:
     if: >-
       !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
       !(inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     runs-on: ${{ inputs.ci-runner }}
     timeout-minutes: 30
     steps:
@@ -662,6 +673,10 @@ jobs:
     if: >-
       !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
       !(inputs.mode == 'release' && needs.qualification.outputs.reuse == 'true')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     runs-on: ${{ inputs.unit-runner }}
     timeout-minutes: 30
     steps:
@@ -751,6 +766,10 @@ jobs:
   e2e:
     name: E2E
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     runs-on: ${{ inputs.test-runner }}
     timeout-minutes: 45
     # Shards duplicate the whole job, but each shard owns a runner-local test
@@ -853,6 +872,10 @@ jobs:
   audit:
     name: Audit
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     runs-on: ${{ inputs.security-runner }}
     timeout-minutes: 30
     steps:
@@ -1158,6 +1181,11 @@ jobs:
     # Release-please pull requests also analyze with CodeQL so repository
     # rulesets requiring code scanning results never deadlock the release.
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.codeql == true && (inputs.mode == 'audit' || inputs.mode == 'release')
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
     uses: ./.github/workflows/codeql.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -1177,6 +1205,8 @@ jobs:
     name: Gate
     needs: [fast-lanes, lint, type-check, unit, e2e, audit, codeql, qualification]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
+    permissions:
+      contents: read
     runs-on: ubuntu-slim
     timeout-minutes: 10
     env:
@@ -1245,6 +1275,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     uses: ./.github/workflows/qualification-receipt.yml
     with:
       phase: produce
@@ -1255,3 +1286,5 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
         {"ci":"${{ needs.lint.result == 'success' && needs.type-check.result == 'success' && needs.fast-lanes.result == 'success' && 'success' || 'failure' }}","test":"${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && needs.e2e.result == 'success' && 'success' || 'failure' }}","security":"${{ needs.audit.result }}","codeql":"${{ inputs.codeql == true && needs.codeql.result || 'not-configured' }}","eval":"${{ needs.fast-lanes.result }}","gate":"${{ needs.gate.result }}"}
+      required-job-names-json: >-
+        '["Validation / Gate"]'

@@ -108,6 +108,7 @@ permissions:
   actions: read
   contents: read
   packages: read
+  pull-requests: read
   security-events: write
 
 jobs:
@@ -119,6 +120,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     uses: ./.github/workflows/qualification-receipt.yml
     with:
       phase: verify
@@ -127,6 +129,7 @@ jobs:
       codeql-enabled: false
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
+      required-job-names-json: '["Validation / Gate"]'
 
   ci:
     name: CI
@@ -159,6 +162,10 @@ jobs:
       !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
       (inputs.mode == 'fast' || inputs.mode == 'audit' ||
       (inputs.mode == 'release' && needs.qualification.outputs.reuse != 'true'))
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     uses: ./.github/workflows/test.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -180,6 +187,8 @@ jobs:
   security:
     name: Security
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    permissions:
+      contents: read
     uses: ./.github/workflows/security.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -192,6 +201,8 @@ jobs:
     # reuse that work only through the exact, unexpired source receipt below.
     # The reusable workflow skips cleanly when there is no eval harness.
     if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    permissions:
+      contents: read
     uses: ./.github/workflows/eval.yml
     with:
       runtime-repository: ${{ inputs.runtime-repository }}
@@ -209,6 +220,8 @@ jobs:
     name: Gate
     needs: [ci, test, security, eval, qualification]
     if: vars.CI_BILLING_PAUSED != 'true' && always()
+    permissions:
+      contents: read
     runs-on: ubuntu-slim
     timeout-minutes: 10
     env:
@@ -268,6 +281,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     uses: ./.github/workflows/qualification-receipt.yml
     with:
       phase: produce
@@ -278,3 +292,4 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
         {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"not-configured","eval":"${{ needs.eval.result }}","gate":"${{ needs.gate.result }}"}
+      required-job-names-json: '["Validation / Gate"]'

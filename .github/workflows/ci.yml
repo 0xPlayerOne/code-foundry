@@ -82,6 +82,7 @@ jobs:
           path: .github/.code-foundry
           sparse-checkout: |
             .github/actions
+            src/commands/qualification-receipt.mjs
             src/lib
             src/runtime-core.mjs
             src/runtime.mjs
@@ -311,8 +312,13 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci should_run build >> "$GITHUB_OUTPUT"
+      - name: Verify versioned package build contract
+        if: inputs.release-package-check == true
+        env:
+          FOUNDRY_BUILD_TASK_APPLICABLE: ${{ steps.applicability.outputs.applicable }}
+        run: node "$RUNNER_TEMP/code-foundry/src/commands/qualification-receipt.mjs" package-contract
       - name: Setup
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        if: steps.applicability.outputs.applicable == 'true' && (inputs.release-build-only == true || steps.applicability.outputs.affected != 'false')
         uses: ./.github/actions/setup
         with:
           install: 'true'
@@ -320,7 +326,7 @@ jobs:
           task: build
       - name: Build
         id: execute
-        if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false'
+        if: steps.applicability.outputs.applicable == 'true' && (inputs.release-build-only == true || steps.applicability.outputs.affected != 'false')
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" ci build
       - name: Inspect versioned npm package contents
         if: inputs.release-package-check == true && hashFiles('package.json') != ''

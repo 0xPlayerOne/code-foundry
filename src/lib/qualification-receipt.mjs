@@ -7,15 +7,15 @@
  */
 
 export const QUALIFICATION_RECEIPT_KIND = 'code-foundry-validation-qualification'
-export const QUALIFICATION_RECEIPT_SCHEMA_VERSION = 1
+export const QUALIFICATION_RECEIPT_SCHEMA_VERSION = 2
 export const QUALIFICATION_RECEIPT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
-export const QUALIFICATION_RECEIPT_ARTIFACT_PREFIX = 'code-foundry-qualification-v1'
+export const QUALIFICATION_RECEIPT_ARTIFACT_PREFIX = 'code-foundry-qualification-v2'
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/
 const WORKFLOW_PATTERN = /^\.github\/workflows\/[A-Za-z0-9_-]+\.ya?ml$/
 const REQUIRED_COMPONENTS = ['ci', 'test', 'security', 'eval', 'gate']
 
-/** @param {unknown} value */
+/** @param {unknown} value @returns {value is Record<string, any>} */
 function object(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -45,6 +45,37 @@ function notVerified(reason) {
   return { verified: false, reason }
 }
 
+/** @param {unknown} input */
+export function verifyQualificationJobEvidence(input) {
+  if (!object(input) || !Array.isArray(input.jobs) || !Array.isArray(input.requiredJobNames)) {
+    return notVerified('missing exact-attempt workflow jobs')
+  }
+  const { jobs, requiredJobNames, runId, headSha } = input
+  if (
+    !positiveInteger(runId) ||
+    !sha(headSha) ||
+    requiredJobNames.length === 0 ||
+    requiredJobNames.length > 32 ||
+    requiredJobNames.some((name) => !nonempty(name)) ||
+    new Set(requiredJobNames).size !== requiredJobNames.length
+  ) {
+    return notVerified('invalid required workflow job contract')
+  }
+  for (const name of requiredJobNames) {
+    const matches = jobs.filter((job) => job?.name === name)
+    if (
+      matches.length !== 1 ||
+      matches[0].run_id !== runId ||
+      matches[0].head_sha !== headSha ||
+      matches[0].status !== 'completed' ||
+      matches[0].conclusion !== 'success'
+    ) {
+      return notVerified(`required workflow job ${name} is missing or unsuccessful`)
+    }
+  }
+  return { verified: true, reason: 'required exact-attempt workflow jobs succeeded' }
+}
+
 /**
  * Validate the serialized receipt without consulting GitHub or the clock.
  * @param {unknown} value
@@ -63,6 +94,11 @@ export function isQualificationReceipt(value) {
     !sha(receipt.workflow?.blob_sha) ||
     !positiveInteger(receipt.run?.id) ||
     !positiveInteger(receipt.run?.attempt) ||
+    !Array.isArray(receipt.run?.required_job_names) ||
+    receipt.run.required_job_names.length === 0 ||
+    receipt.run.required_job_names.length > 32 ||
+    receipt.run.required_job_names.some((/** @type {unknown} */ name) => !nonempty(name)) ||
+    new Set(receipt.run.required_job_names).size !== receipt.run.required_job_names.length ||
     receipt.run?.event !== 'pull_request' ||
     !sha(receipt.run?.head_sha) ||
     !timestamp(receipt.run?.created_at) ||
@@ -78,6 +114,7 @@ export function isQualificationReceipt(value) {
     !sha(receipt.tested?.tree_sha) ||
     !nonempty(receipt.runtime?.repository) ||
     !sha(receipt.runtime?.sha) ||
+    !sha(receipt.runtime?.tree_sha) ||
     !object(receipt.jobs)
   ) {
     return false
@@ -110,16 +147,27 @@ export function createQualificationReceipt(input) {
  * Return whether a candidate receipt proves reusable source qualification.
  * Every mismatch is a normal `verified: false` result so callers can run the
  * full release fallback instead of turning missing evidence into a skip.
- * @param {{receipt:unknown, run:any, pullRequest?:any, artifact:any, target:any, now?:number}} input
+ * @param {{receipt:unknown, run:any, pullRequest:any, jobs:any, expectedJobNames:string[], artifact:any, target:any, now?:number}} input
  * @returns {{verified:boolean, reason:string}}
  */
 export function verifyQualificationReceipt(input) {
-  const { receipt, run, pullRequest, artifact, target, now = Date.now() } = input
+  const {
+    receipt,
+    run,
+    pullRequest,
+    jobs,
+    expectedJobNames,
+    artifact,
+    target,
+    now = Date.now(),
+  } = input
 
   if (!isQualificationReceipt(receipt)) return notVerified('malformed or incomplete receipt')
   if (
     !object(run) ||
-    (pullRequest !== undefined && pullRequest !== null && !object(pullRequest)) ||
+    !object(pullRequest) ||
+    !Array.isArray(jobs) ||
+    !Array.isArray(expectedJobNames) ||
     !object(artifact) ||
     !object(target)
   ) {
@@ -134,7 +182,7 @@ export function verifyQualificationReceipt(input) {
     !WORKFLOW_PATTERN.test(target.workflow_path ?? '') ||
     !sha(target.workflow_blob_sha) ||
     !nonempty(target.runtime_repository) ||
-    !sha(target.runtime_sha) ||
+    !sha(target.runtime_tree_sha) ||
     typeof target.codeql_enabled !== 'boolean'
   ) {
     return notVerified('invalid current target identity')
@@ -158,9 +206,9 @@ export function verifyQualificationReceipt(input) {
   }
   if (
     receipt.runtime.repository !== target.runtime_repository ||
-    receipt.runtime.sha !== target.runtime_sha
+    receipt.runtime.tree_sha !== target.runtime_tree_sha
   ) {
-    return notVerified('qualification runtime does not match current runtime')
+    return notVerified('qualification runtime content does not match current runtime')
   }
   if (target.codeql_enabled && receipt.jobs.codeql !== 'success') {
     return notVerified('CodeQL was not successful in the source qualification')
@@ -172,6 +220,9 @@ export function verifyQualificationReceipt(input) {
   const artifactName = `${QUALIFICATION_RECEIPT_ARTIFACT_PREFIX}-${receipt.run.id}-${receipt.run.attempt}`
   if (
     artifact.expired !== false ||
+    artifact.digest_verified !== true ||
+    !/^sha256:[a-f0-9]{64}$/.test(artifact.digest ?? '') ||
+    !positiveInteger(artifact.size_in_bytes) ||
     artifact.name !== artifactName ||
     !timestamp(artifact.created_at) ||
     !timestamp(artifact.expires_at) ||
@@ -209,24 +260,38 @@ export function verifyQualificationReceipt(input) {
     return notVerified('workflow run is associated with a different or ambiguous pull request')
   }
 
-  if (pullRequest) {
-    if (
-      pullRequest.number !== receipt.pull_request.number ||
-      pullRequest.state !== 'closed' ||
-      pullRequest.merged !== true ||
-      !timestamp(pullRequest.merged_at) ||
-      pullRequest.base?.repo?.full_name !== receipt.pull_request.base_repository ||
-      pullRequest.base?.ref !== receipt.pull_request.base_ref ||
-      pullRequest.head?.repo?.full_name !== receipt.pull_request.head_repository ||
-      pullRequest.head?.ref !== receipt.pull_request.head_ref ||
-      pullRequest.head?.sha !== receipt.pull_request.head_sha ||
-      receipt.run.head_sha !== receipt.pull_request.head_sha
-    ) {
-      return notVerified('pull request does not match the successful source run')
-    }
-  } else if (receipt.run.head_sha !== receipt.pull_request.head_sha) {
-    return notVerified('pull request identity is not bound to the workflow run')
+  if (
+    pullRequest.number !== receipt.pull_request.number ||
+    pullRequest.state !== 'closed' ||
+    pullRequest.merged !== true ||
+    !timestamp(pullRequest.merged_at) ||
+    pullRequest.base?.repo?.full_name !== receipt.pull_request.base_repository ||
+    pullRequest.base?.ref !== receipt.pull_request.base_ref ||
+    pullRequest.head?.repo?.full_name !== receipt.pull_request.head_repository ||
+    pullRequest.head?.ref !== receipt.pull_request.head_ref ||
+    pullRequest.head?.sha !== receipt.pull_request.head_sha ||
+    receipt.run.head_sha !== receipt.pull_request.head_sha
+  ) {
+    return notVerified('pull request does not match the successful source run')
   }
+
+  const expectedNames = [...expectedJobNames].toSorted()
+  const recordedNames = [...receipt.run.required_job_names].toSorted()
+  if (
+    expectedNames.length === 0 ||
+    expectedNames.some((name) => !nonempty(name)) ||
+    new Set(expectedNames).size !== expectedNames.length ||
+    expectedNames.join('\n') !== recordedNames.join('\n')
+  ) {
+    return notVerified('receipt required-job contract does not match current workflow')
+  }
+  const jobEvidence = verifyQualificationJobEvidence({
+    jobs,
+    requiredJobNames: expectedNames,
+    runId: run.id,
+    headSha: run.head_sha,
+  })
+  if (!jobEvidence.verified) return jobEvidence
 
   const createdAt = Date.parse(run.created_at)
   const completedAt = Date.parse(run.updated_at ?? run.created_at)
