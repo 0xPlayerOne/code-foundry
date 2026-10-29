@@ -224,7 +224,7 @@ Keep pull requests focused and reviewable. Include screenshots or recordings for
 | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Draft pull request targeting `main`                | No runner-heavy validation; run local checks before requesting review                 |
 | Ready pull request targeting `main`                | Audit validation: CI, full tests, Security, and CodeQL, ending in `Validation / Gate` |
-| Exact Release Please pull request targeting `main` | Release diff audit and CodeQL, ending in `Validation / Gate`                          |
+| Exact Release Please pull request targeting `main` | CI, unit tests, CodeQL, and release diff audit, ending in `Validation / Gate`         |
 | Scheduled or manual validation                     | Full audit tier                                                                       |
 | Push to a working branch                           | Draft PR workflow                                                                     |
 | Push to `main`                                     | Release workflow; CodeQL skips release-only merges (audit covers drift)               |

@@ -82,11 +82,10 @@ export function classifyValidationMode(input) {
 const REQUIRED_JOBS_BY_MODE = {
   fast: ['ci', 'test'],
   audit: ['ci', 'test', 'security', 'codeql', 'eval'],
-  // Release diff validation runs in the aggregate gate and rejects any change
-  // beyond generated version metadata. The source tree was already qualified
-  // on protected main; CodeQL remains here because some rulesets require a
-  // pull-request analysis before a release can merge.
-  release: ['codeql'],
+  // A verified source-tree qualification receipt is not available yet, so
+  // Release Please keeps CI and unit tests. CodeQL remains required because
+  // some rulesets require a pull-request analysis before a release can merge.
+  release: ['ci', 'test', 'codeql'],
 }
 
 /**

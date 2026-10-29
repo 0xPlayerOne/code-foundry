@@ -2384,7 +2384,7 @@ jobs:
     assert.match(contributing, /Branch from `main` and target pull requests at `main`/)
     assert.match(
       contributing,
-      /Exact Release Please pull request targeting `main`.*Release diff audit and CodeQL/
+      /Exact Release Please pull request targeting `main`.*CI, unit tests, CodeQL, and release diff audit/
     )
     assert.doesNotMatch(contributing, /Release-policy validation only/)
     assert.doesNotMatch(contributing, /staging/i)
@@ -2464,7 +2464,7 @@ jobs:
       )
       assert.match(
         rendered,
-        /Exact Release Please pull request targeting `main`.*Release diff audit and CodeQL/
+        /Exact Release Please pull request targeting `main`.*CI, unit tests, CodeQL, and release diff audit/
       )
       assert.doesNotMatch(rendered, /Release-policy validation only/)
       // No unpadded separator line may survive: prettier pads markdown tables.
@@ -2835,8 +2835,11 @@ jobs:
 
   it('documents that GitHub Stacks is outside the merge topology', () => {
     const workflows = readFileSync('docs/WORKFLOWS.md', 'utf8')
-    assert.match(workflows, /Release Please pull requests into `main` run a lean release lane/)
-    assert.match(workflows, /the content was fully audited on the pull requests that/)
+    assert.match(
+      workflows,
+      /Release Please pull requests into `main` run CI, unit tests, and CodeQL plus\s+the release-diff policy/
+    )
+    assert.match(workflows, /release mode keeps its CI and unit-test fallback/)
     assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)
     assert.match(workflows, /does\s+not reduce required workflow runs/)
@@ -4825,7 +4828,7 @@ jobs:
   it('keeps one required-job truth table per mode', () => {
     assert.deepEqual(requiredValidationJobs('fast'), ['ci', 'test'])
     assert.deepEqual(requiredValidationJobs('audit'), ['ci', 'test', 'security', 'codeql', 'eval'])
-    assert.deepEqual(requiredValidationJobs('release'), ['codeql'])
+    assert.deepEqual(requiredValidationJobs('release'), ['ci', 'test', 'codeql'])
     assert.deepEqual(VALIDATION_MODES, ['fast', 'audit', 'release'])
     assert.deepEqual(VALIDATION_EVENTS, ['pull_request', 'schedule', 'workflow_dispatch'])
     assert.deepEqual(VALIDATION_JOBS, ['ci', 'test', 'security', 'codeql', 'eval'])
@@ -4864,11 +4867,11 @@ jobs:
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
-        results: { ci: 'skipped', test: 'skipped', codeql: 'success' },
+        results: { ci: 'success', test: 'success', codeql: 'success' },
       }),
       {
         valid: true,
-        required: ['codeql'],
+        required: ['ci', 'test', 'codeql'],
         failures: [],
       }
     )
@@ -4898,12 +4901,12 @@ jobs:
     assert.equal(
       evaluateValidationGate({
         mode: 'release',
-        results: { ci: 'skipped', test: 'skipped', security: 'skipped', codeql: 'success' },
+        results: { ci: 'success', test: 'success', security: 'skipped', codeql: 'success' },
       }).valid,
       true
     )
-    // The release lane skips security by design; a skipped security job never
-    // blocks it, but a missing CodeQL analysis does.
+    // Release mode retains source CI and unit tests while skipping security
+    // and eval; a missing CodeQL analysis still blocks the gate.
     assert.equal(
       evaluateValidationGate({
         mode: 'release',
@@ -4951,8 +4954,8 @@ jobs:
       }).failures,
       [{ job: 'codeql', result: 'cancelled' }]
     )
-    // The release lane skips duplicate source CI/tests and still requires the
-    // pull-request CodeQL result.
+    // Release mode requires CI and tests until exact source evidence is
+    // available, and also requires the pull-request CodeQL result.
     assert.deepEqual(
       evaluateValidationGate({
         mode: 'release',
@@ -4960,7 +4963,7 @@ jobs:
       }),
       {
         valid: false,
-        required: ['codeql'],
+        required: ['ci', 'test', 'codeql'],
         failures: [{ job: 'codeql', result: 'skipped' }],
       }
     )
@@ -5313,7 +5316,7 @@ jobs:
     assert.doesNotMatch(orchestrator, /^  release-policy:/m)
     assert.match(
       orchestrator,
-      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit'\)/
+      /if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs.mode == 'fast' \|\| inputs.mode == 'audit' \|\| inputs.mode == 'release'\)/
     )
     // CodeQL stays on release pull requests so code-scanning rulesets never
     // deadlock the release; the security job is audit-only.
@@ -5326,7 +5329,10 @@ jobs:
       /security:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/m
     )
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
-    assert.match(orchestrator, /unit-only: \$\{\{ inputs.mode == 'fast' \}\}/)
+    assert.match(
+      orchestrator,
+      /unit-only: \$\{\{ inputs.mode == 'fast' \|\| inputs.mode == 'release' \}\}/
+    )
     // The eval lane covers content-bearing audits only and needs a
     // Chrome-capable runner for browser harnesses.
     assert.match(orchestrator, /^  eval:\n    name: Eval\n    #/m)
@@ -5354,16 +5360,9 @@ jobs:
       assert.match(
         noCodeqlOrchestrator,
         new RegExp(
-          `^  ${job}:[\\s\\S]*?inputs\\.mode == 'fast'[\\s\\S]*?inputs\\.mode == 'audit'`,
+          `^  ${job}:[\\s\\S]*?inputs\\.mode == 'fast'[\\s\\S]*?inputs\\.mode == 'audit'[\\s\\S]*?inputs\\.mode == 'release'`,
           'm'
         )
-      )
-      assert.doesNotMatch(
-        noCodeqlOrchestrator.slice(
-          noCodeqlOrchestrator.indexOf(`  ${job}:`),
-          noCodeqlOrchestrator.indexOf(job === 'ci' ? '\n  test:' : '\n  security:')
-        ),
-        /inputs\.mode == 'release'/
       )
     }
     assert.match(
@@ -5377,10 +5376,7 @@ jobs:
     for (const job of ['fast-lanes', 'lint', 'type-check', 'unit']) {
       assert.match(
         billingOrchestrator,
-        new RegExp(
-          `^  ${job}:[\\s\\S]*?if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.mode != 'release'`,
-          'm'
-        )
+        new RegExp(`^  ${job}:[\\s\\S]*?if: vars\\.CI_BILLING_PAUSED != 'true'`, 'm')
       )
     }
     assert.match(

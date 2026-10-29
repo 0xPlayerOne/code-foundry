@@ -57,14 +57,13 @@ workflow_dispatch:
 
 In the `staging-release` topology, pull requests into `staging` run the fast
 tier, ordinary pull requests into `main` run the full audit tier, and exact
-Release Please pull requests into `main` run a lean release lane — CI, unit
-tests, and CodeQL plus the release-diff policy. Their diff is version
-metadata only: the content was fully audited on the pull requests that
-merged into `main`, and the scheduled audit lane re-covers drift, so the
-release lane keeps repository rulesets satisfiable without re-running the
-runner-heavy suites. The managed branch rulesets require only the aggregate
-`Validation / Gate` check, so skipped non-required jobs never deadlock the
-release; do not hand-require individual job contexts on release branches.
+Release Please pull requests into `main` run CI, unit tests, and CodeQL plus
+the release-diff policy. Although the diff is version metadata only, source
+checks are skipped only when successful prior evidence for the exact main
+tree and relevant workflow/toolchain can be verified. Until that evidence
+contract is implemented, release mode keeps its CI and unit-test fallback.
+The managed branch rulesets require only the aggregate `Validation / Gate`
+check; do not hand-require individual job contexts on release branches.
 In the
 `direct` topology (the default) every pull request targets `main` and runs the
 full audit tier, because there is no integration branch for a fast pass.
