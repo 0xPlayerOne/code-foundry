@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.50.1...v1.51.0) (2026-10-29)
+
+
+### Features
+
+* **release:** preserve caller publication overrides ([#795](https://github.com/0xPlayerOne/code-foundry/issues/795)) ([e49d2ba](https://github.com/0xPlayerOne/code-foundry/commit/e49d2bac4f8995808bfc6a726b0c2ff1e93c2a5f))
+
 ## [1.50.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.50.0...v1.50.1) (2026-10-29)
 
 
