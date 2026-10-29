@@ -57,7 +57,7 @@ import {
 import { doctor, rustManifestPaths } from '../src/commands/doctor.mjs'
 import { doctorGithub } from '../src/lib/github-doctor.mjs'
 import { reconcileRelease, validateReleasePullRequestDiffs } from '../src/commands/release.mjs'
-import { syncRepository } from '../src/commands/sync.mjs'
+import { pinRuntimeRefs, syncRepository } from '../src/commands/sync.mjs'
 import { parseAgentArgs } from '../src/commands/agent-check.mjs'
 import {
   buildPausedRuleset,
@@ -5069,6 +5069,64 @@ jobs:
       new RegExp(`^\\s+runtime-ref: ${sourceRuntimeRef.replaceAll('.', '\\.')}\\s*$`, 'm')
     )
     assert.doesNotMatch(audit, /inputs\.runtime-ref|github\.sha|github\.event\.inputs/)
+  })
+
+  it('renders consumer runtime refs as one configured value for tags and immutable SHAs', () => {
+    const runtimeRefs = [sourceRuntimeRef, 'd0170a8f89992117d079d71a7a81505036270d68']
+
+    for (const runtimeRef of runtimeRefs) {
+      const root = mkdtempSync(join(tmpdir(), 'code-foundry-consumer-runtime-ref-'))
+      mkdirSync(join(root, '.github'), { recursive: true })
+      writeFileSync(
+        join(root, '.github/code-foundry.yml'),
+        [
+          'languages: typescript',
+          'package_manager: bun',
+          'features: validation,release',
+          'release_qualification_receipts: true',
+          'runtime_ref: ' + runtimeRef,
+          'npm_publish: true',
+          'npm_publish_auth: oidc',
+          'git_workflow: direct',
+          'merge_strategy: squash',
+          'release_merge_strategy: squash',
+          '',
+        ].join('\n')
+      )
+
+      syncRepository({ target: root, source: process.cwd() })
+
+      const caller = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
+      const start = caller.indexOf('      runtime-ref:')
+      const end = caller.indexOf('\n      ci-runner:', start)
+      assert.notEqual(start, -1)
+      assert.notEqual(end, -1)
+      assert.equal(caller.slice(start, end), `      runtime-ref: ${runtimeRef}`)
+      assert.match(caller, /release-qualification-receipts: true/)
+      assert.match(
+        caller,
+        new RegExp(
+          `uses: 0xPlayerOne/code-foundry/\\.github/workflows/validation\\.yml@${runtimeRef}`
+        )
+      )
+
+      const release = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+      assert.match(release, /npm-publish-auth: oidc/)
+      assert.match(release, /NPM_READ_TOKEN: \$\{\{ secrets\.NPM_READ_TOKEN \}\}/)
+      assert.doesNotMatch(release, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves the self-repository runtime expression while pinning consumer refs', () => {
+    const selfTemplate = readFileSync('.github/workflows/validation_self-ci.yml', 'utf8')
+    const selfRendered = pinRuntimeRefs(selfTemplate, sourceRuntimeRef, true)
+
+    assert.equal(selfRendered, selfTemplate)
+    assert.match(
+      selfRendered,
+      /runtime-ref: >-\n\s+\$\{\{ startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)[\s\S]*?github\.sha \}\}/
+    )
   })
 
   it('classifies the validation mode through the pinned runtime in the caller', () => {
