@@ -13,6 +13,14 @@
       "type": "string",
       "enum": ["true", "false"]
     },
+    "release_defer_publication": {
+      "type": "string",
+      "enum": ["true", "false"]
+    },
+    "release_prerelease": {
+      "type": "string",
+      "enum": ["true", "false"]
+    },
     "npm_publish_auth": {
       "description": "npm publisher authentication: auto preserves token users and uses OIDC when no publish token is present; oidc forces trusted publishing; token requires NPM_TOKEN.",
       "type": "string",

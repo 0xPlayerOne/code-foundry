@@ -900,6 +900,11 @@ jobs:
 
 /** @param {Record<string, string>} config */
 function validateReleaseBatchingConfig(config) {
+  for (const key of ['release_defer_publication', 'release_prerelease']) {
+    if (config[key] !== undefined && !['true', 'false'].includes(config[key])) {
+      throw new Error(`Unsupported ${key}: ${config[key]}; use true or false.`)
+    }
+  }
   const schedule = String(config.release_batching_schedule ?? '').trim()
   if (schedule) {
     const limits = [
@@ -1246,7 +1251,9 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       rendered = removeWorkflowBlock(rendered, job)
     rendered = rendered.replace(/^    needs: \[preflight\]\n/m, '')
     rendered = rendered.replace(/^      config-file: \.github\/release-please-foundry\.json\n/m, '')
-    rendered = rendered.replace(/^      defer-publication: true\n/m, '')
+    if (config.release_defer_publication !== 'true') {
+      rendered = rendered.replace(/^      defer-publication: true\n/m, '')
+    }
     rendered = rendered.replace(
       /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\)\n/m,
       "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n"
@@ -1266,12 +1273,17 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
         "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n",
         "    if: >-\n      (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && (github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore(main): release '))\n"
       )
-      if (configured(config.release_batching_prerelease, 'true') === 'true') {
-        rendered = rendered.replace(
-          '      git-workflow:',
-          "      prerelease: ${{ github.event_name != 'workflow_dispatch' }}\n      git-workflow:"
-        )
-      }
+    }
+    const prerelease =
+      config.release_prerelease ||
+      (batchingSchedule && config.release_batching_prerelease !== 'false'
+        ? "${{ github.event_name != 'workflow_dispatch' }}"
+        : '')
+    if (prerelease) {
+      rendered = rendered.replace(
+        '      git-workflow:',
+        `      prerelease: ${prerelease}\n      git-workflow:`
+      )
     }
     const npmSecrets =
       configured(config.npm_publish, 'false') !== 'true'
