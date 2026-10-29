@@ -14,8 +14,8 @@ budget is exceeded. Reports are generated-run evidence and are ignored by Git.
 | Format, lint, type-check, and build   |     15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                  |        0 | Keep the installed CLI dependency-free               |
 | Development dependencies              |        4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact (without changelog)   |   296 kB | Bound registry transfer and install cost             |
-| Unpacked artifact (without changelog) | 1,136 kB | Bound installed footprint                            |
+| Packed artifact (without changelog)   | 316.5 kB | Bound registry transfer and install cost             |
+| Unpacked artifact (without changelog) | 1,225 kB | Bound installed footprint                            |
 | Packed files (without changelog)      |      120 | Detect accidental release contents                   |
 
 The source-of-truth budgets live in `scripts/performance-check.mjs`. When those
@@ -29,8 +29,14 @@ included it eroded on every release and repeatedly failed release pull requests.
 The check packs a staging copy without the changelog and reports the repository
 changelog size and its packaged (trimmed) size as informational metrics. At
 v1.44.0 the measured artifact was 280,902 packed bytes, 1,070,333 unpacked bytes,
-and 118 files, leaving roughly 5% packed and 6% unpacked headroom for source
-growth.
+and 118 files.
+
+On v1.50.1 base `f671dd8`, the measured artifact was 315,853 packed bytes,
+1,200,759 unpacked bytes, and 120 files. Release caller publication overrides
+measure 316,295 packed bytes, 1,222,905 unpacked bytes, and 120 files: an
+increase of 442 packed bytes and 22,146 unpacked bytes. The packed limit is
+316,500 bytes, leaving 205 bytes of measured headroom; the unpacked and file-count
+limits remain 1,225,000 bytes and 120 files.
 
 The published package ships a changelog trimmed to the 20 most recent releases
 with a link to the full history on GitHub. `scripts/package-changelog.mjs`

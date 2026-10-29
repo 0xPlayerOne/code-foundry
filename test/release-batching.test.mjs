@@ -57,6 +57,102 @@ test('a batching schedule gates the pipeline and stages window releases', () => 
   rmSync(root, { recursive: true, force: true })
 })
 
+test('an Adea-style caller preserves deferred publication and a fixed prerelease input', () => {
+  const root = syncConsumer({
+    git_workflow: 'direct',
+    release_merge_strategy: 'squash',
+    release_type: 'node',
+    npm_publish: 'false',
+    npm_publish_auth: 'oidc',
+    release_batching_schedule: '23 12 * * *',
+    release_batching_prerelease: 'true',
+    release_defer_publication: 'true',
+    release_prerelease: 'true',
+    runtime_ref: 'v1.50.1',
+  })
+  try {
+    const releaseConfig = JSON.parse(readFileSync(join(root, 'release-please-config.json'), 'utf8'))
+    assert.equal(releaseConfig.draft, true)
+    assert.equal(releaseConfig['force-tag-creation'], true)
+
+    const caller = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(caller, /^      defer-publication: true$/m)
+    assert.match(caller, /^      prerelease: true$/m)
+    assert.equal((caller.match(/^      prerelease:/gm) ?? []).length, 1)
+    assert.doesNotMatch(caller, /prerelease: \$\{\{ github\.event_name != 'workflow_dispatch' \}\}/)
+    assert.match(caller, /schedule:\n    - cron: '23 12 \* \* \*'/)
+    assert.doesNotMatch(caller, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/)
+
+    const reusable = readFileSync(join(source, '.github/workflows/release.yml'), 'utf8')
+    assert.match(
+      reusable,
+      /Deferred or batched publication requires one root package with draft and force-tag-creation enabled/
+    )
+    for (const job of ['reconcile', 'post-release', 'npm']) {
+      const start = reusable.indexOf(`\n  ${job}:\n`)
+      assert.notEqual(start, -1, `missing reusable ${job} job`)
+      const bodyStart = start + `\n  ${job}:\n`.length
+      const remainder = reusable.slice(bodyStart)
+      const next = remainder.search(/\n  [^ \n]+:\n/)
+      const block = remainder.slice(0, next === -1 ? undefined : next)
+      assert.match(block, /inputs\['defer-publication'\] != true/)
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('publication override schema accepts only string booleans', () => {
+  const properties = JSON.parse(
+    readFileSync(join(source, '.github/code-foundry.schema.json'), 'utf8')
+  ).properties
+  for (const key of ['release_defer_publication', 'release_prerelease']) {
+    assert.equal(properties[key].type, 'string')
+    assert.deepEqual(properties[key].enum, ['true', 'false'])
+  }
+})
+
+test('a fixed false prerelease input overrides batching event behavior', () => {
+  const root = syncConsumer({
+    release_batching_schedule: '23 12 * * *',
+    release_batching_prerelease: 'true',
+    release_prerelease: 'false',
+  })
+  try {
+    const caller = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(caller, /^      prerelease: false$/m)
+    assert.equal((caller.match(/^      prerelease:/gm) ?? []).length, 1)
+    assert.doesNotMatch(caller, /prerelease: \$\{\{ github\.event_name != 'workflow_dispatch' \}\}/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a fixed prerelease input is rendered without batching', () => {
+  const root = syncConsumer({ release_prerelease: 'true' })
+  try {
+    const caller = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8')
+    assert.match(caller, /^      prerelease: true$/m)
+    assert.doesNotMatch(caller, /prerelease: \$\{\{ github\.event_name != 'workflow_dispatch' \}\}/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('invalid deferred-publication and fixed-prerelease values fail sync', () => {
+  for (const key of ['release_defer_publication', 'release_prerelease']) {
+    const root = consumerFixture({ [key]: 'yes' })
+    try {
+      assert.throws(
+        () => syncRepository({ target: root, source }),
+        new RegExp(`Unsupported ${key}: yes; use true or false\\.`)
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+})
+
 test('a malformed batching schedule fails the sync loudly', () => {
   assert.throws(
     () => syncConsumer({ release_batching_schedule: 'every morning' }),
