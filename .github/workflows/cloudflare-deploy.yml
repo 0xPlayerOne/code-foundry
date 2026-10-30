@@ -289,8 +289,16 @@ jobs:
           if (!buildEnv || typeof buildEnv !== 'object' || Array.isArray(buildEnv)) {
             throw new Error('build-env must be a JSON object of string values')
           }
+          const allowedNames = new Set([
+            'ADEA_PREVIEW_HYPERDRIVE_ID',
+            'ADEA_PREVIEW_SECRETS_STORE_ID',
+            'ADEA_PREVIEW_DATABASE_URL_SECRET',
+            'ADEA_PREVIEW_AUTH_BASE_URL_SECRET',
+            'ADEA_PREVIEW_AUTH_COOKIE_SECRET_NAME',
+            'ADEA_PREVIEW_AUTH_TRUSTED_ORIGINS_SECRET',
+          ])
           for (const [name, value] of Object.entries(buildEnv)) {
-            if (!/^[A-Z][A-Z0-9_]*$/.test(name) || /^(GITHUB_|RUNNER_|ACTIONS_)/.test(name) || ['PATH', 'NODE_OPTIONS'].includes(name)) {
+            if (!allowedNames.has(name)) {
               throw new Error(`Invalid build-env variable name: ${name}`)
             }
             if (typeof value !== 'string') throw new Error(`build-env value for ${name} must be a string`)
