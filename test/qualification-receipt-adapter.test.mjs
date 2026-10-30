@@ -11,6 +11,7 @@ import {
   produceQualificationReceipt,
   readArtifactReceipt,
 } from '../src/commands/qualification-receipt.mjs'
+import { supportsRootNpmReleaseContract } from '../src/lib/release-package-contract.mjs'
 import {
   QUALIFICATION_RECEIPT_ARTIFACT_PREFIX,
   QUALIFICATION_RECEIPT_KIND,
@@ -661,4 +662,36 @@ test('bounds artifact downloads and verifies GitHub size and SHA-256 metadata', 
     ),
     /size or digest is unavailable/
   )
+})
+
+test('root release contract accepts only inert Themes-style settings', () => {
+  const input = {
+    packageManifest: { name: '@adea-ai/themes', version: '1.0.0' },
+    releaseManifest: { '.': '1.0.0' },
+    releaseConfigs: [
+      {
+        'release-type': 'node',
+        'include-component-in-tag': false,
+        'extra-files': [],
+        packages: { '.': { 'package-name': '@adea-ai/themes' } },
+      },
+    ],
+  }
+  assert.equal(supportsRootNpmReleaseContract(input), true)
+  for (const change of [
+    { 'extra-files': ['other.json'] },
+    { 'extra-files': null },
+    { 'include-component-in-tag': true },
+    { packages: { '.': { 'package-name': 'different' } } },
+    { packages: { '.': { 'package-name': '@adea-ai/themes', 'extra-files': [] } } },
+    { unsupported: true },
+  ]) {
+    assert.equal(
+      supportsRootNpmReleaseContract({
+        ...input,
+        releaseConfigs: [{ ...input.releaseConfigs[0], ...change }],
+      }),
+      false
+    )
+  }
 })

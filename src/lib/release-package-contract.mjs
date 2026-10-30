@@ -9,7 +9,9 @@ const TOP_LEVEL_RELEASE_CONFIG_KEYS = new Set([
   '$schema',
   'bump-minor-pre-major',
   'changelog-sections',
+  'extra-files',
   'group-pull-request-title-pattern',
+  'include-component-in-tag',
   'manifest-file',
   'packages',
   'pull-request-title-pattern',
@@ -21,6 +23,7 @@ const ROOT_PACKAGE_CONFIG_KEYS = new Set([
   'force-tag-creation',
   'include-component-in-tag',
   'manifest-file',
+  'package-name',
   'release-type',
 ])
 
@@ -52,7 +55,16 @@ export function supportsRootNpmReleaseContract(input) {
   for (const config of releaseConfigs) {
     if (!object(config)) return false
     if (Object.keys(config).some((key) => !TOP_LEVEL_RELEASE_CONFIG_KEYS.has(key))) return false
-    if (config['extra-files'] !== undefined) return false
+    if (
+      config['extra-files'] !== undefined &&
+      (!Array.isArray(config['extra-files']) || config['extra-files'].length !== 0)
+    )
+      return false
+    if (
+      config['include-component-in-tag'] !== undefined &&
+      config['include-component-in-tag'] !== false
+    )
+      return false
     if (
       config['manifest-file'] !== undefined &&
       config['manifest-file'] !== '.release-please-manifest.json'
@@ -67,6 +79,8 @@ export function supportsRootNpmReleaseContract(input) {
         !object(rootConfig) ||
         Object.keys(rootConfig).some((key) => !ROOT_PACKAGE_CONFIG_KEYS.has(key)) ||
         rootConfig['extra-files'] !== undefined ||
+        (rootConfig['package-name'] !== undefined &&
+          rootConfig['package-name'] !== packageManifest.name) ||
         (rootConfig['release-type'] !== undefined && rootConfig['release-type'] !== 'node') ||
         (rootConfig['manifest-file'] !== undefined &&
           rootConfig['manifest-file'] !== '.release-please-manifest.json')

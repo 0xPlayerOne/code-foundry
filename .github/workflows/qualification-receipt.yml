@@ -122,7 +122,7 @@ jobs:
           FOUNDRY_REQUIRED_JOB_NAMES_JSON: ${{ inputs.required-job-names-json }}
         run: |
           if [ "$SOURCE_READY" = success ] && [ "$RUNTIME_READY" = success ] && [ "$NODE_READY" = success ] && [ "$POLICY_READY" = success ] && [ -f "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" ]; then
-            node "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" verify >> "$GITHUB_OUTPUT"
+            node "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" verify
           else
             echo 'reuse=false' >> "$GITHUB_OUTPUT"
             echo 'reason=qualification or version-only release policy unavailable; using full validation' >> "$GITHUB_OUTPUT"
@@ -185,7 +185,7 @@ jobs:
           FOUNDRY_REQUIRED_JOB_NAMES_JSON: ${{ inputs.required-job-names-json }}
         run: |
           if [ "$SOURCE_READY" = success ] && [ "$RUNTIME_READY" = success ] && [ "$NODE_READY" = success ] && [ -f "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" ]; then
-            node "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" produce >> "$GITHUB_OUTPUT"
+            node "$RUNTIME_PATH/src/commands/qualification-receipt.mjs" produce
           else
             echo 'reuse=false' >> "$GITHUB_OUTPUT"
             echo 'reason=receipt setup unavailable' >> "$GITHUB_OUTPUT"
