@@ -207,6 +207,7 @@ describe('Cloudflare build environment forwarding', () => {
       '[]',
       '{"ADEA_PREVIEW_HYPERDRIVE_ID":1}',
       '{"ADEA_PREVIEW_AUTH_HYPERDRIVE_ID_EXTRA":"x"}',
+      '{"ADEA_PREVIEW_AUTH_HYPERDRIVE_ID\n":"x"}',
       '{"BASH_ENV":"x"}',
       '{"LD_PRELOAD":"x"}',
       '{"LD_LIBRARY_PATH":"x"}',
