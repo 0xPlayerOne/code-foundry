@@ -1,5 +1,8 @@
 import { strict as assert } from 'node:assert'
-import { readFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
 import { describe, it } from 'node:test'
 
 const workflow = readFileSync(
@@ -127,5 +130,92 @@ describe('cf deploy path packages a Build Output before every prebuilt deploy', 
       prose,
       /production runs `cf-wrangler build` plus `cf deploy --prebuilt` \(consuming the project's cf Build Output\)/
     )
+  })
+})
+
+describe('Cloudflare build environment forwarding', () => {
+  const buildEnvironmentScript = () => {
+    const buildStart = workflow.indexOf('      - name: Build Worker')
+    const deployStart = workflow.indexOf('      - name: Deploy to Cloudflare', buildStart)
+    assert.ok(buildStart !== -1 && deployStart > buildStart)
+    const buildBlock = workflow.slice(buildStart, deployStart)
+    const deployBlock = workflow.slice(deployStart)
+    assert.match(buildBlock, /BUILD_ENV_JSON: \$\{\{ inputs\.build-env \}\}/)
+    assert.match(buildBlock, /env: \{ \.\.\.process\.env, \.\.\.buildEnv \}/)
+    assert.doesNotMatch(deployBlock, /BUILD_ENV_JSON|buildEnv/)
+    const match = buildBlock.match(/node --input-type=module <<'NODE'\n([\s\S]*?)\n\s+NODE/)
+    assert.ok(match, 'expected executable build environment validator')
+    return match[1]
+  }
+
+  const runBuild = (input) => {
+    const directory = mkdtempSync(join(tmpdir(), 'code-foundry-build-env-'))
+    const bin = join(directory, 'bin')
+    const capture = join(directory, 'capture.json')
+    const bun = join(bin, 'bun')
+    try {
+      mkdirSync(bin)
+      writeFileSync(
+        bun,
+        '#!/usr/bin/env node\nrequire("node:fs").writeFileSync(process.env.BUN_CAPTURE_FILE, JSON.stringify({argv: process.argv.slice(2), env: Object.fromEntries(Object.entries(process.env).filter(([name]) => name.startsWith("ADEA_PREVIEW_")))}))\n'
+      )
+      chmodSync(bun, 0o755)
+      const result = spawnSync(process.execPath, ['--input-type=module', '-'], {
+        input: buildEnvironmentScript(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          BUILD_ENV_JSON: input,
+          BUILD_SCRIPT: 'build:preview',
+          BUN_CAPTURE_FILE: capture,
+          PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+        },
+      })
+      let captured
+      try {
+        captured = JSON.parse(readFileSync(capture, 'utf8'))
+      } catch {
+        captured = null
+      }
+      return { result, captured }
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+
+  it('passes only the six preview identifiers to the build process', () => {
+    const names = [
+      'ADEA_PREVIEW_HYPERDRIVE_ID',
+      'ADEA_PREVIEW_SECRETS_STORE_ID',
+      'ADEA_PREVIEW_DATABASE_URL_SECRET',
+      'ADEA_PREVIEW_AUTH_BASE_URL_SECRET',
+      'ADEA_PREVIEW_AUTH_COOKIE_SECRET_NAME',
+      'ADEA_PREVIEW_AUTH_TRUSTED_ORIGINS_SECRET',
+    ]
+    const input = Object.fromEntries(names.map((name) => [name, `preview-${name}`]))
+    const { result, captured } = runBuild(JSON.stringify(input))
+    assert.equal(result.status, 0, result.stderr)
+    assert.deepEqual(captured.argv, ['run', 'build:preview'])
+    assert.deepEqual(captured.env, input)
+  })
+
+  it('rejects malformed JSON and unsafe environment overrides', () => {
+    for (const input of [
+      '{',
+      'null',
+      '[]',
+      '{"ADEA_PREVIEW_HYPERDRIVE_ID":1}',
+      '{"BASH_ENV":"x"}',
+      '{"LD_PRELOAD":"x"}',
+      '{"LD_LIBRARY_PATH":"x"}',
+      '{"TURBO_API":"x"}',
+      '{"TURBO_TOKEN":"x"}',
+      '{"TURBO_TEAM":"x"}',
+      '{"PATH":"x"}',
+    ]) {
+      const { result, captured } = runBuild(input)
+      assert.notEqual(result.status, 0, `expected rejection for ${input}`)
+      assert.equal(captured, null, `bun must not run for ${input}`)
+    }
   })
 })

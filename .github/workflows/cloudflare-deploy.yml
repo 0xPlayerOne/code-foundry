@@ -35,6 +35,11 @@ on:
         required: false
         type: string
         default: ''
+      build-env:
+        description: 'Optional JSON object of non-secret environment variables for the build command only.'
+        required: false
+        type: string
+        default: '{}'
       bun-version:
         required: false
         type: string
@@ -267,10 +272,44 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           BUILD_SCRIPT: ${{ inputs.build-script }}
+          BUILD_ENV_JSON: ${{ inputs.build-env }}
           TURBO_API: ${{ vars.TURBO_API }}
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        run: bun run "$BUILD_SCRIPT"
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          const input = process.env.BUILD_ENV_JSON
+          let buildEnv
+          try {
+            buildEnv = JSON.parse(input)
+          } catch {
+            throw new Error('build-env must be a JSON object of string values')
+          }
+          if (!buildEnv || typeof buildEnv !== 'object' || Array.isArray(buildEnv)) {
+            throw new Error('build-env must be a JSON object of string values')
+          }
+          const allowedNames = new Set([
+            'ADEA_PREVIEW_HYPERDRIVE_ID',
+            'ADEA_PREVIEW_SECRETS_STORE_ID',
+            'ADEA_PREVIEW_DATABASE_URL_SECRET',
+            'ADEA_PREVIEW_AUTH_BASE_URL_SECRET',
+            'ADEA_PREVIEW_AUTH_COOKIE_SECRET_NAME',
+            'ADEA_PREVIEW_AUTH_TRUSTED_ORIGINS_SECRET',
+          ])
+          for (const [name, value] of Object.entries(buildEnv)) {
+            if (!allowedNames.has(name)) {
+              throw new Error(`Invalid build-env variable name: ${name}`)
+            }
+            if (typeof value !== 'string') throw new Error(`build-env value for ${name} must be a string`)
+          }
+          const result = spawnSync('bun', ['run', process.env.BUILD_SCRIPT], {
+            stdio: 'inherit',
+            env: { ...process.env, ...buildEnv },
+          })
+          if (result.error) throw result.error
+          process.exit(result.status ?? 1)
+          NODE
       - name: Deploy to Cloudflare
         id: deploy
         if: steps.check.outputs.should_deploy != 'false'
