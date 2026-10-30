@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.3...v1.53.4) (2026-10-30)
+
+
+### Performance
+
+* **ci:** run mixed unit runners concurrently ([#821](https://github.com/0xPlayerOne/code-foundry/issues/821)) ([dac0d93](https://github.com/0xPlayerOne/code-foundry/commit/dac0d9313cc2fc6309e0f55aa45274e3dbbff767))
+
 ## [1.53.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.2...v1.53.3) (2026-10-30)
 
 
