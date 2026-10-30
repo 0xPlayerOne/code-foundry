@@ -374,10 +374,10 @@ function parseUiPublisherWorkflow(source) {
   if (/\t|^[ ]*(?:&|\*|<<:|!!)/m.test(source)) return null
   const lines = source.split(/\r?\n/)
   const meaningful = lines.map((line) => (line.trimStart().startsWith('#') ? '' : line))
-  const rootEntries = meaningful
-    .map((line, index) => ({ match: /^([A-Za-z0-9_-]+):(?:\s*(.*))?$/.exec(line), index }))
-    .filter(({ match }) => match !== null)
-    .map(({ match, index }) => ({ key: match[1], index }))
+  const rootEntries = meaningful.flatMap((line, index) => {
+    const match = /^([A-Za-z0-9_-]+):(?:\s*(.*))?$/.exec(line)
+    return match ? [{ key: match[1], index }] : []
+  })
   const rootKeys = rootEntries.map(({ key }) => key)
   const rootEntryIndexes = new Set(rootEntries.map(({ index }) => index))
   if (
@@ -392,8 +392,10 @@ function parseUiPublisherWorkflow(source) {
   ) {
     return null
   }
+  /** @param {string} key */
   const rootIndex = (key) =>
     rootEntries.find(({ key: candidate }) => candidate === key)?.index ?? -1
+  /** @param {string} key */
   const rootSection = (key) => {
     const index = rootIndex(key)
     const next = rootEntries.find((entry) => entry.index > index)?.index ?? meaningful.length
