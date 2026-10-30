@@ -17,11 +17,13 @@
   "files": [
     "src",
     "!src/commands/qualification-receipt.mjs",
+    "!src/commands/release-recovery.mjs",
     "!src/lib/qualification-receipt.mjs",
     "!src/lib/release-package-contract.mjs",
     "docs",
     ".github",
     "!.github/actions/**",
+    "!.github/workflows/qualified-foundry-publish.yml",
     ".githooks",
     ".editorconfig",
     ".gitattributes",

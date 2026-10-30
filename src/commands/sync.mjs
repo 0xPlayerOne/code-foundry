@@ -1247,19 +1247,28 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
     // recovery, staging, and qualified publication. Consumer callers must
     // retain the ordinary reusable Release Please path instead of inheriting
     // self-only jobs whose outputs and environments do not exist for them.
-    for (const job of ['qualification', 'preflight', 'recovery', 'stage', 'publish'])
+    for (const job of [
+      'qualification',
+      'preflight',
+      'recovery',
+      'stage',
+      'publish',
+      'npm_recovery_target',
+      'npm_recovery_publish',
+    ])
       rendered = removeWorkflowBlock(rendered, job)
+    rendered = removeWorkflowBlock(rendered, 'recover-npm-tag', '      ')
     rendered = rendered.replace(/^    needs: \[preflight\]\n/m, '')
     rendered = rendered.replace(/^      config-file: \.github\/release-please-foundry\.json\n/m, '')
     if (config.release_defer_publication !== 'true') {
       rendered = rendered.replace(/^      defer-publication: true\n/m, '')
     }
     rendered = rendered.replace(
-      /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\)\n/m,
+      /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\) && !\(github\.event_name == 'workflow_dispatch' && inputs\['recover-npm-tag'\] != ''\)\n/m,
       "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n"
     )
     rendered = rendered.replace(
-      /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\)\n/m,
+      /^    if: github\.ref == 'refs\/heads\/main' && \(vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)\) && !\(github\.event_name == 'workflow_dispatch' && inputs\['recover-npm-tag'\] != ''\)\n/m,
       "    if: vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)\n"
     )
     // Gate ordinary pushes while allowing the release squash and manual hotfixes.
@@ -1386,19 +1395,25 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
 }
 
 /**
- * Remove a root-level YAML block by id while preserving the surrounding file.
- * This is used for workflow jobs and triggers whose feature is disabled by
- * configuration.
+ * Remove an indented YAML mapping block by id while preserving the surrounding
+ * file. This is used for workflow jobs, inputs, and triggers whose feature is
+ * disabled by configuration.
  * @param {string} content
  * @param {string} blockId
+ * @param {string} [indentation]
  * @returns {string}
  */
-function removeWorkflowBlock(content, blockId) {
+function removeWorkflowBlock(content, blockId, indentation = '  ') {
   const lines = content.split('\n')
-  const start = lines.findIndex((line) => line === `  ${blockId}:`)
+  const start = lines.findIndex((line) => line === `${indentation}${blockId}:`)
   if (start === -1) return content
   let end = start + 1
-  while (end < lines.length && !/^  [A-Za-z0-9_-]+:\s*$/.test(lines[end])) end += 1
+  while (end < lines.length) {
+    const line = lines[end]
+    const level = line.match(/^ */)?.[0].length ?? 0
+    if (line.trim() && level <= indentation.length) break
+    end += 1
+  }
   lines.splice(start, end - start)
   if (content.endsWith('\n') && lines.at(-1) !== '') lines.push('')
   return lines.join('\n')
