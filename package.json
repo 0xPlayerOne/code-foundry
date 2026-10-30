@@ -23,7 +23,7 @@
     "docs",
     ".github",
     "!.github/actions/**",
-    "!.github/workflows/release_self-ci.yml",
+    "!.github/workflows/qualified-foundry-publish.yml",
     ".githooks",
     ".editorconfig",
     ".gitattributes",

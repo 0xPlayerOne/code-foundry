@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   requireNpmVersionMissing,
   validateRecoveryTarget,
+  verifyRecoveryTarget,
 } from '../src/commands/release-recovery.mjs'
 import { syncRepository } from '../src/commands/sync.mjs'
 
@@ -106,6 +107,7 @@ test('manual recovery dispatch calls the normal qualification and OIDC publicati
     /source-sha: \$\{\{ needs\.npm_recovery_target\.outputs\['source-sha'\] \}\}/
   )
   assert.match(releaseCaller, /RELEASE_TAG: \$\{\{ inputs\['recover-npm-tag'\] \}\}/)
+  assert.match(releaseCaller, /node src\/commands\/release-recovery\.mjs verify-target/)
   assert.doesNotMatch(releaseCaller, /npm publish/)
   assert.equal((releaseCaller.match(/inputs\['recover-npm-tag'\] != ''/g) ?? []).length, 7)
   assert.match(publisherWorkflow, /name: Qualify Node \$\{\{ matrix\.node \}\}/)
@@ -132,7 +134,62 @@ test('manual recovery dispatch calls the normal qualification and OIDC publicati
     readFileSync(new URL('../package.json', import.meta.url), 'utf8')
   )
   assert.ok(packageManifest.files.includes('!src/commands/release-recovery.mjs'))
-  assert.ok(packageManifest.files.includes('!.github/workflows/release_self-ci.yml'))
+  assert.ok(packageManifest.files.includes('!.github/workflows/qualified-foundry-publish.yml'))
+  assert.ok(!packageManifest.files.includes('!.github/workflows/release_self-ci.yml'))
+})
+
+test('recovery preflight writes outputs only after tag, immutable asset, ancestry, and npm absence pass', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'code-foundry-recovery-output-'))
+  const outputPath = join(directory, 'github-output')
+  try {
+    const runCalls = []
+    const result = verifyRecoveryTarget(
+      { repository: '0xPlayerOne/code-foundry', tag, currentSha, outputPath },
+      {
+        resolveTagCommit: (repository, resolvedTag) => {
+          assert.equal(repository, '0xPlayerOne/code-foundry')
+          assert.equal(resolvedTag, tag)
+          return sourceSha
+        },
+        runGh: (args) => {
+          runCalls.push(args)
+          return { status: 0, stdout: JSON.stringify(release()) }
+        },
+        spawnSync: (command, args) => {
+          runCalls.push([command, ...args])
+          if (command === 'git') return { status: 0 }
+          return {
+            status: 1,
+            stderr: `npm error code E404\nnpm error 404 No match found for version ${version}\n`,
+          }
+        },
+      }
+    )
+    assert.deepEqual(result, { tag, asset, sourceSha, version })
+    assert.equal(
+      readFileSync(outputPath, 'utf8'),
+      `tag=${tag}\nasset=${asset}\nsource-sha=${sourceSha}\n`
+    )
+    assert.equal(runCalls.filter((args) => args[0] === 'npm').length, 1)
+
+    rmSync(outputPath)
+    writeFileSync(outputPath, '')
+    assert.throws(
+      () =>
+        verifyRecoveryTarget(
+          { repository: '0xPlayerOne/code-foundry', tag, currentSha, outputPath },
+          {
+            resolveTagCommit: () => sourceSha,
+            runGh: () => ({ status: 0, stdout: JSON.stringify(release()) }),
+            spawnSync: (command) => (command === 'git' ? { status: 0 } : { status: 0, stderr: '' }),
+          }
+        ),
+      /already exists/
+    )
+    assert.equal(readFileSync(outputPath, 'utf8'), '')
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 test('consumer release rendering strips the self-only recovery selector and jobs', () => {

@@ -291,51 +291,8 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { appendFileSync, readFileSync } from 'node:fs'
-          import { spawnSync } from 'node:child_process'
-          import { resolveTagCommit, runGh } from './src/commands/release-integrity.mjs'
-          import { requireNpmVersionMissing, validateRecoveryTarget } from './src/commands/release-recovery.mjs'
-
-          const repository = process.env.GITHUB_REPOSITORY
-          const tag = process.env.RELEASE_TAG
-          const currentSha = process.env.CURRENT_SHA
-          const version = JSON.parse(readFileSync('package.json', 'utf8')).version
-          const sourceSha = resolveTagCommit(repository, tag)
-          const releaseResult = runGh([
-            'api',
-            '--hostname',
-            'github.com',
-            `repos/${repository}/releases/tags/${encodeURIComponent(tag)}`,
-          ])
-          if (releaseResult.status !== 0) throw new Error('Could not verify the requested GitHub release')
-          let release
-          try {
-            release = JSON.parse(releaseResult.stdout)
-          } catch {
-            throw new Error('GitHub returned invalid release metadata')
-          }
-          const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', sourceSha, currentSha])
-          const target = validateRecoveryTarget({
-            tag,
-            version,
-            release,
-            sourceSha,
-            currentSha,
-            sourceIsAncestor: ancestor.status === 0,
-          })
-          const npm = spawnSync(
-            'npm',
-            ['view', `code-foundry@${version}`, 'version', '--json', '--registry', 'https://registry.npmjs.org'],
-            { encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 }
-          )
-          requireNpmVersionMissing({ status: npm.status, stderr: npm.stderr ?? '', version })
-          appendFileSync(
-            process.env.GITHUB_OUTPUT,
-            `tag=${target.tag}\nasset=${target.asset}\nsource-sha=${target.sourceSha}\n`
-          )
-          console.log(`Recovery target verified: ${target.tag} at ${target.sourceSha}`)
-          NODE
+          node src/commands/release-recovery.mjs verify-target \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$CURRENT_SHA" "$GITHUB_OUTPUT"
 
   npm_recovery_publish:
     name: Requalify and publish recovered archive
