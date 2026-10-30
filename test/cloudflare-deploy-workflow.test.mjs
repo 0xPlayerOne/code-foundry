@@ -129,3 +129,21 @@ describe('cf deploy path packages a Build Output before every prebuilt deploy', 
     )
   })
 })
+
+describe('Cloudflare build environment forwarding', () => {
+  it('accepts non-secret JSON build variables and scopes them to the build step', () => {
+    assert.match(
+      workflow,
+      /build-env:\s*\n\s+description: 'Optional JSON object of non-secret environment variables for the build command only\.'/
+    )
+    const buildStart = workflow.indexOf('      - name: Build Worker')
+    const deployStart = workflow.indexOf('      - name: Deploy to Cloudflare', buildStart)
+    assert.ok(buildStart !== -1 && deployStart > buildStart)
+    const buildBlock = workflow.slice(buildStart, deployStart)
+    const deployBlock = workflow.slice(deployStart)
+    assert.match(buildBlock, /BUILD_ENV_JSON: \$\{\{ inputs\.build-env \}\}/)
+    assert.match(buildBlock, /env: \{ \.\.\.process\.env, \.\.\.buildEnv \}/)
+    assert.match(buildBlock, /\['PATH', 'NODE_OPTIONS'\]/)
+    assert.doesNotMatch(deployBlock, /BUILD_ENV_JSON|buildEnv/)
+  })
+})
