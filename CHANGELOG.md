@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.2...v1.52.3) (2026-10-30)
+
+
+### Bug Fixes
+
+* opt Code Foundry into source qualification receipts ([#805](https://github.com/0xPlayerOne/code-foundry/issues/805)) ([c7f7011](https://github.com/0xPlayerOne/code-foundry/commit/c7f70117b7d9d687d1116766114ba39028a4dc40))
+
 ## [1.52.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.1...v1.52.2) (2026-10-30)
 
 
