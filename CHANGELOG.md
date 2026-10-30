@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.3...v1.52.4) (2026-10-30)
+
+
+### Bug Fixes
+
+* recognize fixed test-and-pack receipt lifecycle ([#808](https://github.com/0xPlayerOne/code-foundry/issues/808)) ([8c8010c](https://github.com/0xPlayerOne/code-foundry/commit/8c8010cb926895d5a81289c696f82b855e30ad9f))
+
 ## [1.52.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.2...v1.52.3) (2026-10-30)
 
 
