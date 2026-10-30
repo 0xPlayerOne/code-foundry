@@ -47,8 +47,20 @@ const adeaUiPublisherObject = () => {
     'packed-modal-dialog': 'bun run check:packed-modal-dialog',
     'packed-native-select': 'bun run check:packed-native-select',
   }
+  const refuseExistingScript = [
+    'set -euo pipefail',
+    'if npm view "@adea-ai/ui@${VERSION}" version >/dev/null 2>&1; then',
+    '  echo "::error title=Version already published::@adea-ai/ui@${VERSION} is already on the registry. Versions are immutable; bump the manifest and merge a new release instead of retagging."',
+    '  exit 1',
+    'fi',
+    'echo "@adea-ai/ui@${VERSION} is available"',
+  ].join('\n')
   const jobs = {
     prepare: {
+      name: 'Prepare @adea-ai/ui',
+      'runs-on': 'ubuntu-latest',
+      'timeout-minutes': 15,
+      permissions: { contents: 'read' },
       outputs: {
         version: '${{ steps.version.outputs.version }}',
         archive_sha256: '${{ steps.archive.outputs.sha256 }}',
@@ -56,39 +68,162 @@ const adeaUiPublisherObject = () => {
       },
       steps: [
         {
-          id: 'version',
-          run: `echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"`,
+          name: 'Checkout',
+          uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+          with: { 'persist-credentials': false },
+        },
+        {
+          name: 'Setup Bun',
+          uses: 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6',
+          with: { 'bun-version': '1.4.4', 'no-cache': true },
+        },
+        {
+          name: 'Setup Node',
+          uses: 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+          with: { 'node-version': 24, 'registry-url': 'https://registry.npmjs.org' },
+        },
+        { name: 'Install dependencies', run: 'bun install --frozen-lockfile' },
+        {
+          name: 'Verify packed browser runtime policy',
+          run: 'bun test ./.github/scripts/check-playwright-runtime.test.ts',
         },
         { name: 'Build the library', run: 'bun run --cwd packages/ui build' },
-        { name: 'Verify the publishable archive', run: 'bun run pack:check' },
         {
+          name: 'Read the version to publish',
+          id: 'version',
+          'working-directory': 'packages/ui',
+          run: `echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"`,
+        },
+        {
+          name: 'Refuse to publish a version that already exists',
+          if: '${{ inputs.dry-run != true }}',
+          env: { VERSION: '${{ steps.version.outputs.version }}' },
+          run: refuseExistingScript,
+        },
+        {
+          name: 'Verify the publishable archive',
+          'working-directory': 'packages/ui',
+          run: 'bun run pack:check',
+        },
+        {
+          name: 'Pack one immutable UI archive',
           id: 'archive',
+          'working-directory': 'packages/ui',
           run: 'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"',
         },
         {
-          uses: 'actions/upload-artifact@v7',
-          with: { name: 'prepared-ui-package', path: '${{ runner.temp }}/prepared-ui/' },
+          name: 'Verify packed consumers',
+          'working-directory': 'packages/ui',
+          env: {
+            ADEA_PACKED_UI_TARBALL: '${{ runner.temp }}/prepared-ui/package.tgz',
+            ADEA_PACKED_UI_SHA256: '${{ steps.archive.outputs.sha256 }}',
+          },
+          run: 'bun run check:packed-consumer',
+        },
+        {
+          name: 'Verify packed pure paste model',
+          'working-directory': 'packages/ui',
+          env: {
+            ADEA_PACKED_UI_TARBALL: '${{ runner.temp }}/prepared-ui/package.tgz',
+            ADEA_PACKED_UI_SHA256: '${{ steps.archive.outputs.sha256 }}',
+          },
+          run: 'bun run check:packed-paste-model',
+        },
+        {
+          name: 'Upload the verified UI package',
+          uses: 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+          with: {
+            name: 'prepared-ui-package',
+            path: '${{ runner.temp }}/prepared-ui/',
+            'retention-days': 1,
+            'if-no-files-found': 'error',
+          },
         },
       ],
     },
   }
-  for (const [name, script] of Object.entries(consumers)) {
+  const playwrightImage =
+    'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27'
+  const consumerNames = {
+    'packed-conversation': [
+      ['Verify packed conversation composition', 'bun run check:packed-conversation'],
+      ['Verify packed ListRow browser contract', 'bun run check:packed-list-row'],
+    ],
+    'packed-layout': [
+      [
+        'Verify packed pane model and settings navigation',
+        'bun run check:packed-layout && bun run check:packed-settings-navigation',
+      ],
+    ],
+    'packed-layout-renderer': [
+      ['Verify packed pane renderer', 'bun run check:packed-layout-renderer'],
+    ],
+    'packed-appearance': [
+      ['Verify packed appearance interactions and SSR', 'bun run check:packed-appearance'],
+    ],
+    'packed-modal-dialog': [['Verify packed modal dialog', 'bun run check:packed-modal-dialog']],
+    'packed-native-select': [
+      ['Verify native select from the packed artifact', 'bun run check:packed-native-select'],
+    ],
+  }
+  const consumerJobNames = {
+    'packed-conversation': ['Packed conversation', 15],
+    'packed-layout': ['Packed layout', 15],
+    'packed-layout-renderer': ['Packed layout renderer', 20],
+    'packed-appearance': ['Packed appearance', 20],
+    'packed-modal-dialog': ['Packed modal dialog', 15],
+    'packed-native-select': ['Packed native select', 15],
+  }
+  for (const name of Object.keys(consumers)) {
+    const [jobName, timeout] = consumerJobNames[name]
     jobs[name] = {
+      name: jobName,
       needs: 'prepare',
+      'runs-on': 'ubuntu-latest',
+      'timeout-minutes': timeout,
+      container: { image: playwrightImage },
       env: {
+        PLAYWRIGHT_RUNTIME_IMAGE: playwrightImage,
         ADEA_PACKED_UI_TARBALL: '${{ github.workspace }}/prepared-ui/package.tgz',
         ADEA_PACKED_UI_SHA256: '${{ needs.prepare.outputs.archive_sha256 }}',
       },
       steps: [
         {
-          name: 'Download the verified UI package',
-          uses: 'actions/download-artifact@v7',
-          with: { name: 'prepared-ui-package' },
+          name: 'Checkout',
+          uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+          with: { 'persist-credentials': false },
         },
         {
+          name: 'Prepare Bun extraction',
+          run: 'apt-get update && apt-get install -y --no-install-recommends unzip',
+        },
+        {
+          name: 'Setup Bun',
+          uses: 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6',
+          with: { 'bun-version': '1.4.4' },
+        },
+        { name: 'Install dependencies', run: 'bun install --frozen-lockfile' },
+        {
+          name: 'Download the verified UI package',
+          uses: 'actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131',
+          with: {
+            name: 'prepared-ui-package',
+            path: '${{ github.workspace }}/prepared-ui/',
+          },
+        },
+        {
+          name: 'Verify the shared archive',
           run: String.raw`printf '%s  %s\n' "$ADEA_PACKED_UI_SHA256" "$ADEA_PACKED_UI_TARBALL" | sha256sum --check`,
         },
-        { run: script },
+        {
+          name: 'Verify pinned headless engines',
+          run: 'node .github/scripts/check-playwright-runtime.mjs',
+        },
+        ...consumerNames[name].map(([stepName, command]) => ({
+          name: stepName,
+          'working-directory': 'packages/ui',
+          run: command,
+        })),
       ],
     }
   }
@@ -135,9 +270,12 @@ NODE`
     'exit 1',
   ].join('\n')
   jobs.publish = {
+    name: 'Publish @adea-ai/ui',
     if: '${{ inputs.dry-run != true }}',
+    'runs-on': 'ubuntu-latest',
+    'timeout-minutes': 15,
     needs: ['prepare', ...Object.keys(consumers)],
-    permissions: { 'id-token': 'write' },
+    permissions: { contents: 'read', 'id-token': 'write' },
     steps: [
       {
         name: 'Checkout',
@@ -209,15 +347,15 @@ function adeaUiPublisherWorkflow(workflow = adeaUiPublisherObject()) {
   }
   for (const [name, job] of Object.entries(workflow.jobs)) {
     lines.push(`  ${name}:`)
-    if (job.if !== undefined) lines.push(`    if: ${yamlScalar(job.if)}`)
-    if (job['continue-on-error'] !== undefined)
-      lines.push(`    continue-on-error: ${yamlScalar(job['continue-on-error'])}`)
+    for (const key of ['name', 'runs-on', 'timeout-minutes', 'if', 'continue-on-error']) {
+      if (job[key] !== undefined) lines.push(`    ${key}: ${yamlScalar(job[key])}`)
+    }
     if (job.needs !== undefined) {
       lines.push('    needs:')
       for (const need of Array.isArray(job.needs) ? job.needs : [job.needs])
         lines.push(`      - ${yamlScalar(need)}`)
     }
-    for (const key of ['outputs', 'permissions', 'env']) {
+    for (const key of ['outputs', 'permissions', 'env', 'container']) {
       if (job[key] !== undefined) map(4, key, job[key])
     }
     if (job.steps !== undefined) {
@@ -1318,6 +1456,32 @@ test('Adea UI publisher qualification binds parsed, non-skippable jobs and execu
     },
     (workflow) => {
       workflow.jobs['packed-layout']['continue-on-error'] = true
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].env.ADEA_PACKED_UI_TARBALL =
+        '${{ github.workspace }}/decoy/package.tgz'
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].steps.splice(6, 0, {
+        name: 'Replace verified archive',
+        run: 'printf tampered > "$ADEA_PACKED_UI_TARBALL"',
+      })
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].steps.splice(6, 0, {
+        name: 'Install fake Bun',
+        run: 'echo "$RUNNER_TEMP/fake-bin" >> "$GITHUB_PATH"',
+      })
+    },
+    (workflow) => {
+      workflow.jobs.prepare.steps.splice(11, 0, {
+        name: 'Replace archive after verification',
+        run: 'printf tampered > "$RUNNER_TEMP/prepared-ui/package.tgz"',
+      })
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].steps.find((step) => step.name === 'Setup Bun').uses =
+        'example/fake-setup-bun@v1'
     },
     (workflow) => {
       workflow.jobs['packed-layout'].steps.find((step) =>

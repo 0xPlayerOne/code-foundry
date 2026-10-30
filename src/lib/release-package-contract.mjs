@@ -270,76 +270,29 @@ function hasQualifiedAdeaUiPublisher(value) {
     'packed-native-select',
   ]
   const publishNeeds = ['prepare', ...requiredConsumers]
+  if (!sameStringSet(Object.keys(jobs), [...publishNeeds, 'publish'])) return false
   const prepare = jobs.prepare
   const publish = jobs.publish
   if (!safeRequiredJob(prepare) || !safeRequiredJob(publish, true)) {
     return false
   }
-
-  const prepareSteps = steps(prepare)
-  if (
-    !hasStepRun(prepareSteps, 'bun run --cwd packages/ui build') ||
-    !hasStepRun(prepareSteps, 'bun run pack:check') ||
-    !hasStepRun(prepareSteps, 'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"') ||
-    !hasExactVersionOutputStep(prepareSteps) ||
-    !hasStepWithIdAndRun(
-      prepareSteps,
-      'archive',
-      'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"'
-    ) ||
-    !prepareSteps.some(
-      (step) =>
-        safeRequiredStep(step) &&
-        typeof step.uses === 'string' &&
-        step.uses.startsWith('actions/upload-artifact@') &&
-        object(step.with) &&
-        step.with.name === 'prepared-ui-package' &&
-        step.with.path === '${{ runner.temp }}/prepared-ui/'
-    ) ||
-    !object(prepare.outputs) ||
-    prepare.outputs.version !== '${{ steps.version.outputs.version }}' ||
-    prepare.outputs.archive_sha256 !== '${{ steps.archive.outputs.sha256 }}' ||
-    prepare.outputs.archive_integrity !== '${{ steps.archive.outputs.integrity }}'
-  ) {
-    return false
-  }
+  if (!hasQualifiedAdeaUiPrepare(prepare)) return false
 
   for (const [jobName, script] of Object.entries(ADEA_UI_PACKED_CONSUMER_SCRIPTS)) {
     const job = jobs[jobName]
-    if (!safeRequiredJob(job) || !hasNeed(job, 'prepare')) return false
-    const jobSteps = steps(job)
-    if (
-      !jobSteps.some(
-        (step) =>
-          safeRequiredStep(step) &&
-          object(step.with) &&
-          typeof step.uses === 'string' &&
-          step.uses.startsWith('actions/download-artifact@') &&
-          step.name === 'Download the verified UI package' &&
-          step.with.name === 'prepared-ui-package'
-      ) ||
-      !jobSteps.some(
-        (step) =>
-          safeRequiredStep(step) &&
-          typeof step.run === 'string' &&
-          /^\s*printf '%s  %s\\n' "\$ADEA_PACKED_UI_SHA256" "\$ADEA_PACKED_UI_TARBALL" \| sha256sum --check\s*$/m.test(
-            step.run
-          )
-      ) ||
-      job.env?.ADEA_PACKED_UI_SHA256 !== '${{ needs.prepare.outputs.archive_sha256 }}' ||
-      typeof job.env?.ADEA_PACKED_UI_TARBALL !== 'string' ||
-      !job.env.ADEA_PACKED_UI_TARBALL.includes('prepared-ui/package.tgz') ||
-      !hasStepRun(jobSteps, script)
-    ) {
-      return false
-    }
+    if (!hasQualifiedAdeaUiConsumer(job, jobName, script)) return false
   }
 
   if (
     publish.if !== '${{ inputs.dry-run != true }}' ||
+    publish.name !== 'Publish @adea-ai/ui' ||
+    publish['runs-on'] !== 'ubuntu-latest' ||
+    publish['timeout-minutes'] !== 15 ||
+    publish.env !== undefined ||
+    publish.container !== undefined ||
+    publish.outputs !== undefined ||
     !sameStringSet(needs(publish), publishNeeds) ||
-    !object(publish.permissions) ||
-    publish.permissions['id-token'] !== 'write'
+    !exactMap(publish.permissions, { contents: 'read', 'id-token': 'write' })
   ) {
     return false
   }
@@ -483,7 +436,29 @@ function hasIndentedSequence(lines, header, expected) {
 
 /** @param {string[]} block */
 function parseWorkflowJob(block) {
-  const scalarKeys = ['if', 'continue-on-error']
+  const supportedKeys = new Set([
+    'name',
+    'needs',
+    'runs-on',
+    'timeout-minutes',
+    'if',
+    'continue-on-error',
+    'outputs',
+    'permissions',
+    'env',
+    'container',
+    'steps',
+  ])
+  const directKeys = block
+    .map((line) => /^    ([A-Za-z0-9_-]+):/.exec(line)?.[1])
+    .filter((key) => key !== undefined)
+  if (
+    directKeys.length !== new Set(directKeys).size ||
+    directKeys.some((key) => !supportedKeys.has(key))
+  ) {
+    return null
+  }
+  const scalarKeys = ['name', 'runs-on', 'timeout-minutes', 'if', 'continue-on-error']
   /** @type {Record<string, any>} */
   const job = {}
   for (const key of scalarKeys) {
@@ -517,7 +492,7 @@ function parseWorkflowJob(block) {
     }
   }
 
-  for (const key of ['outputs', 'permissions', 'env']) {
+  for (const key of ['outputs', 'permissions', 'env', 'container']) {
     const parsed = parseJobMapping(block, key)
     if (parsed === null) return null
     if (parsed !== undefined) job[key] = parsed
@@ -651,6 +626,233 @@ const ADEA_UI_PACKED_CONSUMER_SCRIPTS = {
 }
 
 /** @param {unknown} job @returns {job is Record<string, any>} */
+function hasQualifiedAdeaUiPrepare(job) {
+  if (
+    !safeRequiredJob(job) ||
+    job.needs !== undefined ||
+    job.name !== 'Prepare @adea-ai/ui' ||
+    job['runs-on'] !== 'ubuntu-latest' ||
+    job['timeout-minutes'] !== 15 ||
+    job.env !== undefined ||
+    job.container !== undefined ||
+    !exactMap(job.permissions, { contents: 'read' }) ||
+    !exactMap(job.outputs, {
+      version: '${{ steps.version.outputs.version }}',
+      archive_sha256: '${{ steps.archive.outputs.sha256 }}',
+      archive_integrity: '${{ steps.archive.outputs.integrity }}',
+    })
+  ) {
+    return false
+  }
+
+  const items = steps(job)
+  if (items.length !== 13) return false
+  const [
+    checkout,
+    setupBun,
+    setupNode,
+    install,
+    browserPolicy,
+    build,
+    version,
+    alreadyPublished,
+    packCheck,
+    pack,
+    consumers,
+    pasteModel,
+    upload,
+  ] = items
+  return (
+    items.every((step, index) => index === 7 || safeRequiredStep(step)) &&
+    exactStepKeys(checkout, ['name', 'uses', 'with']) &&
+    checkout.name === 'Checkout' &&
+    checkout.uses === 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' &&
+    exactMap(checkout.with, { 'persist-credentials': false }) &&
+    exactStepKeys(setupBun, ['name', 'uses', 'with']) &&
+    setupBun.name === 'Setup Bun' &&
+    setupBun.uses === 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6' &&
+    exactMap(setupBun.with, { 'bun-version': '1.4.4', 'no-cache': true }) &&
+    exactStepKeys(setupNode, ['name', 'uses', 'with']) &&
+    setupNode.name === 'Setup Node' &&
+    setupNode.uses === 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' &&
+    exactMap(setupNode.with, {
+      'node-version': 24,
+      'registry-url': 'https://registry.npmjs.org',
+    }) &&
+    exactStepKeys(install, ['name', 'run']) &&
+    install.name === 'Install dependencies' &&
+    install.run === 'bun install --frozen-lockfile' &&
+    exactStepKeys(browserPolicy, ['name', 'run']) &&
+    browserPolicy.name === 'Verify packed browser runtime policy' &&
+    browserPolicy.run === 'bun test ./.github/scripts/check-playwright-runtime.test.ts' &&
+    exactStepKeys(build, ['name', 'run']) &&
+    build.name === 'Build the library' &&
+    build.run === 'bun run --cwd packages/ui build' &&
+    exactStepKeys(version, ['name', 'id', 'working-directory', 'run']) &&
+    version.name === 'Read the version to publish' &&
+    version.id === 'version' &&
+    version['working-directory'] === 'packages/ui' &&
+    version.run ===
+      `echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"` &&
+    exactStepKeys(alreadyPublished, ['name', 'if', 'env', 'run']) &&
+    alreadyPublished.name === 'Refuse to publish a version that already exists' &&
+    alreadyPublished.if === '${{ inputs.dry-run != true }}' &&
+    exactMap(alreadyPublished.env, { VERSION: '${{ steps.version.outputs.version }}' }) &&
+    exactScript(alreadyPublished.run, ADEA_UI_REFUSE_EXISTING_SCRIPT) &&
+    exactStepKeys(packCheck, ['name', 'working-directory', 'run']) &&
+    packCheck.name === 'Verify the publishable archive' &&
+    packCheck['working-directory'] === 'packages/ui' &&
+    packCheck.run === 'bun run pack:check' &&
+    exactStepKeys(pack, ['name', 'id', 'working-directory', 'run']) &&
+    pack.name === 'Pack one immutable UI archive' &&
+    pack.id === 'archive' &&
+    pack['working-directory'] === 'packages/ui' &&
+    pack.run === 'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"' &&
+    exactStepKeys(consumers, ['name', 'working-directory', 'env', 'run']) &&
+    consumers.name === 'Verify packed consumers' &&
+    consumers['working-directory'] === 'packages/ui' &&
+    exactMap(consumers.env, {
+      ADEA_PACKED_UI_TARBALL: '${{ runner.temp }}/prepared-ui/package.tgz',
+      ADEA_PACKED_UI_SHA256: '${{ steps.archive.outputs.sha256 }}',
+    }) &&
+    consumers.run === 'bun run check:packed-consumer' &&
+    exactStepKeys(pasteModel, ['name', 'working-directory', 'env', 'run']) &&
+    pasteModel.name === 'Verify packed pure paste model' &&
+    pasteModel['working-directory'] === 'packages/ui' &&
+    exactMap(pasteModel.env, {
+      ADEA_PACKED_UI_TARBALL: '${{ runner.temp }}/prepared-ui/package.tgz',
+      ADEA_PACKED_UI_SHA256: '${{ steps.archive.outputs.sha256 }}',
+    }) &&
+    pasteModel.run === 'bun run check:packed-paste-model' &&
+    exactStepKeys(upload, ['name', 'uses', 'with']) &&
+    upload.name === 'Upload the verified UI package' &&
+    upload.uses === 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' &&
+    exactMap(upload.with, {
+      name: 'prepared-ui-package',
+      path: '${{ runner.temp }}/prepared-ui/',
+      'retention-days': 1,
+      'if-no-files-found': 'error',
+    })
+  )
+}
+
+/** @type {Record<string, [string, string][]>} */
+const ADEA_UI_PACKED_CONSUMER_STEP_NAMES = {
+  'packed-conversation': [
+    ['Verify packed conversation composition', 'bun run check:packed-conversation'],
+    ['Verify packed ListRow browser contract', 'bun run check:packed-list-row'],
+  ],
+  'packed-layout': [
+    [
+      'Verify packed pane model and settings navigation',
+      'bun run check:packed-layout && bun run check:packed-settings-navigation',
+    ],
+  ],
+  'packed-layout-renderer': [
+    ['Verify packed pane renderer', 'bun run check:packed-layout-renderer'],
+  ],
+  'packed-appearance': [
+    ['Verify packed appearance interactions and SSR', 'bun run check:packed-appearance'],
+  ],
+  'packed-modal-dialog': [['Verify packed modal dialog', 'bun run check:packed-modal-dialog']],
+  'packed-native-select': [
+    ['Verify native select from the packed artifact', 'bun run check:packed-native-select'],
+  ],
+}
+
+/** @type {Record<string, [string, number]>} */
+const ADEA_UI_PACKED_CONSUMER_JOB_NAMES = {
+  'packed-conversation': ['Packed conversation', 15],
+  'packed-layout': ['Packed layout', 15],
+  'packed-layout-renderer': ['Packed layout renderer', 20],
+  'packed-appearance': ['Packed appearance', 20],
+  'packed-modal-dialog': ['Packed modal dialog', 15],
+  'packed-native-select': ['Packed native select', 15],
+}
+
+const ADEA_UI_PLAYWRIGHT_IMAGE =
+  'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27'
+
+/** @param {unknown} job @param {string} jobName @param {string} script */
+function hasQualifiedAdeaUiConsumer(job, jobName, script) {
+  const [expectedName, expectedTimeout] = ADEA_UI_PACKED_CONSUMER_JOB_NAMES[jobName] ?? []
+  if (
+    !safeRequiredJob(job) ||
+    job.name !== expectedName ||
+    job['runs-on'] !== 'ubuntu-latest' ||
+    job['timeout-minutes'] !== expectedTimeout ||
+    !sameStringSet(needs(job), ['prepare']) ||
+    job.permissions !== undefined ||
+    job.outputs !== undefined ||
+    !object(job.container) ||
+    Object.keys(job.container).length !== 1 ||
+    job.container.image !== ADEA_UI_PLAYWRIGHT_IMAGE ||
+    !object(job.env) ||
+    Object.keys(job.env).toSorted().join('\n') !==
+      ['ADEA_PACKED_UI_SHA256', 'ADEA_PACKED_UI_TARBALL', 'PLAYWRIGHT_RUNTIME_IMAGE']
+        .toSorted()
+        .join('\n') ||
+    job.env.PLAYWRIGHT_RUNTIME_IMAGE !== ADEA_UI_PLAYWRIGHT_IMAGE ||
+    job.env.ADEA_PACKED_UI_TARBALL !== '${{ github.workspace }}/prepared-ui/package.tgz' ||
+    job.env.ADEA_PACKED_UI_SHA256 !== '${{ needs.prepare.outputs.archive_sha256 }}'
+  ) {
+    return false
+  }
+
+  const consumerSteps = steps(job)
+  const cases = ADEA_UI_PACKED_CONSUMER_STEP_NAMES[jobName]
+  if (!cases || consumerSteps.length !== 7 + cases.length || !consumerSteps.every(safeRequiredStep))
+    return false
+  const [checkout, prepareBun, setupBun, install, download, verify, engines, ...tests] =
+    consumerSteps
+  return (
+    exactStepKeys(checkout, ['name', 'uses', 'with']) &&
+    checkout.name === 'Checkout' &&
+    checkout.uses === 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' &&
+    exactMap(checkout.with, { 'persist-credentials': false }) &&
+    exactStepKeys(prepareBun, ['name', 'run']) &&
+    prepareBun.name === 'Prepare Bun extraction' &&
+    prepareBun.run === 'apt-get update && apt-get install -y --no-install-recommends unzip' &&
+    exactStepKeys(setupBun, ['name', 'uses', 'with']) &&
+    setupBun.name === 'Setup Bun' &&
+    setupBun.uses === 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6' &&
+    exactMap(setupBun.with, { 'bun-version': '1.4.4' }) &&
+    exactStepKeys(install, ['name', 'run']) &&
+    install.name === 'Install dependencies' &&
+    install.run === 'bun install --frozen-lockfile' &&
+    exactStepKeys(download, ['name', 'uses', 'with']) &&
+    download.name === 'Download the verified UI package' &&
+    download.uses === 'actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131' &&
+    exactMap(download.with, {
+      name: 'prepared-ui-package',
+      path: '${{ github.workspace }}/prepared-ui/',
+    }) &&
+    exactStepKeys(verify, ['name', 'run']) &&
+    verify.name === 'Verify the shared archive' &&
+    exactScript(
+      verify.run,
+      String.raw`printf '%s  %s\n' "$ADEA_PACKED_UI_SHA256" "$ADEA_PACKED_UI_TARBALL" | sha256sum --check`
+    ) &&
+    exactStepKeys(engines, ['name', 'run']) &&
+    engines.name === 'Verify pinned headless engines' &&
+    engines.run === 'node .github/scripts/check-playwright-runtime.mjs' &&
+    tests.every(
+      (step, index) =>
+        exactStepKeys(step, ['name', 'working-directory', 'run']) &&
+        step.name === cases[index][0] &&
+        step['working-directory'] === 'packages/ui' &&
+        step.run === cases[index][1] &&
+        script === cases[0][1]
+    )
+  )
+}
+
+/** @param {unknown} actual @param {Record<string, any>} expected */
+function exactMap(actual, expected) {
+  return object(actual) && stableJson(actual) === stableJson(expected)
+}
+
+/** @param {unknown} job @returns {job is Record<string, any>} */
 function safeRequiredJob(job, allowIf = false) {
   return (
     object(job) &&
@@ -662,32 +864,6 @@ function safeRequiredJob(job, allowIf = false) {
 /** @param {unknown} job @returns {Record<string, any>[]} */
 function steps(job) {
   return object(job) && Array.isArray(job.steps) && job.steps.every(object) ? job.steps : []
-}
-
-/** @param {Record<string, any>[]} jobSteps @param {string} script */
-function hasStepRun(jobSteps, script) {
-  return jobSteps.some((step) => safeRequiredStep(step) && step.run === script)
-}
-
-/** @param {Record<string, any>[]} jobSteps @param {string} id @param {string} run */
-function hasStepWithIdAndRun(jobSteps, id, run) {
-  return jobSteps.some((step) => safeRequiredStep(step) && step.id === id && step.run === run)
-}
-
-/** @param {Record<string, any>[]} jobSteps */
-function hasExactVersionOutputStep(jobSteps) {
-  return jobSteps.some(
-    (step) =>
-      safeRequiredStep(step) &&
-      step.id === 'version' &&
-      step.run ===
-        `echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"`
-  )
-}
-
-/** @param {unknown} job @param {string} dependency */
-function hasNeed(job, dependency) {
-  return needs(job).includes(dependency)
 }
 
 /** @param {unknown} job @returns {string[]} */
@@ -742,6 +918,15 @@ const ADEA_UI_PIN_NPM_SCRIPT = [
   '  exit 1',
   'fi',
   'npm --version',
+].join('\n')
+
+const ADEA_UI_REFUSE_EXISTING_SCRIPT = [
+  'set -euo pipefail',
+  'if npm view "@adea-ai/ui@${VERSION}" version >/dev/null 2>&1; then',
+  '  echo "::error title=Version already published::@adea-ai/ui@${VERSION} is already on the registry. Versions are immutable; bump the manifest and merge a new release instead of retagging."',
+  '  exit 1',
+  'fi',
+  'echo "@adea-ai/ui@${VERSION} is available"',
 ].join('\n')
 
 const ADEA_UI_PUBLISH_VERIFY_SCRIPT = String.raw`set -euo pipefail
