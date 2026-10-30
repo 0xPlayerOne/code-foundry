@@ -201,13 +201,14 @@ describe('Cloudflare build environment forwarding', () => {
   })
 
   it('rejects malformed JSON and unsafe environment overrides', () => {
+    const newlineNameInput = JSON.stringify({ ['ADEA_PREVIEW_AUTH_HYPERDRIVE_ID\n']: 'x' })
+    assert.deepEqual(JSON.parse(newlineNameInput), { ['ADEA_PREVIEW_AUTH_HYPERDRIVE_ID\n']: 'x' })
     for (const input of [
       '{',
       'null',
       '[]',
       '{"ADEA_PREVIEW_HYPERDRIVE_ID":1}',
       '{"ADEA_PREVIEW_AUTH_HYPERDRIVE_ID_EXTRA":"x"}',
-      '{"ADEA_PREVIEW_AUTH_HYPERDRIVE_ID\n":"x"}',
       '{"BASH_ENV":"x"}',
       '{"LD_PRELOAD":"x"}',
       '{"LD_LIBRARY_PATH":"x"}',
@@ -220,5 +221,8 @@ describe('Cloudflare build environment forwarding', () => {
       assert.notEqual(result.status, 0, `expected rejection for ${input}`)
       assert.equal(captured, null, `bun must not run for ${input}`)
     }
+    const { result, captured } = runBuild(newlineNameInput)
+    assert.match(result.stderr, /Invalid build-env variable name/)
+    assert.equal(captured, null, 'the allowlist must reject the valid JSON name before bun runs')
   })
 })
