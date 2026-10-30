@@ -21,8 +21,10 @@ const releaseCaller = readFileSync(
 
 const sourceSha = 'a'.repeat(40)
 const currentSha = 'b'.repeat(40)
-const version = '1.53.1'
+// Recovery verifies the checked-out package version, so follow every release.
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const tag = `v${version}`
+const otherVersion = version.replace(/\d+$/, (patch) => String(Number(patch) + 1))
 const asset = `code-foundry-${version}.tgz`
 const release = () => ({
   immutable: true,
@@ -44,8 +46,8 @@ const target = (changes = {}) =>
 
 test('manual recovery is constrained to the current immutable release source and exact archive', () => {
   assert.deepEqual(target(), { tag, asset, sourceSha, version })
-  assert.throws(() => target({ tag: 'v1.53.2' }), /match the current package version/)
-  assert.throws(() => target({ version: '1.53.2' }), /match the current package version/)
+  assert.throws(() => target({ tag: `v${otherVersion}` }), /match the current package version/)
+  assert.throws(() => target({ version: otherVersion }), /match the current package version/)
   assert.throws(() => target({ sourceSha: 'bad' }), /exact source and current commit/)
   assert.throws(() => target({ sourceIsAncestor: false }), /contained in the trusted main checkout/)
 })
@@ -54,7 +56,7 @@ for (const [label, change] of [
   ['mutable release', (value) => (value.immutable = false)],
   ['draft release', (value) => (value.draft = true)],
   ['prerelease', (value) => (value.prerelease = true)],
-  ['different tag', (value) => (value.tag_name = 'v1.53.2')],
+  ['different tag', (value) => (value.tag_name = `v${otherVersion}`)],
   ['missing archive', (value) => (value.assets = [])],
   ['duplicate archive', (value) => value.assets.push({ name: asset, state: 'uploaded', size: 1 })],
   ['unuploaded archive', (value) => (value.assets[0].state = 'starter')],
