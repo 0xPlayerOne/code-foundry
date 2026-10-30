@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.0...v1.53.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* allow isolated preview auth Hyperdrive build binding ([#813](https://github.com/0xPlayerOne/code-foundry/issues/813)) ([cc267fc](https://github.com/0xPlayerOne/code-foundry/commit/cc267fcb84c2828fb5c7090e0b494991ea90f249))
+
 ## [1.53.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.4...v1.53.0) (2026-10-30)
 
 
