@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.1...v1.52.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* retry transient release fallback reads safely ([#800](https://github.com/0xPlayerOne/code-foundry/issues/800)) ([c91e23b](https://github.com/0xPlayerOne/code-foundry/commit/c91e23bfaea9f107c8af9fa9bdf391308fa5ebf2))
+
 ## [1.52.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.0...v1.52.1) (2026-10-30)
 
 
