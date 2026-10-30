@@ -38,7 +38,12 @@ const adeaUiReleaseConfig = () => ({
   'extra-files': [{ type: 'json', path: 'packages/ui/package.json', jsonpath: '$.version' }],
 })
 
-const adeaUiPublisherObject = () => {
+const ADEA_UI_PLAYWRIGHT_1_63_IMAGE =
+  'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27'
+const ADEA_UI_PLAYWRIGHT_1_64_IMAGE =
+  'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea'
+
+const adeaUiPublisherObject = (playwrightImage = ADEA_UI_PLAYWRIGHT_1_63_IMAGE) => {
   const consumers = {
     'packed-conversation': 'bun run check:packed-conversation',
     'packed-layout': 'bun run check:packed-layout && bun run check:packed-settings-navigation',
@@ -142,8 +147,6 @@ const adeaUiPublisherObject = () => {
       ],
     },
   }
-  const playwrightImage =
-    'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27'
   const consumerNames = {
     'packed-conversation': [
       ['Verify packed conversation composition', 'bun run check:packed-conversation'],
@@ -1506,6 +1509,16 @@ test('Adea UI publisher qualification binds parsed, non-skippable jobs and execu
   const input = adeaUiContractInput()
   assert.equal(supportsAdeaUiWorkspaceReleaseContract(input), true)
 
+  const currentPlaywright = adeaUiPublisherObject(ADEA_UI_PLAYWRIGHT_1_64_IMAGE)
+  assert.equal(
+    supportsAdeaUiWorkspaceReleaseContract({
+      ...input,
+      publisherWorkflowText: adeaUiPublisherWorkflow(currentPlaywright),
+    }),
+    true,
+    'the published, digest-pinned Playwright 1.64.1 UI publisher remains eligible'
+  )
+
   const mutations = [
     (workflow) => {
       workflow.jobs.publish.if = '${{ always() }}'
@@ -1527,6 +1540,36 @@ test('Adea UI publisher qualification binds parsed, non-skippable jobs and execu
     (workflow) => {
       workflow.jobs['packed-layout'].env.ADEA_PACKED_UI_TARBALL =
         '${{ github.workspace }}/decoy/package.tgz'
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].container.image = ADEA_UI_PLAYWRIGHT_1_64_IMAGE
+      workflow.jobs['packed-layout'].env.PLAYWRIGHT_RUNTIME_IMAGE = ADEA_UI_PLAYWRIGHT_1_64_IMAGE
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].env.PLAYWRIGHT_RUNTIME_IMAGE = ADEA_UI_PLAYWRIGHT_1_64_IMAGE
+    },
+    (workflow) => {
+      const arbitraryImage =
+        'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+      for (const job of Object.values(workflow.jobs).slice(1, 7)) {
+        job.container.image = arbitraryImage
+        job.env.PLAYWRIGHT_RUNTIME_IMAGE = arbitraryImage
+      }
+    },
+    (workflow) => {
+      const wrongVersion =
+        'mcr.microsoft.com/playwright:v1.65.0-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea'
+      for (const job of Object.values(workflow.jobs).slice(1, 7)) {
+        job.container.image = wrongVersion
+        job.env.PLAYWRIGHT_RUNTIME_IMAGE = wrongVersion
+      }
+    },
+    (workflow) => {
+      const unpinnedImage = 'mcr.microsoft.com/playwright:v1.64.1-noble'
+      for (const job of Object.values(workflow.jobs).slice(1, 7)) {
+        job.container.image = unpinnedImage
+        job.env.PLAYWRIGHT_RUNTIME_IMAGE = unpinnedImage
+      }
     },
     (workflow) => {
       workflow.jobs['packed-layout'].steps.splice(6, 0, {
