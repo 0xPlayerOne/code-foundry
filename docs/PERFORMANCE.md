@@ -34,8 +34,10 @@ and 118 files.
 On v1.50.1 base `f671dd8`, the measured artifact was 315,853 packed bytes,
 1,200,759 unpacked bytes, and 120 files. Release caller publication overrides
 measure 316,295 packed bytes, 1,222,905 unpacked bytes, and 120 files: an
-increase of 442 packed bytes and 22,146 unpacked bytes. The packed limit is
-316,500 bytes, leaving 205 bytes of measured headroom; the unpacked and file-count
+increase of 442 packed bytes and 22,146 unpacked bytes. The packed limit was
+raised to 317,000 bytes for the optional build environment input in the
+Cloudflare reusable workflow, which ships in the npm package. This leaves 235
+bytes above the measured 316,765-byte artifact. The unpacked and file-count
 limits remain 1,225,000 bytes and 120 files.
 
 The published package ships a changelog trimmed to the 20 most recent releases
