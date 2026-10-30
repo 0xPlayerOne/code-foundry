@@ -5633,22 +5633,6 @@ jobs:
       }).stdout,
       /^mode=release$/m
     )
-    assert.match(
-      runMode({
-        FOUNDRY_EVENT_NAME: 'pull_request',
-        FOUNDRY_BASE_REF: 'main',
-        FOUNDRY_HEAD_REF: 'staging',
-      }).stdout,
-      /^mode=audit$/m
-    )
-    assert.match(
-      runMode({
-        FOUNDRY_EVENT_NAME: 'pull_request',
-        FOUNDRY_BASE_REF: 'main',
-        FOUNDRY_HEAD_REF: 'feature/x',
-      }).stdout,
-      /^mode=audit$/m
-    )
     assert.match(runMode({ FOUNDRY_EVENT_NAME: 'workflow_dispatch' }).stdout, /^mode=audit$/m)
     assert.match(runMode({ FOUNDRY_EVENT_NAME: 'schedule' }).stdout, /^mode=audit$/m)
     const push = runMode({

@@ -40,6 +40,10 @@ publication](qualified-publication.md).
 For an explicit version, put `Release-As: 2.0.0` in a commit or pull request
 body. Existing `CHANGELOG.md` history remains repository-owned.
 
+### Adea UI receipts
+
+Only `packages/ui` may opt in; others use full validation. Packed Node 24/26 checks remain.
+
 ## Configuration
 
 Set these values in `.github/code-foundry.yml`:
