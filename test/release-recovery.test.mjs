@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   requireNpmVersionMissing,
   validateRecoveryTarget,
 } from '../src/commands/release-recovery.mjs'
+import { syncRepository } from '../src/commands/sync.mjs'
 
-const recoveryWorkflow = readFileSync(
-  new URL('../.github/workflows/recover-npm-publication_self-ci.yml', import.meta.url),
-  'utf8'
-)
 const publisherWorkflow = readFileSync(
   new URL('../.github/workflows/qualified-foundry-publish.yml', import.meta.url),
   'utf8'
@@ -94,15 +93,21 @@ test('registry preflight accepts only the exact npm 404 for the requested versio
 })
 
 test('manual recovery dispatch calls the normal qualification and OIDC publication workflow', () => {
-  assert.match(recoveryWorkflow, /^on:\n  workflow_dispatch:/m)
-  assert.doesNotMatch(recoveryWorkflow, /^  (?:push|release|schedule):/m)
-  assert.match(recoveryWorkflow, /^permissions:\n  contents: read$/m)
-  assert.match(recoveryWorkflow, /github\.ref == 'refs\/heads\/main'/)
-  assert.match(recoveryWorkflow, /vars\.CI_BILLING_PAUSED != 'true'/)
-  assert.match(recoveryWorkflow, /fetch-depth: 0/)
-  assert.match(recoveryWorkflow, /uses: \.\/\.github\/workflows\/qualified-foundry-publish\.yml/)
-  assert.match(recoveryWorkflow, /source-sha: \$\{\{ needs\.target\.outputs\['source-sha'\] \}\}/)
-  assert.doesNotMatch(recoveryWorkflow, /npm publish/)
+  assert.match(releaseCaller, /^on:\n  push:[\s\S]*  workflow_dispatch:/m)
+  assert.match(releaseCaller, /recover-npm-tag:[\s\S]*required: false[\s\S]*default: ''/)
+  assert.match(releaseCaller, /name: Verify npm recovery target/)
+  assert.match(releaseCaller, /name: Requalify and publish recovered archive/)
+  assert.match(releaseCaller, /github\.ref == 'refs\/heads\/main'/)
+  assert.match(releaseCaller, /vars\.CI_BILLING_PAUSED != 'true'/)
+  assert.match(releaseCaller, /fetch-depth: 0/)
+  assert.match(releaseCaller, /uses: \.\/\.github\/workflows\/qualified-foundry-publish\.yml/)
+  assert.match(
+    releaseCaller,
+    /source-sha: \$\{\{ needs\.npm_recovery_target\.outputs\['source-sha'\] \}\}/
+  )
+  assert.match(releaseCaller, /RELEASE_TAG: \$\{\{ inputs\['recover-npm-tag'\] \}\}/)
+  assert.doesNotMatch(releaseCaller, /npm publish/)
+  assert.equal((releaseCaller.match(/inputs\['recover-npm-tag'\] != ''/g) ?? []).length, 7)
   assert.match(publisherWorkflow, /name: Qualify Node \$\{\{ matrix\.node \}\}/)
   assert.match(
     publisherWorkflow,
@@ -123,12 +128,29 @@ test('manual recovery dispatch calls the normal qualification and OIDC publicati
     /"\$RUNNER_TEMP\/candidate\/\$RELEASE_ASSET" "\$RELEASE_SOURCE_SHA"/
   )
   assert.match(publisherWorkflow, /id-token: write/)
-  assert.doesNotMatch(releaseCaller, /source-sha:/)
   const packageManifest = JSON.parse(
     readFileSync(new URL('../package.json', import.meta.url), 'utf8')
   )
   assert.ok(packageManifest.files.includes('!src/commands/release-recovery.mjs'))
-  assert.ok(
-    packageManifest.files.includes('!.github/workflows/recover-npm-publication_self-ci.yml')
-  )
+  assert.ok(packageManifest.files.includes('!.github/workflows/release_self-ci.yml'))
+})
+
+test('consumer release rendering strips the self-only recovery selector and jobs', () => {
+  const targetDir = mkdtempSync(join(tmpdir(), 'code-foundry-npm-recovery-render-'))
+  try {
+    mkdirSync(join(targetDir, '.github'), { recursive: true })
+    writeFileSync(
+      join(targetDir, '.github/code-foundry.yml'),
+      'languages: typescript\npackage_manager: bun\nfeatures: release\n'
+    )
+    syncRepository({ target: targetDir, source: process.cwd(), configureHooks: false })
+    const consumer = readFileSync(join(targetDir, '.github/workflows/release.yml'), 'utf8')
+    assert.doesNotMatch(consumer, /recover-npm-tag|npm_recovery_target|npm_recovery_publish/)
+    assert.match(
+      consumer,
+      /if: vars\.CI_BILLING_PAUSED != 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\['release-while-paused'\] == true\)/
+    )
+  } finally {
+    rmSync(targetDir, { recursive: true, force: true })
+  }
 })

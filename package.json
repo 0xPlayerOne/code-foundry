@@ -23,7 +23,7 @@
     "docs",
     ".github",
     "!.github/actions/**",
-    "!.github/workflows/recover-npm-publication_self-ci.yml",
+    "!.github/workflows/release_self-ci.yml",
     ".githooks",
     ".editorconfig",
     ".gitattributes",

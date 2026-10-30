@@ -10,6 +10,11 @@ on:
         required: false
         type: boolean
         default: false
+      recover-npm-tag:
+        description: Requalify and publish the exact archive for a current immutable release missing from npm.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -28,7 +33,7 @@ jobs:
     # content they merge was already audited on its pull request, and the
     # release merge re-qualifies the exact tree it publishes.
     needs: [release, recovery]
-    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && !(github.event_name == 'workflow_dispatch' && inputs['recover-npm-tag'] != '') && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     uses: ./.github/workflows/consumer-qualification.yml
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
@@ -38,7 +43,7 @@ jobs:
 
   preflight:
     name: Verify release prerequisites
-    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && !(github.event_name == 'workflow_dispatch' && inputs['recover-npm-tag'] != '')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -76,7 +81,7 @@ jobs:
     # it. Version pull requests keep flowing even when the candidate is broken;
     # publication stays gated on qualification success in the stage job.
     needs: [preflight]
-    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true))
+    if: github.ref == 'refs/heads/main' && (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && !(github.event_name == 'workflow_dispatch' && inputs['recover-npm-tag'] != '')
     uses: ./.github/workflows/release.yml
     with:
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
@@ -97,7 +102,7 @@ jobs:
   recovery:
     name: Recover qualified draft identity
     needs: [release]
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && needs.release.result == 'success'
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && !(github.event_name == 'workflow_dispatch' && inputs['recover-npm-tag'] != '') && needs.release.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -170,7 +175,7 @@ jobs:
     # Qualification only runs when this push created a release or recovery
     # found a stuck one; staging additionally requires its success so an
     # unqualified tree can never reach publication.
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.qualification.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs['recover-npm-tag'] != '') && needs.qualification.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -244,7 +249,7 @@ jobs:
   publish:
     name: Publish verified package
     needs: [qualification, release, recovery, stage]
-    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && needs.stage.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
+    if: (vars.CI_BILLING_PAUSED != 'true' || (github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true)) && github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs['recover-npm-tag'] != '') && needs.stage.result == 'success' && (needs.release.outputs.release_created == 'true' || needs.recovery.outputs.found == 'true')
     uses: ./.github/workflows/qualified-foundry-publish.yml
     permissions:
       actions: read
@@ -255,3 +260,95 @@ jobs:
       tag: ${{ needs.release.outputs.tag_name || needs.recovery.outputs.tag }}
       asset: ${{ needs.qualification.outputs.filename }}
       billing-pause-bypass: ${{ github.event_name == 'workflow_dispatch' && inputs['release-while-paused'] == true }}
+
+  npm_recovery_target:
+    name: Verify npm recovery target
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs['recover-npm-tag'] != '' && vars.CI_BILLING_PAUSED != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+      asset: ${{ steps.target.outputs.asset }}
+      source-sha: ${{ steps.target.outputs.source-sha }}
+    steps:
+      - name: Checkout trusted recovery verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Require exact immutable release and absent npm version
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs['recover-npm-tag'] }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs'
+          import { spawnSync } from 'node:child_process'
+          import { resolveTagCommit, runGh } from './src/commands/release-integrity.mjs'
+          import { requireNpmVersionMissing, validateRecoveryTarget } from './src/commands/release-recovery.mjs'
+
+          const repository = process.env.GITHUB_REPOSITORY
+          const tag = process.env.RELEASE_TAG
+          const currentSha = process.env.CURRENT_SHA
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version
+          const sourceSha = resolveTagCommit(repository, tag)
+          const releaseResult = runGh([
+            'api',
+            '--hostname',
+            'github.com',
+            `repos/${repository}/releases/tags/${encodeURIComponent(tag)}`,
+          ])
+          if (releaseResult.status !== 0) throw new Error('Could not verify the requested GitHub release')
+          let release
+          try {
+            release = JSON.parse(releaseResult.stdout)
+          } catch {
+            throw new Error('GitHub returned invalid release metadata')
+          }
+          const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', sourceSha, currentSha])
+          const target = validateRecoveryTarget({
+            tag,
+            version,
+            release,
+            sourceSha,
+            currentSha,
+            sourceIsAncestor: ancestor.status === 0,
+          })
+          const npm = spawnSync(
+            'npm',
+            ['view', `code-foundry@${version}`, 'version', '--json', '--registry', 'https://registry.npmjs.org'],
+            { encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 }
+          )
+          requireNpmVersionMissing({ status: npm.status, stderr: npm.stderr ?? '', version })
+          appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `tag=${target.tag}\nasset=${target.asset}\nsource-sha=${target.sourceSha}\n`
+          )
+          console.log(`Recovery target verified: ${target.tag} at ${target.sourceSha}`)
+          NODE
+
+  npm_recovery_publish:
+    name: Requalify and publish recovered archive
+    needs: npm_recovery_target
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.npm_recovery_target.result == 'success' && vars.CI_BILLING_PAUSED != 'true'
+    uses: ./.github/workflows/qualified-foundry-publish.yml
+    permissions:
+      actions: read
+      attestations: read
+      contents: read
+      id-token: write
+    with:
+      tag: ${{ needs.npm_recovery_target.outputs.tag }}
+      asset: ${{ needs.npm_recovery_target.outputs.asset }}
+      source-sha: ${{ needs.npm_recovery_target.outputs['source-sha'] }}
+      billing-pause-bypass: false

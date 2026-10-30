@@ -121,6 +121,11 @@ state still match the qualified candidate. An already-published release is never
 restaged or overwritten. Inspect the retained staging and publication identity
 receipts when recovery is needed.
 
+To recover a published GitHub release that is missing from npm, dispatch the
+self-only `release_self-ci.yml` workflow on `main` with `recover-npm-tag`. It
+requires the current stable tag, immutable release, exact archive, and exact npm
+404, then requalifies that archive on Node 24/26 before OIDC publication.
+
 ## Publication prerequisites
 
 Enable immutable releases and verify the setting with the actual
