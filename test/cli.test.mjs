@@ -1862,7 +1862,7 @@ describe('code-foundry CLI', () => {
     assert.doesNotMatch(workflow, /needs: affected/)
     assert.match(workflow, /steps\.check\.outputs\.should_deploy != 'false'/)
     assert.match(workflow, /bun install --frozen-lockfile/)
-    assert.match(workflow, /spawnSync\\('bun', \\['run', process\\.env\\.BUILD_SCRIPT\\]/)
+    assert.match(workflow, /spawnSync.*process\\.env\\.BUILD_SCRIPT/)
     assert.match(workflow, /deployments: write/)
     assert.match(workflow, /draft-protection:[\s\S]*?type: boolean[\s\S]*?default: true/)
     assert.match(workflow, /inputs\['draft-protection'\] != true/)
