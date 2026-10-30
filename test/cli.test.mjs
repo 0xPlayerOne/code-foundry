@@ -2924,7 +2924,7 @@ jobs:
     )
     assert.match(
       workflows,
-      /private roots, workspaces, and unknown\s+Release Please layouts use the full CI and test fallback/
+      /repository-specific `adea-ui-workspace-v1` contract for `@adea-ai\/ui` at\s+`packages\/ui`[\s\S]*it admits\s+no other private root or workspace/
     )
     assert.doesNotMatch(workflows, /run only release policy plus CodeQL/)
     assert.match(workflows, /GitHub Stacks/)

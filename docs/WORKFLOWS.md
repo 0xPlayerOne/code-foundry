@@ -65,16 +65,16 @@ with the same validation workflow, Code Foundry runtime, CodeQL policy, and
 pull-request/run identity. Verification checks the merged source PR, the
 aggregate gate's success in the exact run attempt, the required component
 results, and the artifact's bounded download size and SHA-256 digest. The release-diff preflight must confirm a
-version-only patch. Reuse is currently supported only for a public npm package
-released from the repository root; private roots, workspaces, and unknown
-Release Please layouts use the full CI and test fallback. A root package may
-use `prepublishOnly` only when it exactly invokes the configured package
-manager's `run build` task; other lifecycle hooks and custom prepublish commands
-use the full fallback. With a verified
-receipt, the applicable build is forced even when path filtering would skip it,
-and the versioned root npm package inspection still runs. Only duplicate
-format, lint, type-check, and unit-test work is skipped. The receipt never
-replaces the release-diff audit or configured CodeQL scan.
+version-only patch. Receipts support public root npm packages, plus the
+repository-specific `adea-ui-workspace-v1` contract for `@adea-ai/ui` at
+`packages/ui`. That contract checks linked versions, Release Please's exact
+extra-file mapping, and the single Bun lock workspace-version change; it admits
+no other private root or workspace. Unsupported layouts, lifecycle hooks, and
+release diffs use full CI and test fallback. UI's tag publisher still builds,
+qualifies, and publishes the exact archive through packed-consumer gates; a
+source receipt does not qualify archive bytes. Only duplicate format, lint,
+type-check, and unit-test work is skipped, and release-diff plus CodeQL checks
+remain required.
 The managed branch rulesets require only the aggregate `Validation / Gate`
 check; do not hand-require individual job contexts on release branches.
 In the

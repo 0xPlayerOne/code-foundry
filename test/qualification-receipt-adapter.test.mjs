@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -11,7 +11,11 @@ import {
   produceQualificationReceipt,
   readArtifactReceipt,
 } from '../src/commands/qualification-receipt.mjs'
-import { supportsRootNpmReleaseContract } from '../src/lib/release-package-contract.mjs'
+import {
+  supportsAdeaUiWorkspaceReleaseContract,
+  supportsRootNpmReleaseContract,
+  validateAdeaUiWorkspaceReleaseDiff,
+} from '../src/lib/release-package-contract.mjs'
 import {
   QUALIFICATION_RECEIPT_ARTIFACT_PREFIX,
   QUALIFICATION_RECEIPT_KIND,
@@ -22,6 +26,123 @@ const now = Date.parse('2026-10-29T12:00:00.000Z')
 const sha = (digit) => digit.repeat(40)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const requiredJobNames = ['Validation / Gate']
+
+const adeaUiReleaseConfig = () => ({
+  $schema: 'https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json',
+  'bump-minor-pre-major': true,
+  'pull-request-title-pattern': 'chore(main): release ${version}',
+  'group-pull-request-title-pattern': 'chore(main): release ${version}',
+  'include-component-in-tag': false,
+  'manifest-file': '.release-please-manifest.json',
+  packages: { '.': { 'release-type': 'node', 'package-name': '@adea-ai/ui' } },
+  'extra-files': [{ type: 'json', path: 'packages/ui/package.json', jsonpath: '$.version' }],
+})
+
+const adeaUiPublisherWorkflow = [
+  'jobs:',
+  '  prepare:',
+  '    steps:',
+  '      - run: bun run pack:check',
+  '      - run: node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"',
+  '  packed-conversation:',
+  '  packed-layout:',
+  '  packed-layout-renderer:',
+  '  packed-appearance:',
+  '  packed-modal-dialog:',
+  '  packed-native-select:',
+  '  publish:',
+  '    needs:',
+  '      - prepare',
+  '      - packed-conversation',
+  '      - packed-layout',
+  '      - packed-layout-renderer',
+  '      - packed-appearance',
+  '      - packed-modal-dialog',
+  '      - packed-native-select',
+  "        if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)",
+  '        if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)',
+  '        if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)',
+  '        run: npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance',
+].join('\n')
+
+const adeaUiLock = (version, dependencyVersion = '1.9.0') => `{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "adea-ui"
+    },
+    "packages/ui": {
+      "name": "@adea-ai/ui",
+      "version": "${version}"
+    }
+  },
+  "packages": {
+    "solid-js": ["solid-js@${dependencyVersion}", "", {}, "sha512-fixture"]
+  }
+}\n`
+
+function adeaUiContractInput() {
+  const version = '1.0.0'
+  return {
+    rootPackageManifest: {
+      name: 'adea-ui',
+      version,
+      private: true,
+      workspaces: ['apps/*', 'packages/*'],
+      packageManager: 'bun@1.4.4',
+      scripts: { 'pack:check': 'bun run --cwd packages/ui pack:check' },
+    },
+    workspacePackageManifest: {
+      name: '@adea-ai/ui',
+      version,
+      publishConfig: { access: 'public' },
+      scripts: {
+        build: 'bun run cn:build && vite build && tsc -p tsconfig.json --emitDeclarationOnly',
+        'pack:check': 'bun scripts/check-pack.ts && bun scripts/check-lib-exports.ts',
+      },
+    },
+    releaseManifest: { '.': version },
+    releaseConfigs: [adeaUiReleaseConfig()],
+    packageManager: 'bun',
+    codeFoundryConfig: {
+      release_qualification_receipts: 'true',
+      npm_publish: 'false',
+    },
+    lockfileText: adeaUiLock(version),
+    publisherWorkflowText: adeaUiPublisherWorkflow,
+  }
+}
+
+function adeaUiReleaseFiles(version, dependencyVersion = '1.9.0') {
+  return new Map([
+    [
+      'package.json',
+      JSON.stringify({
+        name: 'adea-ui',
+        version,
+        private: true,
+        workspaces: ['apps/*', 'packages/*'],
+        packageManager: 'bun@1.4.4',
+        scripts: { 'pack:check': 'bun run --cwd packages/ui pack:check' },
+      }),
+    ],
+    [
+      'packages/ui/package.json',
+      JSON.stringify({
+        name: '@adea-ai/ui',
+        version,
+        publishConfig: { access: 'public' },
+        scripts: {
+          build: 'bun run cn:build && vite build && tsc -p tsconfig.json --emitDeclarationOnly',
+          'pack:check': 'bun scripts/check-pack.ts && bun scripts/check-lib-exports.ts',
+        },
+      }),
+    ],
+    ['.release-please-manifest.json', JSON.stringify({ '.': version })],
+    ['CHANGELOG.md', `# ${version}\n`],
+    ['bun.lock', adeaUiLock(version, dependencyVersion)],
+  ])
+}
 
 function jobResults(runId, headSha, names = requiredJobNames) {
   return names.map((name, index) => ({
@@ -538,6 +659,177 @@ test('unsupported package and release layouts fall back before any receipt API l
   }
 })
 
+test('an invalid opted-in Adea UI workspace package falls back before receipt lookup', async (t) => {
+  const source = sourceFixture(t)
+  const input = adeaUiContractInput()
+  const eventPath = join(source.directory, 'release-event.json')
+  writeFileSync(join(source.directory, 'package.json'), JSON.stringify(input.rootPackageManifest))
+  mkdirSync(join(source.directory, 'packages/ui-target'), { recursive: true })
+  writeFileSync(
+    join(source.directory, 'packages/ui-target/package.json'),
+    JSON.stringify({
+      ...input.workspacePackageManifest,
+    })
+  )
+  symlinkSync('ui-target', join(source.directory, 'packages/ui'))
+  writeFileSync(
+    join(source.directory, '.release-please-manifest.json'),
+    JSON.stringify(input.releaseManifest)
+  )
+  writeFileSync(
+    join(source.directory, 'release-please-config.json'),
+    JSON.stringify(adeaUiReleaseConfig())
+  )
+  mkdirSync(join(source.directory, '.github/workflows'), { recursive: true })
+  writeFileSync(join(source.directory, '.github/workflows/publish-ui.yml'), adeaUiPublisherWorkflow)
+  writeFileSync(join(source.directory, 'bun.lock'), input.lockfileText)
+  writeFileSync(
+    join(source.directory, '.github/code-foundry.yml'),
+    ['package_manager: bun', 'release_qualification_receipts: true', 'npm_publish: false', ''].join(
+      '\n'
+    )
+  )
+  writeFileSync(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        number: 18,
+        base: { ref: 'main', sha: source.commit, repo: { full_name: 'adea-ai/ui' } },
+        head: {
+          ref: 'release-please--branches--main',
+          sha: sha('5'),
+          repo: { full_name: 'adea-ai/ui' },
+        },
+      },
+    })
+  )
+  let apiCalls = 0
+  const result = await findQualificationReceipt(
+    {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_REPOSITORY: 'adea-ai/ui',
+      FOUNDRY_MODE: 'release',
+    },
+    { cwd: source.directory, fetchImpl: async () => (apiCalls += 1) }
+  )
+  assert.equal(result.verified, false)
+  assert.match(result.reason, /unsupported package release contract/)
+  assert.equal(apiCalls, 0)
+
+  const event = JSON.parse(readFileSync(eventPath, 'utf8'))
+  event.pull_request.base.repo.full_name = 'adea-ai/other'
+  event.pull_request.head.repo.full_name = 'adea-ai/other'
+  writeFileSync(eventPath, JSON.stringify(event))
+  const otherRepository = await findQualificationReceipt(
+    {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_REPOSITORY: 'adea-ai/other',
+      FOUNDRY_MODE: 'release',
+    },
+    { cwd: source.directory, fetchImpl: async () => (apiCalls += 1) }
+  )
+  assert.equal(otherRepository.verified, false)
+  assert.match(otherRepository.reason, /unsupported package release contract/)
+  assert.equal(apiCalls, 0)
+})
+
+test('Adea UI workspace receipt lookup rejects dependency lock drift before GitHub API access', async (t) => {
+  const source = sourceFixture(t)
+  const input = adeaUiContractInput()
+  const writeUiTree = (version, dependencyVersion) => {
+    const rootPackage = { ...input.rootPackageManifest, version }
+    const uiPackage = { ...input.workspacePackageManifest, version }
+    writeFileSync(join(source.directory, 'package.json'), JSON.stringify(rootPackage))
+    mkdirSync(join(source.directory, 'packages/ui'), { recursive: true })
+    writeFileSync(join(source.directory, 'packages/ui/package.json'), JSON.stringify(uiPackage))
+    writeFileSync(
+      join(source.directory, '.release-please-manifest.json'),
+      JSON.stringify({ '.': version })
+    )
+    writeFileSync(
+      join(source.directory, 'release-please-config.json'),
+      JSON.stringify(adeaUiReleaseConfig())
+    )
+    mkdirSync(join(source.directory, '.github/workflows'), { recursive: true })
+    writeFileSync(
+      join(source.directory, '.github/workflows/publish-ui.yml'),
+      adeaUiPublisherWorkflow
+    )
+    writeFileSync(join(source.directory, 'bun.lock'), adeaUiLock(version, dependencyVersion))
+    writeFileSync(
+      join(source.directory, '.github/code-foundry.yml'),
+      [
+        'package_manager: bun',
+        'release_qualification_receipts: true',
+        'npm_publish: false',
+        '',
+      ].join('\n')
+    )
+    writeFileSync(join(source.directory, 'CHANGELOG.md'), `# ${version}\n`)
+  }
+  writeUiTree('1.0.0', '1.9.0')
+  execFileSync('git', ['-C', source.directory, 'add', '.'])
+  execFileSync('git', [
+    '-C',
+    source.directory,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'UI main contract',
+  ])
+  const baseSha = git(source.directory, ['rev-parse', 'HEAD'])
+  execFileSync('git', ['-C', source.directory, 'switch', '-c', 'release-please--branches--main'])
+  writeUiTree('1.0.1', '1.9.1')
+  execFileSync('git', ['-C', source.directory, 'add', '.'])
+  execFileSync('git', [
+    '-C',
+    source.directory,
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'chore(main): release 1.0.1',
+  ])
+  const headSha = git(source.directory, ['rev-parse', 'HEAD'])
+  const eventPath = join(source.directory, 'release-event.json')
+  writeFileSync(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        number: 18,
+        base: { ref: 'main', sha: baseSha, repo: { full_name: 'adea-ai/ui' } },
+        head: {
+          ref: 'release-please--branches--main',
+          sha: headSha,
+          repo: { full_name: 'adea-ai/ui' },
+        },
+      },
+    })
+  )
+  let apiCalls = 0
+  const result = await findQualificationReceipt(
+    {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_REPOSITORY: 'adea-ai/ui',
+      FOUNDRY_MODE: 'release',
+    },
+    { cwd: source.directory, fetchImpl: async () => (apiCalls += 1) }
+  )
+  assert.equal(result.verified, false)
+  assert.match(result.reason, /workspace release metadata is not an exact version-only patch/)
+  assert.equal(apiCalls, 0)
+})
+
 test('a build-only prepublishOnly hook is allowed only when the versioned build lane runs', (t) => {
   const source = sourceFixture(t)
   writeFileSync(
@@ -721,6 +1013,167 @@ test('root release contract accepts only inert Themes-style settings', () => {
       false
     )
   }
+})
+
+test('the explicit Adea UI contract accepts only the public UI workspace release layout', () => {
+  const input = adeaUiContractInput()
+  assert.equal(supportsAdeaUiWorkspaceReleaseContract(input), true)
+  assert.equal(
+    supportsRootNpmReleaseContract({
+      packageManifest: input.rootPackageManifest,
+      releaseManifest: input.releaseManifest,
+      releaseConfigs: input.releaseConfigs,
+      packageManager: input.packageManager,
+    }),
+    false,
+    'the existing root npm contract must continue rejecting private workspace roots'
+  )
+
+  const unsafe = [
+    { rootPackageManifest: { private: false } },
+    { rootPackageManifest: { name: 'different-root' } },
+    { rootPackageManifest: { workspaces: ['packages/*'] } },
+    { rootPackageManifest: { scripts: { postinstall: 'node mutate.mjs' } } },
+    { rootPackageManifest: { scripts: { preversion: 'node mutate.mjs' } } },
+    { rootPackageManifest: { scripts: { postbuild: 'node mutate.mjs' } } },
+    { workspacePackageManifest: { name: '@adea-ai/other' } },
+    { workspacePackageManifest: { private: true } },
+    { workspacePackageManifest: { version: '1.0.1' } },
+    { workspacePackageManifest: { publishConfig: { access: 'restricted' } } },
+    { workspacePackageManifest: { scripts: { prepack: 'node mutate.mjs' } } },
+    { workspacePackageManifest: { scripts: { prepare: 'node mutate.mjs' } } },
+    { workspacePackageManifest: { scripts: { prepublishOnly: 'bun run build' } } },
+    { workspacePackageManifest: { scripts: { postpublish: 'node upload.mjs' } } },
+    { workspacePackageManifest: { scripts: { preversion: 'node mutate.mjs' } } },
+    { workspacePackageManifest: { scripts: { postbuild: 'node mutate.mjs' } } },
+    { workspacePackageManifest: { scripts: { build: 'bun run build && node extra.mjs' } } },
+    { workspacePackageManifest: { scripts: { 'pack:check': 'npm pack --dry-run' } } },
+    { releaseManifest: { '.': '0.9.9' } },
+    { releaseConfigs: [{ ...adeaUiReleaseConfig(), 'extra-files': [] }] },
+    {
+      releaseConfigs: [
+        {
+          ...adeaUiReleaseConfig(),
+          'extra-files': [
+            ...adeaUiReleaseConfig()['extra-files'],
+            { type: 'json', path: 'other.json', jsonpath: '$.version' },
+          ],
+        },
+      ],
+    },
+    { releaseConfigs: [{ ...adeaUiReleaseConfig(), 'release-type': 'java' }] },
+    { packageManager: 'npm' },
+    {
+      publisherWorkflowText: adeaUiPublisherWorkflow.replace(
+        '--access public',
+        '--access restricted'
+      ),
+    },
+    { codeFoundryConfig: { release_qualification_receipts: 'false' } },
+    { codeFoundryConfig: { npm_publish: 'true' } },
+    { lockfileText: adeaUiLock('0.9.9') },
+    { lockfileText: adeaUiLock('1.0.0').replace('packages/ui', 'packages/other') },
+    {
+      lockfileText: `${adeaUiLock('1.0.0').replace('\n  "packages"', ',\n    "duplicate": { "name": "@adea-ai/ui", "version": "1.0.0" }\n  },\n  "packages"')}`,
+    },
+    { lockfileText: '{ malformed lockfile' },
+  ]
+  for (const change of unsafe) {
+    assert.equal(
+      supportsAdeaUiWorkspaceReleaseContract({
+        ...input,
+        ...change,
+        rootPackageManifest: {
+          ...input.rootPackageManifest,
+          ...change.rootPackageManifest,
+        },
+        workspacePackageManifest: {
+          ...input.workspacePackageManifest,
+          ...change.workspacePackageManifest,
+          scripts: {
+            ...input.workspacePackageManifest.scripts,
+            ...change.workspacePackageManifest?.scripts,
+          },
+        },
+        codeFoundryConfig: { ...input.codeFoundryConfig, ...change.codeFoundryConfig },
+      }),
+      false,
+      `must reject workspace contract mutation: ${JSON.stringify(change)}`
+    )
+  }
+})
+
+test('the Adea UI release comparison normalizes only the exact workspace version in bun.lock', () => {
+  const paths = [
+    '.release-please-manifest.json',
+    'CHANGELOG.md',
+    'bun.lock',
+    'package.json',
+    'packages/ui/package.json',
+  ]
+  const baseFiles = adeaUiReleaseFiles('1.0.0')
+  const headFiles = adeaUiReleaseFiles('1.0.1')
+  assert.equal(
+    validateAdeaUiWorkspaceReleaseDiff({ baseFiles, headFiles, changedPaths: paths }).valid,
+    true
+  )
+
+  const dependencyDrift = adeaUiReleaseFiles('1.0.1', '1.9.1')
+  assert.equal(
+    validateAdeaUiWorkspaceReleaseDiff({
+      baseFiles,
+      headFiles: dependencyDrift,
+      changedPaths: paths,
+    }).valid,
+    false,
+    'a dependency resolution change must not be normalized away'
+  )
+  assert.equal(
+    validateAdeaUiWorkspaceReleaseDiff({
+      baseFiles,
+      headFiles,
+      changedPaths: [...paths, 'packages/ui/src/index.ts'],
+    }).valid,
+    false,
+    'source changes must use full validation'
+  )
+  assert.equal(
+    validateAdeaUiWorkspaceReleaseDiff({
+      baseFiles,
+      headFiles,
+      changedPaths: paths,
+      modeChanges: ' mode change 100644 => 100755 packages/ui/package.json',
+    }).valid,
+    false,
+    'file mode changes must use full validation'
+  )
+
+  const mismatchedPackage = adeaUiReleaseFiles('1.0.1')
+  mismatchedPackage.set(
+    'packages/ui/package.json',
+    JSON.stringify({
+      ...JSON.parse(mismatchedPackage.get('packages/ui/package.json')),
+      version: '1.0.2',
+    })
+  )
+  assert.equal(
+    validateAdeaUiWorkspaceReleaseDiff({
+      baseFiles,
+      headFiles: mismatchedPackage,
+      changedPaths: paths,
+    }).valid,
+    false,
+    'root and publishable package versions must remain linked'
+  )
+
+  const staleLock = adeaUiReleaseFiles('1.0.1')
+  staleLock.set('bun.lock', adeaUiLock('1.0.0'))
+  assert.equal(
+    validateAdeaUiWorkspaceReleaseDiff({ baseFiles, headFiles: staleLock, changedPaths: paths })
+      .valid,
+    false,
+    'the lock workspace version must match the publishable package version'
+  )
 })
 
 test('root release contract accepts only the fixed test-and-pack prepublish lifecycle', () => {
