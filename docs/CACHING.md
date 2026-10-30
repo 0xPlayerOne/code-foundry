@@ -11,6 +11,13 @@ Repositories should measure before enabling large installed-tree or build
 caches. Set repository variables such as `REPO_FOUNDRY_CACHE_PACKAGES` and
 `REPO_FOUNDRY_CACHE_BUILD` only when a repeatable warm-cache benefit is proven.
 
+These caches are restored on every event and saved on push only, so pull
+requests and scheduled runs cannot poison them. The setup action restores them
+and publishes a save contract; the `.github/actions/cache-save` action at the
+end of each task job saves every published cache that did not restore an exact
+key. Custom workflows that use `.github/actions/setup` must call it after their
+tasks, or nothing is saved.
+
 ## Turborepo and Vercel Remote Caching
 
 Turborepo repositories can opt into Vercel Remote Caching with:
@@ -35,7 +42,8 @@ When opted in, the setup action:
 - restores `node_modules/.vite/task-cache` as its last step, after Install and
   after every step that archives `node_modules` (Install can replace it);
 - publishes a cache path, key, and save-intent contract for the explicit
-  `.github/actions/vite-plus-cache-save` action to use after repository tasks;
+  `.github/actions/cache-save` action, which also saves the repository caches,
+  to use after repository tasks;
 - saves it push-only, so pull requests and scheduled runs cannot poison it;
 - keeps it out of the generic JavaScript build-state archive.
 

@@ -166,8 +166,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   performance:
     name: Performance
@@ -255,8 +255,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   integration:
     name: Integration
@@ -332,8 +332,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   integration-sharded:
     name: Integration shard
@@ -412,8 +412,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   e2e:
     name: E2E
@@ -464,6 +464,7 @@ jobs:
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false' && steps.applicability.outputs.browser == 'true'
         uses: ./.github/actions/cache
         with:
+          id: e2e-browsers
           save: ${{ github.event_name == 'push' }}
           path: |
             ~/.cache/ms-playwright
@@ -508,8 +509,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   smoke:
     name: Smoke
@@ -581,5 +582,5 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save

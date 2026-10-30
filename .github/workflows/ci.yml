@@ -129,8 +129,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   lint:
     name: Lint
@@ -193,8 +193,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   type-check:
     name: Type-Check
@@ -262,8 +262,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   build:
     name: Build
@@ -357,5 +357,5 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save

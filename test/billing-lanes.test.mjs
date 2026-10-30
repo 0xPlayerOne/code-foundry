@@ -209,7 +209,7 @@ test('billing uploads run sequentially after all parallel executions join', () =
       'Retain integration task receipt',
     ].map((name) => `- name: ${name}`)
   )
-  assert.match(followingSteps.at(-1), /^      - name: Save Vite\+ task cache/)
+  assert.match(followingSteps.at(-1), /^      - name: Save task caches/)
   assert.equal([...fastLanes.matchAll(/uses: actions\/upload-artifact@/g)].length, 8)
 })
 

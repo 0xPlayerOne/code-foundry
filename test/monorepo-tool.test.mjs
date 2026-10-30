@@ -704,8 +704,8 @@ test('doctor reports unsatisfied monorepo_tool settings', (t) => {
 // --- setup action: profile detection, cache steps -------------------------
 
 const setupAction = readFileSync(join(packageRoot, '.github/actions/setup/action.yml'), 'utf8')
-const vitePlusCacheSaveAction = readFileSync(
-  join(packageRoot, '.github/actions/vite-plus-cache-save/action.yml'),
+const cacheSaveAction = readFileSync(
+  join(packageRoot, '.github/actions/cache-save/action.yml'),
   'utf8'
 )
 
@@ -991,10 +991,10 @@ test('the Vite+ cache restores last and saves through an explicit push-only acti
   assert.match(restore, /uses: actions\/cache\/restore@v5/)
   assert.doesNotMatch(restore, /uses: \.\/\.github\/actions\/cache/)
   assert.match(restore, /steps\.vite-plus-cache-contract\.outputs\.(?:path|key|restore-keys)/)
-  assert.match(vitePlusCacheSaveAction, /uses: actions\/cache\/save@v5/)
-  assert.match(vitePlusCacheSaveAction, /github\.event_name == 'push'/)
-  assert.match(vitePlusCacheSaveAction, /inputs\.path \|\| env\.CODE_FOUNDRY_VITE_CACHE_PATHS/)
-  assert.match(vitePlusCacheSaveAction, /inputs\.key \|\| env\.CODE_FOUNDRY_VITE_CACHE_KEY/)
+  assert.match(cacheSaveAction, /uses: actions\/cache\/save@v5/)
+  assert.match(cacheSaveAction, /github\.event_name == 'push'/)
+  assert.match(cacheSaveAction, /inputs\.path \|\| env\.CODE_FOUNDRY_VITE_CACHE_PATHS/)
+  assert.match(cacheSaveAction, /inputs\.key \|\| env\.CODE_FOUNDRY_VITE_CACHE_KEY/)
 
   const workflows = [
     ['.github/workflows/ci.yml', ['format', 'lint', 'type-check', 'build']],
@@ -1019,11 +1019,55 @@ test('the Vite+ cache restores last and saves through an explicit push-only acti
         .join('\n')
         .trimEnd()
       assert.ok(
-        block.endsWith('uses: ./.github/actions/vite-plus-cache-save'),
+        block.endsWith('uses: ./.github/actions/cache-save'),
         `${file} ${job} ends with the explicit cache save action`
       )
     }
   }
+})
+
+test('repository caches restore only and save through the explicit cache-save action', () => {
+  const cacheAction = readFileSync(join(packageRoot, '.github/actions/cache/action.yml'), 'utf8')
+  // A nested actions/cache post hook loses the composite inputs and never saves.
+  assert.doesNotMatch(cacheAction, /uses: actions\/cache@/)
+  assert.match(cacheAction, /uses: actions\/cache\/restore@v5/)
+  assert.match(
+    cacheAction,
+    /if: inputs\.save == 'true' && github\.event_name == 'push' && steps\.restore\.outputs\.cache-hit != 'true'/
+  )
+  const sources = [
+    setupAction,
+    ...['test.yml', 'validation-billing.yml'].map((file) =>
+      readFileSync(join(packageRoot, '.github/workflows', file), 'utf8')
+    ),
+  ]
+  const ids = new Set()
+  for (const source of sources) {
+    for (const match of source.matchAll(
+      /uses: \.\/\.github\/actions\/cache\n\s+with:\n\s+id: ([a-z0-9-]+)\n/g
+    ))
+      ids.add(match[1])
+    assert.equal(
+      [...source.matchAll(/uses: \.\/\.github\/actions\/cache\n/g)].length,
+      [...source.matchAll(/uses: \.\/\.github\/actions\/cache\n\s+with:\n\s+id: /g)].length,
+      'every repository cache names its save slot first'
+    )
+  }
+  assert.ok(ids.size >= 14)
+  const slots = new Set(
+    [...cacheSaveAction.matchAll(/env\.CODE_FOUNDRY_CACHE_([A-Z0-9_]+)_KEY != ''/g)].map(
+      (match) => match[1]
+    )
+  )
+  for (const id of ids) {
+    const name = id.toUpperCase().replaceAll('-', '_')
+    assert.ok(slots.has(name), `cache-save saves the ${id} slot`)
+    assert.match(
+      cacheSaveAction,
+      new RegExp(`path: \\$\\{\\{ env\\.CODE_FOUNDRY_CACHE_${name}_PATH \\}\\}`)
+    )
+  }
+  assert.equal(slots.size, ids.size, 'cache-save has no unused slots')
 })
 
 test('the Vite+ cache key rolls per run and never crosses a compatibility namespace', () => {

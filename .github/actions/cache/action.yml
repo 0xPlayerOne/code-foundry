@@ -1,7 +1,10 @@
 name: Repository Cache
-description: Restore a cache and optionally enable the post-job save performed by actions/cache.
+description: Restore a cache and publish its save contract for the cache-save action.
 
 inputs:
+  id:
+    description: Cache slot saved by the cache-save action; one of its listed slots.
+    required: true
   path:
     description: Cache paths.
     required: true
@@ -13,35 +16,46 @@ inputs:
     required: false
     default: ''
   save:
-    description: Enable cache saving after the job completes.
+    description: Save this cache when the job's cache-save action runs.
     required: false
     default: 'true'
 
 outputs:
   cache-hit:
     description: Whether an exact cache was restored.
-    value: ${{ steps.cache.outputs.cache-hit || steps.restore.outputs.cache-hit }}
+    value: ${{ steps.restore.outputs.cache-hit }}
 
 runs:
   using: composite
   steps:
-    # Caches are restored on every event but saved on push only: scheduled
-    # and dispatched runs share the default branch with untrusted
-    # runtime-ref checkouts, so letting them save would allow cache
-    # poisoning. Push events require write access and stay trusted.
     - name: Restore cache
       id: restore
-      if: inputs.save != 'true' || github.event_name != 'push'
       uses: actions/cache/restore@v5
       with:
         path: ${{ inputs.path }}
         key: ${{ inputs.key }}
         restore-keys: ${{ inputs.restore-keys }}
-    - name: Restore and save cache
-      id: cache
-      if: inputs.save == 'true' && github.event_name == 'push'
-      uses: actions/cache@v5
-      with:
-        path: ${{ inputs.path }}
-        key: ${{ inputs.key }}
-        restore-keys: ${{ inputs.restore-keys }}
+    # Caches are restored on every event but saved on push only: scheduled
+    # and dispatched runs share the default branch with untrusted
+    # runtime-ref checkouts, so letting them save would allow cache
+    # poisoning. Push events require write access and stay trusted.
+    # A nested actions/cache post hook cannot recover this composite's
+    # inputs, so the cache-save action saves from this published contract.
+    - name: Publish cache save contract
+      if: inputs.save == 'true' && github.event_name == 'push' && steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        CACHE_ID: ${{ inputs.id }}
+        CACHE_PATH: ${{ inputs.path }}
+        CACHE_KEY: ${{ inputs.key }}
+      run: |
+        if ! [[ "$CACHE_ID" =~ ^[a-z][a-z0-9-]*$ ]]; then
+          echo "::error::Invalid cache id: $CACHE_ID"
+          exit 1
+        fi
+        name="CODE_FOUNDRY_CACHE_$(printf '%s' "$CACHE_ID" | tr 'a-z-' 'A-Z_')"
+        delimiter="CODE_FOUNDRY_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+        {
+          printf '%s_PATH<<%s\n%s\n%s\n' "$name" "$delimiter" "$CACHE_PATH" "$delimiter"
+          printf '%s_KEY=%s\n' "$name" "$CACHE_KEY"
+        } >> "$GITHUB_ENV"

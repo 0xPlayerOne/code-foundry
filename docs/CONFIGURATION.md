@@ -350,7 +350,7 @@ behavior:
   (not a config key). It controls the local Vite+ task cache only when
   `monorepo_tool: vite-plus` is set.
 - Custom workflows using the setup action must add
-  `.github/actions/vite-plus-cache-save` after task execution. The generated
+  `.github/actions/cache-save` after task execution. The generated
   Code Foundry workflows already include this save boundary; see
   [Caching and remote caching](CACHING.md).
 
