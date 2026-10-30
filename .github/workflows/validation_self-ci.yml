@@ -85,6 +85,7 @@ jobs:
     uses: ./.github/workflows/validation.yml
     with:
       mode: ${{ needs.mode.outputs.mode }}
+      release-qualification-receipts: ${{ github.repository == '0xPlayerOne/code-foundry' }}
       runtime-repository: 0xPlayerOne/code-foundry
       # Source PRs validate their proposed runtime commit. A Release Please PR
       # uses its main base, keeping version-only metadata out of the runtime

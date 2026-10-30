@@ -5103,6 +5103,10 @@ jobs:
       caller,
       /runtime-ref: >-[\s\S]*startsWith\(github\.event\.pull_request\.head\.ref, 'release-please--branches--main'\)[\s\S]*github\.event\.pull_request\.base\.sha[\s\S]*github\.sha/
     )
+    assert.match(
+      caller,
+      /release-qualification-receipts: \$\{\{ github\.repository == '0xPlayerOne\/code-foundry' \}\}/
+    )
 
     assert.doesNotMatch(audit, /pull_request:/)
     assert.match(audit, /schedule:/)
@@ -5135,6 +5139,10 @@ jobs:
     const pullRequest = readFileSync(join(root, '.github/workflows/validation.yml'), 'utf8')
     const audit = readFileSync(join(root, '.github/workflows/validation-audit.yml'), 'utf8')
     assert.doesNotMatch(pullRequest, /schedule:|workflow_dispatch:/)
+    assert.match(
+      pullRequest,
+      /release-qualification-receipts: \$\{\{ github\.repository == '0xPlayerOne\/code-foundry' \}\}/
+    )
     assert.match(audit, /schedule:/)
     assert.match(audit, /workflow_dispatch:/)
     assert.doesNotMatch(audit, /pull_request:/)
