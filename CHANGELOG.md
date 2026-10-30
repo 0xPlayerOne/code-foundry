@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.1...v1.53.2) (2026-10-30)
+
+
+### Maintenance
+
+* add verified npm publication recovery ([#815](https://github.com/0xPlayerOne/code-foundry/issues/815)) ([5876361](https://github.com/0xPlayerOne/code-foundry/commit/58763616b3dc38d127680914eeef6151b3375b37))
+
 ## [1.53.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.0...v1.53.1) (2026-10-30)
 
 
