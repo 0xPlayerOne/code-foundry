@@ -49,7 +49,7 @@ inputs:
     required: false
     default: auto
   cache-save:
-    description: Save restored caches after tasks; the explicit Vite+ save action also uses this intent. Disable to avoid archive work in parallel jobs.
+    description: Save restored caches through the cache-save action after tasks. Disable to avoid archive work in parallel jobs.
     required: false
     default: 'true'
   cache-packages:
@@ -602,6 +602,7 @@ runs:
       if: (inputs.mise-scope == 'javascript' || steps.javascript-dependencies.outputs.cache-hit == 'true') && inputs.install-javascript == 'true' && steps.profile.outputs.javascript == 'true' && hashFiles('**/pnpm-lock.yaml', '**/yarn.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: corepack
         save: ${{ inputs.cache-save }}
         path: ~/.cache/node/corepack
         # Corepack shims are independent of the project toolchain; keep this
@@ -629,6 +630,7 @@ runs:
       if: inputs.install == 'true' && inputs.cache-lint == 'true' && steps.profile.outputs.eslint_fallback == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.eslintrc*', '**/eslint.config.*') != ''
       uses: ./.github/actions/cache
       with:
+        id: javascript-lint
         save: ${{ inputs.cache-save }}
         path: |
           **/.eslintcache
@@ -639,6 +641,7 @@ runs:
       if: inputs.install == 'true' && inputs.cache-format == 'true' && steps.profile.outputs.prettier_fallback == 'true' && hashFiles('**/package.json', '**/bun.lock', '**/bun.lockb', '**/pnpm-lock.yaml', '**/yarn.lock', '**/package-lock.json', '**/.prettierrc*', '**/prettier.config.*') != ''
       uses: ./.github/actions/cache
       with:
+        id: javascript-format
         save: ${{ inputs.cache-save }}
         path: |
           **/node_modules/.cache/prettier
@@ -661,6 +664,7 @@ runs:
         steps.profile.outputs.turbo_task != 'true')
       uses: ./.github/actions/cache
       with:
+        id: javascript-build
         save: ${{ inputs.cache-save }}
         # Remote Turbo already stores task outputs for Turbo-backed builds.
         # Avoid a second, often-empty framework cache archive in that mode;
@@ -680,6 +684,7 @@ runs:
       if: inputs.install == 'true' && inputs.install-python == 'true' && inputs.cache-environment == 'true' && steps.profile.outputs.python == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock', '.mise.toml', 'mise.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: python-environment
         save: ${{ inputs.cache-save }}
         path: |
           .venv
@@ -689,6 +694,7 @@ runs:
       if: inputs.install == 'true' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != '' && steps.python-environment.outputs.cache-hit != 'true'
       uses: ./.github/actions/cache
       with:
+        id: python-packages
         save: ${{ inputs.cache-save }}
         path: |
           ~/.cache/pip
@@ -701,6 +707,7 @@ runs:
       if: inputs.install == 'false' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'python') && inputs.install-python == 'true' && steps.profile.outputs.python_dependencies == 'true' && hashFiles('**/pyproject.toml', '**/uv.lock', '**/requirements*.txt', '**/Pipfile.lock', '**/poetry.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: python-audit
         save: ${{ inputs.cache-save }}
         path: ~/.cache/uv-audit
         # Keep scanner wheels and metadata warm across application and script
@@ -716,6 +723,7 @@ runs:
       if: inputs.install == 'true' && inputs.cache-lint == 'true' && steps.profile.outputs.ruff == 'true' && hashFiles('**/pyproject.toml', '**/ruff.toml', '.mise.toml', 'mise.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: python-lint
         save: ${{ inputs.cache-save }}
         path: |
           **/.ruff_cache
@@ -735,6 +743,7 @@ runs:
         (inputs.cache-turbo == 'true' || env.TURBO_TOKEN == '' || env.TURBO_TEAM == '')
       uses: ./.github/actions/cache
       with:
+        id: turbo
         save: ${{ inputs.cache-save }}
         path: |
           .turbo/cache
@@ -757,6 +766,7 @@ runs:
       if: (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: rust-packages
         save: ${{ inputs.cache-save }}
         path: |
           ~/.cargo/registry
@@ -768,6 +778,7 @@ runs:
       if: inputs.install == 'false' && (inputs.mise-scope == 'auto' || inputs.mise-scope == 'all' || inputs.mise-scope == 'rust') && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: rust-advisory
         save: ${{ inputs.cache-save }}
         path: ~/.cargo/advisory-db
         # The advisory database is independent of project dependencies. Keep
@@ -779,6 +790,7 @@ runs:
       if: inputs.install == 'true' && inputs.install-rust == 'true' && inputs.cache-build == 'true' && steps.profile.outputs.rust == 'true' && hashFiles('**/Cargo.toml', '**/Cargo.lock') != ''
       uses: ./.github/actions/cache
       with:
+        id: rust-build
         save: ${{ inputs.cache-save }}
         # Keep reusable dependency/build-script artifacts for the Build job;
         # exclude target/incremental and release output, which are large and
@@ -801,6 +813,7 @@ runs:
       if: inputs.install == 'true' && inputs.install-rust == 'true' && steps.profile.outputs.rust == 'true' && steps.profile.outputs.rust_sccache == 'true'
       uses: ./.github/actions/cache
       with:
+        id: rust-sccache
         save: ${{ inputs.cache-save }}
         path: ~/.cache/sccache
         key: ${{ runner.os }}-rust-sccache-${{ github.workflow }}-${{ github.job }}-${{ hashFiles('rust-toolchain.toml', 'rust-toolchain', '.cargo/config*', '.mise.toml', 'mise.lock') }}

@@ -543,8 +543,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   lint:
     name: Lint
@@ -614,8 +614,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   type-check:
     name: Type-Check
@@ -686,8 +686,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   unit:
     name: Unit
@@ -782,8 +782,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   e2e:
     name: E2E
@@ -838,6 +838,7 @@ jobs:
         if: steps.applicability.outputs.applicable == 'true' && steps.applicability.outputs.affected != 'false' && steps.applicability.outputs.browser == 'true'
         uses: ./.github/actions/cache
         with:
+          id: e2e-browsers
           save: ${{ github.event_name == 'push' }}
           path: |
             ~/.cache/ms-playwright
@@ -882,8 +883,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save
 
   # Profile and dependency audit merged into one job. The split orchestrators
   # run a profile job that feeds an audit matrix; here the language blocks run

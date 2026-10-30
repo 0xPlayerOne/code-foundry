@@ -125,5 +125,5 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Save Vite+ task cache
-        uses: ./.github/actions/vite-plus-cache-save
+      - name: Save task caches
+        uses: ./.github/actions/cache-save

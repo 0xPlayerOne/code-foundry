@@ -1,0 +1,133 @@
+name: Save task caches
+description: Save the Vite+ task cache and restored repository caches after repository tasks complete.
+
+inputs:
+  path:
+    description: Vite+ cache paths; defaults to the contract published by the setup action.
+    required: false
+    default: ''
+  key:
+    description: Vite+ cache key; defaults to the contract published by the setup action.
+    required: false
+    default: ''
+  save:
+    description: Vite+ save intent; defaults to the aggregated setup-action contract.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # Keep saving in regular workflow steps. A nested actions/cache post hook
+    # inside the setup composite cannot reliably recover its original inputs.
+    - name: Save Vite+ task cache
+      if: >-
+        !cancelled() &&
+        github.event_name == 'push' &&
+        (inputs.save == 'true' || (inputs.save != 'false' && env.CODE_FOUNDRY_VITE_CACHE_SAVE == 'true')) &&
+        (inputs.path != '' || env.CODE_FOUNDRY_VITE_CACHE_PATHS != '') &&
+        (inputs.key != '' || env.CODE_FOUNDRY_VITE_CACHE_KEY != '')
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ inputs.path || env.CODE_FOUNDRY_VITE_CACHE_PATHS }}
+        key: ${{ inputs.key || env.CODE_FOUNDRY_VITE_CACHE_KEY }}
+    # One step per .github/actions/cache id. That action publishes a slot only
+    # on push without an exact hit, so these steps never save untrusted runs.
+    - name: Save Corepack managers
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_COREPACK_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_COREPACK_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_COREPACK_KEY }}
+    - name: Save JavaScript lint state
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_JAVASCRIPT_LINT_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_JAVASCRIPT_LINT_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_JAVASCRIPT_LINT_KEY }}
+    - name: Save JavaScript format state
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_JAVASCRIPT_FORMAT_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_JAVASCRIPT_FORMAT_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_JAVASCRIPT_FORMAT_KEY }}
+    - name: Save JavaScript build state
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_JAVASCRIPT_BUILD_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_JAVASCRIPT_BUILD_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_JAVASCRIPT_BUILD_KEY }}
+    - name: Save Python environment
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_PYTHON_ENVIRONMENT_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_ENVIRONMENT_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_ENVIRONMENT_KEY }}
+    - name: Save Python packages
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_PYTHON_PACKAGES_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_PACKAGES_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_PACKAGES_KEY }}
+    - name: Save Python audit tools
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_PYTHON_AUDIT_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_AUDIT_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_AUDIT_KEY }}
+    - name: Save Python lint state
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_PYTHON_LINT_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_LINT_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_PYTHON_LINT_KEY }}
+    - name: Save Turborepo
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_TURBO_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_TURBO_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_TURBO_KEY }}
+    - name: Save Rust packages
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_RUST_PACKAGES_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_RUST_PACKAGES_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_RUST_PACKAGES_KEY }}
+    - name: Save Rust advisory database
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_RUST_ADVISORY_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_RUST_ADVISORY_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_RUST_ADVISORY_KEY }}
+    - name: Save Rust builds
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_RUST_BUILD_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_RUST_BUILD_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_RUST_BUILD_KEY }}
+    - name: Save sccache artifacts
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_RUST_SCCACHE_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_RUST_SCCACHE_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_RUST_SCCACHE_KEY }}
+    - name: Save browser binaries
+      if: "!cancelled() && env.CODE_FOUNDRY_CACHE_E2E_BROWSERS_KEY != ''"
+      continue-on-error: true
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ env.CODE_FOUNDRY_CACHE_E2E_BROWSERS_PATH }}
+        key: ${{ env.CODE_FOUNDRY_CACHE_E2E_BROWSERS_KEY }}
