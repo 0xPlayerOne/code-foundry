@@ -38,32 +38,177 @@ const adeaUiReleaseConfig = () => ({
   'extra-files': [{ type: 'json', path: 'packages/ui/package.json', jsonpath: '$.version' }],
 })
 
-const adeaUiPublisherWorkflow = [
-  'jobs:',
-  '  prepare:',
-  '    steps:',
-  '      - run: bun run pack:check',
-  '      - run: node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"',
-  '  packed-conversation:',
-  '  packed-layout:',
-  '  packed-layout-renderer:',
-  '  packed-appearance:',
-  '  packed-modal-dialog:',
-  '  packed-native-select:',
-  '  publish:',
-  '    needs:',
-  '      - prepare',
-  '      - packed-conversation',
-  '      - packed-layout',
-  '      - packed-layout-renderer',
-  '      - packed-appearance',
-  '      - packed-modal-dialog',
-  '      - packed-native-select',
-  "        if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)",
-  '        if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)',
-  '        if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)',
-  '        run: npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance',
-].join('\n')
+const adeaUiPublisherObject = () => {
+  const consumers = {
+    'packed-conversation': 'bun run check:packed-conversation',
+    'packed-layout': 'bun run check:packed-layout && bun run check:packed-settings-navigation',
+    'packed-layout-renderer': 'bun run check:packed-layout-renderer',
+    'packed-appearance': 'bun run check:packed-appearance',
+    'packed-modal-dialog': 'bun run check:packed-modal-dialog',
+    'packed-native-select': 'bun run check:packed-native-select',
+  }
+  const jobs = {
+    prepare: {
+      outputs: {
+        version: '${{ steps.version.outputs.version }}',
+        archive_sha256: '${{ steps.archive.outputs.sha256 }}',
+        archive_integrity: '${{ steps.archive.outputs.integrity }}',
+      },
+      steps: [
+        {
+          id: 'version',
+          run: `echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"`,
+        },
+        { name: 'Build the library', run: 'bun run --cwd packages/ui build' },
+        { name: 'Verify the publishable archive', run: 'bun run pack:check' },
+        {
+          id: 'archive',
+          run: 'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"',
+        },
+        {
+          uses: 'actions/upload-artifact@v7',
+          with: { name: 'prepared-ui-package', path: '${{ runner.temp }}/prepared-ui/' },
+        },
+      ],
+    },
+  }
+  for (const [name, script] of Object.entries(consumers)) {
+    jobs[name] = {
+      needs: 'prepare',
+      env: {
+        ADEA_PACKED_UI_TARBALL: '${{ github.workspace }}/prepared-ui/package.tgz',
+        ADEA_PACKED_UI_SHA256: '${{ needs.prepare.outputs.archive_sha256 }}',
+      },
+      steps: [
+        {
+          name: 'Download the verified UI package',
+          uses: 'actions/download-artifact@v7',
+          with: { name: 'prepared-ui-package' },
+        },
+        {
+          run: String.raw`printf '%s  %s\n' "$ADEA_PACKED_UI_SHA256" "$ADEA_PACKED_UI_TARBALL" | sha256sum --check`,
+        },
+        { run: script },
+      ],
+    }
+  }
+  jobs.publish = {
+    if: '${{ inputs.dry-run != true }}',
+    needs: ['prepare', ...Object.keys(consumers)],
+    permissions: { 'id-token': 'write' },
+    steps: [
+      {
+        name: 'Download the verified UI package',
+        uses: 'actions/download-artifact@v7',
+        with: { name: 'prepared-ui-package' },
+      },
+      {
+        name: 'Verify the exact release archive',
+        env: {
+          EXPECTED_VERSION: '${{ needs.prepare.outputs.version }}',
+          EXPECTED_SHA256: '${{ needs.prepare.outputs.archive_sha256 }}',
+          EXPECTED_INTEGRITY: '${{ needs.prepare.outputs.archive_integrity }}',
+        },
+        run: String.raw`set -euo pipefail
+archive="$RUNNER_TEMP/prepared-ui/package.tgz"
+printf '%s  %s\n' "$EXPECTED_SHA256" "$archive" | sha256sum --check
+node --input-type=module <<'NODE'
+const { createHash } = await import('node:crypto')
+const { readFileSync } = await import('node:fs')
+const archivePath = process.env.RUNNER_TEMP + '/prepared-ui/package.tgz'
+const bytes = readFileSync(archivePath)
+const manifest = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/prepared-ui/manifest.json', 'utf8'))
+const sha256 = createHash('sha256').update(bytes).digest('hex')
+const integrity = 'sha512-' + createHash('sha512').update(bytes).digest('base64')
+if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)
+  throw new Error('Prepared package identity does not match release version')
+if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)
+  throw new Error('Prepared package SHA-256 does not match the verified artifact')
+if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)
+  throw new Error('Prepared package npm integrity does not match the verified artifact')
+NODE`,
+      },
+      {
+        name: 'Publish with npm trusted publishing',
+        run: 'npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance',
+      },
+    ],
+  }
+  return {
+    on: {
+      push: { tags: ['v*'] },
+      workflow_dispatch: { inputs: { 'dry-run': { type: 'boolean', default: true } } },
+    },
+    jobs,
+  }
+}
+const yamlScalar = (value) => (typeof value === 'string' ? JSON.stringify(value) : String(value))
+
+function adeaUiPublisherWorkflow(workflow = adeaUiPublisherObject()) {
+  const lines = [
+    'on:',
+    '  push:',
+    '    tags:',
+    "      - 'v*'",
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      dry-run:',
+    '        type: boolean',
+    '        default: true',
+    'jobs:',
+  ]
+  const map = (indent, key, value) => {
+    lines.push(`${' '.repeat(indent)}${key}:`)
+    for (const [child, childValue] of Object.entries(value)) {
+      lines.push(`${' '.repeat(indent + 2)}${child}: ${yamlScalar(childValue)}`)
+    }
+  }
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    lines.push(`  ${name}:`)
+    if (job.if !== undefined) lines.push(`    if: ${yamlScalar(job.if)}`)
+    if (job['continue-on-error'] !== undefined)
+      lines.push(`    continue-on-error: ${yamlScalar(job['continue-on-error'])}`)
+    if (job.needs !== undefined) {
+      lines.push('    needs:')
+      for (const need of Array.isArray(job.needs) ? job.needs : [job.needs])
+        lines.push(`      - ${yamlScalar(need)}`)
+    }
+    for (const key of ['outputs', 'permissions', 'env']) {
+      if (job[key] !== undefined) map(4, key, job[key])
+    }
+    if (job.steps !== undefined) {
+      lines.push('    steps:')
+      for (const step of job.steps) {
+        const keys = Object.keys(step)
+        const primary = keys.includes('name')
+          ? 'name'
+          : keys.includes('id')
+            ? 'id'
+            : keys.includes('uses')
+              ? 'uses'
+              : keys.includes('run')
+                ? 'run'
+                : keys[0]
+        const emitField = (indent, key, value, sequenceItem = false) => {
+          const prefix = `${' '.repeat(indent)}${sequenceItem ? '- ' : ''}`
+          if (key === 'run' && value.includes('\n')) {
+            lines.push(`${prefix}${key}: |`)
+            for (const line of value.split('\n')) lines.push(`          ${line}`)
+          } else if ((key === 'with' || key === 'env') && typeof value === 'object') {
+            map(indent, key, value)
+          } else {
+            lines.push(`${prefix}${key}: ${yamlScalar(value)}`)
+          }
+        }
+        emitField(6, primary, step[primary], true)
+        for (const [key, value] of Object.entries(step)) {
+          if (key !== primary) emitField(8, key, value)
+        }
+      }
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
 
 const adeaUiLock = (version, dependencyVersion = '1.9.0') => `{
   "lockfileVersion": 1,
@@ -109,7 +254,7 @@ function adeaUiContractInput() {
       npm_publish: 'false',
     },
     lockfileText: adeaUiLock(version),
-    publisherWorkflowText: adeaUiPublisherWorkflow,
+    publisherWorkflowText: adeaUiPublisherWorkflow(),
   }
 }
 
@@ -681,7 +826,10 @@ test('an invalid opted-in Adea UI workspace package falls back before receipt lo
     JSON.stringify(adeaUiReleaseConfig())
   )
   mkdirSync(join(source.directory, '.github/workflows'), { recursive: true })
-  writeFileSync(join(source.directory, '.github/workflows/publish-ui.yml'), adeaUiPublisherWorkflow)
+  writeFileSync(
+    join(source.directory, '.github/workflows/publish-ui.yml'),
+    adeaUiPublisherWorkflow()
+  )
   writeFileSync(join(source.directory, 'bun.lock'), input.lockfileText)
   writeFileSync(
     join(source.directory, '.github/code-foundry.yml'),
@@ -755,7 +903,7 @@ test('Adea UI workspace receipt lookup rejects dependency lock drift before GitH
     mkdirSync(join(source.directory, '.github/workflows'), { recursive: true })
     writeFileSync(
       join(source.directory, '.github/workflows/publish-ui.yml'),
-      adeaUiPublisherWorkflow
+      adeaUiPublisherWorkflow()
     )
     writeFileSync(join(source.directory, 'bun.lock'), adeaUiLock(version, dependencyVersion))
     writeFileSync(
@@ -1046,6 +1194,8 @@ test('the explicit Adea UI contract accepts only the public UI workspace release
     { workspacePackageManifest: { scripts: { postpublish: 'node upload.mjs' } } },
     { workspacePackageManifest: { scripts: { preversion: 'node mutate.mjs' } } },
     { workspacePackageManifest: { scripts: { postbuild: 'node mutate.mjs' } } },
+    { workspacePackageManifest: { scripts: { 'precn:build': 'node mutate.mjs' } } },
+    { workspacePackageManifest: { scripts: { 'postcn:build': 'node mutate.mjs' } } },
     { workspacePackageManifest: { scripts: { build: 'bun run build && node extra.mjs' } } },
     { workspacePackageManifest: { scripts: { 'pack:check': 'npm pack --dry-run' } } },
     { releaseManifest: { '.': '0.9.9' } },
@@ -1064,7 +1214,7 @@ test('the explicit Adea UI contract accepts only the public UI workspace release
     { releaseConfigs: [{ ...adeaUiReleaseConfig(), 'release-type': 'java' }] },
     { packageManager: 'npm' },
     {
-      publisherWorkflowText: adeaUiPublisherWorkflow.replace(
+      publisherWorkflowText: adeaUiPublisherWorkflow().replace(
         '--access public',
         '--access restricted'
       ),
@@ -1101,6 +1251,99 @@ test('the explicit Adea UI contract accepts only the public UI workspace release
       `must reject workspace contract mutation: ${JSON.stringify(change)}`
     )
   }
+})
+
+test('Adea UI publisher qualification binds parsed, non-skippable jobs and executable steps', () => {
+  const input = adeaUiContractInput()
+  assert.equal(supportsAdeaUiWorkspaceReleaseContract(input), true)
+
+  const mutations = [
+    (workflow) => {
+      workflow.jobs.publish.if = '${{ always() }}'
+    },
+    (workflow) => {
+      workflow.jobs.publish.needs = workflow.jobs.publish.needs.filter(
+        (name) => name !== 'packed-layout'
+      )
+    },
+    (workflow) => {
+      workflow.jobs.publish['continue-on-error'] = true
+    },
+    (workflow) => {
+      workflow.jobs['packed-conversation'].if = '${{ always() }}'
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout']['continue-on-error'] = true
+    },
+    (workflow) => {
+      workflow.jobs['packed-layout'].steps.find((step) =>
+        step.run?.includes('check:packed-layout')
+      ).if = 'always()'
+    },
+    (workflow) => {
+      workflow.jobs['packed-native-select'].needs = []
+    },
+    (workflow) => {
+      workflow.jobs.prepare.if = 'false'
+    },
+    (workflow) => {
+      workflow.jobs.publish.steps.find(
+        (step) => step.name === 'Publish with npm trusted publishing'
+      )['continue-on-error'] = true
+    },
+    (workflow) => {
+      workflow.jobs.publish.steps.find(
+        (step) => step.name === 'Publish with npm trusted publishing'
+      ).run = 'echo no publish'
+      workflow.jobs.decoy = {
+        steps: [
+          {
+            run: 'npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance',
+          },
+        ],
+      }
+    },
+    (workflow) => {
+      workflow.jobs.publish.steps.find(
+        (step) => step.name === 'Verify the exact release archive'
+      ).run =
+        String.raw`# if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)
+# if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)
+# if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)`
+    },
+  ]
+  for (const mutate of mutations) {
+    const publisher = adeaUiPublisherObject()
+    mutate(publisher)
+    assert.equal(
+      supportsAdeaUiWorkspaceReleaseContract({
+        ...input,
+        publisherWorkflowText: adeaUiPublisherWorkflow(publisher),
+      }),
+      false,
+      'an altered executable job or step must use full validation'
+    )
+  }
+
+  const invalidPublisher = adeaUiPublisherObject()
+  invalidPublisher.jobs.prepare.steps.find((step) => step.run === 'bun run pack:check').run =
+    'echo skipped'
+  const commentedDecoy = adeaUiPublisherWorkflow(invalidPublisher).concat(
+    '\n# run: bun run pack:check\n# jobs:\n#   publish:\n#     needs: [prepare, packed-layout]\n'
+  )
+  assert.equal(
+    supportsAdeaUiWorkspaceReleaseContract({ ...input, publisherWorkflowText: commentedDecoy }),
+    false,
+    'comments that resemble required jobs or commands cannot qualify the publisher'
+  )
+  assert.equal(
+    supportsAdeaUiWorkspaceReleaseContract({
+      ...input,
+      publisherWorkflowText: `${adeaUiPublisherWorkflow()}\njobs:\n  publish:\n    if: always()\n`,
+    }),
+    false,
+    'duplicate root mappings cannot shadow the checked publisher jobs'
+  )
 })
 
 test('the Adea UI release comparison normalizes only the exact workspace version in bun.lock', () => {

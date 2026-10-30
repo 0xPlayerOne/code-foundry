@@ -71,6 +71,8 @@ const ADEA_UI_LIFECYCLE_HOOKS = [
   'postprepare',
   'prebuild',
   'postbuild',
+  'precn:build',
+  'postcn:build',
   'prepack',
   'postpack',
   'prepublishOnly',
@@ -238,34 +240,484 @@ export function supportsAdeaUiWorkspaceReleaseContract(input) {
 /** @param {unknown} value */
 function hasQualifiedAdeaUiPublisher(value) {
   if (typeof value !== 'string') return false
-  const needs = [
-    '      - prepare',
-    '      - packed-conversation',
-    '      - packed-layout',
-    '      - packed-layout-renderer',
-    '      - packed-appearance',
-    '      - packed-modal-dialog',
-    '      - packed-native-select',
+  const workflow = parseUiPublisherWorkflow(value)
+  if (!workflow) return false
+  if (!object(workflow) || !object(workflow.on) || !object(workflow.jobs)) return false
+
+  const trigger = workflow.on
+  if (
+    Object.keys(trigger).toSorted().join('\n') !== 'push\nworkflow_dispatch' ||
+    !object(trigger.push) ||
+    !Array.isArray(trigger.push.tags) ||
+    trigger.push.tags.length !== 1 ||
+    trigger.push.tags[0] !== 'v*' ||
+    !object(trigger.workflow_dispatch) ||
+    !object(trigger.workflow_dispatch.inputs) ||
+    !object(trigger.workflow_dispatch.inputs['dry-run']) ||
+    trigger.workflow_dispatch.inputs['dry-run'].type !== 'boolean' ||
+    trigger.workflow_dispatch.inputs['dry-run'].default !== true
+  ) {
+    return false
+  }
+
+  const jobs = workflow.jobs
+  const requiredConsumers = [
+    'packed-conversation',
+    'packed-layout',
+    'packed-layout-renderer',
+    'packed-appearance',
+    'packed-modal-dialog',
+    'packed-native-select',
   ]
-  const publishJob = value.match(/  publish:\n[\s\S]*?(?=\n  [a-zA-Z_-]+:|\n?$)/)?.[0]
-  return (
-    value.includes('run: bun run pack:check') &&
-    value.includes('run: node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"') &&
-    value.includes(
-      "if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)"
-    ) &&
-    value.includes('if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)') &&
-    value.includes(
-      'if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)'
-    ) &&
-    (
-      value.match(
-        /^\s*run: npm publish "\$RUNNER_TEMP\/prepared-ui\/package\.tgz" --access public --provenance\s*$/gm
-      ) ?? []
-    ).length === 1 &&
-    publishJob !== undefined &&
-    needs.every((line) => publishJob.includes(line))
+  const publishNeeds = ['prepare', ...requiredConsumers]
+  const prepare = jobs.prepare
+  const publish = jobs.publish
+  if (!safeRequiredJob(prepare) || !safeRequiredJob(publish, true)) {
+    return false
+  }
+
+  const prepareSteps = steps(prepare)
+  if (
+    !hasStepRun(prepareSteps, 'bun run --cwd packages/ui build') ||
+    !hasStepRun(prepareSteps, 'bun run pack:check') ||
+    !hasStepRun(prepareSteps, 'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"') ||
+    !hasExactVersionOutputStep(prepareSteps) ||
+    !hasStepWithIdAndRun(
+      prepareSteps,
+      'archive',
+      'node scripts/prepare-packed-ui.mjs "$RUNNER_TEMP/prepared-ui"'
+    ) ||
+    !prepareSteps.some(
+      (step) =>
+        safeRequiredStep(step) &&
+        typeof step.uses === 'string' &&
+        step.uses.startsWith('actions/upload-artifact@') &&
+        object(step.with) &&
+        step.with.name === 'prepared-ui-package' &&
+        step.with.path === '${{ runner.temp }}/prepared-ui/'
+    ) ||
+    !object(prepare.outputs) ||
+    prepare.outputs.version !== '${{ steps.version.outputs.version }}' ||
+    prepare.outputs.archive_sha256 !== '${{ steps.archive.outputs.sha256 }}' ||
+    prepare.outputs.archive_integrity !== '${{ steps.archive.outputs.integrity }}'
+  ) {
+    return false
+  }
+
+  for (const [jobName, script] of Object.entries(ADEA_UI_PACKED_CONSUMER_SCRIPTS)) {
+    const job = jobs[jobName]
+    if (!safeRequiredJob(job) || !hasNeed(job, 'prepare')) return false
+    const jobSteps = steps(job)
+    if (
+      !jobSteps.some(
+        (step) =>
+          safeRequiredStep(step) &&
+          object(step.with) &&
+          typeof step.uses === 'string' &&
+          step.uses.startsWith('actions/download-artifact@') &&
+          step.name === 'Download the verified UI package' &&
+          step.with.name === 'prepared-ui-package'
+      ) ||
+      !jobSteps.some(
+        (step) =>
+          safeRequiredStep(step) &&
+          typeof step.run === 'string' &&
+          /^\s*printf '%s  %s\\n' "\$ADEA_PACKED_UI_SHA256" "\$ADEA_PACKED_UI_TARBALL" \| sha256sum --check\s*$/m.test(
+            step.run
+          )
+      ) ||
+      job.env?.ADEA_PACKED_UI_SHA256 !== '${{ needs.prepare.outputs.archive_sha256 }}' ||
+      typeof job.env?.ADEA_PACKED_UI_TARBALL !== 'string' ||
+      !job.env.ADEA_PACKED_UI_TARBALL.includes('prepared-ui/package.tgz') ||
+      !hasStepRun(jobSteps, script)
+    ) {
+      return false
+    }
+  }
+
+  if (
+    publish.if !== '${{ inputs.dry-run != true }}' ||
+    !sameStringSet(needs(publish), publishNeeds) ||
+    !object(publish.permissions) ||
+    publish.permissions['id-token'] !== 'write'
+  ) {
+    return false
+  }
+
+  const publishSteps = steps(publish)
+  const downloadIndex = publishSteps.findIndex(
+    (step) =>
+      safeRequiredStep(step) &&
+      object(step.with) &&
+      typeof step.uses === 'string' &&
+      step.uses.startsWith('actions/download-artifact@') &&
+      step.name === 'Download the verified UI package' &&
+      step.with.name === 'prepared-ui-package'
   )
+  const verifyIndex = publishSteps.findIndex(
+    (step) =>
+      safeRequiredStep(step) &&
+      step.name === 'Verify the exact release archive' &&
+      verifyArchiveScript(step.run)
+  )
+  const publishIndex = publishSteps.findIndex(
+    (step) =>
+      safeRequiredStep(step) &&
+      step.name === 'Publish with npm trusted publishing' &&
+      step.run === 'npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance'
+  )
+  const allSteps = Object.values(jobs).flatMap((job) => (object(job) ? steps(job) : []))
+  const verifyStep = publishSteps[verifyIndex]
+  const publishCommands = allSteps.flatMap((step) =>
+    typeof step.run === 'string' ? (step.run.match(/^\s*npm publish\b.*$/gm) ?? []) : []
+  )
+  const validPublish =
+    downloadIndex >= 0 &&
+    verifyIndex > downloadIndex &&
+    publishIndex > verifyIndex &&
+    object(verifyStep.env) &&
+    verifyStep.env.EXPECTED_VERSION === '${{ needs.prepare.outputs.version }}' &&
+    verifyStep.env.EXPECTED_SHA256 === '${{ needs.prepare.outputs.archive_sha256 }}' &&
+    verifyStep.env.EXPECTED_INTEGRITY === '${{ needs.prepare.outputs.archive_integrity }}' &&
+    publishCommands.length === 1 &&
+    publishCommands[0].trim() === publishSteps[publishIndex].run
+  return validPublish
+}
+
+/**
+ * Parse only the workflow subset used by the checked-in UI publisher. This is
+ * intentionally not a general YAML parser: ambiguous YAML features (aliases,
+ * flow mappings, tabs, duplicate keys, and unsupported indentation) fail
+ * closed, so this contract cannot be satisfied by matching comments or text
+ * in an unrelated job.
+ * @param {string} source
+ */
+function parseUiPublisherWorkflow(source) {
+  if (/\t|^[ ]*(?:&|\*|<<:|!!)/m.test(source)) return null
+  const lines = source.split(/\r?\n/)
+  const meaningful = lines.map((line) => (line.trimStart().startsWith('#') ? '' : line))
+  if (meaningful.filter((line) => line === 'on:').length !== 1) return null
+  if (meaningful.filter((line) => line === 'jobs:').length !== 1) return null
+  const onIndex = meaningful.findIndex((line) => line === 'on:')
+  const jobsIndex = meaningful.findIndex((line) => line === 'jobs:')
+  if (onIndex < 0 || jobsIndex < 0 || onIndex >= jobsIndex) return null
+  const onLines = meaningful.slice(onIndex + 1, jobsIndex)
+  const eventKeys = onLines
+    .filter((line) => /^  [A-Za-z0-9_-]+:\s*$/.test(line))
+    .map((line) => line.trim().slice(0, -1))
+  if (
+    eventKeys.length !== 2 ||
+    new Set(eventKeys).size !== 2 ||
+    !eventKeys.includes('push') ||
+    !eventKeys.includes('workflow_dispatch') ||
+    !hasIndentedSequence(onLines, '    tags:', 'v*') ||
+    !hasExactYamlScalar(onLines, '        type:', 'boolean') ||
+    !hasExactYamlScalar(onLines, '        default:', 'true') ||
+    !onLines.some((line) => line === '      dry-run:') ||
+    !onLines.some((line) => line === '    inputs:')
+  ) {
+    return null
+  }
+
+  /** @type {{ index: number, name: string }[]} */
+  const jobStarts = []
+  for (let index = jobsIndex + 1; index < meaningful.length; index += 1) {
+    const match = /^  ([A-Za-z0-9_-]+):\s*$/.exec(meaningful[index])
+    if (match) jobStarts.push({ index, name: match[1] })
+    else if (meaningful[index] && !/^\s/.test(meaningful[index])) break
+  }
+  if (jobStarts.length === 0 || new Set(jobStarts.map((job) => job.name)).size !== jobStarts.length)
+    return null
+
+  /** @type {Record<string, any>} */
+  const jobs = {}
+  for (let index = 0; index < jobStarts.length; index += 1) {
+    const start = jobStarts[index]
+    const end = jobStarts[index + 1]?.index ?? meaningful.length
+    const block = meaningful.slice(start.index + 1, end)
+    const job = parseWorkflowJob(block)
+    if (!job) return null
+    jobs[start.name] = job
+  }
+  return {
+    on: {
+      push: { tags: ['v*'] },
+      workflow_dispatch: { inputs: { 'dry-run': { type: 'boolean', default: true } } },
+    },
+    jobs,
+  }
+}
+
+/** @param {string[]} lines @param {string} key @param {string} expected */
+function hasExactYamlScalar(lines, key, expected) {
+  return (
+    lines.filter((line) => line.startsWith(key)).length === 1 &&
+    lines.some((line) => line === `${key} ${expected}`)
+  )
+}
+
+/** @param {string[]} lines @param {string} header @param {string} expected */
+function hasIndentedSequence(lines, header, expected) {
+  const at = lines.indexOf(header)
+  if (at < 0) return false
+  let end = at + 1
+  while (end < lines.length && (/^\s*- /.test(lines[end]) || lines[end] === '')) end += 1
+  const values = lines.slice(at + 1, end).filter((line) => line !== '')
+  return values.length === 1 && values[0] === `      - '${expected}'`
+}
+
+/** @param {string[]} block */
+function parseWorkflowJob(block) {
+  const scalarKeys = ['if', 'continue-on-error']
+  /** @type {Record<string, any>} */
+  const job = {}
+  for (const key of scalarKeys) {
+    const values = block.filter((line) => new RegExp(`^    ${key}:`).test(line))
+    if (values.length > 1) return null
+    if (values.length === 1) {
+      const value = parseWorkflowScalar(values[0].slice(values[0].indexOf(':') + 1))
+      if (value === INVALID_YAML_SCALAR) return null
+      job[key] = value
+    }
+  }
+
+  const needsLine = block.filter((line) => line.startsWith('    needs:'))
+  if (needsLine.length > 1) return null
+  if (needsLine.length === 1) {
+    const raw = needsLine[0].slice(needsLine[0].indexOf(':') + 1).trim()
+    if (raw) {
+      const value = parseWorkflowScalar(raw)
+      if (typeof value !== 'string') return null
+      job.needs = value
+    } else {
+      const at = block.indexOf(needsLine[0])
+      const values = []
+      for (const line of block.slice(at + 1)) {
+        if (line && !line.startsWith('      ')) break
+        const item = /^      - (.+)$/.exec(line)
+        if (item) values.push(parseWorkflowScalar(item[1]))
+      }
+      if (!values.every((value) => typeof value === 'string')) return null
+      job.needs = values
+    }
+  }
+
+  for (const key of ['outputs', 'permissions', 'env']) {
+    const parsed = parseJobMapping(block, key)
+    if (parsed === null) return null
+    if (parsed !== undefined) job[key] = parsed
+  }
+  const parsedSteps = parseWorkflowSteps(block)
+  if (parsedSteps === null) return null
+  if (parsedSteps !== undefined) job.steps = parsedSteps
+  return job
+}
+
+/** @param {string[]} block @param {string} key */
+function parseJobMapping(block, key) {
+  const headers = block
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line === `    ${key}:`)
+  if (headers.length > 1) return null
+  if (headers.length === 0) return undefined
+  /** @type {Record<string, any>} */
+  const result = {}
+  for (const line of block.slice(headers[0].index + 1)) {
+    if (line && !line.startsWith('      ')) break
+    const child = /^      ([A-Za-z0-9_-]+):\s*(.*)$/.exec(line)
+    if (!child) continue
+    if (Object.hasOwn(result, child[1])) return null
+    const value = parseWorkflowScalar(child[2])
+    if (value === INVALID_YAML_SCALAR) return null
+    result[child[1]] = value
+  }
+  return result
+}
+
+/** @param {string[]} block */
+function parseWorkflowSteps(block) {
+  const headerIndexes = block
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line === '    steps:')
+    .map(({ index }) => index)
+  if (headerIndexes.length > 1) return null
+  if (headerIndexes.length === 0) return undefined
+  const start = headerIndexes[0] + 1
+  /** @type {number[]} */
+  const starts = []
+  for (let index = start; index < block.length; index += 1) {
+    if (block[index].startsWith('      - ')) starts.push(index)
+    else if (block[index] && !/^\s/.test(block[index])) return null
+  }
+  /** @type {(Record<string, any> | null)[]} */
+  const parsed = starts.map((stepStart, index) =>
+    parseWorkflowStep(block.slice(stepStart, starts[index + 1] ?? block.length))
+  )
+  return parsed.some((step) => step === null) ? null : parsed
+}
+
+/** @param {string[]} lines */
+function parseWorkflowStep(lines) {
+  const first = /^      - ([A-Za-z0-9_-]+):\s*(.*)$/.exec(lines[0])
+  if (!first) return null
+  /** @type {Record<string, any>} */
+  const step = {}
+  const entries = []
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = index === 0 ? `        ${first[1]}: ${first[2]}` : lines[index]
+    const entry = /^        ([A-Za-z0-9_-]+):(?:\s*(.*))?$/.exec(line)
+    if (!entry) continue
+    entries.push({ key: entry[1], raw: entry[2] ?? '', lineIndex: index })
+  }
+  for (const entry of entries) {
+    if (Object.hasOwn(step, entry.key)) return null
+    const raw = entry.raw.trim()
+    if (entry.key === 'run' && (raw === '|' || raw === '|-')) {
+      const body = []
+      for (let index = entry.lineIndex + 1; index < lines.length; index += 1) {
+        const line = lines[index]
+        if (line && !line.startsWith('          ')) break
+        body.push(line === '' ? '' : line.slice(10))
+      }
+      step.run = body.join('\n')
+      continue
+    }
+    if (entry.key === 'with' || entry.key === 'env') {
+      /** @type {Record<string, any>} */
+      const mapping = {}
+      for (let index = entry.lineIndex + 1; index < lines.length; index += 1) {
+        const child = /^          ([A-Za-z0-9_-]+):\s*(.*)$/.exec(lines[index])
+        if (child) {
+          if (Object.hasOwn(mapping, child[1])) return null
+          mapping[child[1]] = parseWorkflowScalar(child[2])
+        }
+      }
+      step[entry.key] = mapping
+      continue
+    }
+    const parsed = parseWorkflowScalar(raw)
+    if (parsed === INVALID_YAML_SCALAR) return null
+    step[entry.key] = parsed
+  }
+  return step
+}
+
+const INVALID_YAML_SCALAR = Symbol('invalid-yaml-scalar')
+
+/** @param {string} raw */
+function parseWorkflowScalar(raw) {
+  const value = raw.trim()
+  if (value === 'true') return true
+  if (value === 'false') return false
+  if (value === '' || value === 'null' || value === '~') return INVALID_YAML_SCALAR
+  if (value.startsWith('"')) {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return INVALID_YAML_SCALAR
+    }
+  }
+  if (value.startsWith("'")) {
+    if (!value.endsWith("'") || value.length < 2) return INVALID_YAML_SCALAR
+    return value.slice(1, -1).replaceAll("''", "'")
+  }
+  if (/\s+#/.test(value)) return value.split(/\s+#/, 1)[0]
+  return value
+}
+
+const ADEA_UI_PACKED_CONSUMER_SCRIPTS = {
+  'packed-conversation': 'bun run check:packed-conversation',
+  'packed-layout': 'bun run check:packed-layout && bun run check:packed-settings-navigation',
+  'packed-layout-renderer': 'bun run check:packed-layout-renderer',
+  'packed-appearance': 'bun run check:packed-appearance',
+  'packed-modal-dialog': 'bun run check:packed-modal-dialog',
+  'packed-native-select': 'bun run check:packed-native-select',
+}
+
+/** @param {unknown} job @returns {job is Record<string, any>} */
+function safeRequiredJob(job, allowIf = false) {
+  return (
+    object(job) &&
+    (allowIf || !Object.hasOwn(job, 'if')) &&
+    (job['continue-on-error'] === undefined || job['continue-on-error'] === false)
+  )
+}
+
+/** @param {unknown} job @returns {Record<string, any>[]} */
+function steps(job) {
+  return object(job) && Array.isArray(job.steps) && job.steps.every(object) ? job.steps : []
+}
+
+/** @param {Record<string, any>[]} jobSteps @param {string} script */
+function hasStepRun(jobSteps, script) {
+  return jobSteps.some((step) => safeRequiredStep(step) && step.run === script)
+}
+
+/** @param {Record<string, any>[]} jobSteps @param {string} id @param {string} run */
+function hasStepWithIdAndRun(jobSteps, id, run) {
+  return jobSteps.some((step) => safeRequiredStep(step) && step.id === id && step.run === run)
+}
+
+/** @param {Record<string, any>[]} jobSteps */
+function hasExactVersionOutputStep(jobSteps) {
+  return jobSteps.some(
+    (step) =>
+      safeRequiredStep(step) &&
+      step.id === 'version' &&
+      step.run ===
+        `echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"`
+  )
+}
+
+/** @param {unknown} job @param {string} dependency */
+function hasNeed(job, dependency) {
+  return needs(job).includes(dependency)
+}
+
+/** @param {unknown} job @returns {string[]} */
+function needs(job) {
+  if (!object(job)) return []
+  if (typeof job.needs === 'string') return [job.needs]
+  return Array.isArray(job.needs) && job.needs.every((item) => typeof item === 'string')
+    ? job.needs
+    : []
+}
+
+/** @param {string[]} actual @param {string[]} expected */
+function sameStringSet(actual, expected) {
+  return (
+    actual.length === expected.length &&
+    [...actual].toSorted().join('\n') === [...expected].toSorted().join('\n')
+  )
+}
+
+/** @param {unknown} step @returns {step is Record<string, any>} */
+function safeRequiredStep(step) {
+  return (
+    object(step) &&
+    !Object.hasOwn(step, 'if') &&
+    (step['continue-on-error'] === undefined || step['continue-on-error'] === false)
+  )
+}
+
+/** @param {unknown} script */
+function verifyArchiveScript(script) {
+  if (typeof script !== 'string') return false
+  const requiredLines = [
+    /^\s*printf '%s  %s\\n' "\$EXPECTED_SHA256" "\$archive" \| sha256sum --check\s*$/m,
+    /^\s*const archivePath = process\.env\.RUNNER_TEMP \+ '\/prepared-ui\/package\.tgz'\s*$/m,
+    /^\s*const bytes = readFileSync\(archivePath\)\s*$/m,
+    /^\s*const manifest = JSON\.parse\(readFileSync\(process\.env\.RUNNER_TEMP \+ '\/prepared-ui\/manifest\.json', 'utf8'\)\)\s*$/m,
+    /^\s*const sha256 = createHash\('sha256'\)\.update\(bytes\)\.digest\('hex'\)\s*$/m,
+    /^\s*const integrity = 'sha512-' \+ createHash\('sha512'\)\.update\(bytes\)\.digest\('base64'\)\s*$/m,
+    /^\s*if \(manifest\.name !== '@adea-ai\/ui' \|\| manifest\.version !== process\.env\.EXPECTED_VERSION\)\s*$/m,
+    /^\s*throw new Error\('Prepared package identity does not match release version'\)\s*$/m,
+    /^\s*if \(sha256 !== process\.env\.EXPECTED_SHA256 \|\| manifest\.sha256 !== sha256\)\s*$/m,
+    /^\s*throw new Error\('Prepared package SHA-256 does not match the verified artifact'\)\s*$/m,
+    /^\s*if \(integrity !== process\.env\.EXPECTED_INTEGRITY \|\| manifest\.integrity !== integrity\)\s*$/m,
+    /^\s*throw new Error\('Prepared package npm integrity does not match the verified artifact'\)\s*$/m,
+  ]
+  return requiredLines.every((pattern) => pattern.test(script))
 }
 
 /** @param {string} content */
