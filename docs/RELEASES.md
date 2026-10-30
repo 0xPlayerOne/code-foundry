@@ -40,24 +40,9 @@ publication](qualified-publication.md).
 For an explicit version, put `Release-As: 2.0.0` in a commit or pull request
 body. Existing `CHANGELOG.md` history remains repository-owned.
 
-### Adea UI workspace receipt reuse
+### Adea UI receipts
 
-Code Foundry supports source-qualification receipt reuse for one explicit
-workspace layout: the `adea-ai/ui` monorepo, with the public package at
-`packages/ui`. Its root and workspace versions, Release Please manifest and
-extra-file mapping, Bun lock entry, lifecycle scripts, and publisher workflow
-must match the reviewed contract. Other private roots and workspace layouts
-continue to use full validation.
-
-The consumer opts in with `release_qualification_receipts: true` in
-`.github/code-foundry.yml`. Reuse is accepted only when the tested source tree
-matches the exact release base tree and the source audit produced a valid
-receipt. Any mismatch or unsupported publisher/package configuration falls
-back to full validation. A receipt does not qualify the published archive:
-release validation still packs the candidate and checks it on Node 24 and 26,
-and publication remains bound to the verified archive and its digest. Keep the
-consumer opt-out until the released runtime and its packed-package workflow
-have both been qualified. This contract was introduced in [#810](https://github.com/0xPlayerOne/code-foundry/pull/810).
+Only `packages/ui` may opt in; others use full validation. Packed Node 24/26 checks remain.
 
 ## Configuration
 
