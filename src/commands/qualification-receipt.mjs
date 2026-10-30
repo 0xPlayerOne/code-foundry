@@ -112,6 +112,14 @@ function readJsonFile(path) {
 /** @param {string} cwd */
 function hasRegularAdeaUiReleasePaths(cwd) {
   try {
+    for (const path of ['.npmrc', 'packages/.npmrc', 'packages/ui/.npmrc']) {
+      try {
+        lstatSync(join(cwd, path))
+        return false
+      } catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') return false
+      }
+    }
     const paths = [
       '.github',
       '.github/code-foundry.yml',

@@ -214,8 +214,8 @@ export function supportsAdeaUiWorkspaceReleaseContract(input) {
     root.version !== workspace.version ||
     workspace.name !== ADEA_UI_PACKAGE_NAME ||
     workspace.private === true ||
-    (workspace.publishConfig?.access !== undefined &&
-      workspace.publishConfig.access !== 'public') ||
+    root.publishConfig !== undefined ||
+    !hasSafeAdeaUiPublishConfig(workspace.publishConfig) ||
     root.packageManager !== 'bun@1.4.4' ||
     packageManager !== 'bun' ||
     root.scripts['pack:check'] !== ADEA_UI_ROOT_PACK_CHECK_SCRIPT ||
@@ -235,6 +235,16 @@ export function supportsAdeaUiWorkspaceReleaseContract(input) {
     return false
   }
   return true
+}
+
+/** @param {unknown} publishConfig */
+function hasSafeAdeaUiPublishConfig(publishConfig) {
+  if (publishConfig === undefined) return true
+  return (
+    object(publishConfig) &&
+    Object.keys(publishConfig).length === 1 &&
+    publishConfig.access === 'public'
+  )
 }
 
 /** @param {unknown} value */
@@ -369,6 +379,7 @@ function parseUiPublisherWorkflow(source) {
   const onIndex = meaningful.findIndex((line) => line === 'on:')
   const jobsIndex = meaningful.findIndex((line) => line === 'jobs:')
   if (onIndex < 0 || jobsIndex < 0 || onIndex >= jobsIndex) return null
+  if (meaningful.some((line) => line === 'env:')) return null
   const onLines = meaningful.slice(onIndex + 1, jobsIndex)
   const eventKeys = onLines
     .filter((line) => /^  [A-Za-z0-9_-]+:\s*$/.test(line))

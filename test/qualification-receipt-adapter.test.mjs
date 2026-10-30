@@ -1348,6 +1348,9 @@ test('root release contract accepts only inert Themes-style settings', () => {
 test('the explicit Adea UI contract accepts only the public UI workspace release layout', () => {
   const input = adeaUiContractInput()
   assert.equal(supportsAdeaUiWorkspaceReleaseContract(input), true)
+  const noWorkspacePublishConfig = structuredClone(input)
+  delete noWorkspacePublishConfig.workspacePackageManifest.publishConfig
+  assert.equal(supportsAdeaUiWorkspaceReleaseContract(noWorkspacePublishConfig), true)
   assert.equal(
     supportsRootNpmReleaseContract({
       packageManifest: input.rootPackageManifest,
@@ -1360,6 +1363,8 @@ test('the explicit Adea UI contract accepts only the public UI workspace release
   )
 
   const unsafe = [
+    { rootPackageManifest: { publishConfig: { registry: 'https://registry.example.invalid/' } } },
+    { rootPackageManifest: { publishConfig: { tag: 'private' } } },
     { rootPackageManifest: { private: false } },
     { rootPackageManifest: { name: 'different-root' } },
     { rootPackageManifest: { workspaces: ['packages/*'] } },
@@ -1370,6 +1375,13 @@ test('the explicit Adea UI contract accepts only the public UI workspace release
     { workspacePackageManifest: { private: true } },
     { workspacePackageManifest: { version: '1.0.1' } },
     { workspacePackageManifest: { publishConfig: { access: 'restricted' } } },
+    {
+      workspacePackageManifest: {
+        publishConfig: { access: 'public', registry: 'https://registry.example.invalid/' },
+      },
+    },
+    { workspacePackageManifest: { publishConfig: { access: 'public', tag: 'private' } } },
+    { workspacePackageManifest: { publishConfig: { access: 'public', provenance: false } } },
     { workspacePackageManifest: { scripts: { prepack: 'node mutate.mjs' } } },
     { workspacePackageManifest: { scripts: { prepare: 'node mutate.mjs' } } },
     { workspacePackageManifest: { scripts: { prepublishOnly: 'bun run build' } } },
@@ -1431,6 +1443,54 @@ test('the explicit Adea UI contract accepts only the public UI workspace release
       }),
       false,
       `must reject workspace contract mutation: ${JSON.stringify(change)}`
+    )
+  }
+})
+
+test('Adea UI workspace receipts reject npmrc files that can redirect package operations', (t) => {
+  for (const npmrcPath of ['.npmrc', 'packages/.npmrc', 'packages/ui/.npmrc']) {
+    const source = sourceFixture(t)
+    const input = adeaUiContractInput()
+    writeFileSync(join(source.directory, 'package.json'), JSON.stringify(input.rootPackageManifest))
+    mkdirSync(join(source.directory, 'packages/ui'), { recursive: true })
+    writeFileSync(
+      join(source.directory, 'packages/ui/package.json'),
+      JSON.stringify(input.workspacePackageManifest)
+    )
+    writeFileSync(
+      join(source.directory, '.release-please-manifest.json'),
+      JSON.stringify(input.releaseManifest)
+    )
+    writeFileSync(
+      join(source.directory, 'release-please-config.json'),
+      JSON.stringify(adeaUiReleaseConfig())
+    )
+    writeFileSync(
+      join(source.directory, '.github/workflows/publish-ui.yml'),
+      adeaUiPublisherWorkflow()
+    )
+    writeFileSync(join(source.directory, 'bun.lock'), input.lockfileText)
+    writeFileSync(
+      join(source.directory, '.github/code-foundry.yml'),
+      'package_manager: bun\nrelease_qualification_receipts: true\nnpm_publish: false\n'
+    )
+    const npmrcAbsolutePath = join(source.directory, npmrcPath)
+    mkdirSync(dirname(npmrcAbsolutePath), { recursive: true })
+    writeFileSync(npmrcAbsolutePath, 'registry=https://registry.example.invalid/\n')
+    assert.throws(
+      () =>
+        execFileSync(
+          'node',
+          [join(root, 'src/commands/qualification-receipt.mjs'), 'package-contract'],
+          {
+            cwd: source.directory,
+            env: { ...process.env, GITHUB_REPOSITORY: 'adea-ai/ui' },
+            encoding: 'utf8',
+            stdio: 'pipe',
+          }
+        ),
+      (error) => error.status === 1,
+      `an npmrc at ${npmrcPath} must reject receipt reuse`
     )
   }
 })
@@ -1554,6 +1614,18 @@ test('Adea UI publisher qualification binds parsed, non-skippable jobs and execu
       'an altered executable job or step must use full validation'
     )
   }
+
+  assert.equal(
+    supportsAdeaUiWorkspaceReleaseContract({
+      ...input,
+      publisherWorkflowText: adeaUiPublisherWorkflow().replace(
+        'jobs:',
+        'env:\n  NPM_CONFIG_REGISTRY: https://registry.example.invalid/\njobs:'
+      ),
+    }),
+    false,
+    'workflow-level npm registry overrides cannot qualify publisher receipts'
+  )
 
   const invalidPublisher = adeaUiPublisherObject()
   invalidPublisher.jobs.prepare.steps.find((step) => step.run === 'bun run pack:check').run =
