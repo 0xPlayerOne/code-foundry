@@ -470,6 +470,21 @@ test('unsupported package and release layouts fall back before any receipt API l
       packageManifest: {
         name: 'fixture-consumer',
         version: '1.0.0',
+        scripts: {
+          test: 'node --test',
+          'test:unit': 'node --test',
+          'pack:check': 'npm pack --dry-run',
+          prepublishOnly: 'npm test && npm run pack:check',
+          pretest: 'node mutate-before-tests.mjs',
+          'prepack:check': 'node mutate-before-pack.mjs',
+          postpublish: 'node release-side-effect.mjs',
+        },
+      },
+    },
+    {
+      packageManifest: {
+        name: 'fixture-consumer',
+        version: '1.0.0',
         scripts: { build: 'node build.mjs', prepublishOnly: 'bun run build' },
       },
       packageManager: 'npm',
@@ -734,6 +749,14 @@ test('root release contract accepts only the fixed test-and-pack prepublish life
     { 'test:unit': 'node publish-extra.mjs' },
     { 'pack:check': 'npm pack --dry-run && node upload.mjs' },
     { 'pack:check': 'npm pack' },
+    { pretest: 'node mutate.mjs' },
+    { posttest: 'node mutate.mjs' },
+    { 'pretest:unit': 'node mutate.mjs' },
+    { 'posttest:unit': 'node mutate.mjs' },
+    { 'prepack:check': 'node mutate.mjs' },
+    { 'postpack:check': 'node mutate.mjs' },
+    { publish: 'node release-side-effect.mjs' },
+    { postpublish: 'node release-side-effect.mjs' },
   ]
   for (const change of unsafeScripts) {
     assert.equal(
