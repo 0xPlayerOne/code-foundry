@@ -101,10 +101,17 @@ export function supportsRootNpmReleaseContract(input) {
       )
         ? `${packageManager} run build`
         : null
-      if (
-        typeof lifecycleScripts.build !== 'string' ||
-        lifecycleScripts.prepublishOnly !== expectedBuild
-      ) {
+      // This fixed hook is covered by the source audit's unit test command and
+      // the release candidate pack qualification. Do not admit shell variants.
+      const expectedTestAndPackCheck =
+        lifecycleScripts.prepublishOnly === 'npm test && npm run pack:check' &&
+        lifecycleScripts.test === 'node --test' &&
+        lifecycleScripts['test:unit'] === 'node --test' &&
+        lifecycleScripts['pack:check'] === 'npm pack --dry-run'
+      const expectedBuildOnly =
+        typeof lifecycleScripts.build === 'string' &&
+        lifecycleScripts.prepublishOnly === expectedBuild
+      if (!expectedBuildOnly && !expectedTestAndPackCheck) {
         return false
       }
     }
