@@ -345,42 +345,57 @@ function hasQualifiedAdeaUiPublisher(value) {
   }
 
   const publishSteps = steps(publish)
-  const downloadIndex = publishSteps.findIndex(
-    (step) =>
-      safeRequiredStep(step) &&
-      object(step.with) &&
-      typeof step.uses === 'string' &&
-      step.uses.startsWith('actions/download-artifact@') &&
-      step.name === 'Download the verified UI package' &&
-      step.with.name === 'prepared-ui-package'
-  )
-  const verifyIndex = publishSteps.findIndex(
-    (step) =>
-      safeRequiredStep(step) &&
-      step.name === 'Verify the exact release archive' &&
-      verifyArchiveScript(step.run)
-  )
-  const publishIndex = publishSteps.findIndex(
-    (step) =>
-      safeRequiredStep(step) &&
-      step.name === 'Publish with npm trusted publishing' &&
-      step.run === 'npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance'
-  )
+  const [checkout, setupNode, pinNpm, download, verify, publishArchive, confirm] = publishSteps
   const allSteps = Object.values(jobs).flatMap((job) => (object(job) ? steps(job) : []))
-  const verifyStep = publishSteps[verifyIndex]
   const publishCommands = allSteps.flatMap((step) =>
     typeof step.run === 'string' ? (step.run.match(/^\s*npm publish\b.*$/gm) ?? []) : []
   )
   const validPublish =
-    downloadIndex >= 0 &&
-    verifyIndex > downloadIndex &&
-    publishIndex > verifyIndex &&
-    object(verifyStep.env) &&
-    verifyStep.env.EXPECTED_VERSION === '${{ needs.prepare.outputs.version }}' &&
-    verifyStep.env.EXPECTED_SHA256 === '${{ needs.prepare.outputs.archive_sha256 }}' &&
-    verifyStep.env.EXPECTED_INTEGRITY === '${{ needs.prepare.outputs.archive_integrity }}' &&
+    publishSteps.length === 7 &&
+    publishSteps.every(safeRequiredStep) &&
+    exactStepKeys(checkout, ['name', 'uses', 'with']) &&
+    checkout.name === 'Checkout' &&
+    checkout.uses === 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' &&
+    object(checkout.with) &&
+    Object.keys(checkout.with).length === 1 &&
+    checkout.with['persist-credentials'] === false &&
+    exactStepKeys(setupNode, ['name', 'uses', 'with']) &&
+    setupNode.name === 'Setup Node' &&
+    setupNode.uses === 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' &&
+    object(setupNode.with) &&
+    setupNode.with['node-version'] === 24 &&
+    setupNode.with['registry-url'] === 'https://registry.npmjs.org' &&
+    Object.keys(setupNode.with).length === 2 &&
+    exactStepKeys(pinNpm, ['name', 'run']) &&
+    pinNpm.name === 'Pin an npm that can do trusted publishing' &&
+    exactScript(pinNpm.run, ADEA_UI_PIN_NPM_SCRIPT) &&
+    exactStepKeys(download, ['name', 'uses', 'with']) &&
+    download.name === 'Download the verified UI package' &&
+    download.uses === 'actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131' &&
+    object(download.with) &&
+    download.with.name === 'prepared-ui-package' &&
+    download.with.path === '${{ runner.temp }}/prepared-ui/' &&
+    Object.keys(download.with).length === 2 &&
+    exactStepKeys(verify, ['name', 'env', 'run']) &&
+    verify.name === 'Verify the exact release archive' &&
+    object(verify.env) &&
+    verify.env.EXPECTED_VERSION === '${{ needs.prepare.outputs.version }}' &&
+    verify.env.EXPECTED_SHA256 === '${{ needs.prepare.outputs.archive_sha256 }}' &&
+    verify.env.EXPECTED_INTEGRITY === '${{ needs.prepare.outputs.archive_integrity }}' &&
+    Object.keys(verify.env).length === 3 &&
+    exactScript(verify.run, ADEA_UI_PUBLISH_VERIFY_SCRIPT) &&
+    exactStepKeys(publishArchive, ['name', 'run']) &&
+    publishArchive.name === 'Publish with npm trusted publishing' &&
+    publishArchive.run ===
+      'npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance' &&
+    exactStepKeys(confirm, ['name', 'env', 'run']) &&
+    confirm.name === 'Confirm the release is what consumers get' &&
+    object(confirm.env) &&
+    confirm.env.VERSION === '${{ needs.prepare.outputs.version }}' &&
+    Object.keys(confirm.env).length === 1 &&
+    exactScript(confirm.run, ADEA_UI_CONFIRM_RELEASE_SCRIPT) &&
     publishCommands.length === 1 &&
-    publishCommands[0].trim() === publishSteps[publishIndex].run
+    publishCommands[0].trim() === publishArchive.run
   return validPublish
 }
 
@@ -609,6 +624,7 @@ function parseWorkflowScalar(raw) {
   const value = raw.trim()
   if (value === 'true') return true
   if (value === 'false') return false
+  if (/^(?:0|[1-9]\d*)$/.test(value)) return Number(value)
   if (value === '' || value === 'null' || value === '~') return INVALID_YAML_SCALAR
   if (value.startsWith('"')) {
     try {
@@ -700,25 +716,68 @@ function safeRequiredStep(step) {
   )
 }
 
-/** @param {unknown} script */
-function verifyArchiveScript(script) {
-  if (typeof script !== 'string') return false
-  const requiredLines = [
-    /^\s*printf '%s  %s\\n' "\$EXPECTED_SHA256" "\$archive" \| sha256sum --check\s*$/m,
-    /^\s*const archivePath = process\.env\.RUNNER_TEMP \+ '\/prepared-ui\/package\.tgz'\s*$/m,
-    /^\s*const bytes = readFileSync\(archivePath\)\s*$/m,
-    /^\s*const manifest = JSON\.parse\(readFileSync\(process\.env\.RUNNER_TEMP \+ '\/prepared-ui\/manifest\.json', 'utf8'\)\)\s*$/m,
-    /^\s*const sha256 = createHash\('sha256'\)\.update\(bytes\)\.digest\('hex'\)\s*$/m,
-    /^\s*const integrity = 'sha512-' \+ createHash\('sha512'\)\.update\(bytes\)\.digest\('base64'\)\s*$/m,
-    /^\s*if \(manifest\.name !== '@adea-ai\/ui' \|\| manifest\.version !== process\.env\.EXPECTED_VERSION\)\s*$/m,
-    /^\s*throw new Error\('Prepared package identity does not match release version'\)\s*$/m,
-    /^\s*if \(sha256 !== process\.env\.EXPECTED_SHA256 \|\| manifest\.sha256 !== sha256\)\s*$/m,
-    /^\s*throw new Error\('Prepared package SHA-256 does not match the verified artifact'\)\s*$/m,
-    /^\s*if \(integrity !== process\.env\.EXPECTED_INTEGRITY \|\| manifest\.integrity !== integrity\)\s*$/m,
-    /^\s*throw new Error\('Prepared package npm integrity does not match the verified artifact'\)\s*$/m,
-  ]
-  return requiredLines.every((pattern) => pattern.test(script))
+/** @param {unknown} step @param {string[]} expected */
+function exactStepKeys(step, expected) {
+  return (
+    object(step) && Object.keys(step).toSorted().join('\n') === [...expected].toSorted().join('\n')
+  )
 }
+
+/** @param {unknown} actual @param {string} expected */
+function exactScript(actual, expected) {
+  if (typeof actual !== 'string') return false
+  return (
+    actual
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .join('\n') === expected
+  )
+}
+
+const ADEA_UI_PIN_NPM_SCRIPT = [
+  'set -euo pipefail',
+  'needed="11.5.1"',
+  'if [ "$(printf \'%s\\n%s\\n\' "$needed" "$(npm --version)" | sort -V | head -1)" != "$needed" ]; then',
+  '  echo "::error title=npm is too old for trusted publishing::needs >= ${needed}, runner has $(npm --version)"',
+  '  exit 1',
+  'fi',
+  'npm --version',
+].join('\n')
+
+const ADEA_UI_PUBLISH_VERIFY_SCRIPT = String.raw`set -euo pipefail
+archive="$RUNNER_TEMP/prepared-ui/package.tgz"
+printf '%s  %s\n' "$EXPECTED_SHA256" "$archive" | sha256sum --check
+node --input-type=module <<'NODE'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+const archivePath = process.env.RUNNER_TEMP + '/prepared-ui/package.tgz'
+const bytes = readFileSync(archivePath)
+const manifest = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/prepared-ui/manifest.json', 'utf8'))
+const sha256 = createHash('sha256').update(bytes).digest('hex')
+const integrity = 'sha512-' + createHash('sha512').update(bytes).digest('base64')
+if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)
+  throw new Error('Prepared package identity does not match release version')
+if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)
+  throw new Error('Prepared package SHA-256 does not match the verified artifact')
+if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)
+  throw new Error('Prepared package npm integrity does not match the verified artifact')
+console.log(JSON.stringify({ name: manifest.name, version: manifest.version, sha256, integrity, size: bytes.byteLength }))
+NODE`
+
+const ADEA_UI_CONFIRM_RELEASE_SCRIPT = [
+  'set -euo pipefail',
+  'for attempt in $(seq 1 20); do',
+  '  latest="$(npm view @adea-ai/ui dist-tags.latest 2>/dev/null || echo \'\')"',
+  '  echo "attempt ${attempt}/20: latest is ${latest:-<unreadable>}"',
+  '  if [ "${latest}" = "${VERSION}" ]; then',
+  '    echo "@adea-ai/ui@${VERSION} is what consumers get"',
+  '    exit 0',
+  '  fi',
+  '  sleep 30',
+  'done',
+  'echo "::error title=latest did not advance::@adea-ai/ui@${VERSION} published but latest is still ${latest:-<unreadable>} after 10 minutes. Another publisher may own this package name — check whether adea-ai/adea is still publishing packages/ui."',
+  'exit 1',
+].join('\n')
 
 /** @param {string} content */
 function parseJsonText(content) {

@@ -92,29 +92,21 @@ const adeaUiPublisherObject = () => {
       ],
     }
   }
-  jobs.publish = {
-    if: '${{ inputs.dry-run != true }}',
-    needs: ['prepare', ...Object.keys(consumers)],
-    permissions: { 'id-token': 'write' },
-    steps: [
-      {
-        name: 'Download the verified UI package',
-        uses: 'actions/download-artifact@v7',
-        with: { name: 'prepared-ui-package' },
-      },
-      {
-        name: 'Verify the exact release archive',
-        env: {
-          EXPECTED_VERSION: '${{ needs.prepare.outputs.version }}',
-          EXPECTED_SHA256: '${{ needs.prepare.outputs.archive_sha256 }}',
-          EXPECTED_INTEGRITY: '${{ needs.prepare.outputs.archive_integrity }}',
-        },
-        run: String.raw`set -euo pipefail
+  const pinNpmScript = [
+    'set -euo pipefail',
+    'needed="11.5.1"',
+    'if [ "$(printf \'%s\\n%s\\n\' "$needed" "$(npm --version)" | sort -V | head -1)" != "$needed" ]; then',
+    '  echo "::error title=npm is too old for trusted publishing::needs >= ${needed}, runner has $(npm --version)"',
+    '  exit 1',
+    'fi',
+    'npm --version',
+  ].join('\n')
+  const verifyScript = String.raw`set -euo pipefail
 archive="$RUNNER_TEMP/prepared-ui/package.tgz"
 printf '%s  %s\n' "$EXPECTED_SHA256" "$archive" | sha256sum --check
 node --input-type=module <<'NODE'
-const { createHash } = await import('node:crypto')
-const { readFileSync } = await import('node:fs')
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 const archivePath = process.env.RUNNER_TEMP + '/prepared-ui/package.tgz'
 const bytes = readFileSync(archivePath)
 const manifest = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/prepared-ui/manifest.json', 'utf8'))
@@ -126,11 +118,63 @@ if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)
   throw new Error('Prepared package SHA-256 does not match the verified artifact')
 if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)
   throw new Error('Prepared package npm integrity does not match the verified artifact')
-NODE`,
+console.log(JSON.stringify({ name: manifest.name, version: manifest.version, sha256, integrity, size: bytes.byteLength }))
+NODE`
+  const confirmScript = [
+    'set -euo pipefail',
+    'for attempt in $(seq 1 20); do',
+    '  latest="$(npm view @adea-ai/ui dist-tags.latest 2>/dev/null || echo \'\')"',
+    '  echo "attempt ${attempt}/20: latest is ${latest:-<unreadable>}"',
+    '  if [ "${latest}" = "${VERSION}" ]; then',
+    '    echo "@adea-ai/ui@${VERSION} is what consumers get"',
+    '    exit 0',
+    '  fi',
+    '  sleep 30',
+    'done',
+    'echo "::error title=latest did not advance::@adea-ai/ui@${VERSION} published but latest is still ${latest:-<unreadable>} after 10 minutes. Another publisher may own this package name — check whether adea-ai/adea is still publishing packages/ui."',
+    'exit 1',
+  ].join('\n')
+  jobs.publish = {
+    if: '${{ inputs.dry-run != true }}',
+    needs: ['prepare', ...Object.keys(consumers)],
+    permissions: { 'id-token': 'write' },
+    steps: [
+      {
+        name: 'Checkout',
+        uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+        with: { 'persist-credentials': false },
+      },
+      {
+        name: 'Setup Node',
+        uses: 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+        with: { 'node-version': 24, 'registry-url': 'https://registry.npmjs.org' },
+      },
+      { name: 'Pin an npm that can do trusted publishing', run: pinNpmScript },
+      {
+        name: 'Download the verified UI package',
+        uses: 'actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131',
+        with: {
+          name: 'prepared-ui-package',
+          path: '${{ runner.temp }}/prepared-ui/',
+        },
+      },
+      {
+        name: 'Verify the exact release archive',
+        env: {
+          EXPECTED_VERSION: '${{ needs.prepare.outputs.version }}',
+          EXPECTED_SHA256: '${{ needs.prepare.outputs.archive_sha256 }}',
+          EXPECTED_INTEGRITY: '${{ needs.prepare.outputs.archive_integrity }}',
+        },
+        run: verifyScript,
       },
       {
         name: 'Publish with npm trusted publishing',
         run: 'npm publish "$RUNNER_TEMP/prepared-ui/package.tgz" --access public --provenance',
+      },
+      {
+        name: 'Confirm the release is what consumers get',
+        env: { VERSION: '${{ needs.prepare.outputs.version }}' },
+        run: confirmScript,
       },
     ],
   }
@@ -1310,6 +1354,28 @@ test('Adea UI publisher qualification binds parsed, non-skippable jobs and execu
         String.raw`# if (manifest.name !== '@adea-ai/ui' || manifest.version !== process.env.EXPECTED_VERSION)
 # if (sha256 !== process.env.EXPECTED_SHA256 || manifest.sha256 !== sha256)
 # if (integrity !== process.env.EXPECTED_INTEGRITY || manifest.integrity !== integrity)`
+    },
+    (workflow) => {
+      const verify = workflow.jobs.publish.steps.find(
+        (step) => step.name === 'Verify the exact release archive'
+      )
+      verify.run = `exit 0\n${verify.run}`
+    },
+    (workflow) => {
+      const verify = workflow.jobs.publish.steps.find(
+        (step) => step.name === 'Verify the exact release archive'
+      )
+      verify.run = `if false; then\n${verify.run}\nfi`
+    },
+    (workflow) => {
+      const publish = workflow.jobs.publish.steps
+      const verifyIndex = publish.findIndex(
+        (step) => step.name === 'Verify the exact release archive'
+      )
+      publish.splice(verifyIndex + 1, 0, {
+        name: 'Replace verified package',
+        run: 'printf tampered > "$RUNNER_TEMP/prepared-ui/package.tgz"',
+      })
     },
   ]
   for (const mutate of mutations) {
