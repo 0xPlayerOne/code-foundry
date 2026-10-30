@@ -272,7 +272,7 @@ jobs:
     name: Qualification receipt
     needs: [ci, test, security, eval, gate]
     if: >-
-      vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
       inputs.release-qualification-receipts == true &&
       github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
       needs.ci.result == 'success' && needs.test.result == 'success' &&

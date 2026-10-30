@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.0...v1.52.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* restore source qualification receipt reuse ([#801](https://github.com/0xPlayerOne/code-foundry/issues/801)) ([989bdbf](https://github.com/0xPlayerOne/code-foundry/commit/989bdbfe5af6d2003ca97dde456d8c86fb92078c))
+
 ## [1.52.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.51.1...v1.52.0) (2026-10-30)
 
 

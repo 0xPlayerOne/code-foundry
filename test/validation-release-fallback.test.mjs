@@ -138,10 +138,13 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
     assert.match(source, /FOUNDRY_QUALIFICATION: \$\{\{ needs\.qualification\.result \}\}/)
     const producer = source.slice(source.indexOf('\n  qualification-receipt:'))
     assert.match(producer, /uses: \.\/\.github\/workflows\/qualification-receipt\.yml/)
+    assert.match(producer, /!cancelled\(\)/)
+    assert.match(producer, /needs\.gate\.result == 'success'/)
     assert.match(producer, /phase: produce/)
     assert.match(producer, /enabled: \$\{\{ inputs\.release-qualification-receipts \}\}/)
   }
 
+  assert.doesNotMatch(receiptWorkflow, /qualification-receipt\.mjs" (?:verify|produce)\s*>>/)
   assert.match(receiptWorkflow, /name: Code Foundry Qualification Receipt/)
   assert.match(receiptWorkflow, /actions: read/)
   assert.match(receiptWorkflow, /contents: read/)

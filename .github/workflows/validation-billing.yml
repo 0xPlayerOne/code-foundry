@@ -1286,7 +1286,7 @@ jobs:
     name: Qualification receipt
     needs: [fast-lanes, lint, type-check, unit, e2e, audit, codeql, gate]
     if: >-
-      vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
       inputs.release-qualification-receipts == true &&
       github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
       needs.fast-lanes.result == 'success' && needs.lint.result == 'success' &&
