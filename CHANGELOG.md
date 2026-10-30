@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.52.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.51.1...v1.52.0) (2026-10-30)
+
+
+### Features
+
+* scope Cloudflare build variables to build ([#802](https://github.com/0xPlayerOne/code-foundry/issues/802)) ([1f9a89f](https://github.com/0xPlayerOne/code-foundry/commit/1f9a89fa19a868732805a065fe90cc7609928a1e))
+
+
+### Bug Fixes
+
+* scope draft cancellation to its pull request ([#799](https://github.com/0xPlayerOne/code-foundry/issues/799)) ([ba42e81](https://github.com/0xPlayerOne/code-foundry/commit/ba42e811729e6ab8a82e2941abfdaab4f8544eed))
+
 ## [1.51.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.51.0...v1.51.1) (2026-10-29)
 
 
