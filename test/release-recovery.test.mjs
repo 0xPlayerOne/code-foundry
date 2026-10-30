@@ -99,6 +99,7 @@ test('manual recovery dispatch calls the normal qualification and OIDC publicati
   assert.match(recoveryWorkflow, /^permissions:\n  contents: read$/m)
   assert.match(recoveryWorkflow, /github\.ref == 'refs\/heads\/main'/)
   assert.match(recoveryWorkflow, /vars\.CI_BILLING_PAUSED != 'true'/)
+  assert.match(recoveryWorkflow, /fetch-depth: 0/)
   assert.match(recoveryWorkflow, /uses: \.\/\.github\/workflows\/qualified-foundry-publish\.yml/)
   assert.match(recoveryWorkflow, /source-sha: \$\{\{ needs\.target\.outputs\['source-sha'\] \}\}/)
   assert.doesNotMatch(recoveryWorkflow, /npm publish/)
