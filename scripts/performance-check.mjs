@@ -29,9 +29,7 @@ const budgets = {
   runtimeDependencies: 0,
   developmentDependencies: 4,
   packedBytes: 317_000,
-  // The published v1.52.0 artifact measured 1,225,194 bytes unpacked.
-  // Keep the cap 306 bytes above that measured package size.
-  unpackedBytes: 1_225_500,
+  unpackedBytes: 1_225_000,
   packedFiles: 120,
 }
 
