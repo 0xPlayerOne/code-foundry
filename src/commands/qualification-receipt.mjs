@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import {
   appendFileSync,
   existsSync,
+  lstatSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -22,7 +23,11 @@ import {
   verifyQualificationJobEvidence,
   verifyQualificationReceipt,
 } from '../lib/qualification-receipt.mjs'
-import { supportsRootNpmReleaseContract } from '../lib/release-package-contract.mjs'
+import {
+  supportsAdeaUiWorkspaceReleaseContract,
+  supportsRootNpmReleaseContract,
+  validateAdeaUiWorkspaceReleaseDiff,
+} from '../lib/release-package-contract.mjs'
 import { detectPackageManager } from '../lib/profile.mjs'
 
 const MAX_RUNS_TO_INSPECT = 30
@@ -77,6 +82,15 @@ function git(cwd, args) {
   }).trim()
 }
 
+/** @param {string} cwd @param {string[]} args */
+function gitText(cwd, args) {
+  return execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  })
+}
+
 /** @param {string} text @param {string} label */
 function parseJson(text, label) {
   try {
@@ -95,9 +109,50 @@ function readJsonFile(path) {
   }
 }
 
+/** @param {string} cwd */
+function hasRegularAdeaUiReleasePaths(cwd) {
+  try {
+    for (const path of ['.npmrc', 'packages/.npmrc', 'packages/ui/.npmrc']) {
+      try {
+        lstatSync(join(cwd, path))
+        return false
+      } catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') return false
+      }
+    }
+    const paths = [
+      '.github',
+      '.github/code-foundry.yml',
+      '.github/workflows',
+      '.github/workflows/publish-ui.yml',
+      'release-please-config.json',
+      '.release-please-manifest.json',
+      'CHANGELOG.md',
+      'package.json',
+      'packages',
+      'packages/ui',
+      'packages/ui/package.json',
+      'bun.lock',
+    ]
+    return paths.every((path) => {
+      const stat = lstatSync(join(cwd, path))
+      if (
+        path.endsWith('.json') ||
+        path.endsWith('.yml') ||
+        path === 'bun.lock' ||
+        path === 'CHANGELOG.md'
+      )
+        return stat.isFile()
+      return stat.isDirectory()
+    })
+  } catch {
+    return false
+  }
+}
+
 /**
- * The fast path currently supports only a public npm package released from
- * the repository root. Unknown Release Please layouts fail closed to full CI.
+ * Reuse is limited to the public root npm contract and one fixed Adea UI
+ * workspace contract. Unknown layouts fail closed to full CI.
  * @param {string} cwd
  * @param {Record<string, string | undefined>} env
  */
@@ -143,12 +198,65 @@ function supportsReleasePackageContract(cwd, env = process.env) {
     env.REPO_FOUNDRY_PACKAGE_MANAGER,
     configuredValue(foundryConfig.package_manager, detectPackageManager(cwd))
   )
+  if (env.GITHUB_REPOSITORY === 'adea-ai/ui') {
+    if (!hasRegularAdeaUiReleasePaths(cwd)) return false
+    return supportsAdeaUiWorkspaceReleaseContract({
+      rootPackageManifest: readJsonFile(join(cwd, 'package.json')),
+      workspacePackageManifest: readJsonFile(join(cwd, 'packages/ui/package.json')),
+      releaseManifest: readJsonFile(join(cwd, '.release-please-manifest.json')),
+      releaseConfigs,
+      packageManager,
+      codeFoundryConfig: foundryConfig,
+      lockfileText: existsSync(join(cwd, 'bun.lock'))
+        ? readFileSync(join(cwd, 'bun.lock'), 'utf8')
+        : null,
+      publisherWorkflowText: existsSync(join(cwd, '.github/workflows/publish-ui.yml'))
+        ? readFileSync(join(cwd, '.github/workflows/publish-ui.yml'), 'utf8')
+        : null,
+    })
+  }
   return supportsRootNpmReleaseContract({
     packageManifest: readJsonFile(join(cwd, 'package.json')),
     releaseManifest: readJsonFile(join(cwd, '.release-please-manifest.json')),
     releaseConfigs,
     packageManager,
   })
+}
+
+/**
+ * Workspace package receipts are only reusable for the exact UI Release Please
+ * metadata patch. This check runs before looking up source receipts so any
+ * drift selects the full validation fallback without an API request.
+ * @param {string} cwd
+ * @param {string} baseSha
+ */
+function matchesAdeaUiReleaseMetadata(cwd, baseSha) {
+  try {
+    const changedPaths = gitText(cwd, ['diff', '--name-only', `${baseSha}...HEAD`])
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+    const modeChanges = gitText(cwd, ['diff', '--summary', `${baseSha}...HEAD`])
+    const paths = [
+      '.release-please-manifest.json',
+      'CHANGELOG.md',
+      'bun.lock',
+      'package.json',
+      'packages/ui/package.json',
+    ]
+    /** @param {string} ref @param {string} path */
+    const readAt = (ref, path) => gitText(cwd, ['show', `${ref}:${path}`])
+    const baseFiles = new Map(paths.map((path) => [path, readAt(baseSha, path)]))
+    const headFiles = new Map(paths.map((path) => [path, readAt('HEAD', path)]))
+    return validateAdeaUiWorkspaceReleaseDiff({
+      baseFiles,
+      headFiles,
+      changedPaths,
+      modeChanges,
+    }).valid
+  } catch {
+    return false
+  }
 }
 
 /** @param {Record<string, string | undefined>} env @param {string} key */
@@ -558,6 +666,16 @@ export async function findQualificationReceipt(env = process.env, options = {}) 
       reason: 'unsupported package release contract; using full validation',
     }
   }
+  if (
+    env.GITHUB_REPOSITORY === 'adea-ai/ui' &&
+    !matchesAdeaUiReleaseMetadata(cwd, pullRequest.base_sha)
+  ) {
+    return {
+      verified: false,
+      reason:
+        'workspace release metadata is not an exact version-only patch; using full validation',
+    }
+  }
   const expectedJobNames = requiredJobNamesFromEnv(env)
   const repository = requiredEnv(env, 'GITHUB_REPOSITORY')
   const token = requiredEnv(env, 'GITHUB_TOKEN')
@@ -761,7 +879,9 @@ else if (command === 'package-contract') {
     (typeof packageManifest?.scripts?.build === 'string' &&
       process.env.FOUNDRY_BUILD_TASK_APPLICABLE !== 'true')
   ) {
-    console.error('Release receipt reuse requires the supported public root npm package contract.')
+    console.error(
+      'Release receipt reuse requires an explicitly supported package release contract.'
+    )
     process.exitCode = 1
   }
 } else if (command !== undefined) {
