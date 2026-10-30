@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.3](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.2...v1.53.3) (2026-10-30)
+
+
+### Bug Fixes
+
+* save repository caches through an explicit save action ([#819](https://github.com/0xPlayerOne/code-foundry/issues/819)) ([a21f1d0](https://github.com/0xPlayerOne/code-foundry/commit/a21f1d0c153e14252bc784f301379029026121da))
+
 ## [1.53.2](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.1...v1.53.2) (2026-10-30)
 
 
