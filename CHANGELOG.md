@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.4...v1.53.0) (2026-10-30)
+
+
+### Features
+
+* document Adea UI workspace receipt reuse ([#811](https://github.com/0xPlayerOne/code-foundry/issues/811)) ([6d0322c](https://github.com/0xPlayerOne/code-foundry/commit/6d0322c619f82753ca1818523a7cb7fb6583934e))
+
 ## [1.52.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.52.3...v1.52.4) (2026-10-30)
 
 
