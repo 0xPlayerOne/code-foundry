@@ -185,15 +185,45 @@ test('consumer Cargo job limits and compiler flags are preserved', (t) => {
   assert.ok(!result.calls[0].args.includes('--jobs'))
 })
 
-test('mixed repositories retain their script and Python checks before native Rust', (t) => {
+test('mixed repositories retain their script and Python checks beside native Rust', (t) => {
   const result = fixture(t, ['src/lib.rs', 'src/main.rs'], true).run('unit')
   assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(
-    result.calls.map(({ command, args }) => ({ command, args })),
+    result.calls
+      .map(({ command, args }) => ({ command, args }))
+      .toSorted((a, b) => a.command.localeCompare(b.command)),
     [
       { command: 'bun', args: ['run', 'test:unit'] },
-      { command: 'python', args: ['-m', 'pytest', 'tests/test_value.py'] },
       { command: 'cargo', args: ['test', '--lib', '--bin', 'fixture-app'] },
+      { command: 'python', args: ['-m', 'pytest', 'tests/test_value.py'] },
     ]
   )
+})
+
+test('mixed unit runners run at the same time and report the first failure', (t) => {
+  const { root, write, run } = fixture(t, ['src/lib.rs', 'src/main.rs'], true)
+  // Each runner records its start and then waits for the other two. Run one
+  // after another, the first runner would wait out its deadline and fail.
+  for (const command of ['cargo', 'bun', 'python']) {
+    write(
+      `bin/${command}`,
+      `#!${process.execPath}
+const fs = require('node:fs')
+const log = process.env.BATCH_LOG
+fs.appendFileSync(log, JSON.stringify({ command: ${JSON.stringify(command)}, args: process.argv.slice(2) }) + '\\n')
+const deadline = Date.now() + 5000
+const started = () => fs.readFileSync(log, 'utf8').trim().split('\\n').length
+while (started() < 3 && Date.now() < deadline) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20)
+console.log('${command} done')
+process.exit(started() < 3 ? 9 : ${JSON.stringify(command)} === 'python' ? 5 : 0)
+`
+    )
+    chmodSync(join(root, 'bin', command), 0o755)
+  }
+  const result = run('unit')
+  assert.equal(result.status, 5, result.stderr)
+  assert.equal(result.calls.length, 3)
+  assert.match(result.stdout, /^\[pytest\] python done$/m)
+  assert.match(result.stdout, /^\[cargo\] cargo done$/m)
+  assert.equal(result.receipt.status, 'failed')
 })

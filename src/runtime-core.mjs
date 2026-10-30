@@ -835,8 +835,18 @@ function ci(task) {
     e2e: ['test:e2e', 'e2e'],
     smoke: ['test:smoke', 'smoke'],
   }
-  const scripts = scriptsByTask[task]
-  const scripted = scripts ? runScript(scripts) : false
+  // Unit runners share no state, so they run together and the task takes as
+  // long as its slowest runner. Other categories may share services or ports
+  // and keep running one after another.
+  /** @type {{ label: string, command: string, args: string[] }[]} */
+  const jobs = []
+  /** @param {string} label @param {string} command @param {string[]} args */
+  const queue = (label, command, args) =>
+    task === 'unit' ? jobs.push({ label, command, args }) : run(command, args)
+  const scriptName = scriptsByTask[task]?.find((candidate) => hasScript(candidate))
+  const [scriptManager, scriptArgs] = scriptName ? packageCommand(['run', scriptName]) : [null, []]
+  const scripted = Boolean(scriptManager)
+  if (scriptName && scriptManager) queue(scriptName, scriptManager, scriptArgs)
   const testFiles = taskTestFiles(/** @type {'unit'|'integration'|'e2e'|'smoke'} */ (task))
   const javascriptTests = testFiles.filter((file) => /\.(?:[cm]?[jt]sx?)$/i.test(file))
   const pythonTests = testFiles.filter((file) => /\.py$/i.test(file))
@@ -851,14 +861,16 @@ function ci(task) {
     (hasLanguage('typescript') || hasLanguage('javascript') || hasLanguage('solidity')) &&
     hasRootJavascriptProject()
   ) {
-    if (javascriptTests.length > 0 || task === 'unit') run('bun', ['test', ...javascriptTests])
+    if (javascriptTests.length > 0 || task === 'unit')
+      queue('bun', 'bun', ['test', ...javascriptTests])
   }
 
   if (hasLanguage('python') && hasRootPythonProject()) {
     const python = existsSync(resolve(root, '.venv/bin/python'))
       ? resolve(root, '.venv/bin/python')
       : 'python'
-    if (pythonTests.length > 0 || task === 'unit') run(python, ['-m', 'pytest', ...pythonTests])
+    if (pythonTests.length > 0 || task === 'unit')
+      queue('pytest', python, ['-m', 'pytest', ...pythonTests])
   }
 
   if (hasLanguage('rust') && hasRootRustProject()) {
@@ -872,7 +884,7 @@ function ci(task) {
       const args = [...testArgs]
       if (existsSync(resolve(root, 'src/lib.rs'))) args.push('--lib')
       if (existsSync(resolve(root, 'src/main.rs'))) args.push('--bin', packageName())
-      run('cargo', args)
+      queue('cargo', 'cargo', args)
     } else {
       // Keep --test selection narrow; --tests includes unit targets.
       const targets = rustTests.flatMap((file) => {
@@ -882,6 +894,13 @@ function ci(task) {
       if (targets.length > 0) run('cargo', [...testArgs, ...targets])
     }
   }
+
+  if (jobs.length === 1) run(jobs[0].command, jobs[0].args)
+  else if (jobs.length > 1)
+    run(process.execPath, [
+      fileURLToPath(new URL('./lib/run-concurrent.mjs', import.meta.url)),
+      JSON.stringify(jobs),
+    ])
 }
 
 function packageName() {

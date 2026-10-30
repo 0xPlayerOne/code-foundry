@@ -31,7 +31,7 @@ changelog size and its packaged (trimmed) size as informational metrics. At
 v1.44.0 the measured artifact was 280,902 packed bytes, 1,070,333 unpacked bytes,
 and 118 files.
 
-v1.52.1 main no-changelog: 316,788 packed, 1,224,968 unpacked, 120 files. Branch checker: 316,744 packed, 1,224,894 unpacked, 120 files. v1.52.0 published (trimmed changelog): 316,867 packed, 1,225,194 unpacked. Limits: 317,000 packed, 1,225,000 unpacked, 120 files.
+v1.53.3 main no-changelog, plus the concurrent unit runner (`src/lib/run-concurrent.mjs`): 317,788 packed, 1,226,187 unpacked, 120 files. Limits: 318,000 packed, 1,227,000 unpacked, 120 files.
 
 The published package ships a changelog trimmed to the 20 most recent releases
 with a link to the full history on GitHub. `scripts/package-changelog.mjs`
