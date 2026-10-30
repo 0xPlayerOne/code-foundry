@@ -1354,12 +1354,9 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       workflow === 'validation' &&
       configured(config.release_qualification_receipts, 'false') === 'true'
     ) {
-      const qualified = rendered.replace(
-        /^(\s+release-qualification-receipts:)\s+\$\{\{\s*github\.repository\s*==\s*'0xPlayerOne\/code-foundry'\s*\}\}\s*$/m,
-        '$1 true'
-      )
+      const qualified = rendered.replace(/^(\s+release-qualification-receipts:).+$/m, '$1 true')
       if (qualified === rendered) {
-        throw new Error('Validation caller cannot render release-qualification-receipts opt-in.')
+        throw new Error('Validation caller is missing receipt input.')
       }
       rendered = qualified
     }
