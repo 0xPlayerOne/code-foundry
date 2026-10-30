@@ -11,6 +11,10 @@ on:
         description: Exact pre-attached Code Foundry npm tarball name.
         required: true
         type: string
+      source-sha:
+        required: false
+        type: string
+        default: ''
       billing-pause-bypass:
         description: Allow only an explicitly dispatched release while shared CI remains paused.
         required: false
@@ -31,6 +35,8 @@ jobs:
       fail-fast: false
       matrix:
         node: ['24', '26']
+    env:
+      RELEASE_SOURCE_SHA: ${{ inputs['source-sha'] || github.sha }}
     steps:
       - name: Checkout trusted qualification runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -51,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           node src/commands/qualified-publication.mjs download \
-            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$GITHUB_SHA" "$RELEASE_ASSET" \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$RELEASE_SOURCE_SHA" "$RELEASE_ASSET" \
             "$RUNNER_TEMP/candidate" > "$RUNNER_TEMP/download.json"
       - name: Qualify those exact bytes
         env:
@@ -59,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           node src/lib/consumer-qualification.mjs \
-            "$RUNNER_TEMP/candidate/$RELEASE_ASSET" "$GITHUB_SHA" \
+            "$RUNNER_TEMP/candidate/$RELEASE_ASSET" "$RELEASE_SOURCE_SHA" \
             "$RUNNER_TEMP/report.json" "$(go env GOPATH)/bin/actionlint"
       - name: Retain this attempt's qualification report
         if: always()
@@ -87,6 +93,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       RELEASE_ASSET: ${{ inputs.asset }}
+      RELEASE_SOURCE_SHA: ${{ inputs['source-sha'] || github.sha }}
     steps:
       - name: Checkout trusted publication runtime
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -108,7 +115,7 @@ jobs:
               --dir "$RUNNER_TEMP/reports/$node"
           done
           node src/commands/qualified-publication.mjs download \
-            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$GITHUB_SHA" "$RELEASE_ASSET" \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$RELEASE_SOURCE_SHA" "$RELEASE_ASSET" \
             "$RUNNER_TEMP/candidate" > "$RUNNER_TEMP/download.json"
       - name: Reverify and publish the tested tarball without lifecycle hooks
         env:
@@ -116,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           node src/commands/qualified-publication.mjs publish \
-            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$GITHUB_SHA" "$RELEASE_ASSET" \
+            "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$RELEASE_SOURCE_SHA" "$RELEASE_ASSET" \
             "$RUNNER_TEMP/candidate" \
             "$RUNNER_TEMP/reports/24/report.json" \
             "$RUNNER_TEMP/reports/26/report.json" > "$RUNNER_TEMP/publication.json"

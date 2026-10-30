@@ -35,13 +35,11 @@ actual caller workflow filename, `release_self-ci.yml`, in repository
 environment. Both the caller and reusable publisher grant `id-token: write`.
 For generated consumer workflows, the caller filename is `release.yml` and the
 auth mode remains configurable with `npm_publish_auth`.
-Existing version publication is not overwritten: retrying an already-published
-version fails rather than treating a registry conflict or network error as proof
-of identity.
+To recover a GitHub release missing from npm, the self-only dispatch requires the
+current stable tag, immutable release, exact archive, npm 404, fresh Node 24/26
+qualification, and OIDC publication. Existing npm versions are never overwritten.
 
-The publisher never rebuilds the package, publishes a directory, or treats an
-already-published version conflict as proof of success. It never accepts or
-forwards `NPM_TOKEN`.
+The publisher never rebuilds a package or accepts `NPM_TOKEN`.
 
 Qualification and publication are gated on `main` push or an explicitly
 requested `workflow_dispatch`. The shared billing pause blocks normal runs. A
