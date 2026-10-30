@@ -458,6 +458,33 @@ test('unsupported package and release layouts fall back before any receipt API l
       packageManifest: {
         name: 'fixture-consumer',
         version: '1.0.0',
+        scripts: {
+          test: 'node --test',
+          'test:unit': 'node --test',
+          'pack:check': 'npm pack --dry-run',
+          prepublishOnly: 'npm test && npm run pack:check && node extra-step.mjs',
+        },
+      },
+    },
+    {
+      packageManifest: {
+        name: 'fixture-consumer',
+        version: '1.0.0',
+        scripts: {
+          test: 'node --test',
+          'test:unit': 'node --test',
+          'pack:check': 'npm pack --dry-run',
+          prepublishOnly: 'npm test && npm run pack:check',
+          pretest: 'node mutate-before-tests.mjs',
+          'prepack:check': 'node mutate-before-pack.mjs',
+          postpublish: 'node release-side-effect.mjs',
+        },
+      },
+    },
+    {
+      packageManifest: {
+        name: 'fixture-consumer',
+        version: '1.0.0',
         scripts: { build: 'node build.mjs', prepublishOnly: 'bun run build' },
       },
       packageManager: 'npm',
@@ -692,6 +719,56 @@ test('root release contract accepts only inert Themes-style settings', () => {
         releaseConfigs: [{ ...input.releaseConfigs[0], ...change }],
       }),
       false
+    )
+  }
+})
+
+test('root release contract accepts only the fixed test-and-pack prepublish lifecycle', () => {
+  const input = {
+    packageManifest: {
+      name: 'fixture-consumer',
+      version: '1.0.0',
+      packageManager: 'bun@1.4.4',
+      scripts: {
+        build: 'node --check src/cli.mjs',
+        test: 'node --test',
+        'test:unit': 'node --test',
+        'pack:check': 'npm pack --dry-run',
+        prepublishOnly: 'npm test && npm run pack:check',
+      },
+    },
+    releaseManifest: { '.': '1.0.0' },
+    releaseConfigs: [{ 'release-type': 'node' }],
+    packageManager: 'bun',
+  }
+  assert.equal(supportsRootNpmReleaseContract(input), true)
+
+  const unsafeScripts = [
+    { prepublishOnly: 'npm test && npm run pack:check && node publish-extra.mjs' },
+    { test: 'node publish-extra.mjs' },
+    { 'test:unit': 'node publish-extra.mjs' },
+    { 'pack:check': 'npm pack --dry-run && node upload.mjs' },
+    { 'pack:check': 'npm pack' },
+    { pretest: 'node mutate.mjs' },
+    { posttest: 'node mutate.mjs' },
+    { 'pretest:unit': 'node mutate.mjs' },
+    { 'posttest:unit': 'node mutate.mjs' },
+    { 'prepack:check': 'node mutate.mjs' },
+    { 'postpack:check': 'node mutate.mjs' },
+    { publish: 'node release-side-effect.mjs' },
+    { postpublish: 'node release-side-effect.mjs' },
+  ]
+  for (const change of unsafeScripts) {
+    assert.equal(
+      supportsRootNpmReleaseContract({
+        ...input,
+        packageManifest: {
+          ...input.packageManifest,
+          scripts: { ...input.packageManifest.scripts, ...change },
+        },
+      }),
+      false,
+      `must reject lifecycle mutation: ${JSON.stringify(change)}`
     )
   }
 })

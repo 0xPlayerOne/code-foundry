@@ -27,6 +27,19 @@ const ROOT_PACKAGE_CONFIG_KEYS = new Set([
   'release-type',
 ])
 
+// npm can run these hooks around the exact test, pack-check, or publish path.
+// Keep release-time side effects outside the narrow receipt contract too.
+const UNSUPPORTED_TEST_AND_PACK_HOOKS = [
+  'pretest',
+  'posttest',
+  'pretest:unit',
+  'posttest:unit',
+  'prepack:check',
+  'postpack:check',
+  'publish',
+  'postpublish',
+]
+
 /**
  * Reuse source-test evidence only for a public npm package released from the
  * repository root. Workspace and private-root layouts need package-specific
@@ -101,10 +114,18 @@ export function supportsRootNpmReleaseContract(input) {
       )
         ? `${packageManager} run build`
         : null
-      if (
-        typeof lifecycleScripts.build !== 'string' ||
-        lifecycleScripts.prepublishOnly !== expectedBuild
-      ) {
+      // This fixed hook is covered by the source audit's unit test command and
+      // the release candidate pack qualification. Do not admit shell variants.
+      const expectedTestAndPackCheck =
+        lifecycleScripts.prepublishOnly === 'npm test && npm run pack:check' &&
+        lifecycleScripts.test === 'node --test' &&
+        lifecycleScripts['test:unit'] === 'node --test' &&
+        lifecycleScripts['pack:check'] === 'npm pack --dry-run' &&
+        !UNSUPPORTED_TEST_AND_PACK_HOOKS.some((name) => name in lifecycleScripts)
+      const expectedBuildOnly =
+        typeof lifecycleScripts.build === 'string' &&
+        lifecycleScripts.prepublishOnly === expectedBuild
+      if (!expectedBuildOnly && !expectedTestAndPackCheck) {
         return false
       }
     }
