@@ -288,9 +288,12 @@ function hasQualifiedAdeaUiPublisher(value) {
   }
   if (!hasQualifiedAdeaUiPrepare(prepare)) return false
 
+  const playwrightImage = jobs['packed-conversation']?.container?.image
+  if (!ADEA_UI_PLAYWRIGHT_IMAGES.includes(playwrightImage)) return false
+
   for (const [jobName, script] of Object.entries(ADEA_UI_PACKED_CONSUMER_SCRIPTS)) {
     const job = jobs[jobName]
-    if (!hasQualifiedAdeaUiConsumer(job, jobName, script)) return false
+    if (!hasQualifiedAdeaUiConsumer(job, jobName, script, playwrightImage)) return false
   }
 
   if (
@@ -795,11 +798,13 @@ const ADEA_UI_PACKED_CONSUMER_JOB_NAMES = {
   'packed-native-select': ['Packed native select', 15],
 }
 
-const ADEA_UI_PLAYWRIGHT_IMAGE =
-  'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27'
+const ADEA_UI_PLAYWRIGHT_IMAGES = [
+  'mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27',
+  'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea',
+]
 
-/** @param {unknown} job @param {string} jobName @param {string} script */
-function hasQualifiedAdeaUiConsumer(job, jobName, script) {
+/** @param {unknown} job @param {string} jobName @param {string} script @param {string} playwrightImage */
+function hasQualifiedAdeaUiConsumer(job, jobName, script, playwrightImage) {
   const [expectedName, expectedTimeout] = ADEA_UI_PACKED_CONSUMER_JOB_NAMES[jobName] ?? []
   if (
     !safeRequiredJob(job) ||
@@ -811,13 +816,13 @@ function hasQualifiedAdeaUiConsumer(job, jobName, script) {
     job.outputs !== undefined ||
     !object(job.container) ||
     Object.keys(job.container).length !== 1 ||
-    job.container.image !== ADEA_UI_PLAYWRIGHT_IMAGE ||
+    job.container.image !== playwrightImage ||
     !object(job.env) ||
     Object.keys(job.env).toSorted().join('\n') !==
       ['ADEA_PACKED_UI_SHA256', 'ADEA_PACKED_UI_TARBALL', 'PLAYWRIGHT_RUNTIME_IMAGE']
         .toSorted()
         .join('\n') ||
-    job.env.PLAYWRIGHT_RUNTIME_IMAGE !== ADEA_UI_PLAYWRIGHT_IMAGE ||
+    job.env.PLAYWRIGHT_RUNTIME_IMAGE !== playwrightImage ||
     job.env.ADEA_PACKED_UI_TARBALL !== '${{ github.workspace }}/prepared-ui/package.tgz' ||
     job.env.ADEA_PACKED_UI_SHA256 !== '${{ needs.prepare.outputs.archive_sha256 }}'
   ) {
