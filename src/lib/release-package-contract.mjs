@@ -374,26 +374,56 @@ function parseUiPublisherWorkflow(source) {
   if (/\t|^[ ]*(?:&|\*|<<:|!!)/m.test(source)) return null
   const lines = source.split(/\r?\n/)
   const meaningful = lines.map((line) => (line.trimStart().startsWith('#') ? '' : line))
-  if (meaningful.filter((line) => line === 'on:').length !== 1) return null
-  if (meaningful.filter((line) => line === 'jobs:').length !== 1) return null
-  const onIndex = meaningful.findIndex((line) => line === 'on:')
-  const jobsIndex = meaningful.findIndex((line) => line === 'jobs:')
-  if (onIndex < 0 || jobsIndex < 0 || onIndex >= jobsIndex) return null
-  if (meaningful.some((line) => line === 'env:')) return null
-  const onLines = meaningful.slice(onIndex + 1, jobsIndex)
-  const eventKeys = onLines
-    .filter((line) => /^  [A-Za-z0-9_-]+:\s*$/.test(line))
-    .map((line) => line.trim().slice(0, -1))
+  const rootEntries = meaningful
+    .map((line, index) => ({ match: /^([A-Za-z0-9_-]+):(?:\s*(.*))?$/.exec(line), index }))
+    .filter(({ match }) => match !== null)
+    .map(({ match, index }) => ({ key: match[1], index }))
+  const rootKeys = rootEntries.map(({ key }) => key)
+  const rootEntryIndexes = new Set(rootEntries.map(({ index }) => index))
   if (
-    eventKeys.length !== 2 ||
-    new Set(eventKeys).size !== 2 ||
-    !eventKeys.includes('push') ||
-    !eventKeys.includes('workflow_dispatch') ||
-    !hasIndentedSequence(onLines, '    tags:', 'v*') ||
-    !hasExactYamlScalar(onLines, '        type:', 'boolean') ||
-    !hasExactYamlScalar(onLines, '        default:', 'true') ||
-    !onLines.some((line) => line === '      dry-run:') ||
-    !onLines.some((line) => line === '    inputs:')
+    rootKeys.length !== 5 ||
+    !sameStringSet(rootKeys, ['name', 'on', 'permissions', 'concurrency', 'jobs']) ||
+    meaningful.some(
+      (line, index) =>
+        line === '---' ||
+        line.startsWith('%') ||
+        (line !== '' && !/^\s/.test(line) && !rootEntryIndexes.has(index))
+    )
+  ) {
+    return null
+  }
+  const rootIndex = (key) =>
+    rootEntries.find(({ key: candidate }) => candidate === key)?.index ?? -1
+  const rootSection = (key) => {
+    const index = rootIndex(key)
+    const next = rootEntries.find((entry) => entry.index > index)?.index ?? meaningful.length
+    return meaningful.slice(index + 1, next).filter((line) => line !== '')
+  }
+  if (meaningful[rootIndex('name')] !== 'name: Publish the design system') return null
+  if (rootSection('permissions').join('\n') !== '  contents: read') return null
+  if (
+    rootSection('concurrency').join('\n') !==
+    '  group: publish-adea-ai-ui\n  cancel-in-progress: false'
+  ) {
+    return null
+  }
+  const onIndex = rootIndex('on')
+  const jobsIndex = rootIndex('jobs')
+  if (onIndex < 0 || jobsIndex < 0 || onIndex >= jobsIndex) return null
+  const onLines = rootSection('on')
+  if (
+    onLines.filter((line) => line !== '').join('\n') !==
+    [
+      '  push:',
+      '    tags:',
+      "      - 'v*'",
+      '  workflow_dispatch:',
+      '    inputs:',
+      '      dry-run:',
+      '        description: Build, verify and pack without publishing',
+      '        type: boolean',
+      '        default: true',
+    ].join('\n')
   ) {
     return null
   }
@@ -425,24 +455,6 @@ function parseUiPublisherWorkflow(source) {
     },
     jobs,
   }
-}
-
-/** @param {string[]} lines @param {string} key @param {string} expected */
-function hasExactYamlScalar(lines, key, expected) {
-  return (
-    lines.filter((line) => line.startsWith(key)).length === 1 &&
-    lines.some((line) => line === `${key} ${expected}`)
-  )
-}
-
-/** @param {string[]} lines @param {string} header @param {string} expected */
-function hasIndentedSequence(lines, header, expected) {
-  const at = lines.indexOf(header)
-  if (at < 0) return false
-  let end = at + 1
-  while (end < lines.length && (/^\s*- /.test(lines[end]) || lines[end] === '')) end += 1
-  const values = lines.slice(at + 1, end).filter((line) => line !== '')
-  return values.length === 1 && values[0] === `      - '${expected}'`
 }
 
 /** @param {string[]} block */

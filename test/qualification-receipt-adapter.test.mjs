@@ -328,6 +328,7 @@ const yamlScalar = (value) => (typeof value === 'string' ? JSON.stringify(value)
 
 function adeaUiPublisherWorkflow(workflow = adeaUiPublisherObject()) {
   const lines = [
+    'name: Publish the design system',
     'on:',
     '  push:',
     '    tags:',
@@ -335,8 +336,14 @@ function adeaUiPublisherWorkflow(workflow = adeaUiPublisherObject()) {
     '  workflow_dispatch:',
     '    inputs:',
     '      dry-run:',
+    '        description: Build, verify and pack without publishing',
     '        type: boolean',
     '        default: true',
+    'permissions:',
+    '  contents: read',
+    'concurrency:',
+    '  group: publish-adea-ai-ui',
+    '  cancel-in-progress: false',
     'jobs:',
   ]
   const map = (indent, key, value) => {
@@ -1626,6 +1633,26 @@ test('Adea UI publisher qualification binds parsed, non-skippable jobs and execu
     false,
     'workflow-level npm registry overrides cannot qualify publisher receipts'
   )
+  for (const workflowText of [
+    adeaUiPublisherWorkflow().replace('  contents: read', '  contents: write'),
+    adeaUiPublisherWorkflow().replace('  contents: read', '  contents: read\n  id-token: write'),
+    adeaUiPublisherWorkflow().replace('jobs:', 'defaults:\n  run:\n    shell: bash\njobs:'),
+    adeaUiPublisherWorkflow().replace(
+      'jobs:',
+      'defaults:\n  run:\n    working-directory: packages/ui\njobs:'
+    ),
+    adeaUiPublisherWorkflow().replace('jobs:', 'run-name: unreviewed workflow\njobs:'),
+    adeaUiPublisherWorkflow().replace(
+      'name: Publish the design system',
+      '---\nname: Publish the design system'
+    ),
+  ]) {
+    assert.equal(
+      supportsAdeaUiWorkspaceReleaseContract({ ...input, publisherWorkflowText: workflowText }),
+      false,
+      'widened permissions, defaults, and unknown workflow fields must use full validation'
+    )
+  }
 
   const invalidPublisher = adeaUiPublisherObject()
   invalidPublisher.jobs.prepare.steps.find((step) => step.run === 'bun run pack:check').run =
