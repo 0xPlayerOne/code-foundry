@@ -295,6 +295,7 @@ jobs:
             'ADEA_PREVIEW_DATABASE_URL_SECRET',
             'ADEA_PREVIEW_AUTH_BASE_URL_SECRET',
             'ADEA_PREVIEW_AUTH_COOKIE_SECRET_NAME',
+            'ADEA_PREVIEW_AUTH_HYPERDRIVE_ID',
             'ADEA_PREVIEW_AUTH_TRUSTED_ORIGINS_SECRET',
           ])
           for (const [name, value] of Object.entries(buildEnv)) {

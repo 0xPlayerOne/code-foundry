@@ -183,13 +183,14 @@ describe('Cloudflare build environment forwarding', () => {
     }
   }
 
-  it('passes only the six preview identifiers to the build process', () => {
+  it('passes only the seven preview identifiers to the build process', () => {
     const names = [
       'ADEA_PREVIEW_HYPERDRIVE_ID',
       'ADEA_PREVIEW_SECRETS_STORE_ID',
       'ADEA_PREVIEW_DATABASE_URL_SECRET',
       'ADEA_PREVIEW_AUTH_BASE_URL_SECRET',
       'ADEA_PREVIEW_AUTH_COOKIE_SECRET_NAME',
+      'ADEA_PREVIEW_AUTH_HYPERDRIVE_ID',
       'ADEA_PREVIEW_AUTH_TRUSTED_ORIGINS_SECRET',
     ]
     const input = Object.fromEntries(names.map((name) => [name, `preview-${name}`]))
@@ -205,6 +206,7 @@ describe('Cloudflare build environment forwarding', () => {
       'null',
       '[]',
       '{"ADEA_PREVIEW_HYPERDRIVE_ID":1}',
+      '{"ADEA_PREVIEW_AUTH_HYPERDRIVE_ID_EXTRA":"x"}',
       '{"BASH_ENV":"x"}',
       '{"LD_PRELOAD":"x"}',
       '{"LD_LIBRARY_PATH":"x"}',
