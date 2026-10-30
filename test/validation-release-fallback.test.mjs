@@ -144,7 +144,7 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
     assert.match(producer, /enabled: \$\{\{ inputs\.release-qualification-receipts \}\}/)
   }
 
-  assert.doesNotMatch(receiptWorkflow, /qualification-receipt\.mjs\" (?:verify|produce)\s*>>/)
+  assert.doesNotMatch(receiptWorkflow, /qualification-receipt\.mjs" (?:verify|produce)\s*>>/)
   assert.match(receiptWorkflow, /name: Code Foundry Qualification Receipt/)
   assert.match(receiptWorkflow, /actions: read/)
   assert.match(receiptWorkflow, /contents: read/)
