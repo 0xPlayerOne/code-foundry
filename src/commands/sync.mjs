@@ -1355,8 +1355,8 @@ function renderWorkflow(content, config, repository, ref, rustCodeql, file, self
       configured(config.release_qualification_receipts, 'false') === 'true'
     ) {
       const qualified = rendered.replace(
-        /^(\s+mode:)\s+(\$\{\{\s*needs\.mode\.outputs\.mode\s*\}\})\s*$/m,
-        '$1 $2\n      release-qualification-receipts: true'
+        /^(\s+release-qualification-receipts:)\s+\$\{\{\s*github\.repository\s*==\s*'0xPlayerOne\/code-foundry'\s*\}\}\s*$/m,
+        '$1 true'
       )
       if (qualified === rendered) {
         throw new Error('Validation caller cannot render release-qualification-receipts opt-in.')
