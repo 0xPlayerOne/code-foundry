@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
-import { syncRepository } from '../src/commands/sync.mjs'
+import { alignRuntimeRefInputs, syncRepository } from '../src/commands/sync.mjs'
 
 /** @param {string} customWorkflow */
 function consumerFixture(customWorkflow) {
@@ -74,5 +74,61 @@ jobs:
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  it('keeps each job runtime-ref input in step with its refreshed pin', () => {
+    const cacheWarm = `name: Validation cache warm
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  warm:
+    uses: 0xPlayerOne/code-foundry/.github/workflows/test.yml@v1.9.12
+    with:
+      runtime-repository: 0xPlayerOne/code-foundry
+      runtime-ref: v1.9.12
+  pinned:
+    uses: 0xPlayerOne/code-foundry/.github/workflows/test.yml@v1.9.12
+    with:
+      runtime-ref: 0123456789abcdef0123456789abcdef01234567
+  evented:
+    uses: 0xPlayerOne/code-foundry/.github/workflows/test.yml@main
+    with:
+      runtime-ref: v1.9.12
+`
+    const root = consumerFixture(cacheWarm)
+    try {
+      syncRepository({ target: root, source: process.cwd() })
+      const updated = readFileSync(join(root, '.github/workflows/cloudflare-preview.yml'), 'utf8')
+      const version = updated.match(/test\.yml@(v\d+\.\d+\.\d+)$/m)?.[1]
+      assert.ok(version && version !== 'v1.9.12', 'the pin moved to the synced runtime')
+      const [, warm, pinned, evented] = updated.split(/^ {2}(?=warm:|pinned:|evented:)/m)
+      assert.match(warm, new RegExp(`^      runtime-ref: ${version.replaceAll('.', '\\.')}$`, 'm'))
+      // SHAs and refs next to an intentional (non-semver) pin stay as written.
+      assert.match(pinned, /runtime-ref: 0123456789abcdef0123456789abcdef01234567$/m)
+      assert.match(evented, /runtime-ref: v1\.9\.12$/m)
+      assert.deepEqual(syncRepository({ target: root, source: process.cwd() }).changed, [])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('repairs a runtime-ref left behind an already current pin', () => {
+    const drifted = `jobs:
+  warm:
+    uses: 0xPlayerOne/code-foundry/.github/workflows/test.yml@v1.53.6
+    with:
+      runtime-ref: 'v1.53.5'
+  other:
+    uses: someone/else/.github/workflows/test.yml@v2.0.0
+    with:
+      runtime-ref: v1.53.5
+`
+    const aligned = alignRuntimeRefInputs(drifted, '0xPlayerOne/code-foundry')
+    assert.match(aligned, /^ {6}runtime-ref: 'v1\.53\.6'$/m)
+    assert.match(aligned, /^ {2}other:[\s\S]*runtime-ref: v1\.53\.5$/m)
+    assert.equal(alignRuntimeRefInputs(aligned, '0xPlayerOne/code-foundry'), aligned)
   })
 })

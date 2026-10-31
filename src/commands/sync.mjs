@@ -433,7 +433,10 @@ function synchronize(options) {
         if (!entry.endsWith('.yml') || standard.has(`.github/workflows/${entry}`)) continue
         const destination = join(workflowsDir, entry)
         const original = readFileSync(destination, 'utf8')
-        const updated = original.replace(runtimePin, `$1@${runtimeRef}`)
+        const updated = alignRuntimeRefInputs(
+          original.replace(runtimePin, `$1@${runtimeRef}`),
+          runtimeRepository
+        )
         if (updated !== original) {
           changed.push(`.github/workflows/${entry}`)
           if (dryRun)
@@ -1097,6 +1100,32 @@ export function renderDevChannel(config) {
     '__DEV_WORKFLOW__',
     config.release_batching_dev_workflow ?? ''
   )
+}
+
+/**
+ * Keep each preserved job's `runtime-ref:` input on the same plain semver
+ * version as its `uses:` pin of the runtime repository. The reusable
+ * workflows check out the runtime at `runtime-ref`, so a pin refreshed without
+ * its input would run the new workflow against the old runtime. Only plain
+ * semver values move: expressions, branch names, and SHAs are intentional.
+ * @param {string} content @param {string} runtimeRepository
+ */
+export function alignRuntimeRefInputs(content, runtimeRepository) {
+  const pin = new RegExp(
+    `uses:\\s*${escapeRegExp(runtimeRepository)}/\\.github/(?:workflows|actions)/[^\\s@]+@(v\\d+\\.\\d+\\.\\d+)\\s*$`,
+    'm'
+  )
+  return content
+    .split(/(?=^ {2}[A-Za-z0-9_-]+:[ \t]*\r?$)/m)
+    .map((block) => {
+      const version = block.match(pin)?.[1]
+      if (!version) return block
+      return block.replace(
+        /^([ \t]+runtime-ref:[ \t]*)(['"]?)v\d+\.\d+\.\d+\2([ \t]*)$/gm,
+        (_, key, quote, trailing) => `${key}${quote}${version}${quote}${trailing}`
+      )
+    })
+    .join('')
 }
 
 /**
