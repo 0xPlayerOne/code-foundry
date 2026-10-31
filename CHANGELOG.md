@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.8...v1.53.9) (2026-10-31)
+
+
+### Performance
+
+* **codeql:** drop unchanged analyzers from the planned matrix ([#831](https://github.com/0xPlayerOne/code-foundry/issues/831)) ([35b891e](https://github.com/0xPlayerOne/code-foundry/commit/35b891e721ea2e5d2bd09ec44509b541120a3a64))
+
 ## [1.53.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.7...v1.53.8) (2026-10-31)
 
 
