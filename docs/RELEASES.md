@@ -162,6 +162,17 @@ agent-sim 0.15.14 release left all 14 workspaces at 0.15.10).
   reports the stale lock instead. A push rejected because Release Please moved
   the branch is left for the next run.
 
+## Issue references in release pull requests
+
+Release Please renders every footer-form issue reference in a squashed commit
+(`Refs #187`, `Closes: #187`) as `, closes [#187](…)` in the version pull
+request body, so merging the release would close every issue a release merely
+mentions. After each Release Please run the Release workflow pipes each open
+generated release PR body through `code-foundry release scrub-pr-body`, which
+rewrites GitHub's closing keywords (close, fix, resolve and their forms) before
+an issue reference to `refs`, and updates the body only when it changed. The
+issue stays linked; closing it remains a decision made on the change itself.
+
 ## Pull request permissions
 
 The release job validates the configured automation token

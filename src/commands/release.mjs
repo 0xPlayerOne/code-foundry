@@ -10,6 +10,7 @@ import {
   auditReleaseDiffContent,
   buildReconciliationPullRequestBody,
   classifyReconciliation,
+  neutralizeClosingReferences,
   readReleaseConfig,
   reconciliationPullRequestBranch,
   reconciliationPullRequestTitle,
@@ -788,6 +789,11 @@ export function syncReleaseLock(root, options) {
     )
   }
   return changes
+}
+
+/** Write the version pull request body read from stdin with its closing keywords neutralized. */
+export function scrubReleasePullRequestBody() {
+  process.stdout.write(neutralizeClosingReferences(readFileSync(0, 'utf8')))
 }
 
 /** @param {string} root */
