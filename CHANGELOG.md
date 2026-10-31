@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.5...v1.53.6) (2026-10-31)
+
+
+### Performance
+
+* **validation:** skip lane jobs that have nothing to run ([#825](https://github.com/0xPlayerOne/code-foundry/issues/825)) ([4d04f62](https://github.com/0xPlayerOne/code-foundry/commit/4d04f627bfac572bc056b5a5f448b66c17500c00))
+
 ## [1.53.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.4...v1.53.5) (2026-10-31)
 
 
