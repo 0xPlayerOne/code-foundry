@@ -366,10 +366,12 @@ test('the gate folds merged lanes back into the shared category vocabulary', () 
   assert.doesNotMatch(gate, /needs\.integration\.result/)
   assert.match(gate, /FOUNDRY_SECURITY: \$\{\{ needs\.audit\.result \}\}/)
   // The CodeQL decision collapses into the input so one file serves both
-  // flavors; expected skips of audit-tier jobs never fail the gate.
-  assert.match(
-    gate,
-    /FOUNDRY_CODEQL: \$\{\{ inputs\.codeql == true && needs\.codeql\.result \|\| 'success' \}\}/
+  // flavors; expected skips of audit-tier jobs never fail the gate, and only
+  // a skip the caller planned as idle counts as success.
+  assert.ok(
+    gate.includes(
+      "FOUNDRY_CODEQL: ${{ inputs.codeql == true && ((needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true' && 'success') || needs.codeql.result) || 'success' }}"
+    )
   )
   assert.match(gate, /FOUNDRY_EVAL: \$\{\{ needs\.fast-lanes\.result \}\}/)
   assert.match(gate, /validation release_diff/)

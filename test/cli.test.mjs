@@ -2724,7 +2724,11 @@ jobs:
     assert.doesNotMatch(workflow, /^  analyze-typescript:\s*$/m)
     assert.doesNotMatch(workflow, /^  analyze-python:\s*$/m)
     assert.doesNotMatch(workflow, /^  analyze-rust:\s*$/m)
-    assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.detect\.outputs\.matrix/)
+    assert.ok(
+      workflow.includes(
+        "entry: ${{ fromJson((inputs.plan != '' && fromJSON(inputs.plan || '{}').matrix) || needs.detect.outputs.matrix || '[]') }}"
+      )
+    )
     assert.doesNotMatch(workflow, /rust_matrix/)
     // Rust shard fan-out lives in the shared matrix; the dedicated throttle
     // input stays declared for caller compatibility. The runtime feeds
@@ -2823,7 +2827,11 @@ jobs:
     assert.doesNotMatch(workflow, /^  dependency-audit-rust:\s*$/m)
     assert.doesNotMatch(workflow, /^  dependency-audit-python:\s*$/m)
     assert.doesNotMatch(workflow, /python-gate/)
-    assert.match(workflow, /entry: \$\{\{ fromJson\(needs\.profile\.outputs\.audit_matrix/)
+    assert.ok(
+      workflow.includes(
+        "entry: ${{ fromJson((inputs.plan != '' && fromJSON(inputs.plan || '{}').audit_matrix) || needs.profile.outputs.audit_matrix || '[]') }}"
+      )
+    )
     // Empty matrices must not be expanded; missing or malformed outputs fail closed.
     assert.match(
       workflow,
@@ -5478,11 +5486,11 @@ jobs:
     // deadlock the release; the security job is audit-only.
     assert.match(
       orchestrator,
-      /codeql:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && \(inputs\.mode == 'audit' \|\| inputs\.mode == 'release'\)/
+      /\n  codeql:[\s\S]*?if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && \(inputs\.mode == 'audit' \|\| inputs\.mode == 'release'\) &&\n/
     )
     assert.match(
       orchestrator,
-      /security:[\s\S]*?if: vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit'/m
+      /\n  security:[\s\S]*?if: >-\n\s+vars\.CI_BILLING_PAUSED != 'true' && inputs\.mode == 'audit' &&\n/
     )
     assert.match(orchestrator, /if: \$\{\{ inputs\.mode == 'release' \}\}/)
     assert.match(

@@ -167,7 +167,7 @@ test('release reuse is opt-in, with a fail-closed full-validation fallback in ev
   assert.match(workflow, /qualification-receipt:[\s\S]*needs\.codeql\.result == 'success'/)
   assert.match(noCodeql, /FOUNDRY_CODEQL: success/)
   assert.match(noCodeql, /"codeql":"not-configured"/)
-  assert.match(billing, /inputs\.codeql == true && needs\.codeql\.result/)
+  assert.match(billing, /inputs\.codeql == true && \(\(needs\.codeql\.result == 'skipped'/)
   assert.match(billing, /name: Inspect versioned npm package contents/)
 
   assert.match(ci, /release-build-only:[\s\S]*default: false/)

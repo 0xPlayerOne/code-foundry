@@ -409,7 +409,7 @@ duplicates, empty scopes, and more than eight shards are rejected. Use
 
 Every lane rendered from this configuration (pull-request validation, the
 default-branch scan, the scheduled audit, and merge queues) receives the same
-shard list, and the CodeQL Detect job fails closed when caller workflows drift
+shard list, and CodeQL detection (the caller's Plan job or the CodeQL Detect job) fails closed when caller workflows drift
 apart. Keep them aligned: each shard uploads a SARIF category keyed by a hash
 of the shard scope, GitHub code scanning baselines every category it has seen
 on the default branch, and the code-scanning merge gate waits for results in

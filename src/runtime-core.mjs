@@ -393,6 +393,44 @@ function validation(task) {
     writeOutput('idle_lanes', idle.join(','))
     return
   }
+  if (task === 'plan') {
+    // The caller's planning job already holds the consumer checkout and the
+    // runtime, so it also runs the Security Profile and CodeQL Detect steps
+    // that would otherwise each queue a runner before any audit or analysis
+    // could start. Each plan carries exactly the outputs that job emits, plus
+    // `idle` when the workflow would have nothing to run.
+    const profile = securityProfile()
+    const auditMatrix = JSON.stringify(securityAuditMatrix(profile))
+    const dependencyReview =
+      (process.env.FOUNDRY_EVENT_NAME ?? '') === 'pull_request' &&
+      profile.dependency_review === 'true'
+    const securityPlan = {
+      ...profile,
+      audit_matrix: auditMatrix,
+      idle: auditMatrix === '[]' && !dependencyReview ? 'true' : 'false',
+    }
+    const detection = codeqlDetection()
+    const enabled = detection.enabled === 'true'
+    const codeqlPlan = {
+      ...detection,
+      matrix: enabled
+        ? JSON.stringify(
+            codeqlAnalysisMatrix(JSON.parse(detection.languages), configuredRustShards())
+          )
+        : '[]',
+      code_security: process.env.REPO_FOUNDRY_CODE_SECURITY ?? '',
+      idle: enabled ? 'false' : 'true',
+    }
+    // Dependency Review rides on the first audit job of a planned run. With
+    // no audit to ride on, leave Security unplanned so its Profile job runs
+    // the review as it always has, rather than adding a job of its own.
+    writeOutput(
+      'security_plan',
+      auditMatrix === '[]' && dependencyReview ? '' : JSON.stringify(securityPlan)
+    )
+    writeOutput('codeql_plan', JSON.stringify(codeqlPlan))
+    return
+  }
   if (task === 'gate') {
     const mode = process.env.FOUNDRY_MODE ?? ''
     const gate = evaluateValidationGate({
@@ -940,24 +978,56 @@ function readFileSafe(file) {
   }
 }
 
+/**
+ * The Security workflow's Profile outputs, as the strings the job emits.
+ * @returns {Record<string, string>}
+ */
+function securityProfile() {
+  const python = hasDependencyManifest('python')
+  const requirements = capture('git', ['ls-files', '*requirements*.txt'])
+    .split('\n')
+    .filter(Boolean)
+  return {
+    javascript: hasDependencyManifest('javascript') ? 'true' : 'false',
+    rust: hasDependencyManifest('rust') ? 'true' : 'false',
+    python: python ? 'true' : 'false',
+    python_requirements: JSON.stringify(
+      python ? (requirements.length ? requirements : ['project']) : ['none']
+    ),
+    dependency_review: featureEnabled('dependency_review') ? 'true' : 'false',
+  }
+}
+
+/**
+ * The dependency audit matrix built from a profile: the same entries the
+ * Security workflow's "Build audit matrix" step emits.
+ * @param {Record<string, string>} profile
+ */
+function securityAuditMatrix(profile) {
+  /** @type {Array<Record<string, string>>} */
+  const entries = []
+  if (profile.javascript === 'true') entries.push({ display: 'JavaScript', language: 'javascript' })
+  if (profile.rust === 'true') entries.push({ display: 'Rust', language: 'rust' })
+  if (profile.python === 'true') {
+    /** @type {unknown} */
+    let requirements = []
+    try {
+      requirements = JSON.parse(profile.python_requirements || '[]')
+    } catch {
+      requirements = []
+    }
+    for (const requirement of Array.isArray(requirements) ? requirements : []) {
+      if (!requirement || requirement === 'none') continue
+      entries.push({ display: `Python / ${requirement}`, language: 'python', requirement })
+    }
+  }
+  return entries
+}
+
 /** @param {string} task @param {string} ecosystem */
 function security(task, ecosystem) {
   if (task === 'profile') {
-    writeOutput('javascript', hasDependencyManifest('javascript') ? 'true' : 'false')
-    writeOutput('rust', hasDependencyManifest('rust') ? 'true' : 'false')
-    writeOutput('python', hasDependencyManifest('python') ? 'true' : 'false')
-    const requirements = capture('git', ['ls-files', '*requirements*.txt'])
-      .split('\n')
-      .filter(Boolean)
-    writeOutput(
-      'python_requirements',
-      hasDependencyManifest('python')
-        ? requirements.length
-          ? requirements
-          : ['project']
-        : ['none']
-    )
-    writeOutput('dependency_review', featureEnabled('dependency_review') ? 'true' : 'false')
+    for (const [key, value] of Object.entries(securityProfile())) writeOutput(key, value)
     return
   }
   if (task === 'should_run') {
@@ -1082,18 +1152,28 @@ function assertRustShardsAligned() {
 }
 
 function codeql() {
+  for (const [key, value] of Object.entries(codeqlDetection())) writeOutput(key, value)
+}
+
+/**
+ * The CodeQL workflow's "Detect languages" outputs, as the strings the step
+ * emits, in the order it emits them.
+ * @returns {Record<string, string>}
+ */
+function codeqlDetection() {
   const enabled =
     featureEnabled('codeql') &&
     (isPublicRepository() || process.env.REPO_FOUNDRY_CODE_SECURITY === 'enabled')
-  writeOutput('enabled', enabled ? 'true' : 'false')
+  /** @type {Record<string, string>} */
+  const outputs = { enabled: enabled ? 'true' : 'false' }
   if (!enabled) {
-    writeOutput('languages', [])
+    outputs.languages = '[]'
     for (const language of ['actions', 'javascript', 'python', 'rust']) {
-      writeOutput(`${language}_available`, 'false')
-      writeOutput(`${language}_changed`, 'false')
-      writeOutput(`${language}_build_mode`, 'none')
+      outputs[`${language}_available`] = 'false'
+      outputs[`${language}_changed`] = 'false'
+      outputs[`${language}_build_mode`] = 'none'
     }
-    return
+    return outputs
   }
   // Detect lane drift before any analysis uploads a category the other lanes
   // never produce; a stall surfaces only later as a blocked merge gate.
@@ -1129,14 +1209,55 @@ function codeql() {
     rustEntry.shards = shards
     rustEntry.changed = shards.some((entry) => entry.changed)
   }
-  writeOutput('languages', languagesJson)
+  outputs.languages = JSON.stringify(languagesJson)
   for (const language of ['actions', 'javascript-typescript', 'python', 'rust']) {
     const entry = languagesJson.find((item) => item.language === language)
     const prefix = language === 'javascript-typescript' ? 'javascript' : language
-    writeOutput(`${prefix}_available`, entry ? 'true' : 'false')
-    writeOutput(`${prefix}_changed`, entry?.changed ? 'true' : 'false')
-    writeOutput(`${prefix}_build_mode`, entry?.['build-mode'] ?? 'none')
+    outputs[`${prefix}_available`] = entry ? 'true' : 'false'
+    outputs[`${prefix}_changed`] = entry?.changed ? 'true' : 'false'
+    outputs[`${prefix}_build_mode`] = entry?.['build-mode'] ?? 'none'
   }
+  return outputs
+}
+
+/**
+ * The CodeQL analysis matrix: the same entries the CodeQL workflow's "Build
+ * analysis matrix" step emits from detection. SARIF categories are the
+ * code-scanning baseline keys and must stay byte-identical to that step's.
+ * @param {CodeqlLanguageEntry[]} detected @param {string[]} shards
+ */
+function codeqlAnalysisMatrix(detected, shards) {
+  /** @type {Record<string, string>} */
+  const display = { actions: 'Actions', 'javascript-typescript': 'TypeScript', python: 'Python' }
+  /** @type {Array<Record<string, string | boolean>>} */
+  const matrix = detected
+    .filter((entry) => entry.language !== 'rust')
+    .map((entry) => ({
+      display: display[entry.language] || entry.language,
+      language: entry.language,
+      category: `/language:${entry.language}`,
+      build_mode: entry['build-mode'] || 'none',
+      changed: entry.changed === true,
+    }))
+  const rust = detected.find((entry) => entry.language === 'rust')
+  const rustShards =
+    rust && Array.isArray(rust.shards) && rust.shards.length
+      ? rust.shards
+      : rust
+        ? shards.map((shard) => ({ shard: String(shard), changed: rust.changed === true }))
+        : []
+  for (const entry of rustShards) {
+    matrix.push({
+      display: entry.shard === 'all' ? 'Rust' : `Rust (${entry.shard})`,
+      language: 'rust',
+      category: '/language:rust',
+      build_mode: 'none',
+      changed: entry.changed === true,
+      shard: String(entry.shard),
+    })
+  }
+  if (!matrix.length) throw new Error('CodeQL analysis matrix is empty while analysis is enabled.')
+  return matrix
 }
 
 /**
