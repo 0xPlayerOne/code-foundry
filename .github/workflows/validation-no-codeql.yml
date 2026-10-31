@@ -75,6 +75,15 @@ on:
         required: false
         type: number
         default: 1
+      idle-lanes:
+        description: >-
+          Comma-separated lanes the caller's planner found no entrypoint for
+          (integration, e2e, smoke, performance, eval). Their jobs are
+          skipped instead of allocating a runner for a no-op. Empty runs every
+          lane.
+        required: false
+        type: string
+        default: ''
       artifact-prefix:
         description: Prefix for task receipts; use a unique value when calling this workflow more than once.
         required: false
@@ -181,6 +190,7 @@ jobs:
       integration-total-shards: ${{ inputs.integration-total-shards }}
       e2e-shard-list: ${{ inputs.e2e-shard-list }}
       e2e-total-shards: ${{ inputs.e2e-total-shards }}
+      idle-lanes: ${{ inputs.idle-lanes }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
@@ -209,6 +219,7 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.eval-runner }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
+      idle-lanes: ${{ inputs.idle-lanes }}
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
@@ -229,7 +240,11 @@ jobs:
       FOUNDRY_CI: ${{ needs.ci.result }}
       FOUNDRY_TEST: ${{ needs.test.result }}
       FOUNDRY_SECURITY: ${{ needs.security.result }}
-      FOUNDRY_EVAL: ${{ needs.eval.result }}
+      # An eval lane the caller planned as idle (no eval script, no
+      # eval_command, or eval: false) never starts, so the whole Eval
+      # workflow reports skipped. Count that exactly like the no-op success
+      # it reported before; any other skip still fails the gate.
+      FOUNDRY_EVAL: ${{ (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result }}
       FOUNDRY_SOURCE_QUALIFICATION: ${{ needs.qualification.outputs.reuse }}
       FOUNDRY_QUALIFICATION: ${{ needs.qualification.result }}
       # This workflow is selected only for repositories whose canonical
@@ -276,7 +291,9 @@ jobs:
       inputs.release-qualification-receipts == true &&
       github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
       needs.ci.result == 'success' && needs.test.result == 'success' &&
-      needs.security.result == 'success' && needs.eval.result == 'success' &&
+      needs.security.result == 'success' &&
+      (needs.eval.result == 'success' ||
+      (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,'))) &&
       needs.gate.result == 'success'
     permissions:
       actions: read
@@ -291,5 +308,5 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
-        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"not-configured","eval":"${{ needs.eval.result }}","gate":"${{ needs.gate.result }}"}
+        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"not-configured","eval":"${{ (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result }}","gate":"${{ needs.gate.result }}"}
       required-job-names-json: '["Validation / Gate"]'

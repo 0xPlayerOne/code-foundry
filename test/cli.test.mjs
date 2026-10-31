@@ -5451,7 +5451,10 @@ jobs:
     assert.match(orchestrator, /if: vars\.CI_BILLING_PAUSED != 'true' && always\(\)/)
     assert.match(orchestrator, /validation gate/)
     assert.match(orchestrator, /FOUNDRY_CI: \$\{\{ needs\.ci\.result \}\}/)
-    assert.match(orchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
+    assert.match(
+      orchestrator,
+      /FOUNDRY_EVAL: \$\{\{ \(needs\.eval\.result == 'skipped' && contains\(format\(',\{0\},', inputs\.idle-lanes\), ',eval,'\) && 'success'\) \|\| needs\.eval\.result \}\}/
+    )
     assert.doesNotMatch(orchestrator, /release-policy:/)
     assert.doesNotMatch(orchestrator, /FOUNDRY_RELEASE_POLICY/)
     assert.doesNotMatch(orchestrator, /^on:\n  push:/m)
@@ -5524,7 +5527,10 @@ jobs:
     )
     assert.match(noCodeqlOrchestrator, /^  eval:\n    name: Eval\n    #/m)
     assert.match(noCodeqlOrchestrator, /FOUNDRY_CODEQL: success/)
-    assert.match(noCodeqlOrchestrator, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
+    assert.match(
+      noCodeqlOrchestrator,
+      /FOUNDRY_EVAL: \$\{\{ \(needs\.eval\.result == 'skipped' && contains\(format\(',\{0\},', inputs\.idle-lanes\), ',eval,'\) && 'success'\) \|\| needs\.eval\.result \}\}/
+    )
     assert.match(noCodeqlOrchestrator, /needs: \[ci, test, security, eval, qualification\]/)
     for (const job of ['fast-lanes', 'lint', 'type-check', 'unit']) {
       assert.match(
@@ -5601,7 +5607,7 @@ jobs:
       assert.match(
         test,
         new RegExp(
-          `^  ${job}:\n    name: [A-Za-z0-9]+\n    if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`,
+          `^  ${job}:\n    name: [A-Za-z0-9]+\n    if: (?:>-\n      )?vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`,
           'm'
         )
       )

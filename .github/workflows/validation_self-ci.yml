@@ -34,6 +34,7 @@ jobs:
       contents: read
     outputs:
       mode: ${{ steps.classify.outputs.mode }}
+      idle-lanes: ${{ steps.lanes.outputs.idle_lanes }}
     steps:
       # The runtime classifies policy from the consumer repository's config.
       # Keep this checkout before the isolated runtime checkout below.
@@ -61,6 +62,12 @@ jobs:
           FOUNDRY_BASE_REF: ${{ github.event.pull_request.base.ref }}
           FOUNDRY_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation mode >> "$GITHUB_OUTPUT"
+      # Lanes without an entrypoint (no package script, configured command,
+      # or test files) are skipped by the orchestrator rather than started on
+      # a runner only to report a no-op. Detection errors keep the lane.
+      - name: Plan lanes
+        id: lanes
+        run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" validation lanes >> "$GITHUB_OUTPUT"
 
   # The stable aggregate check name is the caller job name plus the
   # orchestrator gate job name: "Validation / Gate". Keep both names fixed.
@@ -107,6 +114,7 @@ jobs:
       integration-total-shards: '1'
       e2e-shard-list: '1'
       e2e-total-shards: '1'
+      idle-lanes: ${{ needs.mode.outputs.idle-lanes }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}

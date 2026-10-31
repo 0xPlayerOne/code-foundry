@@ -53,6 +53,15 @@ on:
         required: false
         type: string
         default: '1'
+      idle-lanes:
+        description: >-
+          Comma-separated lanes the caller's planner found no entrypoint for
+          (integration, e2e, smoke, performance, eval). Their jobs are
+          skipped instead of allocating a runner for a no-op. Empty runs every
+          lane.
+        required: false
+        type: string
+        default: ''
     secrets:
       TURBO_TOKEN:
         required: false
@@ -171,7 +180,7 @@ jobs:
 
   performance:
     name: Performance
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && !contains(format(',{0},', inputs.idle-lanes), ',performance,')
     runs-on: ${{ inputs.performance-runner }}
     timeout-minutes: 30
     steps:
@@ -260,7 +269,9 @@ jobs:
 
   integration:
     name: Integration
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true && inputs.integration-total-shards != '2'
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true && inputs.integration-total-shards != '2' &&
+      !contains(format(',{0},', inputs.idle-lanes), ',integration,')
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
@@ -337,7 +348,9 @@ jobs:
 
   integration-sharded:
     name: Integration shard
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true && inputs.integration-total-shards == '2'
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true && inputs.integration-total-shards == '2' &&
+      !contains(format(',{0},', inputs.idle-lanes), ',integration,')
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     strategy:
@@ -417,7 +430,9 @@ jobs:
 
   e2e:
     name: E2E
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true &&
+      !contains(format(',{0},', inputs.idle-lanes), ',e2e,')
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 45
     # Shards duplicate the whole job, but each shard owns a runner-local test
@@ -514,7 +529,9 @@ jobs:
 
   smoke:
     name: Smoke
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.unit-only != true &&
+      !contains(format(',{0},', inputs.idle-lanes), ',smoke,')
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     steps:
