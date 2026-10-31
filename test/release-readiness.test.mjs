@@ -65,7 +65,8 @@ else if (args[0] === 'pr' && args[1] === 'view') {
   state.apiCalls = (state.apiCalls ?? 0) + 1;
   save(); if (state.apiFailure || state.apiFailureAt === state.apiCalls) { console.error('lookup unavailable'); process.exit(1); }
   const requestedHead = args.find((value) => value.startsWith('head_sha='))?.slice('head_sha='.length);
-  const runs = state.runsByHead?.[requestedHead] ?? state.runs;
+  const registered = state.runsAfterLookup && state.apiCalls > state.runsAfterLookup.lookups;
+  const runs = registered ? state.runsAfterLookup.runs : (state.runsByHead?.[requestedHead] ?? state.runs);
   console.log(JSON.stringify(state.malformed ? {} : { workflow_runs: runs, total_count: state.responseCount ?? runs.length }));
 } else if (args[0] === 'pr' && args[1] === 'ready') {
   if (args.includes('--undo')) { state.draft = true; state.cancellations += 1; }
@@ -74,6 +75,12 @@ else if (args[0] === 'pr' && args[1] === 'view') {
 } else { save(); console.error('Unexpected fake gh operation'); process.exit(2); }
 `
   writeFileSync(join(directory, 'gh'), fake, { mode: 0o700 })
+  // Record the bounded owner wait instead of spending real time in it.
+  const sleeps = join(directory, 'sleeps')
+  writeFileSync(sleeps, '')
+  writeFileSync(join(directory, 'sleep'), `#!/bin/sh\necho "$*" >> '${sleeps}'\n`, {
+    mode: 0o700,
+  })
   // macOS ships Bash 3; this test-only bridge implements the single mapfile form
   // used by the unchanged Ubuntu step. The production script runs verbatim below.
   const bridge = `if ! type mapfile >/dev/null 2>&1; then
@@ -94,7 +101,11 @@ fi
     },
   })
   assert.equal(result.error, undefined)
-  return { ...result, state: JSON.parse(readFileSync(file, 'utf8')) }
+  return {
+    ...result,
+    state: JSON.parse(readFileSync(file, 'utf8')),
+    sleeps: readFileSync(sleeps, 'utf8').split('\n').filter(Boolean),
+  }
 }
 test('unchanged ready release preserves its queued current-head validation', (t) => {
   const result = execute(t)
@@ -237,6 +248,7 @@ for (const [name, path] of [
   })
 
 const movedHead = 'b'.repeat(40)
+const ownerLookups = 7
 const ownerQueries = (result) => result.state.calls.filter(([command]) => command === 'api')
 const requestedHeads = (result) =>
   ownerQueries(result).map((args) => args.find((value) => value.startsWith('head_sha=')))
@@ -257,7 +269,11 @@ test('a moved ready head reads its complete fresh state and owner before preserv
 test('an old owner cannot bless a moved head with no current owner', (t) => {
   const result = execute(t, { changeHead: true })
   assert.equal(result.status, 0, result.stderr)
-  assert.deepEqual(requestedHeads(result), [`head_sha=${head}`, `head_sha=${movedHead}`])
+  assert.deepEqual(requestedHeads(result), [
+    `head_sha=${head}`,
+    ...Array(ownerLookups).fill(`head_sha=${movedHead}`),
+  ])
+  assert.equal(result.sleeps.length, ownerLookups - 1)
   assert.equal(result.state.draft, false)
   assert.equal(result.state.cancellations, 1)
   assert.equal(result.state.allocations, 1)
@@ -310,8 +326,8 @@ test('a fresh draft state gets its first transition without using old ready-head
 test('a generated branch transition cannot inherit the previous branch owner', (t) => {
   const result = execute(t, { viewStates: { 2: { branch: branch + '--component' } } })
   assert.equal(result.status, 0, result.stderr)
-  assert.equal(ownerQueries(result).length, 2)
-  assert.equal(result.state.views, 4)
+  assert.equal(ownerQueries(result).length, 1 + ownerLookups)
+  assert.equal(result.state.views, 2 + 1 + ownerLookups)
   assert.equal(result.state.cancellations, 1)
   assert.equal(result.state.allocations, 1)
 })
@@ -331,6 +347,75 @@ test('an API error during the fresh lookup fails closed without retrying it', (t
   assert.match(result.stderr, /lookup unavailable/)
   assert.equal(ownerQueries(result).length, 2)
   assert.equal(result.state.views, 3)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+// #916: the Release run pushes a changed head (Release Please rewrite or the
+// lockfile sync) and reads Actions about a second later, before GitHub has
+// registered the push-triggered synchronize run. Treating that gap as a missing
+// owner cancelled the synchronize run 3-12 s in on every changed release head.
+test('a just-pushed ready head waits for its synchronize run instead of cancelling it', (t) => {
+  const result = execute(t, {
+    runs: [],
+    runsAfterLookup: { lookups: 2, runs: [run('queued', null)] },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(ownerQueries(result).length, 3)
+  assert.deepEqual(result.sleeps, ['5', '5'])
+  assert.match(result.stdout, /no current-head validation yet \(lookup 1 of 7\)/)
+  assert.match(result.stdout, /already has current-head validation; preserving readiness/)
+  assert.equal(result.state.draft, false)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+test('an owner that never registers gets the canonical transition after the bounded wait', (t) => {
+  const result = execute(t, { runs: [] })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(ownerQueries(result).length, ownerLookups)
+  assert.deepEqual(result.sleeps, Array(ownerLookups - 1).fill('5'))
+  assert.equal(result.state.draft, false)
+  assert.equal(result.state.cancellations, 1)
+  assert.equal(result.state.allocations, 1)
+})
+
+test('a synchronize run that registers as failed still fails without readiness mutation', (t) => {
+  const result = execute(t, {
+    runs: [],
+    runsAfterLookup: { lookups: 1, runs: [run('completed', 'failure')] },
+  })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /Current-head validation failed/)
+  assert.equal(result.sleeps.length, 1)
+  assert.equal(result.state.cancellations, 0)
+  assert.equal(result.state.allocations, 0)
+})
+
+for (const conclusion of ['cancelled', 'skipped', 'neutral'])
+  test(`a terminal ${conclusion} owner transitions at once without waiting`, (t) => {
+    const result = execute(t, { runs: [run('completed', conclusion)] })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(ownerQueries(result).length, 1)
+    assert.deepEqual(result.sleeps, [])
+    assert.equal(result.state.cancellations, 1)
+    assert.equal(result.state.allocations, 1)
+  })
+
+test('a head that moves during the wait is re-read instead of waited on', (t) => {
+  const result = execute(t, {
+    runs: [],
+    viewStates: { 3: { head: movedHead } },
+    runsByHead: { [movedHead]: [{ ...run('queued', null), head_sha: movedHead }] },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(requestedHeads(result), [
+    `head_sha=${head}`,
+    `head_sha=${head}`,
+    `head_sha=${movedHead}`,
+  ])
+  assert.equal(result.sleeps.length, 1)
+  assert.match(result.stdout, /changed during validation lookup/)
   assert.equal(result.state.cancellations, 0)
   assert.equal(result.state.allocations, 0)
 })

@@ -554,56 +554,77 @@ jobs:
                   # A ready head already receives synchronize validation. Preserve
                   # its live/completed owner instead of cancelling and reallocating
                   # CI every time another queued main release run prepares it.
-                  runs=$(GH_TOKEN="$VALIDATION_TOKEN" gh api \
-                    "repos/$GITHUB_REPOSITORY/actions/runs" --method GET \
-                    -f event=pull_request -f head_sha="$PR_HEAD" -f per_page=100)
-                  validation=$(jq -er --arg head "$PR_HEAD" --arg branch "$PR_BRANCH" \
-                    --arg repo "$GITHUB_REPOSITORY" '
-                    def active: .status == "queued" or .status == "in_progress" or
-                      .status == "waiting" or .status == "pending" or .status == "requested";
-                    def valid_run:
-                      type == "object" and
-                      (.id | type == "number" and . > 0 and floor == .) and
-                      (.run_attempt | type == "number" and . >= 1 and floor == .) and
-                      (.head_sha | type == "string" and test("^[a-f0-9]{40}$")) and
-                      (.head_branch | type == "string" and length > 0) and
-                      (.event | type == "string" and length > 0) and
-                      (.repository | type == "object") and
-                      (.repository.full_name | type == "string" and length > 0) and
-                      (.path | type == "string" and length > 0) and
-                      ((active and has("conclusion") and .conclusion == null) or
-                       (.status == "completed" and
-                        (.conclusion == "success" or .conclusion == "failure" or
-                         .conclusion == "timed_out" or .conclusion == "action_required" or
-                         .conclusion == "cancelled" or .conclusion == "skipped" or
-                         .conclusion == "neutral")));
-                    if (.workflow_runs | type) != "array" or
-                       (.total_count | type) != "number" then
-                      error("Invalid validation owner response")
-                    elif .total_count != (.workflow_runs | length) then
-                      error("Incomplete validation owner response")
-                    elif any(.workflow_runs[]; valid_run | not) then
-                      error("Invalid validation run identity or state")
-                    else
-                      [.workflow_runs[] | (.path | split("@")[0]) as $workflow | select(
-                        .head_sha == $head and .head_branch == $branch and
-                        .event == "pull_request" and .repository.full_name == $repo and
-                        ($workflow == ".github/workflows/validation.yml" or
-                         $workflow == ".github/workflows/validation_self-ci.yml")
-                      )] | sort_by(.id) | last |
-                      if . == null then "missing"
-                      elif active or (.status == "completed" and .conclusion == "success") then "owned"
-                      elif .status == "completed" and
-                           (.conclusion == "failure" or .conclusion == "timed_out" or
-                            .conclusion == "action_required") then "failed"
-                      elif .status == "completed" and
-                           (.conclusion == "cancelled" or .conclusion == "skipped" or
-                            .conclusion == "neutral") then "missing"
-                      else error("Unconfirmed validation owner state") end
-                    end' <<< "$runs")
-                  fresh_state=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
-                    --json isDraft,headRefOid,headRefName \
-                    --jq '[.isDraft, .headRefOid, .headRefName] | @tsv')
+                  #
+                  # GitHub registers the synchronize run for a head this job (or
+                  # Release Please) just pushed a few seconds after the push. An
+                  # absent owner is therefore polled for a bounded window before the
+                  # canonical transition, so the transition does not cancel that
+                  # run. A cancelled, skipped or neutral owner is already terminal
+                  # and transitions at once; after the window an absent owner
+                  # still gets the explicit transition, and a failed one still fails.
+                  owner_poll=1
+                  while :; do
+                    runs=$(GH_TOKEN="$VALIDATION_TOKEN" gh api \
+                      "repos/$GITHUB_REPOSITORY/actions/runs" --method GET \
+                      -f event=pull_request -f head_sha="$PR_HEAD" -f per_page=100)
+                    validation=$(jq -er --arg head "$PR_HEAD" --arg branch "$PR_BRANCH" \
+                      --arg repo "$GITHUB_REPOSITORY" '
+                      def active: .status == "queued" or .status == "in_progress" or
+                        .status == "waiting" or .status == "pending" or .status == "requested";
+                      def valid_run:
+                        type == "object" and
+                        (.id | type == "number" and . > 0 and floor == .) and
+                        (.run_attempt | type == "number" and . >= 1 and floor == .) and
+                        (.head_sha | type == "string" and test("^[a-f0-9]{40}$")) and
+                        (.head_branch | type == "string" and length > 0) and
+                        (.event | type == "string" and length > 0) and
+                        (.repository | type == "object") and
+                        (.repository.full_name | type == "string" and length > 0) and
+                        (.path | type == "string" and length > 0) and
+                        ((active and has("conclusion") and .conclusion == null) or
+                         (.status == "completed" and
+                          (.conclusion == "success" or .conclusion == "failure" or
+                           .conclusion == "timed_out" or .conclusion == "action_required" or
+                           .conclusion == "cancelled" or .conclusion == "skipped" or
+                           .conclusion == "neutral")));
+                      if (.workflow_runs | type) != "array" or
+                         (.total_count | type) != "number" then
+                        error("Invalid validation owner response")
+                      elif .total_count != (.workflow_runs | length) then
+                        error("Incomplete validation owner response")
+                      elif any(.workflow_runs[]; valid_run | not) then
+                        error("Invalid validation run identity or state")
+                      else
+                        [.workflow_runs[] | (.path | split("@")[0]) as $workflow | select(
+                          .head_sha == $head and .head_branch == $branch and
+                          .event == "pull_request" and .repository.full_name == $repo and
+                          ($workflow == ".github/workflows/validation.yml" or
+                           $workflow == ".github/workflows/validation_self-ci.yml")
+                        )] | sort_by(.id) | last |
+                        if . == null then "absent"
+                        elif active or (.status == "completed" and .conclusion == "success") then "owned"
+                        elif .status == "completed" and
+                             (.conclusion == "failure" or .conclusion == "timed_out" or
+                              .conclusion == "action_required") then "failed"
+                        elif .status == "completed" and
+                             (.conclusion == "cancelled" or .conclusion == "skipped" or
+                              .conclusion == "neutral") then "missing"
+                        else error("Unconfirmed validation owner state") end
+                      end' <<< "$runs")
+                    fresh_state=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" \
+                      --json isDraft,headRefOid,headRefName \
+                      --jq '[.isDraft, .headRefOid, .headRefName] | @tsv')
+                    if [ "$fresh_state" != "$pr_state" ] || [ "$validation" != absent ] ||
+                      [ "$owner_poll" -ge 7 ]; then
+                      break
+                    fi
+                    echo "Release PR #$pr has no current-head validation yet (lookup $owner_poll of 7); waiting for its synchronize run to register."
+                    owner_poll=$((owner_poll + 1))
+                    sleep 5
+                  done
+                  if [ "$validation" = absent ]; then
+                    validation=missing
+                  fi
                   if [ "$fresh_state" != "$pr_state" ]; then
                     if [ "$state_attempt" -eq 3 ]; then
                       echo 'Release PR state did not stabilize during validation lookup; refusing readiness mutation.' >&2
