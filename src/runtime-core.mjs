@@ -411,15 +411,18 @@ function validation(task) {
     }
     const detection = codeqlDetection()
     const enabled = detection.enabled === 'true'
+    const matrix = enabled
+      ? plannedCodeqlMatrix(
+          codeqlAnalysisMatrix(JSON.parse(detection.languages), configuredRustShards())
+        )
+      : []
     const codeqlPlan = {
       ...detection,
-      matrix: enabled
-        ? JSON.stringify(
-            codeqlAnalysisMatrix(JSON.parse(detection.languages), configuredRustShards())
-          )
-        : '[]',
+      matrix: JSON.stringify(matrix),
       code_security: process.env.REPO_FOUNDRY_CODE_SECURITY ?? '',
-      idle: enabled ? 'false' : 'true',
+      // Idle when CodeQL is unavailable, or when change detection left no
+      // entry to analyze: the gate counts that planned skip as success.
+      idle: matrix.length ? 'false' : 'true',
     }
     // Dependency Review rides on the first audit job of a planned run. With
     // no audit to ride on, leave Security unplanned so its Profile job runs
@@ -1258,6 +1261,24 @@ function codeqlAnalysisMatrix(detected, shards) {
   }
   if (!matrix.length) throw new Error('CodeQL analysis matrix is empty while analysis is enabled.')
   return matrix
+}
+
+/**
+ * The planned CodeQL analysis matrix: the full matrix minus entries (whole
+ * languages or single Rust shards) that change detection marked unchanged.
+ * Such an entry would only take a runner to print "Not applicable": it
+ * uploads nothing either way. Entries are dropped only when the planner
+ * positively found no code-scanning merge gate (`FOUNDRY_CODEQL_MERGE_GATE`
+ * is exactly `false`); an active gate waits on every tracked category, and
+ * an unknown gate state keeps the full matrix. Analyze check names are not
+ * required checks ("Validation / Gate" is), so dropping entries never changes
+ * a required check. An empty result means nothing changed and the caller
+ * marks the plan idle.
+ * @param {Array<Record<string, string | boolean>>} matrix
+ */
+function plannedCodeqlMatrix(matrix) {
+  if ((process.env.FOUNDRY_CODEQL_MERGE_GATE ?? '') !== 'false') return matrix
+  return matrix.filter((entry) => entry.changed === true)
 }
 
 /**

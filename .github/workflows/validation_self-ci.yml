@@ -127,17 +127,29 @@ jobs:
           set -euo pipefail
           # The code-scanning merge gate waits for results in every tracked
           # category, so change detection must never skip an upload while it
-          # is active. Any ruleset API failure also disables change
-          # detection: full analysis is the safe default.
+          # is active. Any ruleset API failure counts as an active gate: full
+          # analysis is the safe default, and the planner drops unchanged
+          # analyzers only on a positive "no gate" answer.
           gated=false
-          for id in $(gh api "repos/$GITHUB_REPOSITORY/rulesets" --paginate \
-            -q '.[] | select(.enforcement == "active") | .id' 2>/dev/null); do
-            if gh api "repos/$GITHUB_REPOSITORY/rulesets/$id" \
-              -q 'any(.rules[]?; .type == "code_scanning")' 2>/dev/null | grep -q true; then
-              gated=true
-              break
-            fi
-          done
+          if ! ids="$(gh api "repos/$GITHUB_REPOSITORY/rulesets" --paginate \
+            -q '.[] | select(.enforcement == "active") | .id')"; then
+            echo "Ruleset listing failed; treating the code-scanning merge gate as active."
+            gated=true
+          else
+            for id in $ids; do
+              if ! rule="$(gh api "repos/$GITHUB_REPOSITORY/rulesets/$id" \
+                -q 'any(.rules[]?; .type == "code_scanning")')"; then
+                echo "Ruleset $id lookup failed; treating the code-scanning merge gate as active."
+                gated=true
+                break
+              fi
+              if [ "$rule" = "true" ]; then
+                gated=true
+                break
+              fi
+            done
+          fi
+          echo "Code-scanning merge gate active: $gated"
           echo "gated=$gated" >> "$GITHUB_OUTPUT"
       - name: Plan security and CodeQL
         id: plan

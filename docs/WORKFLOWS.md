@@ -326,9 +326,13 @@ Security Profile and CodeQL language detection (Code Security status, changed
 files, code-scanning merge gate) and passes their outputs to the orchestrator
 as `security-plan` and `codeql-plan`. The Security workflow then skips its
 `Profile` job and the CodeQL workflow skips its `Detect` job, so audits and
-analyzers start one runner hop earlier. A plan marked idle (no audit or review
-to run, or CodeQL unavailable) skips that workflow, and the gate counts only
-that planned skip as success. Planning fails open: if any planning step fails,
+analyzers start one runner hop earlier. Without a code-scanning merge gate,
+the CodeQL plan also drops the languages and Rust shards that change detection
+marked unchanged, so they no longer take a runner only to print `Not
+applicable`; `Analyze` checks are not required checks, so no required check
+name changes. A plan marked idle (no audit or review to run, CodeQL
+unavailable, or no analyzed language or shard changed) skips that workflow,
+and the gate counts only that planned skip as success. Planning fails open: if any planning step fails,
 the plans stay empty and each workflow profiles and detects for itself, as it
 does for callers that pass no plans (the scheduled audit and default-branch
 CodeQL lanes).

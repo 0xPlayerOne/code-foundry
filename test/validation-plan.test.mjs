@@ -162,7 +162,14 @@ test('the plan carries exactly what the Profile and Detect jobs emit', () => {
     const { idle: securityIdle, ...security } = plan.security
     assert.deepEqual(security, { ...profile, audit_matrix: audit.audit_matrix })
     const { idle: codeqlIdle, code_security: codeSecurity, ...codeql } = plan.codeql
-    assert.deepEqual(codeql, { ...detect, matrix: analysis.matrix })
+    // Without a merge gate the plan keeps only the entries the Detect
+    // matrix marks changed; otherwise it is that matrix exactly.
+    const full = JSON.parse(analysis.matrix)
+    const planned =
+      env.FOUNDRY_CODEQL_MERGE_GATE === 'false'
+        ? full.filter((/** @type {{ changed: boolean }} */ entry) => entry.changed)
+        : full
+    assert.deepEqual(codeql, { ...detect, matrix: JSON.stringify(planned) })
     assert.equal(codeSecurity, env.REPO_FOUNDRY_CODE_SECURITY ?? '')
     assert.equal(securityIdle, 'false')
     assert.equal(codeqlIdle, detect.enabled === 'true' ? 'false' : 'true')
@@ -347,4 +354,143 @@ test('rendered consumer callers plan security and CodeQL for every orchestrator'
     assert.match(caller, /^      codeql-plan: \$\{\{ needs\.mode\.outputs\.codeql-plan \}\}$/m)
     assert.match(caller, /^  validation:\n    name: Validation$/m)
   }
+})
+
+/** @param {string} root @param {string} paths @param {string} gate */
+function changedPlan(root, paths, gate) {
+  const changed = join(root, 'changed.txt')
+  writeFileSync(changed, paths)
+  return plans(root, {
+    FOUNDRY_EVENT_NAME: 'pull_request',
+    REPO_FOUNDRY_VISIBILITY: 'public',
+    FOUNDRY_CODEQL_CHANGED_FILES_FILE: changed,
+    ...(gate === 'unset' ? {} : { FOUNDRY_CODEQL_MERGE_GATE: gate }),
+  }).codeql
+}
+
+/** @param {{ matrix: string }} plan */
+const displays = (plan) =>
+  JSON.parse(plan.matrix).map((/** @type {{ display: string }} */ entry) => entry.display)
+
+test('without a merge gate the CodeQL plan drops unchanged languages and Rust shards', () => {
+  const root = polyglot()
+  const plan = changedPlan(root, 'crates/lib.rs\nREADME.md\n', 'false')
+  assert.deepEqual(displays(plan), ['Rust (crates)'])
+  assert.equal(plan.idle, 'false')
+  // Detection outputs still describe every language; only the matrix shrinks.
+  assert.equal(plan.javascript_available, 'true')
+  assert.equal(plan.javascript_changed, 'false')
+  assert.equal(plan.rust_changed, 'true')
+  // SARIF categories of the kept entries are untouched.
+  assert.deepEqual(JSON.parse(plan.matrix), [
+    {
+      display: 'Rust (crates)',
+      language: 'rust',
+      category: '/language:rust',
+      build_mode: 'none',
+      changed: true,
+      shard: 'crates',
+    },
+  ])
+
+  const mixed = changedPlan(root, 'src/index.ts\n.github/workflows/ci.yml\n', 'false')
+  assert.deepEqual(displays(mixed), ['Actions', 'TypeScript'])
+})
+
+test('a CodeQL plan with no changed entry is a planned idle skip', () => {
+  const root = polyglot()
+  const plan = changedPlan(root, 'README.md\ndocs/guide.md\n', 'false')
+  assert.equal(plan.enabled, 'true')
+  assert.equal(plan.matrix, '[]')
+  assert.equal(plan.idle, 'true')
+})
+
+test('an active or unknown merge gate keeps the full CodeQL matrix', () => {
+  const root = polyglot()
+  const all = ['Actions', 'TypeScript', 'Python', 'Rust (crates)', 'Rust (apps/core)']
+  // An active gate disables change detection: every entry runs.
+  const gated = changedPlan(root, 'README.md\n', 'true')
+  assert.deepEqual(displays(gated), all)
+  assert.equal(gated.idle, 'false')
+  // An unknown gate state (no gate output) keeps unchanged entries, which
+  // report Not applicable on their own runner as before.
+  for (const gate of ['unset', '']) {
+    const unknown = changedPlan(root, 'crates/lib.rs\n', gate)
+    assert.deepEqual(displays(unknown), all, `gate ${gate}`)
+    assert.equal(unknown.idle, 'false')
+    assert.ok(
+      JSON.parse(unknown.matrix).some((/** @type {{ changed: boolean }} */ e) => !e.changed)
+    )
+  }
+  // A failed changed-file listing fails open toward analyzing everything.
+  const unlisted = plans(root, {
+    FOUNDRY_EVENT_NAME: 'pull_request',
+    REPO_FOUNDRY_VISIBILITY: 'public',
+    FOUNDRY_CODEQL_CHANGED_FILES_FILE: join(root, 'missing.txt'),
+    FOUNDRY_CODEQL_MERGE_GATE: 'false',
+  }).codeql
+  assert.deepEqual(displays(unlisted), all)
+})
+
+/**
+ * Run the "Detect code scanning merge gate" step of a workflow against a
+ * stubbed `gh` that answers the two rulesets calls.
+ * @param {string} text @param {{ list: string, rule: string }} stub
+ */
+function runGateStep(text, stub) {
+  const step = text.slice(text.indexOf('- name: Detect code scanning merge gate'))
+  const start = step.indexOf('run: |\n') + 'run: |\n'.length
+  const end = step.indexOf('\n      - ', start)
+  const script = step
+    .slice(start, end)
+    .split('\n')
+    .map((line) => line.replace(/^ {10}/, ''))
+    .join('\n')
+  const root = mkdtempSync(join(tmpdir(), 'code-foundry-gate-'))
+  const bin = join(root, 'bin')
+  mkdirSync(bin)
+  writeFileSync(
+    join(bin, 'gh'),
+    `#!/bin/sh\ncase "$2" in\n  */rulesets) ${stub.list} ;;\n  *) ${stub.rule} ;;\nesac\n`,
+    { mode: 0o755 }
+  )
+  const output = join(root, 'output.env')
+  writeFileSync(output, '')
+  execFileSync('bash', ['-c', script], {
+    env: {
+      ...baseEnv,
+      PATH: `${bin}:${process.env.PATH}`,
+      GITHUB_OUTPUT: output,
+      GITHUB_REPOSITORY: 'o/r',
+    },
+    stdio: 'ignore',
+  })
+  return parseOutputs(readFileSync(output, 'utf8')).gated
+}
+
+test('the merge gate step treats any ruleset API failure as an active gate', () => {
+  for (const name of ['codeql.yml', 'validation_self-ci.yml']) {
+    const text = workflow(name)
+    assert.equal(runGateStep(text, { list: 'echo 7', rule: 'echo false' }), 'false', name)
+    assert.equal(runGateStep(text, { list: 'echo 7', rule: 'echo true' }), 'true', name)
+    assert.equal(runGateStep(text, { list: 'true', rule: 'echo true' }), 'false', name)
+    assert.equal(runGateStep(text, { list: 'exit 1', rule: 'echo false' }), 'true', name)
+    assert.equal(runGateStep(text, { list: 'echo 7', rule: 'exit 1' }), 'true', name)
+  }
+})
+
+test('dropping CodeQL entries keeps the analyzer and required check names', () => {
+  const analyze = jobBlock(workflow('codeql.yml'), 'analyze')
+  assert.match(analyze, /^    name: Analyze \(\$\{\{ matrix\.entry\.display \}\}\)$/m)
+  // The unplanned Detect path still builds the full matrix and keeps the
+  // Not applicable step for unchanged entries.
+  assert.match(analyze, /- name: Not applicable\n\s+if: \$\{\{ matrix\.entry\.changed != true \}\}/)
+  for (const name of ['validation.yml', 'validation-billing.yml']) {
+    assert.match(jobBlock(workflow(name), 'codeql'), /^    name: CodeQL$/m)
+    assert.match(jobBlock(workflow(name), 'gate'), /^    name: Gate$/m)
+  }
+  assert.match(
+    jobBlock(workflow('validation_self-ci.yml'), 'validation'),
+    /^    name: Validation$/m
+  )
 })
