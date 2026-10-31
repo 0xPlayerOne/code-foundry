@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.6...v1.53.7) (2026-10-31)
+
+
+### Performance
+
+* **validation:** fold Security Profile and CodeQL Detect into the plan job ([#827](https://github.com/0xPlayerOne/code-foundry/issues/827)) ([75ca83c](https://github.com/0xPlayerOne/code-foundry/commit/75ca83c042f01e23a1f3c62b26f92e1bc6641a80))
+
 ## [1.53.6](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.5...v1.53.6) (2026-10-31)
 
 
