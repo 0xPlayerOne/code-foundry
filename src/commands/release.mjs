@@ -10,6 +10,7 @@ import {
   auditReleaseDiffContent,
   buildReconciliationPullRequestBody,
   classifyReconciliation,
+  neutralizeClosingReferences,
   readReleaseConfig,
   reconciliationPullRequestBranch,
   reconciliationPullRequestTitle,
@@ -18,7 +19,6 @@ import {
   validateReleasePullRequests,
 } from '../lib/release-policy.mjs'
 import { syncBunLockWorkspaceVersions } from '../lib/bun-lock.mjs'
-import { neutralizeClosingReferences } from '../lib/closing-references.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib/release-hook.mjs'
 
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */

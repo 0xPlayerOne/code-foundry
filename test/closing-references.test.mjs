@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { neutralizeClosingReferences } from '../src/lib/closing-references.mjs'
+import { neutralizeClosingReferences } from '../src/lib/release-policy.mjs'
 
 const cli = new URL('../src/cli.mjs', import.meta.url).pathname
 const workflow = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8')
