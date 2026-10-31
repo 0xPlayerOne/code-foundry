@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.8](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.7...v1.53.8) (2026-10-31)
+
+
+### Bug Fixes
+
+* **release:** wait for the synchronize validation run before re-readying ([#829](https://github.com/0xPlayerOne/code-foundry/issues/829)) ([d0abbe2](https://github.com/0xPlayerOne/code-foundry/commit/d0abbe27349635bcc5bb63aafac3ff2e989f960f))
+
 ## [1.53.7](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.6...v1.53.7) (2026-10-31)
 
 
