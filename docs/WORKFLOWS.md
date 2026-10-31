@@ -23,7 +23,11 @@ lightweight Draft Guard runs from the trusted base branch on `opened` and
 `reopened`; it converts ordinary ready pull requests back to draft without
 checking out pull-request code. It rechecks the current head and update
 timestamp before mutating state, so a stale event cannot undo a later draft or
-ready transition. Release Please version heads are excluded because the
+ready transition. A pull request that was a draft when the event fired, or that
+received a `ready_for_review` at or after the event, is a deliberate ready
+transition and is left alone even when it lands in the same second. Changing
+draft state needs `contents: write` alongside `pull-requests: write`, because
+GitHub refuses the draft mutation to app tokens without push access. Release Please version heads are excluded because the
 release workflow owns their state. A separate draft-control caller listens for
 `converted_to_draft` and cancels queued or running pull-request workflows.
 Marking a pull request ready starts validation, and each new commit on a ready
