@@ -89,7 +89,11 @@ fi
 `
   const result = spawnSync('bash', ['-c', bridge + script], {
     encoding: 'utf8',
-    timeout: 3000,
+    // Each bounded poll starts several Node-backed gh fixtures. The full test
+    // suite runs files concurrently, so process scheduling on a busy runner is
+    // not a three-second performance contract. Sleeps remain stubbed and the
+    // tests assert exact lookup/mutation counts; retain a finite hang guard.
+    timeout: 15_000,
     env: {
       PATH: directory + ':' + process.env.PATH,
       FIXTURE_STATE: file,
