@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.5](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.4...v1.53.5) (2026-10-31)
+
+
+### Bug Fixes
+
+* **codeql:** pass the event name so pull request change detection runs ([#823](https://github.com/0xPlayerOne/code-foundry/issues/823)) ([0d0044e](https://github.com/0xPlayerOne/code-foundry/commit/0d0044eca5dc5ec3457ea82892429d146ea1754d))
+
 ## [1.53.4](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.3...v1.53.4) (2026-10-30)
 
 
