@@ -167,6 +167,7 @@ jobs:
         name: Detect languages
         env:
           CODEQL_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          FOUNDRY_EVENT_NAME: ${{ github.event_name }}
           FOUNDRY_CODEQL_CHANGED_FILES_FILE: ${{ steps.changed.outputs.file }}
           FOUNDRY_CODEQL_MERGE_GATE: ${{ steps.gate.outputs.gated }}
           REPO_FOUNDRY_CODE_SECURITY: ${{ steps.security.outputs.status }}

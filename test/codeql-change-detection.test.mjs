@@ -138,3 +138,14 @@ test('the all shard never skips while it is the configured scope', () => {
   const rust = languages.find((entry) => entry.language === 'rust')
   assert.deepEqual(rust.shards, [{ shard: 'all', changed: true }])
 })
+
+test('the reusable workflow passes every input change detection reads', () => {
+  // The runtime fails open when an input is absent, so a missing env entry
+  // silently turns change detection off for every caller.
+  const workflow = readFileSync(new URL('../.github/workflows/codeql.yml', import.meta.url), 'utf8')
+  const step = workflow.slice(workflow.indexOf('name: Detect languages'))
+  const env = step.slice(0, step.indexOf('run:'))
+  assert.match(env, /FOUNDRY_EVENT_NAME: \$\{\{ github\.event_name \}\}/)
+  assert.match(env, /FOUNDRY_CODEQL_CHANGED_FILES_FILE: \$\{\{ steps\.changed\.outputs\.file \}\}/)
+  assert.match(env, /FOUNDRY_CODEQL_MERGE_GATE: \$\{\{ steps\.gate\.outputs\.gated \}\}/)
+})
