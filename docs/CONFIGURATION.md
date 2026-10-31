@@ -427,8 +427,14 @@ every tracked category. Two practical consequences:
 
 On pull requests without a code-scanning merge gate, analyzers run only for
 languages with changed files, and Rust shards run only when their scope (or a
-workspace-wide `Cargo` manifest or toolchain file) changed; unchanged matrix
-entries report `Not applicable` instead of analyzing. Repositories whose
+workspace-wide `Cargo` manifest or toolchain file) changed. The caller's
+`Plan` job drops unchanged languages and shards from the analysis matrix, so
+they take no runner and register no `Analyze` check; when nothing changed, the
+whole CodeQL workflow is a planned idle skip that the gate counts as success.
+Entries are dropped only when the planner positively found no merge gate; a
+failed ruleset lookup counts as an active gate, and any other planning failure
+leaves the workflow to detect for itself, where unchanged entries still report
+`Not applicable` on their own runner. Repositories whose
 rulesets enforce a code-scanning requirement are detected automatically and
 analyze everything, because that merge gate waits for results in every tracked
 category. Push, schedule, and merge-queue events always analyze the complete

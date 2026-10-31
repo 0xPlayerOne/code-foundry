@@ -113,8 +113,9 @@ on:
         description: >-
           JSON CodeQL Detect outputs from the caller's planning job. When set,
           the CodeQL workflow skips its Detect job and reads the plan, and a
-          plan marked idle (CodeQL unavailable) skips the workflow. Empty
-          detects inside the workflow as before.
+          plan marked idle (CodeQL unavailable, or no analyzed language or
+          Rust shard changed) skips the workflow. Empty detects inside the
+          workflow as before.
         required: false
         type: string
         default: ''
