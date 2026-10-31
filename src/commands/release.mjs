@@ -18,6 +18,7 @@ import {
   validateReleasePullRequests,
 } from '../lib/release-policy.mjs'
 import { syncBunLockWorkspaceVersions } from '../lib/bun-lock.mjs'
+import { neutralizeClosingReferences } from '../lib/closing-references.mjs'
 import { hasDeliveredHook, releaseDeliveryKey, selectHookDelivery } from '../lib/release-hook.mjs'
 
 /** @typedef {{ target: string, dryRun: boolean, github: boolean, base: string, head: string }} ReleaseOptions */
@@ -788,6 +789,11 @@ export function syncReleaseLock(root, options) {
     )
   }
   return changes
+}
+
+/** Write the version pull request body read from stdin with its closing keywords neutralized. */
+export function scrubReleasePullRequestBody() {
+  process.stdout.write(neutralizeClosingReferences(readFileSync(0, 'utf8')))
 }
 
 /** @param {string} root */

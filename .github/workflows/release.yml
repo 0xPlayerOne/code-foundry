@@ -505,6 +505,33 @@ jobs:
               echo "::warning title=Release lock sync::$branch moved before the lockfile sync could be pushed; the next release run will sync it."
             fi
           done
+      - name: Neutralize closing keywords in generated release PRs
+        # Release Please renders footer references from squashed commits
+        # ("Refs #187") as ", closes [#187](…)" in the version pull request
+        # body, so merging it would close every issue a release merely
+        # mentions. Rewrite those keywords to "refs" after each Release Please
+        # run, which regenerates the body, so the merge closes nothing.
+        if: steps.release.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.credentials.outputs.token_source == 'configured' && secrets.CODE_FOUNDRY_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          mapfile -t release_prs < <(
+            gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --base main \
+              --json number,headRefName \
+              --jq '.[] | select(.headRefName == "release-please--branches--main" or (.headRefName | startswith("release-please--branches--main--"))) | .number'
+          )
+          for pr in "${release_prs[@]}"; do
+            body="$RUNNER_TEMP/release-pr-$pr-body.md"
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq '.body // ""' > "$body"
+            node "$RUNNER_TEMP/code-foundry/src/cli.mjs" release scrub-pr-body < "$body" > "$body.scrubbed"
+            if ! cmp -s "$body" "$body.scrubbed"; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$pr" -F "body=@$body.scrubbed" --silent
+            fi
+          done
       - name: Normalize generated release PR draft state
         if: steps.release.outcome == 'success'
         env:
