@@ -35,6 +35,15 @@ on:
         default: 1
         # Retained for caller compatibility. Rust shards share the single
         # analysis matrix, so no separate throttle applies.
+      plan:
+        description: >-
+          JSON object of the Detect job's outputs, computed by the caller's
+          planning job (`validation plan`). When set, Detect is skipped and
+          analysis reads the plan instead, saving one runner hop. Empty runs
+          Detect here as before.
+        required: false
+        type: string
+        default: ''
 permissions:
   actions: read
   contents: read
@@ -60,7 +69,7 @@ concurrency:
 jobs:
   detect:
     name: Detect
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.plan == ''
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
@@ -238,11 +247,16 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.entry.display }})
     needs: detect
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.detect.outputs.enabled == 'true'
+    # A planned run skips Detect and reads the same outputs from the plan;
+    # an unplanned run still requires Detect to have succeeded.
+    if: >-
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
+      ((inputs.plan == '' && needs.detect.result == 'success' && needs.detect.outputs.enabled == 'true') ||
+      (inputs.plan != '' && needs.detect.result == 'skipped' && fromJSON(inputs.plan || '{}').enabled == 'true'))
     strategy:
       fail-fast: false
       matrix:
-        entry: ${{ fromJson(needs.detect.outputs.matrix || '[]') }}
+        entry: ${{ fromJson((inputs.plan != '' && fromJSON(inputs.plan || '{}').matrix) || needs.detect.outputs.matrix || '[]') }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:
@@ -336,7 +350,7 @@ jobs:
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           languages: rust
-          build-mode: ${{ needs.detect.outputs.rust_build_mode }}
+          build-mode: ${{ (inputs.plan != '' && fromJSON(inputs.plan || '{}').rust_build_mode) || needs.detect.outputs.rust_build_mode }}
           config-file: ${{ steps.scope.outputs.config_file }}
           threads: ${{ inputs.rust-threads }}
       - name: Analyze Rust

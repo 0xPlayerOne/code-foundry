@@ -124,6 +124,22 @@ on:
         required: false
         type: string
         default: ''
+      security-plan:
+        description: >-
+          Accepted so every orchestrator takes the same caller inputs. The
+          merged audit job profiles in place, so the plan is unused.
+        required: false
+        type: string
+        default: ''
+      codeql-plan:
+        description: >-
+          JSON CodeQL Detect outputs from the caller's planning job. When set,
+          the CodeQL workflow skips its Detect job and reads the plan, and a
+          plan marked idle (CodeQL unavailable) skips the workflow. Empty
+          detects inside the workflow as before.
+        required: false
+        type: string
+        default: ''
     secrets:
       TURBO_TOKEN:
         required: false
@@ -1216,7 +1232,9 @@ jobs:
     name: CodeQL
     # Release-please pull requests also analyze with CodeQL so repository
     # rulesets requiring code scanning results never deadlock the release.
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.codeql == true && (inputs.mode == 'audit' || inputs.mode == 'release')
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.codeql == true && (inputs.mode == 'audit' || inputs.mode == 'release') &&
+      fromJSON(inputs.codeql-plan || '{}').idle != 'true'
     permissions:
       actions: read
       contents: read
@@ -1230,6 +1248,7 @@ jobs:
       rust-shards: ${{ inputs.rust-shards }}
       rust-threads: ${{ inputs.rust-threads }}
       rust-max-parallel: ${{ inputs.rust-max-parallel }}
+      plan: ${{ inputs.codeql-plan }}
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.
@@ -1256,8 +1275,10 @@ jobs:
       FOUNDRY_SECURITY: ${{ needs.audit.result }}
       # This orchestrator runs CodeQL only when the consumer's canonical
       # configuration enables it; otherwise the unavailability decision is
-      # treated as satisfied without registering a skipped PR check.
-      FOUNDRY_CODEQL: ${{ inputs.codeql == true && needs.codeql.result || 'success' }}
+      # treated as satisfied without registering a skipped PR check. A CodeQL
+      # workflow the caller planned as idle (unavailable) reports skipped;
+      # only that planned skip counts as success.
+      FOUNDRY_CODEQL: ${{ inputs.codeql == true && ((needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true' && 'success') || needs.codeql.result) || 'success' }}
       # Eval runs inside the merged fast-lanes job on the audit tier; a
       # fast-lanes failure on that tier marks the eval category failed even if
       # another merged lane caused it, which fails closed.
@@ -1306,7 +1327,8 @@ jobs:
       needs.fast-lanes.result == 'success' && needs.lint.result == 'success' &&
       needs.type-check.result == 'success' && needs.unit.result == 'success' &&
       needs.e2e.result == 'success' && needs.audit.result == 'success' &&
-      (inputs.codeql != true || needs.codeql.result == 'success') &&
+      (inputs.codeql != true || needs.codeql.result == 'success' ||
+      (needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true')) &&
       needs.gate.result == 'success'
     permissions:
       actions: read
@@ -1321,5 +1343,5 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
-        {"ci":"${{ needs.lint.result == 'success' && needs.type-check.result == 'success' && needs.fast-lanes.result == 'success' && 'success' || 'failure' }}","test":"${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && needs.e2e.result == 'success' && 'success' || 'failure' }}","security":"${{ needs.audit.result }}","codeql":"${{ inputs.codeql == true && needs.codeql.result || 'not-configured' }}","eval":"${{ needs.fast-lanes.result }}","gate":"${{ needs.gate.result }}"}
+        {"ci":"${{ needs.lint.result == 'success' && needs.type-check.result == 'success' && needs.fast-lanes.result == 'success' && 'success' || 'failure' }}","test":"${{ needs.unit.result == 'success' && needs.fast-lanes.result == 'success' && needs.e2e.result == 'success' && 'success' || 'failure' }}","security":"${{ needs.audit.result }}","codeql":"${{ inputs.codeql == true && ((needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true' && 'success') || needs.codeql.result) || 'not-configured' }}","eval":"${{ needs.fast-lanes.result }}","gate":"${{ needs.gate.result }}"}
       required-job-names-json: '["Validation / Gate"]'

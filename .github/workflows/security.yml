@@ -18,6 +18,16 @@ on:
         required: false
         type: string
         default: ubuntu-slim
+      plan:
+        description: >-
+          JSON object of the Profile job's outputs, computed by the caller's
+          planning job (`validation plan`). When set, Profile is skipped,
+          audits read the plan instead, and Dependency Review runs as its own
+          job beside them, saving one runner hop. Empty runs Profile here as
+          before.
+        required: false
+        type: string
+        default: ''
 permissions:
   contents: read
 
@@ -39,7 +49,7 @@ concurrency:
 jobs:
   profile:
     name: Profile
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && inputs.plan == ''
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     outputs:
@@ -142,12 +152,16 @@ jobs:
     needs: profile
     # Avoid expanding an empty matrix; skip only the explicitly empty result.
     # Missing or malformed output still fails closed during matrix expansion.
-    if: vars.CI_BILLING_PAUSED != 'true' && needs.profile.result == 'success' && needs.profile.outputs.audit_matrix != '[]'
+    # A planned run skips Profile and reads the same matrix from the plan.
+    if: >-
+      !cancelled() && vars.CI_BILLING_PAUSED != 'true' &&
+      ((inputs.plan == '' && needs.profile.result == 'success' && needs.profile.outputs.audit_matrix != '[]') ||
+      (inputs.plan != '' && needs.profile.result == 'skipped' && fromJSON(inputs.plan || '{}').audit_matrix != '[]'))
     strategy:
       fail-fast: false
       max-parallel: 8
       matrix:
-        entry: ${{ fromJson(needs.profile.outputs.audit_matrix || '[]') }}
+        entry: ${{ fromJson((inputs.plan != '' && fromJSON(inputs.plan || '{}').audit_matrix) || needs.profile.outputs.audit_matrix || '[]') }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     env:
@@ -386,3 +400,15 @@ jobs:
       - name: Audit Python dependencies
         if: matrix.entry.language == 'python'
         run: node "$RUNNER_TEMP/code-foundry/src/runtime.mjs" security audit python
+      # Planned runs only: with no Profile job, the first audit job runs
+      # Dependency Review, whatever the audit's own outcome, so the review
+      # costs no runner hop. The planner leaves a run with a review but no
+      # audit unplanned, so Profile still runs it there.
+      - name: Dependency Review
+        if: >-
+          !cancelled() && inputs.plan != '' && strategy.job-index == 0 &&
+          github.event_name == 'pull_request' && fromJSON(inputs.plan || '{}').dependency_review == 'true'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
+          license-check: true

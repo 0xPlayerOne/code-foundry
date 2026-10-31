@@ -310,7 +310,8 @@ repositories by failing closed unless every generated check succeeds. An
 empty analysis matrix while analysis is enabled fails the build instead of
 silently skipping every analyzer.
 
-The caller's `Mode` job also plans lanes: it runs the same applicability check
+The caller's `Plan` job (job id `mode`, formerly named `Mode`) classifies the
+validation tier, including the docs-only downgrade, and also plans lanes: it runs the same applicability check
 each lane's Detect step runs and passes the integration, E2E, smoke,
 performance, and eval lanes that have no package script, configured command,
 or test files to the orchestrator as `idle-lanes`. Those jobs are skipped
@@ -320,6 +321,18 @@ The gate counts a planned idle Eval workflow (which reports `skipped`) as the
 no-op success it reported before; any other skip, and every lane with work,
 is still required. Callers that pass no `idle-lanes` run every lane as before.
 
+On the tiers that run Security or CodeQL, the same `Plan` job also runs the
+Security Profile and CodeQL language detection (Code Security status, changed
+files, code-scanning merge gate) and passes their outputs to the orchestrator
+as `security-plan` and `codeql-plan`. The Security workflow then skips its
+`Profile` job and the CodeQL workflow skips its `Detect` job, so audits and
+analyzers start one runner hop earlier. A plan marked idle (no audit or review
+to run, or CodeQL unavailable) skips that workflow, and the gate counts only
+that planned skip as success. Planning fails open: if any planning step fails,
+the plans stay empty and each workflow profiles and detects for itself, as it
+does for callers that pass no plans (the scheduled audit and default-branch
+CodeQL lanes).
+
 ## Security behavior
 
 CodeQL is a separate workflow using GitHub's official actions. The default
@@ -328,9 +341,11 @@ Security availability for private repositories. When CodeQL is unavailable,
 set `codeql: false` and sync: the generated caller selects an orchestrator that
 omits CodeQL entirely, so pull requests do not show a skipped analyzer.
 Dependency Review follows the same capability policy through
-`dependency_review: auto`, but executes as a conditional step inside the
-Security profile job and never registers a separate skipped pull-request
-check. JavaScript, Python, and Rust audits remain available without Advanced
+`dependency_review: auto`, but executes as a conditional step and never
+registers a separate skipped pull-request check: inside the Security profile
+job, or, when the caller planned the profile, as the last step of the first
+dependency audit job. A run with a review but no audit stays unplanned, so the
+profile job still runs the review. JavaScript, Python, and Rust audits remain available without Advanced
 Security. If GitHub default setup is enabled, disable its generated CodeQL
 workflow to avoid duplicate analysis.
 

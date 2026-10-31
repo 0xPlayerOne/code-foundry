@@ -99,6 +99,25 @@ on:
         required: false
         type: string
         default: ''
+      security-plan:
+        description: >-
+          JSON Security Profile outputs from the caller's planning job. When
+          set, the Security workflow skips its Profile job and reads the plan,
+          and a plan marked idle (no dependency audit and no dependency
+          review to run) skips the workflow. Empty profiles inside the
+          workflow as before.
+        required: false
+        type: string
+        default: ''
+      codeql-plan:
+        description: >-
+          JSON CodeQL Detect outputs from the caller's planning job. When set,
+          the CodeQL workflow skips its Detect job and reads the plan, and a
+          plan marked idle (CodeQL unavailable) skips the workflow. Empty
+          detects inside the workflow as before.
+        required: false
+        type: string
+        default: ''
       artifact-prefix:
         description: Prefix for task receipts; use a unique value when calling this workflow more than once.
         required: false
@@ -196,7 +215,11 @@ jobs:
 
   security:
     name: Security
-    if: vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit'
+    # A plan marked idle has no audit or review to run; the gate counts that
+    # planned skip as the success the empty workflow used to report.
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && inputs.mode == 'audit' &&
+      fromJSON(inputs.security-plan || '{}').idle != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/security.yml
@@ -204,12 +227,15 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.security-runner }}
+      plan: ${{ inputs.security-plan }}
 
   codeql:
     name: CodeQL
     # Release-please pull requests also analyze with CodeQL so repository
     # rulesets requiring code scanning results never deadlock the release.
-    if: vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release')
+    if: >-
+      vars.CI_BILLING_PAUSED != 'true' && (inputs.mode == 'audit' || inputs.mode == 'release') &&
+      fromJSON(inputs.codeql-plan || '{}').idle != 'true'
     permissions:
       actions: read
       contents: read
@@ -223,6 +249,7 @@ jobs:
       rust-shards: ${{ inputs.rust-shards }}
       rust-threads: ${{ inputs.rust-threads }}
       rust-max-parallel: ${{ inputs.rust-max-parallel }}
+      plan: ${{ inputs.codeql-plan }}
 
   eval:
     name: Eval
@@ -258,8 +285,11 @@ jobs:
       FOUNDRY_MODE: ${{ inputs.mode }}
       FOUNDRY_CI: ${{ needs.ci.result }}
       FOUNDRY_TEST: ${{ needs.test.result }}
-      FOUNDRY_SECURITY: ${{ needs.security.result }}
-      FOUNDRY_CODEQL: ${{ needs.codeql.result }}
+      # A Security or CodeQL workflow the caller planned as idle never
+      # starts and reports skipped. Count only that planned skip as the
+      # success its empty run reported before.
+      FOUNDRY_SECURITY: ${{ (needs.security.result == 'skipped' && fromJSON(inputs.security-plan || '{}').idle == 'true' && 'success') || needs.security.result }}
+      FOUNDRY_CODEQL: ${{ (needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true' && 'success') || needs.codeql.result }}
       # An eval lane the caller planned as idle (no eval script, no
       # eval_command, or eval: false) never starts, so the whole Eval
       # workflow reports skipped. Count that exactly like the no-op success
@@ -307,7 +337,10 @@ jobs:
       inputs.release-qualification-receipts == true &&
       github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
       needs.ci.result == 'success' && needs.test.result == 'success' &&
-      needs.security.result == 'success' && needs.codeql.result == 'success' &&
+      (needs.security.result == 'success' ||
+      (needs.security.result == 'skipped' && fromJSON(inputs.security-plan || '{}').idle == 'true')) &&
+      (needs.codeql.result == 'success' ||
+      (needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true')) &&
       (needs.eval.result == 'success' ||
       (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,'))) &&
       needs.gate.result == 'success'
@@ -324,5 +357,5 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
-        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"${{ needs.codeql.result }}","eval":"${{ (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result }}","gate":"${{ needs.gate.result }}"}
+        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ (needs.security.result == 'skipped' && fromJSON(inputs.security-plan || '{}').idle == 'true' && 'success') || needs.security.result }}","codeql":"${{ (needs.codeql.result == 'skipped' && fromJSON(inputs.codeql-plan || '{}').idle == 'true' && 'success') || needs.codeql.result }}","eval":"${{ (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result }}","gate":"${{ needs.gate.result }}"}
       required-job-names-json: '["Validation / Gate"]'
