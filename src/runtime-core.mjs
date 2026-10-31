@@ -354,6 +354,13 @@ function downgradeDocsOnlyPullRequest(mode) {
   }
 }
 
+/**
+ * Lanes that own a whole runner job and can be skipped when they have no work.
+ * Unit stays out: it is the one test lane every tier requires, so it always
+ * keeps its job.
+ */
+const PLANNED_LANES = ['integration', 'e2e', 'smoke', 'performance', 'eval']
+
 /** @param {string} task */
 function validation(task) {
   if (task === 'mode') {
@@ -368,6 +375,22 @@ function validation(task) {
         })
       )
     )
+    return
+  }
+  if (task === 'lanes') {
+    // Lanes with no entrypoint would only allocate a runner to report a
+    // no-op. The caller's mode job already holds the checkout, so it names
+    // them once and the orchestrator skips those jobs. This mirrors each
+    // lane's own Detect step (`relevant`) and fails open: a lane whose
+    // detection throws keeps its job so the job reports the error itself.
+    const idle = PLANNED_LANES.filter((lane) => {
+      try {
+        return !relevant(lane)
+      } catch {
+        return false
+      }
+    })
+    writeOutput('idle_lanes', idle.join(','))
     return
   }
   if (task === 'gate') {

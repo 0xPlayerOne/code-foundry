@@ -5601,7 +5601,7 @@ jobs:
       assert.match(
         test,
         new RegExp(
-          `^  ${job}:\n    name: [A-Za-z0-9]+\n    if: vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`,
+          `^  ${job}:\n    name: [A-Za-z0-9]+\n    if: (?:>-\n      )?vars\\.CI_BILLING_PAUSED != 'true' && inputs\\.unit-only != true`,
           'm'
         )
       )

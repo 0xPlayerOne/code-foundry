@@ -90,6 +90,15 @@ on:
         required: false
         type: string
         default: '1'
+      idle-lanes:
+        description: >-
+          Comma-separated lanes the caller's planner found no entrypoint for
+          (integration, e2e, smoke, performance, eval). Their jobs are
+          skipped instead of allocating a runner for a no-op. Empty runs every
+          lane.
+        required: false
+        type: string
+        default: ''
       artifact-prefix:
         description: Prefix for task receipts; use a unique value when calling this workflow more than once.
         required: false
@@ -181,6 +190,7 @@ jobs:
       integration-total-shards: ${{ inputs.integration-total-shards }}
       e2e-shard-list: ${{ inputs.e2e-shard-list }}
       e2e-total-shards: ${{ inputs.e2e-total-shards }}
+      idle-lanes: ${{ inputs.idle-lanes }}
     secrets:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
 
@@ -228,6 +238,7 @@ jobs:
       runtime-ref: ${{ inputs.runtime-ref }}
       runner: ${{ inputs.eval-runner }}
       artifact-prefix: ${{ inputs.artifact-prefix }}
+      idle-lanes: ${{ inputs.idle-lanes }}
 
   # Aggregate check: "Validation / Gate" (caller job name + this job name).
   # Always evaluates; only jobs required for the mode must have succeeded.

@@ -26,6 +26,15 @@ on:
         required: false
         type: string
         default: task-result
+      idle-lanes:
+        description: >-
+          Comma-separated lanes the caller's planner found no entrypoint for
+          (integration, e2e, smoke, performance, eval). Their jobs are
+          skipped instead of allocating a runner for a no-op. Empty runs every
+          lane.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -51,7 +60,7 @@ concurrency:
 jobs:
   eval:
     name: Eval
-    if: vars.CI_BILLING_PAUSED != 'true'
+    if: vars.CI_BILLING_PAUSED != 'true' && !contains(format(',{0},', inputs.idle-lanes), ',eval,')
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     steps:

@@ -310,6 +310,16 @@ repositories by failing closed unless every generated check succeeds. An
 empty analysis matrix while analysis is enabled fails the build instead of
 silently skipping every analyzer.
 
+The caller's `Mode` job also plans lanes: it runs the same applicability check
+each lane's Detect step runs and passes the integration, E2E, smoke,
+performance, and eval lanes that have no package script, configured command,
+or test files to the orchestrator as `idle-lanes`. Those jobs are skipped
+instead of queuing a runner only to report a no-op. Unit always keeps its job,
+a lane whose detection errors keeps its job so the error surfaces there, and
+the gate still reads the unchanged Test and Eval results, so every lane with
+work still runs and is still required. Callers that pass no `idle-lanes` run
+every lane as before.
+
 ## Security behavior
 
 CodeQL is a separate workflow using GitHub's official actions. The default
