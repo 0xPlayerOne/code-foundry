@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.9...v1.53.10) (2026-10-31)
+
+
+### Bug Fixes
+
+* **release:** stop version pull requests from closing referenced issues ([#833](https://github.com/0xPlayerOne/code-foundry/issues/833)) ([d912e46](https://github.com/0xPlayerOne/code-foundry/commit/d912e463275495fef91153d7b627e12f3a3ff2f4))
+
 ## [1.53.9](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.8...v1.53.9) (2026-10-31)
 
 
