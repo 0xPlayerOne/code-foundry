@@ -140,7 +140,18 @@ test('every orchestrator accepts idle-lanes and skips only inside the lane workf
       name
     )
     assert.match(text, /FOUNDRY_TEST: \$\{\{ needs\.test\.result \}\}/)
-    assert.match(text, /FOUNDRY_EVAL: \$\{\{ needs\.eval\.result \}\}/)
+    // A fully idle Eval workflow reports `skipped`. Only that planned skip
+    // counts as the no-op success it used to report; every other result,
+    // including any unplanned skip, reaches the gate unchanged.
+    const planned =
+      "(needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result"
+    assert.ok(text.includes(`FOUNDRY_EVAL: \${{ ${planned} }}`), `${name} gate eval`)
+    assert.ok(text.includes(`"eval":"\${{ ${planned} }}"`), `${name} receipt eval`)
+    assert.match(
+      text,
+      /\(needs\.eval\.result == 'success' \|\|\n\s+\(needs\.eval\.result == 'skipped' && contains\(format\(',\{0\},', inputs\.idle-lanes\), ',eval,'\)\)\) &&/
+    )
+    assert.doesNotMatch(text, /needs\.eval\.result == 'success' && needs\.gate/)
   }
   const lanes = workflow('test.yml')
   for (const [job, lane] of [

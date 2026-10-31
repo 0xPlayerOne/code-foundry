@@ -260,7 +260,11 @@ jobs:
       FOUNDRY_TEST: ${{ needs.test.result }}
       FOUNDRY_SECURITY: ${{ needs.security.result }}
       FOUNDRY_CODEQL: ${{ needs.codeql.result }}
-      FOUNDRY_EVAL: ${{ needs.eval.result }}
+      # An eval lane the caller planned as idle (no eval script, no
+      # eval_command, or eval: false) never starts, so the whole Eval
+      # workflow reports skipped. Count that exactly like the no-op success
+      # it reported before; any other skip still fails the gate.
+      FOUNDRY_EVAL: ${{ (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result }}
       FOUNDRY_SOURCE_QUALIFICATION: ${{ needs.qualification.outputs.reuse }}
       FOUNDRY_QUALIFICATION: ${{ needs.qualification.result }}
     steps:
@@ -304,7 +308,9 @@ jobs:
       github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' &&
       needs.ci.result == 'success' && needs.test.result == 'success' &&
       needs.security.result == 'success' && needs.codeql.result == 'success' &&
-      needs.eval.result == 'success' && needs.gate.result == 'success'
+      (needs.eval.result == 'success' ||
+      (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,'))) &&
+      needs.gate.result == 'success'
     permissions:
       actions: read
       contents: read
@@ -318,5 +324,5 @@ jobs:
       runtime-repository: ${{ inputs.runtime-repository }}
       runtime-ref: ${{ inputs.runtime-ref }}
       job-results-json: >-
-        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"${{ needs.codeql.result }}","eval":"${{ needs.eval.result }}","gate":"${{ needs.gate.result }}"}
+        {"ci":"${{ needs.ci.result }}","test":"${{ needs.test.result }}","security":"${{ needs.security.result }}","codeql":"${{ needs.codeql.result }}","eval":"${{ (needs.eval.result == 'skipped' && contains(format(',{0},', inputs.idle-lanes), ',eval,') && 'success') || needs.eval.result }}","gate":"${{ needs.gate.result }}"}
       required-job-names-json: '["Validation / Gate"]'

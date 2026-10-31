@@ -315,10 +315,10 @@ each lane's Detect step runs and passes the integration, E2E, smoke,
 performance, and eval lanes that have no package script, configured command,
 or test files to the orchestrator as `idle-lanes`. Those jobs are skipped
 instead of queuing a runner only to report a no-op. Unit always keeps its job,
-a lane whose detection errors keeps its job so the error surfaces there, and
-the gate still reads the unchanged Test and Eval results, so every lane with
-work still runs and is still required. Callers that pass no `idle-lanes` run
-every lane as before.
+and a lane whose detection errors keeps its job so the error surfaces there.
+The gate counts a planned idle Eval workflow (which reports `skipped`) as the
+no-op success it reported before; any other skip, and every lane with work,
+is still required. Callers that pass no `idle-lanes` run every lane as before.
 
 ## Security behavior
 
