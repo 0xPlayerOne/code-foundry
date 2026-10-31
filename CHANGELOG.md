@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.53.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.10...v1.53.11) (2026-10-31)
+
+
+### Bug Fixes
+
+* **draft-guard:** grant draft-mutation permission and respect same-second ready transitions ([913096f](https://github.com/0xPlayerOne/code-foundry/commit/913096f3b67144d7784325a3aa61dedcc0f17ee6))
+
+
+### Tests
+
+* tolerate runner contention in readiness fixtures ([#836](https://github.com/0xPlayerOne/code-foundry/issues/836)) ([26f2ec7](https://github.com/0xPlayerOne/code-foundry/commit/26f2ec77259cf883f15851351d37a955311f1b24))
+
 ## [1.53.10](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.9...v1.53.10) (2026-10-31)
 
 
