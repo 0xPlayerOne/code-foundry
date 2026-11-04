@@ -41,6 +41,8 @@
     "README.md"
   ],
   "type": "module",
+  "main": "src/runtime.mjs",
+  "types": "src/runtime.d.ts",
   "publishConfig": {
     "access": "public"
   },
