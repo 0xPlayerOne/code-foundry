@@ -13,14 +13,16 @@ import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import {
+  buildBudgetSetting,
   coverageFiles,
   describeTask,
+  evaluateBuildBudget,
   evaluateCoverage,
   fingerprint,
+  readBuildBudget,
   readTaskPolicy,
   TASKS,
 } from './lib/task-policy.mjs'
-import { buildBudgetSetting, evaluateBuildBudget, readBuildBudget } from './lib/build-budget.mjs'
 
 const core = fileURLToPath(new URL('./runtime-core.mjs', import.meta.url))
 

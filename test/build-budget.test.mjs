@@ -17,7 +17,7 @@ import {
   buildBudgetSetting,
   evaluateBuildBudget,
   readBuildBudget,
-} from '../src/lib/build-budget.mjs'
+} from '../src/lib/task-policy.mjs'
 import { evaluateValidationGate } from '../src/lib/validation-policy.mjs'
 import { runRuntime } from '../src/runtime.mjs'
 
