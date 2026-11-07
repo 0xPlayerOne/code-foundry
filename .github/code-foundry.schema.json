@@ -21,6 +21,10 @@
       "type": "string",
       "enum": ["true", "false"]
     },
+    "build_budget_file": {
+      "description": "Opt in to the Build time ceiling: a repository-relative JSON file whose lanes.build.ceilingSeconds the CI Build must not exceed. Empty or omitted leaves the Build unbudgeted. See docs/build-budgets.md.",
+      "type": "string"
+    },
     "npm_publish_auth": {
       "description": "npm publisher authentication: auto preserves token users and uses OIDC when no publish token is present; oidc forces trusted publishing; token requires NPM_TOKEN.",
       "type": "string",

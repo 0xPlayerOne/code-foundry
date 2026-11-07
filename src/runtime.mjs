@@ -13,10 +13,13 @@ import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import {
+  buildBudgetSetting,
   coverageFiles,
   describeTask,
+  evaluateBuildBudget,
   evaluateCoverage,
   fingerprint,
+  readBuildBudget,
   readTaskPolicy,
   TASKS,
 } from './lib/task-policy.mjs'
@@ -84,10 +87,14 @@ function sourceSha(root) {
 /**
  * Stable public runtime; the native executor stays separate from policy and evidence.
  * Tests can substitute an executor without installing consumer dependencies.
+ * `options.clock` substitutes the monotonic clock (nanoseconds as a bigint) so
+ * build-budget tests are deterministic.
  * @param {string[]} args @param {string} [root] @param {string} [entry]
+ * @param {{ clock?: () => bigint }} [options]
  * @returns {number}
  */
-export function runRuntime(args, root = process.cwd(), entry = core) {
+export function runRuntime(args, root = process.cwd(), entry = core, options = {}) {
+  const clock = options.clock ?? (() => process.hrtime.bigint())
   const [area, task, selected] = args
   if (area !== 'ci' || task === 'install') {
     const result = spawnSync(process.execPath, [entry, ...args], { cwd: root, stdio: 'inherit' })
@@ -187,20 +194,46 @@ export function runRuntime(args, root = process.cwd(), entry = core) {
             coverageFiles(root, policy).map(({ file, path }) => [file, fingerprint(path)])
           )
         : {}
+    // An opted-in Build reads its ceiling before it runs: missing, malformed,
+    // unsupported, or invalid budget data fails closed without building.
+    const budgetFile = task === 'build' ? buildBudgetSetting(policy.config) : null
+    const budget = budgetFile === null ? null : readBuildBudget(root, budgetFile)
     const argv = [process.execPath, entry, 'ci', task]
+    // The measured interval is exactly this executor subprocess: from spawn to
+    // exit on the monotonic clock. See docs/build-budgets.md.
+    const started = clock()
     const result = spawnSync(argv[0], argv.slice(1), { cwd: root, stdio: 'inherit' })
+    const elapsed = clock() - started
     report.commands.push({
       argv,
       source: profile.source,
       status: result.status,
       signal: result.signal,
     })
+    if (budget !== null) {
+      const measured = evaluateBuildBudget(elapsed, budget.ceilingSeconds)
+      report.buildBudget = {
+        file: budget.file,
+        lane: 'build',
+        clock: 'monotonic',
+        interval: 'build executor subprocess, spawn to exit',
+        ceilingSeconds: measured.ceilingSeconds,
+        measuredSeconds: measured.measuredSeconds,
+        measuredNanoseconds: measured.measuredNanoseconds,
+        within: measured.within,
+      }
+    }
     if (result.error) throw result.error
     if (result.status !== 0) {
       report.reason = result.signal
         ? `executor terminated by ${result.signal}`
         : `executor exited ${result.status}`
       return result.status ?? 1
+    }
+    if (report.buildBudget && !report.buildBudget.within) {
+      report.reason = `Build took ${report.buildBudget.measuredSeconds}s, over the ${report.buildBudget.ceilingSeconds}s ceiling in ${report.buildBudget.file} (lanes.build.ceilingSeconds)`
+      console.error(`::error::${report.reason}`)
+      return 1
     }
     if (task === 'unit') {
       report.coverage = evaluateCoverage(root, policy, before)
