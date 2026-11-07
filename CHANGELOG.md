@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.12...v1.54.0) (2026-11-07)
+
+
+### Features
+
+* **runtime:** enforce an opt-in Build time ceiling ([#840](https://github.com/0xPlayerOne/code-foundry/issues/840)) ([a379a46](https://github.com/0xPlayerOne/code-foundry/commit/a379a46bc8e6749fff282ac9e45c77b714e72aa4))
+
 ## [1.53.12](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.11...v1.53.12) (2026-11-07)
 
 
