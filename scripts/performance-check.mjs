@@ -29,8 +29,9 @@ const budgets = {
   runtimeDependencies: 0,
   developmentDependencies: 4,
   packedBytes: 328_000,
-  unpackedBytes: 1_262_000,
-  packedFiles: 120,
+  // The public runtime declaration adds one file and about 424 unpacked bytes.
+  unpackedBytes: 1_263_000,
+  packedFiles: 121,
 }
 
 /** @param {string} command @param {string[]} args @param {NodeJS.ProcessEnv} [env] */
