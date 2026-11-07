@@ -28,10 +28,12 @@ const budgets = {
   ciChecksMs: 15_000,
   runtimeDependencies: 0,
   developmentDependencies: 4,
-  packedBytes: 328_000,
+  // Opt-in build budgets add src/lib/build-budget.mjs and docs/build-budgets.md:
+  // two files, about 3.1 KB packed and 9.3 KB unpacked.
+  packedBytes: 332_000,
   // The public runtime declaration adds one file and about 424 unpacked bytes.
-  unpackedBytes: 1_263_000,
-  packedFiles: 121,
+  unpackedBytes: 1_276_000,
+  packedFiles: 123,
 }
 
 /** @param {string} command @param {string[]} args @param {NodeJS.ProcessEnv} [env] */
