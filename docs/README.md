@@ -17,6 +17,7 @@ details before copying any guide elsewhere.
 - [Agent-facing validation](agent-validation.md) — run local plans and checks with machine-readable evidence.
 - [Required capabilities and task evidence](required-capabilities.md) — require tasks, coverage, and retained receipts.
 - [Performance budgets](PERFORMANCE.md) — maintain runtime, CI, and package-size budgets.
+- [Build budgets](build-budgets.md) — fail the Build lane when it exceeds an opted-in ceiling.
 - [Product quality profiles](product-quality.md) — add acceptance checks for sites, apps, Workers, and packages.
 - [Merge queue validation](merge-queues.md) — validate GitHub merge-group commits.
 
