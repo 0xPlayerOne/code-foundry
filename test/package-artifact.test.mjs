@@ -30,6 +30,8 @@ test('the npm package keeps runtime templates and excludes repository-local acti
     '.github/ISSUE_TEMPLATE/bug_report.yml',
     '.github/licenses/AGPL-3.0-or-later.txt',
     'src/commands/sync.mjs',
+    'src/runtime.mjs',
+    'src/runtime.d.ts',
     'src/templates/gitignore',
     'src/templates/workflows/validation-audit.yml',
   ]) {
