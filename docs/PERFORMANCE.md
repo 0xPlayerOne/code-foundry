@@ -14,17 +14,16 @@ budget is exceeded. Reports are generated-run evidence and are ignored by Git.
 | Format, lint, type-check, and build   |            15 s | Bound the local CI feedback loop                     |
 | Runtime dependencies                  |               0 | Keep the installed CLI dependency-free               |
 | Development dependencies              |               4 | Prevent unreviewed toolchain growth                  |
-| Packed artifact (without changelog)   |        316.5 kB | Bound registry transfer and install cost             |
+| Packed artifact (without changelog)   |   328,000 bytes | Bound registry transfer and install cost             |
 | Unpacked artifact (without changelog) | 1,263,000 bytes | Bound installed footprint                            |
 | Packed files (without changelog)      |             121 | Detect accidental release contents                   |
 
 The source-of-truth budgets live in `scripts/performance-check.mjs`. When those
 limits change, update this table and include before/after measurements in the
 same change. Adding the public runtime declaration increased a local pack from
-120 files and 1,261,691 unpacked bytes to 121 files and 1,262,115 bytes
-(excluding the changelog). This adds 424 installed bytes and one file; it does
-not add runtime dependencies. The limits retain a small allowance for source
-growth. Latency budgets are evaluated against the fastest of the timed
+120 files and 1,261,671 unpacked bytes to 121 files and 1,262,095 bytes
+(excluding the changelog and before this documentation update). This adds 424
+installed bytes and one file; it does not add runtime dependencies. The unpacked-size limit retains a small allowance for source growth. Latency budgets are evaluated against the fastest of the timed
 samples so a single load spike on a shared runner cannot fail the gate.
 
 The artifact budgets measure the package **without `CHANGELOG.md`**. Release
