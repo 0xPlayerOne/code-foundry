@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.12](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.11...v1.53.12) (2026-11-07)
+
+
+### Bug Fixes
+
+* complete runtime package declarations ([#838](https://github.com/0xPlayerOne/code-foundry/issues/838)) ([479a058](https://github.com/0xPlayerOne/code-foundry/commit/479a0587d5365977092844d2097d1286443c5ffd))
+
 ## [1.53.11](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.10...v1.53.11) (2026-10-31)
 
 
