@@ -21,7 +21,7 @@ Quick links: [Code of Conduct](./CODE_OF_CONDUCT.md) · [Security Policy](./SECU
 Agents must follow these rules before changing code:
 
 1. Read this file, `AGENTS.md`, and the relevant project documentation.
-2. Inspect the current branch, worktree, remotes, and existing changes before editing.
+2. Inspect the GitButler workspace (`but status`), remotes, and existing changes before editing. Use `but` for every version-control write, and do not create git worktrees unless the maintainer asks for one.
 3. Preserve user-owned changes. Never discard or overwrite unrelated work.
 4. Branch from `main` and target pull requests at `main`; do not push directly to `main`.
 5. Keep the change focused. Do not expand scope without documenting why.
