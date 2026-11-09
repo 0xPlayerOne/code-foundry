@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.1](https://github.com/0xPlayerOne/code-foundry/compare/v1.54.0...v1.54.1) (2026-11-09)
+
+
+### Documentation
+
+* **agents:** use GitButler and stop creating worktrees ([#842](https://github.com/0xPlayerOne/code-foundry/issues/842)) ([04d8091](https://github.com/0xPlayerOne/code-foundry/commit/04d809170403afa29a45d2cbc9679bf53e32f1d2))
+
 ## [1.54.0](https://github.com/0xPlayerOne/code-foundry/compare/v1.53.12...v1.54.0) (2026-11-07)
 
 
