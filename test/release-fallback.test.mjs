@@ -63,7 +63,8 @@ function run({
               }
               return JSON.stringify(pulls)
             }
-            if (endpoint.endsWith('/tags')) return JSON.stringify(tags.map((name) => ({ name })))
+            if (endpoint.endsWith('/tags'))
+              return JSON.stringify(tags.map((tagName) => ({ name: tagName })))
             if (endpoint.endsWith('/git/refs')) return '{}'
             assert.equal(endpoint, 'repos/example/project/releases')
             if (args.includes('POST')) {
@@ -278,7 +279,11 @@ for (const [tags, expectedTag] of [
 test('fallback rejects unrelated branches and unmerged component version PRs', () => {
   for (const candidate of [
     { ...pull, head: { ref: 'release-please--branches--main-other' } },
-    { ...pull, merged_at: null, head: { ref: 'release-please--branches--main--components--workspace' } },
+    {
+      ...pull,
+      merged_at: null,
+      head: { ref: 'release-please--branches--main--components--workspace' },
+    },
   ]) {
     const result = run({ pulls: [candidate] })
     assert.match(result.error?.message, /no merged version pull request/)
