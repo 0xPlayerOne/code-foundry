@@ -25,6 +25,7 @@ const pull = {
 
 function run({
   pages = [[]],
+  tags = ['workspace-v1.114.0'],
   pulls = [pull],
   failRead = false,
   failWrite = false,
@@ -62,7 +63,8 @@ function run({
               }
               return JSON.stringify(pulls)
             }
-            if (endpoint.endsWith('/tags')) return JSON.stringify([{ name: 'workspace-v1.114.0' }])
+            if (endpoint.endsWith('/tags')) return JSON.stringify(tags.map((name) => ({ name })))
+            if (endpoint.endsWith('/git/refs')) return '{}'
             assert.equal(endpoint, 'repos/example/project/releases')
             if (args.includes('POST')) {
               if (failWrite)
@@ -248,4 +250,38 @@ test('exhausted transient reads fail closed without a release write', () => {
   )
   assert.equal(writes(result).length, 0)
   assert.equal(result.output, '')
+})
+
+for (const [tags, expectedTag] of [
+  [['v1.114.0'], 'v1.114.0'],
+  [['workspace-v1.114.0'], 'workspace-v1.114.0'],
+  [[], 'v1.114.0'],
+]) {
+  test(`component version branch preserves tag prefix: ${expectedTag} (${tags.length} tags)`, () => {
+    const result = run({
+      tags,
+      pulls: [
+        {
+          ...pull,
+          head: { ref: 'release-please--branches--main--components--bun-native-workspace' },
+        },
+      ],
+    })
+    assert.ifError(result.error)
+    const releases = writes(result).filter(({ args }) => args[1].endsWith('/releases'))
+    assert.equal(releases.length, 1)
+    assert.equal(JSON.parse(releases[0].options.input).tag_name, expectedTag)
+    assert.ok(result.output.includes(`tag_name=${expectedTag}\n`))
+  })
+}
+
+test('fallback rejects unrelated branches and unmerged component version PRs', () => {
+  for (const candidate of [
+    { ...pull, head: { ref: 'release-please--branches--main-other' } },
+    { ...pull, merged_at: null, head: { ref: 'release-please--branches--main--components--workspace' } },
+  ]) {
+    const result = run({ pulls: [candidate] })
+    assert.match(result.error?.message, /no merged version pull request/)
+    assert.equal(writes(result).length, 0)
+  }
 })

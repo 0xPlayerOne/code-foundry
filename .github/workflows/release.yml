@@ -314,7 +314,10 @@ jobs:
             '-f', 'sort=updated',
             '-f', 'direction=desc',
             '-f', 'per_page=100',
-          ])).filter((pull) => pull.merged_at !== null && pull.head.ref === 'release-please--branches--main');
+          ])).filter((pull) => pull.merged_at !== null && (
+            pull.head.ref === 'release-please--branches--main' ||
+            pull.head.ref.startsWith('release-please--branches--main--')
+          ));
 
           // The newest existing tag supplies the tag prefix; the manifest
           // supplies the version each merged pull request published.
@@ -325,7 +328,7 @@ jobs:
           // not corrupt it.
           const versionedTags = tags.filter((name) => /v?\d+\.\d+\.\d+$/.test(name));
           const latestTag = versionedTags[0] ?? '';
-          const prefix = latestTag.replace(/v?\d+\.\d+\.\d+.*$/, '') || 'v';
+          const prefix = latestTag.replace(/v?\d+\.\d+\.\d+.*$/, '');
 
           // Include drafts and every page before deciding an object is absent.
           const releasePages = JSON.parse(gh([
