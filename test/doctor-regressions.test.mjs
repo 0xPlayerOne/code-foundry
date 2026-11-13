@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -237,3 +237,50 @@ for (const topology of ['direct', 'staging-release']) {
     assert.ok(report.warnings.some((message) => message.startsWith('turbo_remote is enabled')))
   })
 }
+
+const selfValidation = readFileSync(
+  new URL('../.github/workflows/validation_self-ci.yml', import.meta.url),
+  'utf8'
+)
+
+function refDoctor(t, caller, filename = 'validation_self-ci.yml') {
+  const root = mkdtempSync(join(tmpdir(), 'foundry-doctor-refs-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  mkdirSync(join(root, '.github/workflows'), { recursive: true })
+  writeFileSync(
+    join(root, '.github/code-foundry.yml'),
+    'git_workflow: direct\nrelease_type: none\n'
+  )
+  writeFileSync(join(root, '.github/workflows', filename), caller)
+  const result = spawnSync(
+    process.execPath,
+    [new URL('../src/cli.mjs', import.meta.url).pathname, 'doctor', '--target', root],
+    { encoding: 'utf8' }
+  )
+  return result.stdout + result.stderr
+}
+
+test('doctor recognizes the source release-base runtime contract, including folded scalar', (t) => {
+  const output = refDoctor(t, selfValidation)
+  assert.doesNotMatch(output, /runtime refs|runtime ref wiring|is not a released tag/)
+})
+
+test('doctor still rejects unrelated source runtime expressions and consumer release-base pins', (t) => {
+  const changed = selfValidation.replace(
+    'github.event.pull_request.base.sha || github.sha',
+    "'unreviewed-runtime' || github.sha"
+  )
+  assert.match(refDoctor(t, changed), /pins mismatched runtime refs/)
+  assert.match(refDoctor(t, selfValidation, 'validation.yml'), /pins mismatched runtime refs/)
+})
+
+test('doctor compares folded release tags without weakening unequal pin detection', (t) => {
+  const pinned = selfValidation
+    .replace(/runtime-ref: >-\n        \$\{\{[^\n]+/, 'runtime-ref: >-\n        v1.54.1')
+    .replace('ref: ${{ github.sha }}', 'ref: v1.54.1')
+  assert.doesNotMatch(refDoctor(t, pinned, 'validation.yml'), /runtime refs|runtime ref wiring/)
+  assert.match(
+    refDoctor(t, pinned.replace('ref: v1.54.1', 'ref: v1.54.0'), 'validation.yml'),
+    /pins mismatched runtime refs/
+  )
+})
