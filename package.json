@@ -24,7 +24,7 @@
     ".github",
     "!.github/actions/**",
     "!.github/workflows/qualified-foundry-publish.yml",
-    ".githooks",
+    ".githooks/pre-commit",
     ".editorconfig",
     ".gitattributes",
     ".gitignore",
