@@ -118,9 +118,9 @@ function measurePackWithoutChangelog() {
 const cli = benchmarkNode('CLI help startup', ['src/cli.mjs', '--help'])
 const runtime = benchmarkNode('runtime mode startup', ['src/runtime.mjs', 'validation', 'mode'], {
   ...process.env,
-  FOUNDRY_EVENT_NAME: 'pull_request',
-  FOUNDRY_BASE_REF: 'main',
-  FOUNDRY_HEAD_REF: 'perf/runtime-audit',
+  // Measure local startup, not network-dependent docs-only PR discovery.
+  // Manual validation keeps the same audit mode without fetching a remote.
+  FOUNDRY_EVENT_NAME: 'workflow_dispatch',
 })
 const focusedTests = run(process.execPath, ['--test', 'test/runtime.test.mjs']).durationMs
 
