@@ -290,3 +290,40 @@ test('fallback rejects unrelated branches and unmerged component version PRs', (
     assert.equal(writes(result).length, 0)
   }
 })
+
+test('fallback fails closed on component titles and malformed semantic versions', () => {
+  for (const suffix of [
+    'widget 1.114.0',
+    'widget',
+    '1.2',
+    'v1.2.3',
+    '01.2.3',
+    '1.02.3',
+    '1.2.03',
+    '1.2.3-01',
+    '1.2.3-alpha..1',
+    '1.2.3+',
+    '1.2.3 extra',
+  ]) {
+    const result = run({
+      pulls: [
+        {
+          ...pull,
+          title: `chore(main): release ${suffix}`,
+          head: { ref: 'release-please--branches--main--components--widget' },
+        },
+      ],
+    })
+    assert.match(result.error?.message, /no merged version pull request/, suffix)
+    assert.equal(writes(result).length, 0, suffix)
+  }
+})
+
+for (const version of ['0.0.0', '1.114.0-rc.1', '1.114.0+build.01', '1.114.0-rc.1+build.01']) {
+  test(`fallback preserves valid semantic version ${version}`, () => {
+    const result = run({ pulls: [{ ...pull, title: `chore(main): release ${version}` }] })
+    assert.ifError(result.error)
+    const releases = writes(result).filter(({ args }) => args[1].endsWith('/releases'))
+    assert.equal(JSON.parse(releases[0].options.input).tag_name, `workspace-v${version}`)
+  })
+}

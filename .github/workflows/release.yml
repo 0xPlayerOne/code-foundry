@@ -346,9 +346,12 @@ jobs:
           let failures = 0;
           let lastTag = '';
           let lastSha = '';
+          // Only the canonical version-only title is supported. Component
+          // titles must not turn a package name into a release tag.
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
           for (const pull of pulls) {
-            const version = /^chore\(main\): release (\S+)/.exec(pull.title)?.[1];
-            if (!version) continue;
+            const version = /^chore\(main\): release (\S+)$/.exec(pull.title)?.[1];
+            if (!version || !semver.test(version)) continue;
             const tag = `${prefix}v${version}`;
             if (existingReleaseTags.has(tag)) {
               console.log(`${tag}: release object already exists`);
