@@ -1,7 +1,7 @@
 // @ts-check
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve, isAbsolute } from 'node:path'
+import { join, resolve, isAbsolute, basename } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { includesValue, readConfig } from '../lib/config.mjs'
 import { recommendRunners, resolveMonorepoTool, resolveProfile } from '../lib/profile.mjs'
@@ -13,6 +13,31 @@ import { formatterChoice } from '../lib/formatter.mjs'
 /** @param {string} message */
 function warn(message) {
   console.warn(`WARN: ${message}`)
+}
+
+/** Read the inline or folded scalar used by generated workflow ref fields.
+ * @param {string} workflow
+ * @param {string} key
+ */
+function workflowRef(workflow, key) {
+  const lines = workflow.split(/\r?\n/)
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(\s+)([\w-]+):[ \t]*(.*)$/.exec(lines[index])
+    if (!match || match[2] !== key) continue
+    let value = match[3].trim()
+    if (/^>[+-]?$/.test(value)) {
+      const folded = []
+      for (let next = index + 1; next < lines.length; next += 1) {
+        const line = lines[next]
+        if (!line.trim()) break
+        if ((/^\s*/.exec(line)?.[0].length ?? 0) <= match[1].length) break
+        folded.push(line.trim())
+      }
+      value = folded.join(' ')
+    }
+    return value || undefined
+  }
+  return undefined
 }
 
 /** @param {string} root @param {{ github?: boolean }} [options] */
@@ -249,15 +274,29 @@ export function doctor(root, options = {}) {
     ) {
       error('validation caller does not reference the validation orchestrator.')
     }
-    const runtimeRef = caller.match(/^\s+runtime-ref:\s+(.+?)\s*$/m)?.[1]
-    const checkoutRef = caller.match(/^\s+ref:\s+(.+?)\s*$/m)?.[1]
+    const runtimeRef = workflowRef(caller, 'runtime-ref')
+    const checkoutRef = workflowRef(caller, 'ref')
+    // The source repository's release-qualification contract intentionally
+    // plans on the PR checkout, but validates a metadata-only Release Please
+    // PR with its base runtime. Do not allow this exception for consumer pins
+    // or for other expressions that could select an unrelated runtime.
+    const releaseBaseRuntime =
+      basename(validationCaller) === 'validation_self-ci.yml' &&
+      /^    uses: \.\/\.github\/workflows\/validation\.yml\s*$/m.test(caller) &&
+      checkoutRef === '${{ github.sha }}' &&
+      runtimeRef ===
+        "${{ startsWith(github.event.pull_request.head.ref, 'release-please--branches--main') && github.event.pull_request.base.sha || github.sha }}"
     if (!runtimeRef || !checkoutRef) {
       error(
         'validation caller is missing runtime ref wiring (mode checkout or orchestrator input).'
       )
-    } else if (runtimeRef !== checkoutRef) {
+    } else if (runtimeRef !== checkoutRef && !releaseBaseRuntime) {
       error(`validation caller pins mismatched runtime refs (${runtimeRef} vs ${checkoutRef}).`)
-    } else if (runtimeRef !== '${{ github.sha }}' && !/^v\d+\.\d+\.\d+$/.test(runtimeRef)) {
+    } else if (
+      !releaseBaseRuntime &&
+      runtimeRef !== '${{ github.sha }}' &&
+      !/^v\d+\.\d+\.\d+$/.test(runtimeRef)
+    ) {
       warn(`validation caller runtime ref ${runtimeRef} is not a released tag; pin a vX.Y.Z tag.`)
     }
   }
